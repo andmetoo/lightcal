@@ -1,0 +1,79 @@
+# Implementation roadmap
+
+Each milestone ends with a reviewable PR and owner acceptance. Estimates are planning time boxes, not delivery promises. Do not start application implementation in the planning PR.
+
+## 0. Agree on the plan and public repository foundation
+
+Deliver this documentation, GPL license, contribution/security policies, issue forms, PR template, and documentation checks.
+
+Acceptance:
+
+1. Documentation links and whitespace checks pass from a fresh checkout.
+2. The accepted Slint decision is explicit about custom drawing and unmeasured performance.
+3. Owner reviews scope and repository settings in [open-source readiness](open-source.md).
+4. Changes remain on a feature branch and enter the default branch only through a PR approved by the owner.
+
+## 1. Prove the platform and framework (2-3 days)
+
+Build the smallest useful Windows application: tray icon, month view, larger taskbar window, explicit Quit. Resolve exact crate versions from current stable releases, pin the Rust toolchain, commit `Cargo.lock`, and record licenses. Establish Rust CI for format, Clippy, tests, and Windows release compilation. Add a macOS compile lane and arrange a real launch probe.
+
+Acceptance:
+
+1. Tray click opens and toggles a compact calendar; Escape and focus loss hide it.
+2. Taskbar shortcut opens a larger calendar. Relaunch forwards activation to one process without duplicate tray icons. Hide and restart preserve a valid lifecycle.
+3. Normal close hides to tray; Quit exits. Tray recovery after Explorer restart works or a blocking issue is recorded before full UI implementation.
+4. Mixed-DPI positioning, first keyboard navigation, and Narrator discoverability are demonstrated.
+5. Release-build metrics are recorded using [validation](validation.md); pass targets or obtain an explicit adjustment backed by measurements.
+6. A macOS launch/menu-bar probe is recorded; unavailable hardware is an open gate, never a claimed pass.
+
+Gate: record passing integration/performance evidence in ADR 0001 before building the full UI; bring blockers to the owner if the accepted decision needs revision.
+
+## 2. Approve the visual design (about 1 day)
+
+Use Lunacy for editable compact and expanded views. Commit portable design sources and preview exports under `design/`; document asset licenses.
+
+Acceptance:
+
+1. Both views have light/dark designs, readable selected/today/weekend states, keyboard focus, month navigation, optional week numbers, and tray menu.
+2. Review at 100%, 150%, and 200% scaling; include long localized month/day labels and Windows high-contrast behavior.
+3. Expanded space improves readability and navigation. Do not invent empty agenda content to fill the window.
+4. Owner accepts the previews and interaction behavior before visual implementation.
+
+## 3. Complete the offline calendar (2-4 days)
+
+Implement the approved UI, month/year transitions, leap years, configurable first weekday, optional ISO week numbers, themes, date rollover, and keyboard navigation.
+
+Acceptance:
+
+1. Today, selected date, and displayed month have distinct behavior; returning to today restores the current local date.
+2. Arrow keys move selection; Page Up/Down navigate months; Tab reaches controls; Escape dismisses the compact view. Accessible labels describe dates and selection.
+3. Deterministic tests cover leap days, year boundaries, ISO week-year boundaries, and 4/5/6-row month grids.
+4. Suspend/resume and date/timezone changes refresh today without a continuous render loop.
+5. Shared selection remains consistent when switching entry points; no clipped controls at supported scaling.
+
+## 4. Preferences and reliable background behavior (1-2 days)
+
+Implement theme/weekday/week-number settings, optional autostart, safe persistence, and tray recovery.
+
+Acceptance:
+
+1. Settings survive process restart, and corrupt/newer files remain recoverable without silent overwrite.
+2. Autostart is off initially; enabling/disabling it affects only Lightcal's entry and is verified in an isolated user profile.
+3. Missing monitor, changed scaling, Explorer restart, and failed settings writes leave the app usable.
+4. Performance targets still hold after features are enabled.
+
+## 5. Prepare the first Windows release (2-3 days, excluding certificate lead time)
+
+Choose portable archive and/or installer, stable identifiers, versioning, and signing with the owner. Start signing research early; purchase and publication require permission. Automatic updates are not part of the initial scope.
+
+Acceptance:
+
+1. A clean standard-user machine can install/run/uninstall without unexplained elevation; retained or removed preferences match documented behavior.
+2. Package includes license, notices, checksums, and an exact source tag/archive with build instructions for GPL compliance.
+3. Record signature/SmartScreen status honestly; an unsigned preview is clearly labeled if the owner approves distributing one.
+4. Complete functional, accessibility, and performance evidence is attached to the release candidate.
+5. Owner approves the release before any public binary upload or tag publication.
+
+## 6. macOS product port (after the Windows baseline)
+
+Complete menu-bar activation, appearance, preferences location, accessibility, packaging, signing, and notarization on macOS. Re-run Windows checks throughout. Select macOS versions/architectures from actual testing and publish a separate support matrix.
