@@ -16,7 +16,7 @@ crates/
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
       macos/        # Menu bar and activation behavior, added during probe
-design/             # Lunacy source files and exported previews, when created
+design/             # Penpot source, page manifest, and review evidence
 ```
 
 Start with these two crates. Split platform crates only when dependencies or ownership justify it. Keep OS calls and toolkit types out of `calendar-core`. The core accepts an explicit current date and first-weekday preference, allowing deterministic tests without changing the real system clock.

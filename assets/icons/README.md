@@ -14,7 +14,7 @@ PNG files from 16 through 1024 px include alpha transparency. The SVG and PNG ar
 
 ## Visual validation
 
-The supplied PNG dimensions/alpha and ICO structure were checked. Small raster variants were inspected on light/dark surfaces. This does not verify actual Windows shell rendering or macOS packaging. The earlier Lunacy icon board is historical and no longer the asset source.
+The supplied PNG dimensions/alpha and ICO structure were checked. Small raster variants were inspected on light/dark surfaces. This does not verify actual Windows shell rendering or macOS packaging.
 
 The new application design is maintained in Penpot. See [design notes](../../design/README.md).
 

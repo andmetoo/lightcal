@@ -12,7 +12,7 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 - GPL-3.0. This repository uses the precise identifier `GPL-3.0-only`.
 - Future macOS support must remain architecturally possible.
 - All documentation is in English. Changes are reviewed through PRs; protected branches require owner approval.
-- Penpot through MCP is the current design tool; the earlier Lunacy concepts are historical. Editable design sources and review evidence belong in `design/`.
+- Penpot through MCP is the design tool. Editable design sources and review evidence belong in `design/`.
 - Slint is accepted. The additional owner-required features and acceptance criteria are tracked in [Required features](features.md), including Windows calendar selection, event dots, startup, shortcut, update checking, and About links.
 
 ## Proposed first release

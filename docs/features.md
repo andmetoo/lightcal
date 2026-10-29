@@ -35,6 +35,6 @@ Settings cover Appearance, General, Calendars, and About. General contains start
 
 All four languages are first-release requirements. English is the source catalog; use stable message keys, complete translated sentences and locale-aware pluralization/date formatting instead of concatenated fragments. Japanese requires working system font fallback without bundled proprietary fonts or downloaded font assets. Layout, focus, screen-reader text, event counts, update/error messages, and tray/menu labels must be checked in each language. Language changes must preserve selected dates, calendar sources, shortcut, timezone, and weekday preferences.
 
-The current redesign is in Penpot through MCP: calendars, settings, provider/shortcut/update states, localized examples, and a control guide. Earlier Lunacy concepts are historical. Provider names/events are illustrative, not an assertion that live Windows calendars were accessed. See [the design notes](../design/README.md) for actual completion and validation status.
+The design is in Penpot through MCP: calendars, settings, provider/shortcut/update states, localized examples, and a control guide. Provider names/events are illustrative, not an assertion that live Windows calendars were accessed. See [the design notes](../design/README.md) for actual completion and validation status.
 
 The complete first release includes these features. The earliest prototype may use synthetic events to validate layout, but cannot claim the calendar integration works or silently drop it from the release.
