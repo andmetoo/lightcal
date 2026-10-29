@@ -13,6 +13,7 @@ Owner requirements recorded on 2026-10-29. These extend the original offline-cal
 | Current-month emphasis | When displayed year/month equals local today, give the month title a soft accent background and a `Current month` caption. Remove both when browsing another month/year. Today returns to the current date/month. This is independent of the today outline and selected-day fill; recompute after local midnight/timezone changes. |
 | Event dots | For dates containing events from selected calendars, show up to three small dots below the day number, using calendar colors when available. More events retain three dots; an accessible label/tooltip gives the exact count. No selected-calendar events means no dots. Count all-day, recurring, timezone-converted, and multi-day occurrences correctly; use exclusive end boundaries. Preserve clear today/selection states. |
 | About links | About includes app version, GPL license, [GitHub repository](https://github.com/andmetoo/lightcal), and [koona.app](https://koona.app). Open links only on user action; no embedded browser, remote fonts, automatic website fetches, or analytics. |
+| Languages | Default to English (`en`) on a fresh installation, even on a non-English OS. Settings offers English, Русский (`ru`), Español (`es`), and 日本語 (`ja`). Persist the selection, update UI/date/accessible text immediately without restarting, and use English if a translation or saved language is unavailable. Do not translate event titles, user calendar names, proper names, URLs, or keyboard combinations. |
 
 ## Windows calendar feasibility gate
 
@@ -30,7 +31,9 @@ These identify an API family to investigate; they do not establish compatibility
 
 ## UI and release implications
 
-Settings cover Appearance, General, Calendars, and About. General contains startup and shortcut controls. Appearance includes weekday visibility, gray-weekday selection, theme, and week numbering. Calendars shows permission/provider state and checked sources. About contains update checking and the requested links.
+Settings cover Appearance, General, Calendars, and About. General contains startup, shortcut, and language controls. Appearance includes weekday visibility, gray-weekday selection, theme, and week numbering. Calendars shows permission/provider state and checked sources. About contains update checking and the requested links.
+
+All four languages are first-release requirements. English is the source catalog; use stable message keys, complete translated sentences and locale-aware pluralization/date formatting instead of concatenated fragments. Japanese requires working system font fallback without bundled proprietary fonts or downloaded font assets. Layout, focus, screen-reader text, event counts, update/error messages, and tray/menu labels must be checked in each language. Language changes must preserve selected dates, calendar sources, shortcut, timezone, and weekday preferences.
 
 The revised Lunacy concepts show weekday text, gray columns, current-month emphasis, event dots, and Appearance/General/Calendars/About screens in both themes. Settings navigation and permission/error states remain design work. Provider names/events in mockups are illustrative, not an assertion that live Windows calendars were accessed. See [the design notes](../design/README.md).
 

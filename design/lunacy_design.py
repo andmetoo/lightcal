@@ -239,7 +239,9 @@ def preferences_board(dark, x, y):
             label("Shortcut help", "Choose a shortcut to toggle the compact calendar.",
                   28, 340, size=12, color=muted)
             label("Optional settings hint", "Both options are optional and off by default.",
-                  28, 416, size=12, color=muted)
+                  28, 439, size=12, color=muted)
+            label("Language heading", "Language", 28, 382, bold=True)
+            button("Language selector", "English ▾", 270, 377, 142)
         elif title == "Calendars":
             label("Calendar source heading", "Windows calendars", 28, 126, bold=True)
             label("Calendar source help", "Choose which calendars appear in Lightcal.",
@@ -295,7 +297,7 @@ def reuse_ids(new_layer, old_layer):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["probe", "area", "create", "revise", "preferences", "layers", "contrast", "inspect", "export"])
+    parser.add_argument("action", choices=["probe", "area", "create", "revise", "preferences", "language", "layers", "contrast", "inspect", "export"])
     parser.add_argument("ids", nargs="*")
     parser.add_argument("--y", type=int, default=0, help="Top coordinate for an area inspection")
     parser.add_argument("--exe", default=r"C:\Program Files\Lunacy\Lunacy.exe")
@@ -338,6 +340,23 @@ def main():
             print(json.dumps({"preferences_ids": [layer["id"] for layer in layers],
                               "screen_ids": [layer["id"] for board_layer in layers
                                              for layer in board_layer["layers"] if layer["_t"] == "FRAME"]}), flush=True)
+        elif args.action == "language":
+            client.tool("get_format_documentation")
+            existing = client.tool("get_layers_by_ids", {"ids": args.ids})
+            updates = []
+            for item in existing.get("content", []):
+                if item.get("type") != "text":
+                    continue
+                for old in json.loads(item["text"]):
+                    dark = old.get("name", "").endswith("Dark")
+                    template = preferences_board(dark, 0, 0)
+                    general = next(layer for layer in template["layers"]
+                                   if "/ General /" in layer.get("name", ""))
+                    if "/ General /" not in old.get("name", ""):
+                        raise RuntimeError("Language action requires General screen IDs")
+                    reuse_ids(general, old)
+                    updates.append(general)
+            result = client.tool("update_layers", {"layersJson": json.dumps(updates)})
         elif args.action == "layers":
             client.tool("get_format_documentation")
             result = client.tool("get_layers_by_ids", {"ids": args.ids})

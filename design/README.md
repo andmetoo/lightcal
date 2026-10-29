@@ -26,6 +26,7 @@ All elements are editable text and vector layers, not flattened screenshots. Nat
 - Today's weekday appears in both views. The current month has a soft accent title and a `Current month` label, distinct from today and selection.
 - Saturday/Sunday columns are gray in these examples; Appearance supports arbitrary gray-weekday selection. Sample event dots use illustrative Work/Personal calendar colors.
 - General shows opt-in Windows startup and an unassigned optional global shortcut. Calendars demonstrates checked sources. About includes GitHub, koona.app, GPL licensing, and a manual update-check button.
+- General also includes a language selector, initially English; its options are English, Русский, Español, and 日本語. The current boards show English; translated layouts and Japanese font fallback still need review.
 
 These are first visual concepts for owner review, not implemented application screenshots. Calendar names/events are synthetic; no live account data was accessed. Hover/focus states, settings navigation, permission/error/empty states, tray menu, high-contrast treatment, scaling, long localized text, and accessibility still require the checks in [the roadmap](../docs/roadmap.md). Feature acceptance criteria are in [Required features](../docs/features.md).
 

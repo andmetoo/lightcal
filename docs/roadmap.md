@@ -40,6 +40,7 @@ Acceptance:
 3. Expanded space improves readability and navigation. Do not invent empty agenda content to fill the window.
 4. Owner accepts the previews and interaction behavior before visual implementation.
 5. Apply [the required features](features.md): weekday/date text, selectable gray weekdays, current-month label, event dots, and Settings/Calendars/About designs including the two requested links.
+6. General includes a language selector: English by default, Russian, Spanish, and Japanese. Check layout with long Spanish/Russian strings and Japanese glyphs; do not assume the English layout proves localized usability.
 
 ## 3. Complete the offline calendar (2-4 days)
 
@@ -66,6 +67,7 @@ Acceptance:
 5. Shortcut capture/change/clear handles conflicts and preserves the last working binding on failure. About opens the correct external links only on user action.
 6. Calendar selection persists by ID; unselected calendars contribute no dots. Access denial, missing/deleted calendars, recurrence, all-day/multi-day events, timezone conversion, and stale provider data are tested with controlled fixtures and a real-provider smoke check.
 7. Manual update checking correctly handles newer/current versions, no stable release, offline, timeout, rate-limit, and invalid responses; it never installs or restarts the app.
+8. Ship complete English/Russian/Spanish/Japanese UI catalogs. A fresh non-English OS still starts in English; language changes apply immediately and survive restart. Verify date names/formatting, pluralized counts, errors, menus, shortcuts, glyph coverage, and accessibility in all four languages. Preserve calendar/date/weekday settings across language changes and fall back safely on an invalid saved locale or missing message.
 
 ## 5. Prepare the first Windows release (2-3 days, excluding certificate lead time)
 

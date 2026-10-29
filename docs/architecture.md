@@ -43,6 +43,10 @@ Write via a temporary file and platform-appropriate atomic replacement, retainin
 
 `LIGHTCAL_DATA_DIR` redirects all application-owned writable data in development and tests. Autostart, registry/shortcut changes, and real profile writes are disabled in automated tests unless explicitly exercised in an isolated profile. Logs are opt-in, bounded, and contain no personal calendar data. No telemetry is permitted. Explicit update checks may contact GitHub; About links open only on user action.
 
+## Localization
+
+Use bundled message catalogs for `en`, `ru`, `es`, and `ja`, with English as the initial and fallback language. Keep locale identifiers in preferences and message keys in code; localize in the presentation layer, including tray/menu strings and accessibility announcements. Use the selected locale for month/weekday names, date patterns, and event-count plurals. Never translate provider/user event data. A language change rebuilds presentation strings without re-querying or altering the calendar domain state. Use installed Japanese-capable font fallback and test glyph coverage; no remote font requests. Preserve system timezone and user-chosen weekday settings across language changes.
+
 ## Calendar provider, shortcut, and update checking
 
 Follow [Required features](features.md). Keep provider enumeration and bounded occurrence queries behind a Windows adapter. The provider feasibility probe precedes final installer/package selection. Windows appointment-store access does not imply access to every Outlook calendar. Use read-only APIs and explicit user connection; store selected opaque calendar IDs separately from labels. Query the visible date range, cancel obsolete requests when navigating, and never block calendar opening on provider work. Cache only bounded data in memory initially; keep stale/loading/error distinct from a confirmed absence of events. Do not persist event titles or credentials without another design decision.

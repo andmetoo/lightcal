@@ -31,6 +31,7 @@ Hidden mode must not repaint continuously, run a busy timer, or poll the tray. C
 - Features: weekday display, gray-weekday subsets, current-month label/year matching, optional shortcut registration/conflicts, startup, and About GitHub/koona.app links.
 - Events: checked-calendar filtering, zero/multiple sources, permission/provider failures, loading/stale counts, all-day/recurring/multi-day occurrences, DST and exclusive date boundaries. Use synthetic data for automated tests; keep live-provider checks explicit and read-only.
 - Updates: stable-version comparison, no release, offline, timeout, rate limiting, invalid metadata/link rejection, and no implicit download/install/restart.
+- Languages: English default on every OS locale; switch/restart persistence for English/Russian/Spanish/Japanese; missing-message fallback; localized dates/plurals/errors/accessibility; long strings and Japanese font fallback; no changes to source event text or user date/weekday preferences.
 
 ## Automation boundaries
 

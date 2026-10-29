@@ -21,7 +21,7 @@ Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 an
 
 The first release includes a Gregorian month grid, selected date, today highlight, weekday/date display, previous/next month, current-month emphasis, return to today, configurable first weekday and gray weekdays, light/dark/system theme, optional ISO week numbers, keyboard navigation, tray menu, and explicit Quit. It also includes opt-in startup, an optional global shortcut, manual update checking, selection of Windows-exposed calendars, event dots, and About links. The tray icon should display the day of month if legibility testing succeeds; its tooltip includes the full local date and weekday.
 
-Start with English application text; use system locale for month/day names where supported. Keep strings separate from logic so additional translations are possible. Localization and right-to-left coverage must not be claimed before testing.
+Ship English (`en`) as the default regardless of the OS language, with optional Russian (`ru`), Spanish (`es`), and Japanese (`ja`) selected in Settings. Persist the choice and apply it to application text, accessible labels, weekday/month names, and date formatting. Keep the system timezone and explicit first-weekday/gray-weekday preferences independent of the UI language. Store strings separately from logic; use English as the fallback for missing/invalid translations. Validate all four languages before release; right-to-left languages are outside this release scope.
 
 ## Two presentation modes
 
