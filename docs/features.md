@@ -1,6 +1,6 @@
 # Required features
 
-Owner requirements recorded on 2026-10-29. These extend the original offline-calendar scope; they are planned, not implemented. The owner selected calendars already connected in Windows as the event source, subject to an API feasibility probe.
+Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph and private ICS are approved, Google sign-in is deferred, and signed automatic update installation is approved. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter.
 
 | Feature | Expected behavior and acceptance |
 | --- | --- |

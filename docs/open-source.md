@@ -24,6 +24,10 @@ All project code and documentation use GPL-3.0-only unless a file explicitly car
 
 Use original icons and layouts. Record third-party fonts, icons, snippets, and dependency licenses when introduced. Avoid bundling proprietary system fonts; use system fonts at runtime where supported.
 
+### Third-party notices and bundled assets
+
+- **Inter Font**: `crates/lightcal/assets/fonts/Inter.ttf` is licensed under the SIL Open Font License, Version 1.1 (Copyright 2016-2024 The Inter Project Authors, Rasmus Andersson). License text is preserved in `crates/lightcal/assets/fonts/OFL.txt`. Used for high-quality dynamic tray icon and application icon rasterization.
+
 Commit `Cargo.lock` for reproducible application dependencies. Pin the Rust toolchain at implementation setup and pin CI actions to reviewed commit SHAs. Add dependency advisories/license checks when dependencies exist; do not claim a clean audit for an empty manifest set.
 
 ## Before distributing binaries

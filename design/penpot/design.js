@@ -1,304 +1,733 @@
-/* Lightcal redesign. Execute through the connected Penpot MCP plugin.
- * Defines helpers only; screens are created explicitly in subsequent calls.
- * No existing shapes are deleted. All event/account data below is synthetic.
- */
-storage.lightcal = storage.lightcal || { screens: {}, links: [], pages: {} };
-const lc = storage.lightcal;
-lc.palette = {
-  light: { surface:'#FFFFFF', base:'#F5F7FA', ink:'#172033', muted:'#526077',
-    line:'#D8E0EA', weekend:'#EFF1F5', accent:'#1D5FD0', soft:'#EAF2FF',
-    onAccent:'#FFFFFF', purple:'#7538C9', amber:'#B07000', danger:'#B42335' },
-  dark: { surface:'#182231', base:'#111823', ink:'#F3F6FC', muted:'#B3BED0',
-    line:'#344157', weekend:'#263244', accent:'#79B9FF', soft:'#213D5C',
-    onAccent:'#10233B', purple:'#C4A3FF', amber:'#FBBF24', danger:'#FFACB6' }
+// Lightcal Penpot Core Library (storage.lc)
+// Inspired by Linear Desktop, Raycast, and Notion Calendar (Cron)
+
+storage.lc = {
+  THEMES: {
+    light: {
+      mode: 'light',
+      label: 'Light',
+      stage: '#EAEAEF',
+      canvas: '#FFFFFF',
+      panel: '#F7F7F8',
+      weekendBand: '#F8F8FA',
+      control: '#FFFFFF',
+      controlSubtle: '#F2F2F5',
+      controlHover: '#EFEFF2',
+      borderWindow: '#DFDFE4',
+      hairline: '#ECECEF',
+      borderControl: '#E2E2E6',
+      ink: '#141416',
+      secondary: '#64646C',
+      muted: '#A0A0AB',
+      outside: '#C8C8D0',
+      todayAccent: '#E5484D',
+      primaryAccent: '#5E6AD2',
+      primarySoft: '#EEF0FF',
+      dotWork: '#5E6AD2',
+      dotPersonal: '#F59E0B',
+      dotHoliday: '#10B981',
+      danger: '#E5484D',
+      dangerSoft: '#FFF0F0',
+      warning: '#D97706',
+      warningSoft: '#FEF3C7'
+    },
+    dark: {
+      mode: 'dark',
+      label: 'Dark',
+      stage: '#08080A',
+      canvas: '#101012',
+      panel: '#141417',
+      weekendBand: '#151519',
+      control: '#1E1E22',
+      controlSubtle: '#18181C',
+      controlHover: '#26262B',
+      borderWindow: '#27272A',
+      hairline: '#1F1F24',
+      borderControl: '#2C2C32',
+      ink: '#F4F4F6',
+      secondary: '#94949E',
+      muted: '#52525B',
+      outside: '#3A3A42',
+      todayAccent: '#E5484D',
+      primaryAccent: '#5E6AD2',
+      primarySoft: '#1D203A',
+      dotWork: '#6E7AE2',
+      dotPersonal: '#FBBF24',
+      dotHoliday: '#34D399',
+      danger: '#F87171',
+      dangerSoft: '#2A1618',
+      warning: '#FBBF24',
+      warningSoft: '#272012'
+    }
+  },
+
+  openPage(name) {
+    const p = penpotUtils.getPageByName(name);
+    if (!p) throw new Error('Page not found: ' + name);
+    penpot.openPage(p);
+    return p;
+  },
+
+  clearCurrentPage() {
+    const children = [...penpot.root.children];
+    for (const ch of children) ch.remove();
+  },
+
+  createBoard(name, x, y, w, h, fill, stroke, rx = 12) {
+    const b = penpot.createBoard();
+    b.name = name;
+    b.x = x;
+    b.y = y;
+    b.resize(w, h);
+    b.borderRadius = rx;
+    b.fills = fill ? [{ fillColor: fill, fillOpacity: 1 }] : [];
+    if (stroke) {
+      b.strokes = [{ strokeColor: stroke, strokeWidth: 1, strokeAlignment: 'inner' }];
+    }
+    return b;
+  },
+
+  rect(parent, name, rxRel, ryRel, w, h, fill, stroke = null, radius = 0, strokeWidth = 1) {
+    const r = penpot.createRectangle();
+    r.name = name;
+    r.resize(w, h);
+    if (radius) r.borderRadius = radius;
+    r.fills = fill ? [{ fillColor: fill, fillOpacity: 1 }] : [];
+    if (stroke) {
+      r.strokes = [{ strokeColor: stroke, strokeWidth, strokeAlignment: 'inner' }];
+    }
+    parent.appendChild(r);
+    penpotUtils.setParentXY(r, rxRel, ryRel);
+    return r;
+  },
+
+  text(parent, name, str, rxRel, ryRel, size = 12, weight = '500', color = '#141416', fontFamily = 'Inter') {
+    const s = String(str);
+    const t = penpot.createText(s);
+    t.name = name;
+    t.fontFamily = fontFamily;
+    t.fontSize = String(size);
+    t.fontWeight = String(weight);
+    t.fills = [{ fillColor: color, fillOpacity: 1 }];
+    parent.appendChild(t);
+    const estW = Math.max(24, Math.ceil(s.length * size * 0.62) + 8);
+    const estH = Math.max(14, Math.ceil(size * 1.35));
+    t.resize(estW, estH);
+    t.growType = 'fixed';
+    t.align = 'left';
+    t.verticalAlign = 'center';
+    penpotUtils.setParentXY(t, rxRel, ryRel);
+    return t;
+  },
+
+  centeredText(parent, name, str, boxX, boxY, boxW, boxH, size = 12, weight = '600', color = '#141416', fontFamily = 'Inter') {
+    const t = penpot.createText(String(str));
+    t.name = name;
+    t.fontFamily = fontFamily;
+    t.fontSize = String(size);
+    t.fontWeight = String(weight);
+    t.fills = [{ fillColor: color, fillOpacity: 1 }];
+    parent.appendChild(t);
+    t.resize(boxW, boxH);
+    t.growType = 'fixed';
+    t.align = 'center';
+    t.verticalAlign = 'center';
+    penpotUtils.setParentXY(t, boxX, boxY);
+    return t;
+  }
 };
-lc.font = penpot.fonts.all.find(f=>f.name==='Inter') || penpot.fonts.all.find(f=>f.name==='Noto Sans') || penpot.fonts.findByName('Roboto');
-lc.jpFont = penpot.fonts.all.find(f=>f.name==='Noto Sans JP') || lc.font;
-lc.board = (parent,name,x,y,w,h,color,r=0) => {
-  const b=penpot.createBoard(); b.name=name; b.resize(w,h); b.fills=color?[{fillColor:color,fillOpacity:1}]:[];
-  b.borderRadius=r; b.clipContent=true; if(parent)parent.appendChild(b);
-  b.x=(parent?.x||0)+x; b.y=(parent?.y||0)+y; return b;
+
+const lc = storage.lc;
+
+lc.OCTOBER_2026 = {
+  title: 'October 2026',
+  isCurrentMonth: true,
+  currentLabel: 'Current month',
+  todayLabel: 'Today',
+  weekdays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+  weeks: [
+    { w: 'W40', days: [
+      { d: 28, out: true }, { d: 29, out: true }, { d: 30, out: true },
+      { d: 1, dots: ['work'] }, { d: 2 }, { d: 3 }, { d: 4 }
+    ]},
+    { w: 'W41', days: [
+      { d: 5 }, { d: 6, dots: ['work', 'personal'] }, { d: 7 },
+      { d: 8 }, { d: 9, dots: ['work'] }, { d: 10 }, { d: 11 }
+    ]},
+    { w: 'W42', days: [
+      { d: 12, dots: ['holiday'] }, { d: 13 }, { d: 14, dots: ['work'] },
+      { d: 15 }, { d: 16, dots: ['personal'] }, { d: 17 }, { d: 18 }
+    ]},
+    { w: 'W43', days: [
+      { d: 19 }, { d: 20, dots: ['work'] }, { d: 21 },
+      { d: 22, dots: ['work', 'personal'] }, { d: 23 }, { d: 24 }, { d: 25 }
+    ]},
+    { w: 'W44', days: [
+      { d: 26 }, { d: 27, dots: ['work'] }, { d: 28 },
+      { d: 29, today: true, dots: ['work', 'personal'] },
+      { d: 30, selected: true, dots: ['work', 'personal', 'holiday'] },
+      { d: 31 }, { d: 1, out: true }
+    ]},
+    { w: 'W45', days: [
+      { d: 2, out: true }, { d: 3, out: true }, { d: 4, out: true },
+      { d: 5, out: true }, { d: 6, out: true }, { d: 7, out: true }, { d: 8, out: true }
+    ]}
+  ],
+  compactSummaryHeader: 'FRI, OCT 30 · 2 EVENTS',
+  expandedSummaryHeader: 'Friday, October 30',
+  expandedCountBadge: '3 events',
+  events: [
+    { time: '10:00', end: '11:00', title: 'Architecture sync', cal: 'Work', kind: 'work', loc: 'Linear Meet' },
+    { time: '14:30', end: '15:15', title: 'Dentist checkup', cal: 'Personal', kind: 'personal', loc: 'Downtown Clinic' },
+    { time: 'All day', end: '', title: 'Founder summit prep', cal: 'Holidays', kind: 'holiday', loc: 'Note' }
+  ]
 };
-lc.rect = (p,name,x,y,w,h,color,r=0,stroke=null) => {
-  const s=penpot.createRectangle(); s.name=name; s.resize(w,h); s.fills=color?[{fillColor:color,fillOpacity:1}]:[];
-  s.borderRadius=r; if(stroke)s.strokes=[{strokeColor:stroke,strokeWidth:1,strokeAlignment:'inner',strokeStyle:'solid'}];
-  p.appendChild(s); s.x=p.x+x; s.y=p.y+y; return s;
+
+lc.NOVEMBER_2026 = {
+  title: 'November 2026',
+  isCurrentMonth: false,
+  currentLabel: '',
+  todayLabel: 'Today',
+  weekdays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+  weeks: [
+    { w: 'W44', days: [
+      { d: 26, out: true }, { d: 27, out: true }, { d: 28, out: true },
+      { d: 29, out: true }, { d: 30, out: true }, { d: 31, out: true }, { d: 1 }
+    ]},
+    { w: 'W45', days: [
+      { d: 2, dots: ['work'] }, { d: 3 }, { d: 4, dots: ['work'] },
+      { d: 5 }, { d: 6, dots: ['personal'] }, { d: 7 }, { d: 8 }
+    ]},
+    { w: 'W46', days: [
+      { d: 9 }, { d: 10, dots: ['work'] }, { d: 11, dots: ['holiday'] },
+      { d: 12, selected: true, dots: ['work', 'personal'] }, { d: 13 }, { d: 14 }, { d: 15 }
+    ]},
+    { w: 'W47', days: [
+      { d: 16 }, { d: 17 }, { d: 18, dots: ['work'] },
+      { d: 19 }, { d: 20, dots: ['work'] }, { d: 21 }, { d: 22 }
+    ]},
+    { w: 'W48', days: [
+      { d: 23 }, { d: 24, dots: ['personal'] }, { d: 25 },
+      { d: 26, dots: ['holiday'] }, { d: 27 }, { d: 28 }, { d: 29 }
+    ]},
+    { w: 'W49', days: [
+      { d: 30, dots: ['work'] }, { d: 1, out: true }, { d: 2, out: true },
+      { d: 3, out: true }, { d: 4, out: true }, { d: 5, out: true }, { d: 6, out: true }
+    ]}
+  ],
+  compactSummaryHeader: 'THU, NOV 12 · 2 EVENTS',
+  expandedSummaryHeader: 'Thursday, November 12',
+  expandedCountBadge: '2 events',
+  events: [
+    { time: '09:30', end: '10:30', title: 'Q4 roadmap review', cal: 'Work', kind: 'work', loc: 'Room 4B' },
+    { time: '18:00', end: '19:30', title: 'Dinner with Alex', cal: 'Personal', kind: 'personal', loc: 'Soho Bistro' }
+  ]
 };
-lc.text = (p,name,value,x,y,w,h,size,color,weight=400,align='left',jp=false) => {
-  const s=penpot.createText(value); s.name=name;
-  const f=jp?lc.jpFont:lc.font; const variant=f?.variants.find(v=>v.fontWeight===String(weight));
-  if(f)f.applyToText(s,variant); s.fontSize=String(size); s.fontWeight=String(weight);
-  s.lineHeight='1.35'; s.align=align; s.verticalAlign='center'; s.resize(w,h); s.growType='fixed';
-  s.fills=[{fillColor:color,fillOpacity:1}]; p.appendChild(s); s.x=p.x+x; s.y=p.y+y; return s;
+
+lc.drawCalendar = function(container, ox, oy, opts) {
+  const t = lc.THEMES[opts.theme || 'light'];
+  const expanded = !!opts.expanded;
+  const data = opts.data || lc.OCTOBER_2026;
+  const font = opts.fontFamily || 'Inter';
+  const W = expanded ? 520 : 352;
+  const H = expanded ? 600 : 432;
+
+  if (opts.drawSurface) {
+    lc.rect(container, 'Window Surface', ox, oy, W, H, t.canvas, t.borderWindow, 12, 1);
+  }
+
+  const titleY = expanded ? 16 : (data.isCurrentMonth ? 11 : 17);
+  const titleX = expanded ? 20 : 16;
+  lc.text(container, 'Month Title', data.title, ox + titleX, oy + titleY, expanded ? 16 : 15, '700', t.ink, font);
+
+  if (data.isCurrentMonth) {
+    if (expanded) {
+      lc.rect(container, 'Current Month Underline', ox + 20, oy + 40, 44, 2, t.primaryAccent, null, 1);
+      lc.rect(container, 'Current Month Pill', ox + 138, oy + 16, 98, 22, t.controlSubtle, t.hairline, 11, 1);
+      lc.rect(container, 'Current Month Dot', ox + 146, oy + 24, 6, 6, t.primaryAccent, null, 3);
+      lc.text(container, 'Current Month Label', data.currentLabel || 'Current month', ox + 156, oy + 20, 10, '500', t.secondary, font);
+    } else {
+      lc.rect(container, 'Current Month Underline', ox + 16, oy + 34, 28, 2, t.primaryAccent, null, 1);
+      lc.rect(container, 'Current Month Dot', ox + 50, oy + 32, 5, 5, t.primaryAccent, null, 2.5);
+      lc.text(container, 'Current Month Label', data.currentLabel || 'Current month', ox + 59, oy + 27, 10, '500', t.secondary, font);
+    }
+  }
+
+  const todayW = opts.todayWidth || 62;
+  let gearX = expanded ? 422 : (W - 14 - 26);
+  if (expanded) {
+    lc.rect(container, 'Win Divider', ox + 458, oy + 20, 1, 14, t.hairline);
+    lc.text(container, 'Win Minimize', '—', ox + 470, oy + 18, 11, '500', t.muted, 'Inter');
+    lc.text(container, 'Win Close', '×', ox + 494, oy + 16, 13, '500', t.muted, 'Inter');
+  }
+  const nextX = gearX - 30;
+  const todayX = nextX - 4 - todayW;
+  const prevX = todayX - 30;
+
+  lc.rect(container, 'Prev Button', ox + prevX, oy + 14, 26, 26, t.control, t.borderControl, 6, 1);
+  lc.text(container, 'Prev Icon', '‹', ox + prevX + 10, oy + 18, 13, '600', t.secondary, 'Inter');
+
+  lc.rect(container, 'Today Button', ox + todayX, oy + 14, todayW, 26, t.control, t.borderControl, 6, 1);
+  lc.rect(container, 'Today Button Dot', ox + todayX + 8, oy + 24, 6, 6, t.todayAccent, null, 3);
+  lc.text(container, 'Today Button Label', data.todayLabel || 'Today', ox + todayX + 18, oy + 20, 11, '600', t.ink, font);
+
+  lc.rect(container, 'Next Button', ox + nextX, oy + 14, 26, 26, t.control, t.borderControl, 6, 1);
+  lc.text(container, 'Next Icon', '›', ox + nextX + 10, oy + 18, 13, '600', t.secondary, 'Inter');
+
+  lc.rect(container, 'Settings Button', ox + gearX, oy + 14, 26, 26, t.controlSubtle, t.hairline, 6, 1);
+  lc.text(container, 'Settings Icon', '⚙', ox + gearX + 7, oy + 19, 12, '500', t.secondary, 'Inter');
+
+  lc.rect(container, 'Header Hairline', ox, oy + 52, W, 1, t.hairline);
+
+  const gridX = expanded ? 64 : 44;
+  const colW = expanded ? 62 : 42;
+  const rowStartY = expanded ? 92 : 90;
+  const rowH = 44;
+
+  lc.rect(container, 'Weekend Band Sa', ox + gridX + 5 * colW + 2, oy + 60, colW - 4, 292, t.weekendBand, null, 8);
+  lc.rect(container, 'Weekend Band Su', ox + gridX + 6 * colW + 2, oy + 60, colW - 4, 292, t.weekendBand, null, 8);
+
+  lc.text(container, 'Week Col Header', 'W', ox + (expanded ? 28 : 18), oy + 66, 10, '600', t.muted, 'Inter');
+  for (let c = 0; c < 7; c++) {
+    const wd = data.weekdays[c];
+    const wx = ox + gridX + c * colW + Math.round(colW / 2) - 8;
+    lc.text(container, 'Weekday ' + wd, wd, wx, oy + 65, 11, '500', c >= 5 ? t.muted : t.secondary, font);
+  }
+
+  const dotColor = (kind, onToday) => {
+    if (onToday) return '#FFFFFF';
+    if (kind === 'work') return t.dotWork;
+    if (kind === 'personal') return t.dotPersonal;
+    return t.dotHoliday;
+  };
+
+  for (let r = 0; r < 6; r++) {
+    const wk = data.weeks[r];
+    const ry = oy + rowStartY + r * rowH;
+    lc.text(container, 'Week ' + wk.w, wk.w, ox + (expanded ? 22 : 14), ry + 11, 10, '500', t.muted, 'Inter');
+
+    for (let c = 0; c < 7; c++) {
+      const cell = wk.days[c];
+      const cx = ox + gridX + c * colW;
+      const tileW = expanded ? 42 : 34;
+      const tileH = expanded ? 36 : 34;
+      const tileX = cx + Math.round((colW - tileW) / 2);
+      const tileY = ry + 1;
+
+      if (cell.today) {
+        lc.rect(container, 'Today Tile ' + cell.d, tileX, tileY, tileW, tileH, t.todayAccent, null, 8);
+      } else if (cell.selected) {
+        lc.rect(container, 'Selected Tile ' + cell.d, tileX, tileY, tileW, tileH, t.primarySoft, t.primaryAccent, 8, 1.5);
+      }
+
+      const numStr = String(cell.d);
+      const numX = cx + Math.round(colW / 2) - (numStr.length > 1 ? 7 : 4);
+      const numY = tileY + 7;
+      let numColor = t.ink;
+      let numWeight = '500';
+      if (cell.today) {
+        numColor = '#FFFFFF';
+        numWeight = '700';
+      } else if (cell.selected) {
+        numColor = t.ink;
+        numWeight = '700';
+      } else if (cell.out) {
+        numColor = t.outside;
+        numWeight = '400';
+      } else if (c >= 5) {
+        numColor = t.secondary;
+      }
+
+      lc.text(container, 'Day ' + numStr, numStr, numX, numY, 12, numWeight, numColor, 'Inter');
+
+      if (cell.dots && cell.dots.length) {
+        const n = cell.dots.length;
+        const totalDotsW = n * 4 + (n - 1) * 3;
+        let dx = cx + Math.round((colW - totalDotsW) / 2);
+        const dy = tileY + tileH - 7;
+        for (let k = 0; k < n; k++) {
+          lc.rect(container, 'Dot', dx, dy, 4, 4, dotColor(cell.dots[k], cell.today), null, 2);
+          dx += 7;
+        }
+      }
+    }
+  }
+
+  if (!expanded) {
+    lc.rect(container, 'Footer Hairline', ox, oy + 358, W, 1, t.hairline);
+    lc.text(container, 'Summary Header', data.compactSummaryHeader, ox + 16, oy + 368, 10, '600', t.secondary, font);
+    lc.text(container, 'Expand Link', 'Expand ↗', ox + 286, oy + 367, 10, '600', t.primaryAccent, 'Inter');
+
+    for (let i = 0; i < Math.min(2, data.events.length); i++) {
+      const ev = data.events[i];
+      const ey = oy + 388 + i * 20;
+      const barCol = ev.kind === 'work' ? t.dotWork : (ev.kind === 'personal' ? t.dotPersonal : t.dotHoliday);
+      lc.rect(container, 'Event Bar ' + i, ox + 16, ey + 2, 3, 12, barCol, null, 1.5);
+      lc.text(container, 'Event Time ' + i, ev.time, ox + 25, ey + 1, 11, '600', t.secondary, 'Inter');
+      lc.text(container, 'Event Title ' + i, ev.title, ox + 66, ey + 1, 11, '500', t.ink, font);
+      lc.text(container, 'Event Cal ' + i, ev.cal, ox + 292, ey + 1, 10, '500', t.muted, font);
+    }
+  } else {
+    lc.rect(container, 'Agenda Panel Bg', ox + 1, oy + 364, W - 2, H - 365, t.panel, null, 11);
+    lc.rect(container, 'Agenda Top Hairline', ox, oy + 364, W, 1, t.hairline);
+    lc.text(container, 'Agenda Date Heading', data.expandedSummaryHeader, ox + 20, oy + 378, 13, '600', t.ink, font);
+    lc.rect(container, 'Agenda Count Pill', ox + 158, oy + 376, 58, 20, t.controlSubtle, t.hairline, 10, 1);
+    lc.text(container, 'Agenda Count Text', data.expandedCountBadge, ox + 168, oy + 380, 10, '500', t.secondary, font);
+
+    lc.rect(container, 'New Event Button', ox + 404, oy + 373, 96, 26, t.control, t.borderControl, 6, 1);
+    lc.text(container, 'New Event Label', '+ New event', ox + 418, oy + 380, 11, '600', t.ink, font);
+
+    for (let i = 0; i < data.events.length; i++) {
+      const ev = data.events[i];
+      const ry = oy + 408 + i * 52;
+      const barCol = ev.kind === 'work' ? t.dotWork : (ev.kind === 'personal' ? t.dotPersonal : t.dotHoliday);
+      lc.rect(container, 'Agenda Row ' + i, ox + 20, ry, 480, 44, t.canvas, t.hairline, 8, 1);
+      lc.rect(container, 'Agenda Bar ' + i, ox + 28, ry + 8, 3, 28, barCol, null, 1.5);
+      lc.text(container, 'Agenda Title ' + i, ev.title, ox + 40, ry + 8, 12, '600', t.ink, font);
+      lc.text(container, 'Agenda Time ' + i, ev.time + (ev.end ? ' – ' + ev.end : '') + ' · ' + ev.loc, ox + 40, ry + 25, 11, '400', t.secondary, font);
+      lc.rect(container, 'Agenda Tag ' + i, ox + 432, ry + 12, 58, 20, t.controlSubtle, null, 5);
+      lc.text(container, 'Agenda Tag Text ' + i, ev.cal, ox + 442, ry + 16, 10, '500', t.secondary, font);
+    }
+
+    lc.rect(container, 'Footer Hairline', ox, oy + 572, W, 1, t.hairline);
+    lc.rect(container, 'Sync Dot', ox + 20, oy + 584, 6, 6, t.dotHoliday, null, 3);
+    lc.text(container, 'Sync Status', 'Synced 2m ago · 3 calendars active', ox + 32, oy + 580, 11, '400', t.muted, font);
+    lc.text(container, 'Collapse Action', 'Collapse ↙', ox + 442, oy + 580, 11, '500', t.secondary, font);
+  }
 };
-lc.dot = (p,name,x,y,d,color) => {
-  const s=penpot.createEllipse(); s.name=name; s.resize(d,d); s.fills=[{fillColor:color,fillOpacity:1}];
-  p.appendChild(s);s.x=p.x+x;s.y=p.y+y;return s;
+
+lc.drawTrayMenu = function(container, ox, oy, themeName) {
+  const t = lc.THEMES[themeName];
+  const items = [
+    { label: 'Open Lightcal', right: 'Alt+C', active: true },
+    { label: 'Jump to Today (Oct 29)', right: '⌘T' },
+    { divider: true },
+    { label: 'Settings…', right: '⌘,' },
+    { label: 'Check for updates…', right: '' },
+    { divider: true },
+    { label: 'Quit Lightcal', right: '⌘Q', danger: true }
+  ];
+  let cy = oy + 8;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.divider) {
+      lc.rect(container, 'Menu Divider ' + i, ox + 10, cy + 4, 220, 1, t.hairline);
+      cy += 10;
+    } else {
+      if (it.active) {
+        lc.rect(container, 'Menu Active Row', ox + 6, cy, 228, 30, t.controlSubtle, null, 6);
+      }
+      const col = it.danger ? t.danger : t.ink;
+      lc.text(container, 'Menu Item ' + it.label, it.label, ox + 16, cy + 8, 12, it.active ? '600' : '500', col, 'Inter');
+      if (it.right) {
+        lc.text(container, 'Menu Shortcut ' + it.label, it.right, ox + 188, cy + 8, 11, '500', t.muted, 'Inter');
+      }
+      cy += 32;
+    }
+  }
 };
-lc.paths = {
-  settings:'M4 6H20M4 12H20M4 18H20M9 3V9M15 9V15M9 15V21',
-  left:'M14 5L7 12L14 19', right:'M10 5L17 12L10 19', down:'M6 9L12 15L18 9',
-  close:'M6 6L18 18M18 6L6 18', minimize:'M5 12H19', check:'M5 12L10 17L19 7',
-  external:'M14 4H20V10M20 4L10 14M10 5H5V19H19V14',
-  calendar:'M7 3V7M17 3V7M4 10H20M6 5H18Q20 5 20 7V19Q20 21 18 21H6Q4 21 4 19V7Q4 5 6 5Z',
-  refresh:'M20 5V11H14M4 19V13H10M5 9A8 8 0 0 1 18 6L20 11M4 13L6 18A8 8 0 0 0 19 15',
-  info:'M12 11V17M12 7V7.1M21 12A9 9 0 1 1 3 12A9 9 0 1 1 21 12',
-  globe:'M3 12H21M12 3C6 9 6 15 12 21C18 15 18 9 12 3M21 12A9 9 0 1 1 3 12A9 9 0 1 1 21 12',
-  sun:'M12 3V1M12 23V21M3 12H1M23 12H21M5 5L3 3M21 21L19 19M5 19L3 21M21 3L19 5M17 12A5 5 0 1 1 7 12A5 5 0 1 1 17 12'
+
+lc.drawDropdown = function(container, x, y, w, valueText, t, active = false) {
+  const strokeCol = active ? t.primaryAccent : t.borderControl;
+  lc.rect(container, 'Dropdown Box', x, y, w, 30, t.control, strokeCol, 6, active ? 1.5 : 1);
+  lc.text(container, 'Dropdown Text', valueText, x + 10, y + 8, 12, '500', t.ink, 'Inter');
+  lc.text(container, 'Dropdown Chevron', active ? '▴' : '▾', x + w - 18, y + 8, 11, '600', t.secondary, 'Inter');
 };
-lc.icon = (p,key,x,y,size,color) => {
-  const s=penpot.createShapeFromSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="${lc.paths[key]}" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`);
-  if(!s)throw new Error('SVG icon creation failed: '+key);s.name='Icon / '+key;s.resize(size,size);p.appendChild(s);s.x=p.x+x;s.y=p.y+y;return s;
+
+lc.drawToggle = function(container, x, y, on, t) {
+  const trackCol = on ? t.primaryAccent : t.borderControl;
+  lc.rect(container, 'Toggle Track', x, y, 36, 20, trackCol, null, 10);
+  const thumbX = on ? x + 18 : x + 2;
+  lc.rect(container, 'Toggle Thumb', thumbX, y + 2, 16, 16, '#FFFFFF', null, 8);
 };
-lc.brand = (p,x,y,size) => {
-  const s=lc.rect(p,'Owner-selected Lightcal icon',x,y,size,size,null,0);
-  if(lc.image)s.fills=[{fillImage:lc.image,fillOpacity:1}];
-  else {s.fills=[{fillColor:'#3B82F6',fillOpacity:1}];lc.icon(p,'calendar',x+size*.2,y+size*.2,size*.6,'#FFFFFF');}
-  return s;
+
+lc.drawButton = function(container, x, y, w, label, t, kind = 'secondary') {
+  let fill = t.control;
+  let stroke = t.borderControl;
+  let textCol = t.ink;
+  if (kind === 'primary') {
+    fill = t.primaryAccent;
+    stroke = null;
+    textCol = '#FFFFFF';
+  } else if (kind === 'subtle') {
+    fill = t.controlSubtle;
+    stroke = t.hairline;
+  } else if (kind === 'danger') {
+    fill = t.dangerSoft;
+    stroke = t.danger;
+    textCol = t.danger;
+  }
+  lc.rect(container, 'Button ' + label, x, y, w, 30, fill, stroke, 6, 1);
+  lc.text(container, 'Button Label ' + label, label, x + 12, y + 8, 12, '600', textCol, 'Inter');
 };
-lc.button = (p,name,label,x,y,w,h,c,kind='secondary',icon=null) => {
-  const b=lc.board(p,name,x,y,w,h,kind==='primary'?c.accent:kind==='soft'?c.soft:c.surface,8);
-  b.strokes=[{strokeColor:kind==='primary'?c.accent:c.line,strokeWidth:1,strokeAlignment:'inner',strokeStyle:'solid'}];
-  if(label)lc.text(b,'Label',label,icon?34:8,0,w-(icon?42:16),h,12,kind==='primary'?c.onAccent:kind==='soft'?c.accent:c.ink,500,icon?'left':'center');
-  if(icon)lc.icon(b,icon,label?10:(w-18)/2,(h-18)/2,18,kind==='primary'?c.onAccent:c.muted);
+
+lc.drawWeekdayPills = function(container, rightX, y, t) {
+  const days = [
+    { d: 'Mo', on: false },
+    { d: 'Tu', on: false },
+    { d: 'We', on: false },
+    { d: 'Th', on: false },
+    { d: 'Fr', on: false },
+    { d: 'Sa', on: true },
+    { d: 'Su', on: true }
+  ];
+  const pillW = 28;
+  const gap = 4;
+  const totalW = days.length * pillW + (days.length - 1) * gap;
+  const startX = rightX - totalW;
+  for (let i = 0; i < days.length; i++) {
+    const item = days[i];
+    const px = startX + i * (pillW + gap);
+    const fill = item.on ? (t.mode === 'light' ? t.ink : t.primaryAccent) : t.controlSubtle;
+    const stroke = item.on ? null : t.hairline;
+    const txtCol = item.on ? '#FFFFFF' : t.secondary;
+    lc.rect(container, 'Weekday Pill ' + item.d, px, y, pillW, 26, fill, stroke, 6, 1);
+    lc.text(container, 'Weekday Pill Text ' + item.d, item.d, px + 6, y + 6, 11, item.on ? '600' : '500', txtCol, 'Inter');
+  }
+};
+
+lc.drawFlatRow = function(container, y, title, subtitle, t, showDivider = true) {
+  lc.text(container, 'Row Title ' + title, title, 240, y + 8, 13, '500', t.ink, 'Inter');
+  if (subtitle) {
+    lc.text(container, 'Row Sub ' + title, subtitle, 240, y + 27, 11, '400', t.secondary, 'Inter');
+  }
+  if (showDivider) {
+    lc.rect(container, 'Row Hairline ' + title, 240, y + 54, 500, 1, t.hairline);
+  }
+};
+
+lc.drawSettingsBoard = function(name, x, y, themeName, section, stateVariant = null) {
+  const t = lc.THEMES[themeName];
+  const b = lc.createBoard(name, x, y, 780, 620, t.canvas, t.borderWindow, 12);
+
+  lc.rect(b, 'Sidebar Surface', 1, 1, 199, 618, t.panel, null, 11);
+  lc.rect(b, 'Sidebar Divider', 200, 0, 1, 620, t.hairline);
+
+  lc.rect(b, 'App Icon Badge', 20, 22, 22, 22, t.primaryAccent, null, 6);
+  lc.text(b, 'App Icon Numeral', '29', 24, 26, 11, '700', '#FFFFFF', 'Inter');
+  lc.text(b, 'App Name', 'Lightcal', 50, 24, 14, '700', t.ink, 'Inter');
+  lc.text(b, 'App Subtitle', 'Preferences', 112, 26, 12, '500', t.muted, 'Inter');
+
+  const navItems = ['General', 'Appearance', 'Calendars', 'About'];
+  for (let i = 0; i < navItems.length; i++) {
+    const item = navItems[i];
+    const ny = 68 + i * 38;
+    const isActive = item === section;
+    if (isActive) {
+      lc.rect(b, 'Nav Active ' + item, 12, ny, 176, 32, t.control, t.borderControl, 6, 1);
+      lc.rect(b, 'Nav Accent Bar', 16, ny + 8, 3, 16, t.primaryAccent, null, 1.5);
+    }
+    lc.text(b, 'Nav Label ' + item, item, 28, ny + 9, 13, isActive ? '600' : '500', isActive ? t.ink : t.secondary, 'Inter');
+  }
+
+  lc.rect(b, 'Sidebar Footer Hairline', 16, 564, 168, 1, t.hairline);
+  lc.text(b, 'Sidebar Back Link', '← Back to Calendar', 20, 580, 12, '500', t.secondary, 'Inter');
+
+  lc.text(b, 'Win Minimize', '—', 728, 18, 12, '500', t.muted, 'Inter');
+  lc.text(b, 'Win Close', '×', 752, 16, 14, '500', t.muted, 'Inter');
+
+  const subtitles = {
+    General: 'Regional conventions, startup behavior, and global keyboard shortcuts.',
+    Appearance: 'Theme mode, density, gray weekday columns, and visual indicators.',
+    Calendars: 'Connected local and CalDAV calendar feeds and visibility.',
+    About: 'Version status, release channel, and automatic update preferences.'
+  };
+  lc.text(b, 'Section Heading', section, 240, 26, 18, '700', t.ink, 'Inter');
+  lc.text(b, 'Section Subtitle', subtitles[section] || '', 240, 52, 12, '400', t.secondary, 'Inter');
+  lc.rect(b, 'Section Header Hairline', 240, 80, 500, 1, t.hairline);
+
+  if (section === 'General') {
+    lc.drawFlatRow(b, 92, 'Language', 'Interface language for month names, weekdays, and controls', t, true);
+    lc.drawDropdown(b, 568, 104, 172, 'English (US)', t, stateVariant === 'lang-open');
+
+    lc.drawFlatRow(b, 152, 'Start of week', 'First column shown in the calendar grid', t, true);
+    lc.drawDropdown(b, 568, 164, 172, 'Monday', t, false);
+
+    lc.drawFlatRow(b, 212, 'Show week numbers', 'Display ISO week numbers (W01–W52) along the left margin', t, true);
+    lc.drawToggle(b, 704, 229, true, t);
+
+    lc.drawFlatRow(b, 272, 'Launch at login', 'Start Lightcal quietly in the system tray when you sign in', t, true);
+    lc.drawToggle(b, 704, 289, true, t);
+
+    lc.drawFlatRow(b, 332, 'Global shortcut', 'Toggle the calendar popover from anywhere on the desktop', t, false);
+    if (stateVariant === 'shortcut-conflict') {
+      lc.rect(b, 'Shortcut Box Conflict', 568, 344, 172, 30, t.dangerSoft, t.danger, 6, 1.5);
+      lc.text(b, 'Shortcut Key Text', 'Alt + Space', 580, 352, 12, '600', t.danger, 'Inter');
+      lc.text(b, 'Shortcut Badge', 'Conflict', 688, 353, 10, '600', t.danger, 'Inter');
+
+      lc.rect(b, 'Conflict Banner', 240, 396, 500, 48, t.dangerSoft, t.danger, 8, 1);
+      lc.text(b, 'Conflict Title', 'Shortcut unavailable: Alt + Space is already registered by Raycast.', 256, 406, 12, '600', t.danger, 'Inter');
+      lc.text(b, 'Conflict Hint', 'Press a new key combination (for example Alt + C) or click Reset.', 256, 424, 11, '400', t.secondary, 'Inter');
+      lc.drawButton(b, 652, 405, 76, 'Reset', t, 'secondary');
+    } else {
+      lc.rect(b, 'Shortcut Recorder', 568, 344, 172, 30, t.controlSubtle, t.borderControl, 6, 1);
+      lc.text(b, 'Shortcut Text', 'Alt + C', 580, 352, 12, '600', t.ink, 'Inter');
+      lc.text(b, 'Shortcut Hint', 'Record', 690, 353, 10, '500', t.muted, 'Inter');
+    }
+
+    if (stateVariant === 'lang-open') {
+      lc.rect(b, 'Lang Popover Menu', 568, 138, 172, 136, t.control, t.primaryAccent, 8, 1);
+      const langs = [
+        { label: 'English (US)', active: true },
+        { label: 'Русский', hover: true },
+        { label: 'Español' },
+        { label: '日本語' }
+      ];
+      for (let i = 0; i < langs.length; i++) {
+        const lg = langs[i];
+        const ly = 144 + i * 31;
+        if (lg.active || lg.hover) {
+          lc.rect(b, 'Lang Option Bg ' + i, 574, ly, 160, 27, lg.active ? t.primarySoft : t.controlSubtle, null, 5);
+        }
+        lc.text(b, 'Lang Option ' + lg.label, lg.label, 584, ly + 7, 12, lg.active ? '600' : '500', t.ink, lg.label === '日本語' ? 'Noto Sans JP' : 'Inter');
+        if (lg.active) {
+          lc.text(b, 'Lang Check', '✓', 716, ly + 7, 12, '700', t.primaryAccent, 'Inter');
+        }
+      }
+    }
+  } else if (section === 'Appearance') {
+    lc.drawFlatRow(b, 92, 'Theme', 'Choose Alabaster Light, Obsidian Dark, or follow system appearance', t, true);
+    lc.drawDropdown(b, 568, 104, 172, themeName === 'light' ? 'Light (Alabaster)' : 'Dark (Obsidian)', t, false);
+
+    lc.drawFlatRow(b, 152, 'Default view mode', 'Open tray popover in Compact grid or Expanded agenda view', t, true);
+    lc.drawDropdown(b, 568, 164, 172, 'Compact (352 × 432)', t, false);
+
+    lc.drawFlatRow(b, 212, 'Gray days of week', 'Tint non-working weekday columns with a soft vertical band', t, true);
+    lc.drawWeekdayPills(b, 740, 226, t);
+
+    lc.drawFlatRow(b, 272, 'Highlight current month', 'Show Indigo underline and status pill when viewing the active month', t, true);
+    lc.drawToggle(b, 704, 289, true, t);
+
+    lc.drawFlatRow(b, 332, 'Show event dots on dates', 'Render up to 3 semantic color dots beneath days with scheduled events', t, false);
+    lc.drawToggle(b, 704, 349, true, t);
+  } else if (section === 'Calendars') {
+    if (stateVariant === 'access-denied') {
+      lc.rect(b, 'Access Denied Banner', 240, 96, 500, 88, t.dangerSoft, t.danger, 8, 1);
+      lc.text(b, 'Denied Title', 'Calendar access is turned off in System Privacy Settings', 258, 110, 13, '600', t.danger, 'Inter');
+      lc.text(b, 'Denied Desc', 'Lightcal needs read permission to display your local OS and CalDAV events.', 258, 130, 11, '400', t.secondary, 'Inter');
+      lc.drawButton(b, 258, 146, 164, 'Open Privacy Settings', t, 'secondary');
+      lc.drawButton(b, 430, 146, 88, 'Retry Sync', t, 'subtle');
+    } else if (stateVariant === 'empty') {
+      lc.rect(b, 'Empty State Hairline Box', 240, 110, 500, 160, t.panel, t.hairline, 10, 1);
+      lc.text(b, 'Empty Title', 'No calendar accounts connected yet', 384, 148, 14, '600', t.ink, 'Inter');
+      lc.text(b, 'Empty Sub', 'Connect iCloud, Google, Fastmail CalDAV, or a local .ics feed.', 332, 172, 12, '400', t.secondary, 'Inter');
+      lc.drawButton(b, 412, 206, 156, '+ Add Calendar Account', t, 'primary');
+    } else {
+      lc.text(b, 'Group Subheader', 'ACTIVE CALENDARS (3)', 240, 96, 11, '600', t.secondary, 'Inter');
+      lc.drawButton(b, 624, 88, 116, '+ Add Calendar', t, 'secondary');
+      lc.rect(b, 'Cal Top Hairline', 240, 126, 500, 1, t.hairline);
+
+      const cals = [
+        { name: 'Work · Engineering', sub: 'CalDAV · alex@linear.app · Synced 2m ago', col: t.dotWork, tag: 'CalDAV' },
+        { name: 'Personal', sub: 'iCloud · Primary schedule & reminders', col: t.dotPersonal, tag: 'iCloud' },
+        { name: 'Public Holidays', sub: 'Subscribed .ics · United States & National', col: t.dotHoliday, tag: 'Read-only' }
+      ];
+      for (let i = 0; i < cals.length; i++) {
+        const c = cals[i];
+        const ry = 132 + i * 60;
+        lc.rect(b, 'Cal Checkbox ' + c.name, 240, ry + 14, 18, 18, c.col, null, 5);
+        lc.text(b, 'Cal Checkmark ' + i, '✓', 244, ry + 16, 11, '700', '#FFFFFF', 'Inter');
+        lc.text(b, 'Cal Title ' + c.name, c.name, 268, ry + 10, 13, '600', t.ink, 'Inter');
+        lc.text(b, 'Cal Sub ' + c.name, c.sub, 268, ry + 29, 11, '400', t.secondary, 'Inter');
+        lc.rect(b, 'Cal Tag ' + c.name, 672, ry + 14, 68, 22, t.controlSubtle, t.hairline, 6, 1);
+        lc.text(b, 'Cal Tag Text ' + c.name, c.tag, 682, ry + 19, 10, '500', t.secondary, 'Inter');
+        lc.rect(b, 'Cal Row Hairline ' + i, 240, ry + 56, 500, 1, t.hairline);
+      }
+    }
+  } else if (section === 'About') {
+    lc.drawFlatRow(b, 92, 'Lightcal Desktop', 'Version 0.4.2 (2026.10) · Native Rust + Slint UI · 64-bit', t, true);
+    if (stateVariant === 'checking') {
+      lc.rect(b, 'Checking Pill', 576, 104, 164, 30, t.controlSubtle, t.hairline, 6, 1);
+      lc.rect(b, 'Checking Dot', 588, 116, 6, 6, t.primaryAccent, null, 3);
+      lc.text(b, 'Checking Text', 'Checking updates…', 602, 112, 12, '500', t.secondary, 'Inter');
+    } else if (stateVariant === 'update-available') {
+      lc.rect(b, 'Update Badge', 612, 106, 128, 26, t.primarySoft, t.primaryAccent, 6, 1);
+      lc.text(b, 'Update Badge Text', 'v0.5.0 available', 626, 113, 11, '600', t.primaryAccent, 'Inter');
+    } else {
+      lc.drawButton(b, 604, 104, 136, 'Check for updates', t, 'secondary');
+    }
+
+    if (stateVariant === 'update-available') {
+      lc.rect(b, 'Release Card', 240, 158, 500, 86, t.panel, t.primaryAccent, 8, 1);
+      lc.text(b, 'Release Title', 'Lightcal v0.5.0 is ready to install', 256, 170, 13, '600', t.ink, 'Inter');
+      lc.text(b, 'Release Notes', 'Faster CalDAV background sync, native macOS vibrancy, and localized Japanese grid.', 256, 190, 11, '400', t.secondary, 'Inter');
+      lc.drawButton(b, 256, 208, 132, 'Install & Restart', t, 'primary');
+      lc.drawButton(b, 396, 208, 104, 'Release notes', t, 'secondary');
+
+      lc.drawFlatRow(b, 256, 'Automatic updates', 'Download and verify signed releases in the background', t, true);
+      lc.drawToggle(b, 704, 273, true, t);
+
+      lc.drawFlatRow(b, 316, 'Update channel', 'Stable production builds or early preview releases', t, false);
+      lc.drawDropdown(b, 568, 328, 172, 'Stable', t, false);
+    } else {
+      lc.drawFlatRow(b, 152, 'Automatic updates', 'Download and verify signed releases in the background', t, true);
+      lc.drawToggle(b, 704, 169, true, t);
+
+      lc.drawFlatRow(b, 212, 'Update channel', 'Receive verified stable releases or preview builds', t, true);
+      lc.drawDropdown(b, 568, 224, 172, 'Stable', t, false);
+
+      lc.drawFlatRow(b, 272, 'License & source', 'MIT License · Built with Rust, Slint, and zero webview bloat', t, false);
+      lc.drawButton(b, 628, 284, 112, 'GitHub Repo ↗', t, 'subtle');
+    }
+  }
+
   return b;
 };
-lc.toggle = (p,name,x,y,on,c) => {
-  const b=lc.board(p,name,x,y,42,24,on?c.accent:c.line,12);
-  lc.dot(b,'Thumb',on?22:3,3,18,on?c.onAccent:c.surface);return b;
-};
-lc.line = (p,y,c,x=24,w=p.width-48) => lc.rect(p,'Divider',x,y,w,1,c.line);
-lc.link = (shape,to) => { lc.links.push({id:shape.id,to}); return shape; };
-lc.page = async name => {
-  let p=penpotUtils.getPageByName(name);if(!p){p=penpot.createPage();p.name=name;}
-  await penpot.openPage(p);lc.pages[name]=p.id;return p;
-};
-lc.register=(key,b)=>{lc.screens[key]=b.id;b.setPluginData('lightcal.key',key);return b;};
-lc.strings={
-  en:{month:'October 2026',next:'November 2026',date:'Thursday, 29 October',short:'Thu, 29 Oct',current:'Current month',today:'Today',week:'Week 44',cal:'2 calendars',selected:'Friday, 30 October',count:'2 events',days:['MO','TU','WE','TH','FR','SA','SU']},
-  ru:{month:'Октябрь 2026',next:'Ноябрь 2026',date:'Четверг, 29 октября',short:'Чт, 29 окт.',current:'Текущий месяц',today:'Сегодня',week:'Неделя 44',cal:'2 календаря',selected:'Пятница, 30 октября',count:'2 события',days:['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС']},
-  es:{month:'Octubre de 2026',next:'Noviembre de 2026',date:'Jueves, 29 de octubre',short:'Jue., 29 oct.',current:'Mes actual',today:'Hoy',week:'Semana 44',cal:'2 calendarios',selected:'Viernes, 30 de octubre',count:'2 eventos',days:['LU','MA','MI','JU','VI','SÁ','DO']},
-  ja:{month:'2026年10月',next:'2026年11月',date:'10月29日 木曜日',short:'10月29日（木）',current:'今月',today:'今日',week:'第44週',cal:'カレンダー2件',selected:'10月30日 金曜日',count:'予定2件',days:['月','火','水','木','金','土','日']}
-};
-lc.calendar=(theme,expanded,x,y,options={})=>{
-  const c=lc.palette[theme],lang=options.lang||'en',s=lc.strings[lang],jp=lang==='ja';
-  const next=!!options.next,mode=expanded?'expanded':'compact',w=expanded?520:352,h=expanded?600:432,pad=expanded?28:20;
-  const key=options.key||`${theme}/${mode}/${next?'november':lang}`;
-  const b=lc.register(key,lc.board(null,`Calendar / ${expanded?'Taskbar':'Tray'} / ${theme} / ${next?'November':lang.toUpperCase()}`,x,y,w,h,c.surface,expanded?12:16));
-  b.strokes=[{strokeColor:c.line,strokeWidth:1,strokeAlignment:'inner',strokeStyle:'solid'}];
-  lc.brand(b,pad,16,22);lc.text(b,'App name','Lightcal',pad+30,15,130,24,13,c.ink,600);
-  lc.link(lc.button(b,'Open settings','',w-pad-(expanded?102:30),12,30,30,c,'secondary','settings'),`${theme}/settings/General`);
-  if(expanded){lc.button(b,'Minimize window','',w-pad-66,12,30,30,c,'secondary','minimize');lc.button(b,'Close window to tray','',w-pad-30,12,30,30,c,'secondary','close');}
-  if(expanded){lc.line(b,50,c,0,w);lc.text(b,'Month heading',next?s.next:s.month,pad,68,310,40,27,c.ink,600,'left',jp);}
-  else lc.text(b,'Month heading',next?s.next:s.month,pad,62,226,32,20,c.ink,600,'left',jp);
-  const navY=expanded?72:63;
-  lc.link(lc.button(b,'Previous month','',w-pad-64,navY,30,30,c,'secondary','left'),`${theme}/${mode}/en`);
-  lc.link(lc.button(b,'Next month','',w-pad-30,navY,30,30,c,'secondary','right'),`${theme}/${mode}/november`);
-  lc.text(b,'Today weekday and date',expanded?s.date:s.short,pad,expanded?111:103,expanded?270:165,22,expanded?13:11,c.muted,400,'left',jp);
-  if(!next){
-    const bx=expanded?342:184,by=expanded?112:105,bw=expanded?150:148;
-    lc.rect(b,'Current month badge',bx,by,bw,20,c.soft,6);
-    lc.dot(b,'Current month marker',bx+8,by+7,6,c.accent);
-    lc.text(b,'Current month label',s.current,bx+20,by,bw-25,20,10,c.accent,500,'left',jp);
-    lc.rect(b,'Current month accent',pad,expanded?104:96,44,2,c.accent,1);
+
+
+lc.drawAppIcon = function(container, x, y, size, opts = {}) {
+  const dark = !!opts.dark;
+  const mode = opts.mode || 'date'; // 'date' | 'weekday-date' | 'time-date'
+  const headerText = opts.headerText || 'OCT';
+  const numText = opts.numText || '29';
+  const timeText = opts.timeText || '22:01';
+  const rx = Math.max(4, Math.round(size * 0.23));
+  const headerH = Math.max(5, Math.round(size * 0.30));
+
+  const bodyFill = dark ? '#18181C' : '#FFFFFF';
+  const bodyStroke = dark ? '#2E2E36' : '#DFDFE4';
+  const ink = dark ? '#F4F4F6' : '#141416';
+  const subInk = dark ? '#94949E' : '#64646C';
+
+  lc.rect(container, 'Icon Body', x, y, size, size, bodyFill, bodyStroke, rx, 1);
+
+  const hRect = lc.rect(container, 'Icon Header', x, y, size, headerH, '#E5484D', null, 0);
+  hRect.borderRadiusTopLeft = rx;
+  hRect.borderRadiusTopRight = rx;
+  hRect.borderRadiusBottomLeft = 0;
+  hRect.borderRadiusBottomRight = 0;
+
+  if (size >= 32) {
+    lc.rect(container, 'Icon Header Seam', x + 1, y + headerH, size - 2, 1, dark ? '#27272A' : '#ECECEF');
   }
-  const headY=expanded?157:145,gridY=expanded?190:174,step=expanded?48:32,cell=expanded?40:30,col=(w-2*pad)/7;
-  for(const weekend of [5,6])lc.rect(b,'Gray weekday '+weekend,pad+weekend*col+1,headY-3,col-2,gridY-headY+step*6+3,c.weekend,7);
-  s.days.forEach((day,i)=>lc.text(b,'Weekday '+i,day,pad+i*col,headY,col,20,11,c.muted,600,'center',jp));
-  for(let i=0;i<42;i++){
-    const d=i-(next?5:2),outside=d<1||d>(next?30:31),number=d<1?d+(next?31:30):d>(next?30:31)?d-(next?30:31):d;
-    const cx=pad+(i%7)*col,cy=gridY+Math.floor(i/7)*step;
-    const today=!next&&d===29,selected=!next&&d===(options.today?29:30);
-    const hit=lc.board(b,`Date ${next?'November':'October'} ${number}${outside?' adjacent':''}`,cx,cy,col,cell,null);
-    if(today||selected){
-      const mark=lc.rect(hit,selected?'Selected date fill':'Today outline',(col-cell)/2,0,cell,cell,selected?c.accent:c.surface,9,selected?null:c.accent);
-      if(today&&!selected)mark.strokes=[{strokeColor:c.accent,strokeWidth:1.5,strokeStyle:'solid',strokeAlignment:'inner'}];
+
+  if (mode === 'date') {
+    if (size >= 36) {
+      const hFont = Math.max(7, Math.round(size * 0.14));
+      lc.text(container, 'Icon Header Text', headerText, x + Math.round(size * 0.33), y + Math.round((headerH - hFont) * 0.45), hFont, '700', '#FFFFFF', 'Inter');
     }
-    lc.text(hit,'Day number',String(number),0,-1,col,cell,expanded?17:14,selected?c.onAccent:outside?c.muted:c.ink,today||selected?600:400,'center',jp);
-    if(!outside&&[2,8,14,20,29,30].includes(d)){
-      const count=[14,29,30].includes(d)?2:1;
-      for(let j=0;j<count;j++)lc.dot(hit,'Event dot '+j,col/2-1.5+(j-(count-1)/2)*5,cell-5,3,selected?c.onAccent:j?c.purple:c.accent);
+    const nFont = Math.max(9, Math.round(size * 0.44));
+    const nx = x + Math.round(size * (numText.length > 1 ? 0.22 : 0.34));
+    const ny = y + headerH + Math.round((size - headerH - nFont) * 0.34);
+    lc.text(container, 'Icon Date Numeral', numText, nx, ny, nFont, '700', ink, 'Inter');
+  } else if (mode === 'weekday-date') {
+    const hFont = Math.max(7, Math.round(size * 0.15));
+    lc.text(container, 'Icon Weekday Header', headerText, x + Math.round(size * 0.30), y + Math.round((headerH - hFont) * 0.45), hFont, '700', '#FFFFFF', 'Inter');
+    const nFont = Math.max(9, Math.round(size * 0.42));
+    const nx = x + Math.round(size * 0.22);
+    const ny = y + headerH + Math.round((size - headerH - nFont) * 0.26);
+    lc.text(container, 'Icon Date Numeral', numText, nx, ny, nFont, '700', ink, 'Inter');
+    if (size >= 48) {
+      const dotSize = Math.max(4, Math.round(size * 0.06));
+      lc.rect(container, 'Icon Event Dot 1', x + Math.round(size * 0.42), y + size - Math.round(size * 0.14), dotSize, dotSize, '#5E6AD2', null, dotSize / 2);
+      lc.rect(container, 'Icon Event Dot 2', x + Math.round(size * 0.52), y + size - Math.round(size * 0.14), dotSize, dotSize, '#F59E0B', null, dotSize / 2);
     }
-    if(!outside)lc.link(hit,`${theme}/${mode}/en`);
+  } else if (mode === 'time-date') {
+    const hFont = Math.max(7, Math.round(size * 0.14));
+    lc.text(container, 'Icon Day Header', headerText, x + Math.round(size * 0.20), y + Math.round((headerH - hFont) * 0.45), hFont, '700', '#FFFFFF', 'Inter');
+    const tFont = Math.max(8, Math.round(size * 0.24));
+    lc.text(container, 'Icon Time Text', timeText, x + Math.round(size * 0.16), y + headerH + Math.round(size * 0.12), tFont, '700', ink, 'Inter');
+    const sFont = Math.max(7, Math.round(size * 0.13));
+    lc.text(container, 'Icon Sub Date', 'OCT ' + numText, x + Math.round(size * 0.26), y + headerH + Math.round(size * 0.44), sFont, '600', subInk, 'Inter');
   }
-  if(expanded){
-    lc.line(b,502,c);lc.text(b,'Selection caption','SELECTED DATE',pad,519,250,18,10,c.muted,600);
-    lc.text(b,'Selected weekday date',next?(lang==='en'?'Sunday, 1 November':s.next):s.selected,pad,540,300,28,17,c.ink,600,'left',jp);
-    lc.text(b,'Selected event count',s.count,pad,572,200,18,11,c.muted,400,'left',jp);
-    lc.link(lc.button(b,'Calendar selection',s.cal,338,540,154,34,c,'secondary','calendar'),`${theme}/settings/Calendars`);
-    lc.link(lc.button(b,'Return to today',s.today,392,510,100,26,c,'soft'),`${theme}/expanded/en`);
-  }else{
-    lc.line(b,386,c);lc.link(lc.button(b,'Return to today',s.today,pad,397,80,26,c,'soft'),`${theme}/compact/en`);
-    lc.text(b,'ISO week',s.week,116,398,94,24,10,c.muted,400,'center',jp);
-    lc.link(lc.button(b,'Calendar selection',s.cal,218,397,114,26,c,'secondary'),`${theme}/settings/Calendars`);
-  }
-  return b;
 };
-lc.settings=(theme,tab,x,y,state='normal')=>{
-  const c=lc.palette[theme],key=`${theme}/settings/${tab}${state==='normal'?'':'/'+state}`;
-  const b=lc.register(key,lc.board(null,`Settings / ${tab} / ${theme}${state==='normal'?'':' / '+state}`,x,y,780,620,c.surface,12));
-  b.strokes=[{strokeColor:c.line,strokeWidth:1,strokeStyle:'solid',strokeAlignment:'inner'}];
-  lc.brand(b,20,13,22);lc.text(b,'Window title','Lightcal settings',50,12,350,24,13,c.ink,600);
-  lc.link(lc.button(b,'Close settings','',730,10,30,30,c,'secondary','close'),`${theme}/expanded/en`);
-  lc.line(b,48,c,0,780);lc.rect(b,'Navigation background',0,49,168,571,c.base);
-  ['General','Appearance','Calendars','About'].forEach((name,i)=>{
-    const active=name===tab;
-    const row=lc.board(b,'Navigation / '+name,12,74+i*48,144,38,active?c.soft:null,8);
-    lc.icon(row,{General:'settings',Appearance:'sun',Calendars:'calendar',About:'info'}[name],12,10,18,active?c.accent:c.muted);
-    lc.text(row,'Navigation label',name,40,0,100,38,12,active?c.accent:c.ink,active?600:400);
-    lc.link(row,`${theme}/settings/${name}`);
-  });
-  lc.text(b,'Settings footer','Lightcal',24,568,120,20,11,c.muted,500);
-  const panel=lc.board(b,'Content / '+tab,196,76,556,516,null);
-  lc.text(panel,'Section title',tab,0,0,540,40,26,c.ink,600);
-  const desc={General:'A few preferences. Your calendar stays close.',Appearance:'Make the calendar comfortable to read.',Calendars:'Choose which events appear in your calendar.',About:'A little calendar. Right where you need it.'};
-  lc.text(panel,'Section introduction',desc[tab],0,45,540,24,13,c.muted);
-  const field=(name,label,value,yy)=>{lc.text(panel,name+' label',label,0,yy,270,34,13,c.ink,500);const v=lc.button(panel,name,value,300,yy,256,34,c);lc.icon(v,'down',228,9,16,c.muted);return v;};
-  if(tab==='General'){
-    const lang=field('Language selector','Language','English',100);lc.link(lang,`${theme}/settings/General/languages`);
-    lc.text(panel,'Available languages','English · Русский · Español · 日本語',0,146,556,24,12,c.muted,400,'left',true);
-    lc.line(panel,190,c,0,556);
-    lc.text(panel,'Startup label','Start with Windows',0,209,460,28,14,c.ink,500);
-    lc.text(panel,'Startup description','Open quietly in the tray after sign-in.',0,243,460,24,12,c.muted);
-    lc.toggle(panel,'Startup off by default',514,214,false,c);lc.line(panel,289,c,0,556);
-    lc.text(panel,'Shortcut label','Global shortcut',0,311,500,28,14,c.ink,500);
-    lc.button(panel,'Shortcut field',state==='conflict'?'Ctrl + Alt + C':'Not set',0,351,416,38,c);
-    lc.link(lc.button(panel,'Record shortcut','Record',432,351,124,38,c),`${theme}/settings/General/conflict`);
-    lc.text(panel,'Shortcut explanation',state==='conflict'?'This shortcut is already in use. Choose another.':'Open or hide the tray calendar from anywhere.',0,401,556,34,12,state==='conflict'?c.danger:c.muted);
-    lc.text(panel,'Preferences persistence','Changes are saved automatically.',0,480,556,24,11,c.muted);
-    if(state==='languages'){
-      const menu=lc.board(panel,'Language choices',300,139,256,184,c.surface,9);menu.strokes=[{strokeColor:c.line,strokeWidth:1,strokeStyle:'solid',strokeAlignment:'inner'}];
-      ['English','Русский','Español','日本語'].forEach((label,i)=>{
-        const row=lc.board(menu,'Language / '+label,4,4+i*44,248,42,i===0?c.soft:null,6);
-        lc.text(row,'Language name',label,14,0,194,42,13,i===0?c.accent:c.ink,i===0?600:400,'left',i===3);
-        if(i===0)lc.icon(row,'check',218,13,16,c.accent);
-        lc.link(row,`${theme}/settings/General`);
-      });
-    }
-  }
-  if(tab==='Appearance'){
-    lc.text(panel,'Theme label','Theme',0,100,556,26,14,c.ink,500);
-    const segment=lc.board(panel,'Theme choices',0,140,556,40,c.base,8);
-    const flex=segment.addFlexLayout();flex.dir='row';flex.columnGap=4;flex.horizontalPadding=4;flex.verticalPadding=4;flex.alignItems='center';
-    ['Light','System','Dark'].forEach(label=>{const q=lc.button(segment,'Theme '+label,label,0,0,180,32,c,label==='System'?'soft':'secondary');if(label!=='System')lc.link(q,`${label.toLowerCase()}/settings/Appearance`);});
-    field('First weekday','First day of week','Monday',215);
-    lc.line(panel,273,c,0,556);lc.text(panel,'Gray weekdays label','Gray weekdays',0,293,556,28,14,c.ink,500);
-    lc.text(panel,'Gray weekdays helper','Shade any days you choose. Dates remain selectable.',0,326,556,24,12,c.muted);
-    const row=lc.board(panel,'Weekday shading choices',0,366,556,38,null);const fx=row.addFlexLayout();fx.dir='row';fx.columnGap=8;fx.alignItems='center';
-    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach((label,i)=>lc.button(row,'Gray weekday '+label,label,0,0,72,36,c,i>=5?'soft':'secondary'));
-    lc.text(panel,'Show weekday label','Show weekday in date',0,433,460,28,13,c.ink,500);lc.toggle(panel,'Show weekday on',514,435,true,c);
-    lc.text(panel,'Week numbers label','Show week numbers',0,478,460,28,13,c.ink,500);lc.toggle(panel,'Week numbers on in this example',514,480,true,c);
-  }
-  if(tab==='Calendars'){
-    lc.rect(panel,'Provider summary',0,96,556,78,c.base,10);lc.icon(panel,'calendar',16,120,24,c.accent);
-    lc.text(panel,'Provider name','Windows calendars',54,106,340,26,14,c.ink,600);
-    lc.text(panel,'Provider access','Read-only access',54,136,340,20,11,c.muted);
-    lc.link(lc.button(panel,'Refresh calendars','',506,119,32,32,c,'secondary','refresh'),`${theme}/settings/Calendars`);
-    if(state==='denied'||state==='empty'){
-      lc.icon(panel,'info',250,226,32,c.muted);
-      lc.text(panel,'Unavailable heading',state==='denied'?'Calendar access is unavailable':'No calendars found',24,282,508,34,20,c.ink,600,'center');
-      lc.text(panel,'Unavailable explanation','You can still use Lightcal. No events are shown.',24,327,508,48,13,c.muted,400,'center');
-      lc.link(lc.button(panel,'Retry provider','Try again',192,399,172,36,c,'soft'),`${theme}/settings/Calendars`);
-    }else{
-      [['Work','Windows · Work',c.accent,true],['Personal','Windows · Personal',c.purple,true],['Holidays','Windows · Subscribed calendar',c.muted,false]].forEach(([name,source,color,on],i)=>{
-        const yy=205+i*82;lc.rect(panel,'Select '+name,0,yy+10,22,22,on?c.accent:c.surface,6,on?null:c.line);
-        if(on)lc.icon(panel,'check',3,yy+13,16,c.onAccent);lc.dot(panel,'Calendar color '+name,40,yy+17,8,color);
-        lc.text(panel,'Calendar name '+name,name,62,yy,460,28,14,c.ink,500);
-        lc.text(panel,'Calendar source '+name,source,62,yy+31,460,20,11,c.muted);lc.line(panel,yy+66,c,0,556);
-      });
-      lc.text(panel,'Selection explanation','Only checked calendars contribute event dots.',0,480,556,24,12,c.muted);
-    }
-  }
-  if(tab==='About'){
-    lc.brand(panel,0,105,72);lc.text(panel,'Product name','Lightcal',94,105,440,38,30,c.ink,600);
-    lc.text(panel,'Version label','Development build',94,147,440,24,12,c.muted);
-    const github=lc.button(panel,'GitHub repository','GitHub',0,218,268,44,c,'secondary','external');github.addInteraction('click',{type:'open-url',url:'https://github.com/andmetoo/lightcal'});
-    const site=lc.button(panel,'Author website','koona.app',284,218,272,44,c,'secondary','external');site.addInteraction('click',{type:'open-url',url:'https://koona.app'});
-    lc.text(panel,'License','GPL-3.0-only · Open source',0,284,556,24,12,c.muted);lc.line(panel,332,c,0,556);
-    lc.text(panel,'Updates title','Updates',0,354,556,28,16,c.ink,600);
-    lc.text(panel,'Updates helper',state==='checking'?'Checking GitHub for a stable release…':state==='available'?'A new version is available.':'Checks only when you ask.',0,393,556,26,13,c.muted);
-    const update=lc.button(panel,'Check updates',state==='checking'?'Checking…':state==='available'?'View release on GitHub':'Check for updates',0,443,556,40,c,'soft',state==='available'?'external':'refresh');
-    if(state==='available')update.addInteraction('click',{type:'open-url',url:'https://github.com/andmetoo/lightcal/releases'});
-    else lc.link(update,`${theme}/settings/About/checking`);
-    lc.text(panel,'Manual install note','No automatic downloads, installation, or restart.',0,493,556,20,11,c.muted);
-  }
-  return b;
-};
-lc.trayMenu=(theme,x,y)=>{
-  const c=lc.palette[theme],b=lc.register(`${theme}/tray-menu`,lc.board(null,`Tray menu / ${theme}`,x,y,256,236,c.surface,10));
-  lc.brand(b,16,14,24);lc.text(b,'App name','Lightcal',48,13,180,26,14,c.ink,600);lc.line(b,53,c,12,232);
-  [['Open calendar','expanded/en'],['Settings','settings/General'],['About Lightcal','settings/About'],['Quit',null]].forEach(([label,to],i)=>{
-    const row=lc.board(b,'Tray menu / '+label,8,64+i*40,240,36,null,6);lc.text(row,'Menu label',label,12,0,212,36,13,c.ink);
-    if(to)lc.link(row,`${theme}/${to}`);
-  });return b;
-};
-lc.wire=(start=0,limit=12)=>{
-  let linked=0,noOp=0;const missing=[];
-  for(const link of lc.links.slice(start,start+limit)){
-    const s=penpotUtils.findShapeById(link.id),dest=penpotUtils.findShapeById(lc.screens[link.to]);
-    if(!s||!dest){missing.push(link.to);continue;}
-    const visited=new Set();let ancestor=s,self=false;
-    while(ancestor&&!visited.has(ancestor.id)){
-      visited.add(ancestor.id);if(ancestor.id===dest.id){self=true;break;}
-      if(ancestor.id==='00000000-0000-0000-0000-000000000000')break;
-      ancestor=ancestor.parent;
-    }
-    if(self){noOp++;continue;}
-    s.interactions.filter(i=>i.trigger==='click').forEach(i=>s.removeInteraction(i));
-    s.addInteraction('click',{type:'navigate-to',destination:dest});linked++;
-  }
-  return {linked,noOp,missing:[...new Set(missing)],next:start+limit,total:lc.links.length};
-};
-lc.wireCurrentPage=()=>{
-  const page=penpot.currentPage,rootId=page.root.id,roots=new Set(page.root.children.map(s=>s.id));
-  let linked=0;const seen=new Set();
-  for(const link of lc.links){
-    if(seen.has(link.id))continue;seen.add(link.id);
-    const s=page.getShapeById(link.id),dest=page.getShapeById(lc.screens[link.to]);
-    if(!s||!dest||!roots.has(dest.id)||s.name.startsWith('Date '))continue;
-    let top=s;
-    for(let depth=0;depth<12;depth++){
-      const parent=top.parent;if(!parent||parent.id===rootId||parent.id===top.id)break;top=parent;
-    }
-    if(top.id===dest.id)continue;
-    s.interactions.filter(i=>i.trigger==='click').forEach(i=>s.removeInteraction(i));
-    s.addInteraction('click',{type:'navigate-to',destination:dest});linked++;
-  }
-  return {page:page.name,linked,crossPage:'Not bound; navigate pages in the editor'};
-};
-lc.overview=()=>{
-  const c=lc.palette.light,b=lc.board(null,'Lightcal / Calendar overview',0,0,2048,840,'#EDF1F6',0);
-  lc.brand(b,40,28,40);lc.text(b,'Brand heading','Lightcal',96,24,700,44,32,c.ink,600);
-  lc.text(b,'Design proposition','Your month, a click away.',96,73,800,26,15,c.muted);
-  lc.rect(b,'Dark theme backdrop',1024,126,984,674,'#0D1420',24);
-  lc.text(b,'Light appearance caption','LIGHT',40,112,400,22,10,c.muted,600);
-  lc.text(b,'Dark appearance caption','DARK',1064,138,400,22,10,'#B3BED0',600);
-  const screens=[lc.calendar('light',false,40,178),lc.calendar('light',true,432,178),
-                 lc.calendar('dark',false,1064,178),lc.calendar('dark',true,1456,178)];
-  // Prototype destinations must be top-level boards. Keep separate presentation
-  // copies inside the overview and the canonical windows to its right.
-  screens.forEach(s=>{const preview=s.clone();preview.name=s.name+' / presentation';b.appendChild(preview);preview.showInViewMode=false;s.x+=3520;s.y-=178;});
-  lc.text(b,'Review note','Illustrative events · Windows calendar access is subject to the platform probe',40,802,1960,24,12,c.muted);
-  lc.register('overview',b);return b;
-};
-lc.guide=(x,y)=>{
-  const c=lc.palette.light,b=lc.register('design-guide',lc.board(null,'Design system / Controls and states',x,y,1640,650,'#F5F7FA',0));
-  lc.text(b,'Guide title','Small details. Consistent behavior.',32,24,1550,46,30,c.ink,600);
-  lc.text(b,'Guide introduction','8 px rhythm · 12–16 px body text · 32–40 px controls · 2 px visible keyboard focus',32,83,1550,28,14,c.muted);
-  for(const [i,theme] of ['light','dark'].entries()){
-    const p=lc.palette[theme],panel=lc.board(b,theme+' controls',32+i*804,144,772,450,p.surface,14);
-    lc.text(panel,'Palette caption',theme==='light'?'Light surfaces':'Dark surfaces',24,18,720,32,20,p.ink,600);
-    lc.button(panel,'Primary button','Continue',24,79,150,38,p,'primary');lc.button(panel,'Secondary button','Cancel',190,79,150,38,p);
-    const focus=lc.button(panel,'Keyboard focused button','Today',356,79,150,38,p,'soft');
-    const ring=lc.rect(panel,'Visible keyboard focus',353,76,156,44,null,11,p.accent);ring.strokes=[{strokeColor:p.accent,strokeWidth:2,strokeAlignment:'inner',strokeStyle:'solid'}];
-    lc.text(panel,'Toggle labels','On',24,148,60,24,12,p.muted);lc.toggle(panel,'Toggle on',88,147,true,p);
-    lc.text(panel,'Toggle labels off','Off',190,148,60,24,12,p.muted);lc.toggle(panel,'Toggle off',254,147,false,p);
-    const colors=[['Surface',p.surface],['Text',p.ink],['Muted',p.muted],['Accent',p.accent],['Weekdays',p.weekend],['Events',p.purple]];
-    colors.forEach(([label,color],j)=>{lc.rect(panel,'Swatch '+label,24+j*120,218,96,56,color,8,p.line);lc.text(panel,'Swatch label '+label,label,24+j*120,285,104,24,11,p.muted);});
-    lc.rect(panel,'Error notice',24,347,724,70,p.base,10,p.line);
-    lc.text(panel,'Error title','This shortcut is already in use.',40,359,690,25,13,p.danger,600);
-    lc.text(panel,'Error helper','Choose another combination. Your previous shortcut stays active.',40,386,690,20,11,p.muted);
-  }
-  return b;
-};
-return {ready:true,font:lc.font?.name,japaneseFont:lc.jpFont?.name,screenCount:Object.keys(lc.screens).length};

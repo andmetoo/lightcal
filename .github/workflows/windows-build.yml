@@ -1,0 +1,34 @@
+name: Windows portable build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build locked release
+        run: cargo build --release --workspace --locked
+      - name: Stage unsigned review archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/ci-package -Force | Out-Null
+          Copy-Item target/release/lightcal.exe, LICENSE, THIRD_PARTY_NOTICES.md, README.md target/ci-package/
+          $hash = (Get-FileHash target/ci-package/lightcal.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  lightcal.exe" | Set-Content target/ci-package/lightcal.exe.sha256 -Encoding ascii
+          Compress-Archive -Path target/ci-package/* -DestinationPath target/lightcal-windows-x64-unsigned.zip
+      - name: Upload unsigned build for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: lightcal-windows-x64-unsigned
+          path: target/lightcal-windows-x64-unsigned.zip
+          if-no-files-found: error
+          retention-days: 14

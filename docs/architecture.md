@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: planned; no application code exists yet.
+Status: the Rust/Slint prototype is implemented. The sections below retain the planning baseline; [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes its Windows-only provider and manual-install restrictions. Direct providers live in `crates/lightcal/src/calendars`, bounded HTTPS in `net.rs`, Windows credential encryption in `secure_store.rs`, and the signed portable updater in `installer.rs`. Calendar arithmetic stays in `calendar-core`; Windows timezone-name conversion is behind a platform adapter. Read [setup](provider-setup.md) for configuration and remaining live validation.
 
 ## Boundaries
 
@@ -23,7 +23,7 @@ Start with these two crates. Split platform crates only when dependencies or own
 
 ## State and lifecycle
 
-Application state contains displayed month, selected date, today, preferences, and presentation (`Hidden`, `Compact`, or `Expanded`). UI callbacks dispatch typed Rust actions; the state drives both views. Closing a surface changes presentation, while Quit releases tray/menu objects and exits.
+Application state contains displayed month, selected date, today, preferences, and presentation (initially background, compact calendar, settings, or minimized). Both tray and taskbar restore the same compact calendar. Closing or dismissing minimizes the native window; loss of focus preserves it. Quit releases tray/menu objects and exits. Windows DWM thumbnail and Peek requests use Slint calendar pixels via a subclass attached only to the process-owned window.
 
 Windows-specific work includes stable application identity and shortcut association, visible-window styles for taskbar/Alt-Tab behavior, per-monitor DPI awareness, tray rectangle lookup, focus and activation, and Explorer restart recovery. A single-instance mechanism must be per-user, accept only bounded activation messages, and reject arbitrary commands or file paths. Its exact implementation is selected in the prototype.
 
