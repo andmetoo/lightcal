@@ -1,0 +1,24 @@
+{
+  "verifiedOn": "2026-10-29",
+  "fileName": "app",
+  "fileId": "c2d27051-3cd1-813e-8008-dd81ca9d88c1",
+  "instance": "local",
+  "savedVersion": "Lightcal redesign — organized into six pages",
+  "pages": [
+    { "name": "00 · Overview", "id": "837761bc-b3c9-80fe-8008-dd83770d7ca7", "boards": 1 },
+    { "name": "01 · Calendar", "id": "837761bc-b3c9-80fe-8008-dd83ae620de8", "boards": 10 },
+    { "name": "02 · Settings", "id": "837761bc-b3c9-80fe-8008-dd83fa138f99", "boards": 8 },
+    { "name": "03 · States", "id": "837761bc-b3c9-80fe-8008-dd840e641e39", "boards": 12 },
+    { "name": "04 · Languages", "id": "837761bc-b3c9-80fe-8008-dd842a6454ea", "boards": 4 },
+    { "name": "05 · Design system", "id": "837761bc-b3c9-80fe-8008-dd84d15eb2d9", "boards": 1 }
+  ],
+  "checks": {
+    "totalBoards": 36,
+    "textOverflows": 0,
+    "containmentViolations": 0,
+    "fileValidationErrors": 0,
+    "calendarNavigationLinks": 14,
+    "settingsNavigationLinks": 26,
+    "manualViewerWalkthrough": false
+  }
+}

@@ -1,0 +1,17 @@
+name: Feature proposal
+description: Suggest a focused improvement.
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: User scenario
+      description: Who needs this, in what situation, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior and alternatives
+      description: Explain how this fits a lightweight offline calendar.
+    validations:
+      required: true

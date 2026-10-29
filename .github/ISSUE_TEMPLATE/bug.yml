@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible problem; use SECURITY.md for vulnerabilities.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected behavior
+      description: Include steps to reproduce without personal information.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lightcal version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS version, architecture, display scaling, monitors, and entry point.
+    validations:
+      required: true
