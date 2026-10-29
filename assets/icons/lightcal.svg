@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Lightcal">
+  <rect width="1024" height="1024" rx="224" fill="#245fd0"/>
+  <g fill="#fff">
+    <rect x="240" y="288" width="544" height="480" rx="80"/>
+    <rect x="352" y="208" width="64" height="160" rx="32"/>
+    <rect x="608" y="208" width="64" height="160" rx="32"/>
+  </g>
+  <g fill="#245fd0">
+    <rect x="240" y="416" width="544" height="48"/>
+    <rect x="328" y="528" width="128" height="48" rx="24"/>
+    <rect x="328" y="624" width="128" height="48" rx="24"/>
+    <circle cx="632" cy="600" r="64"/>
+  </g>
+</svg>

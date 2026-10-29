@@ -297,7 +297,7 @@ def reuse_ids(new_layer, old_layer):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["probe", "area", "create", "revise", "preferences", "language", "layers", "contrast", "inspect", "export"])
+    parser.add_argument("action", choices=["probe", "viewport", "area", "create", "revise", "preferences", "language", "layers", "contrast", "inspect", "export"])
     parser.add_argument("ids", nargs="*")
     parser.add_argument("--y", type=int, default=0, help="Top coordinate for an area inspection")
     parser.add_argument("--exe", default=r"C:\Program Files\Lunacy\Lunacy.exe")
@@ -306,6 +306,8 @@ def main():
     try:
         if args.action == "probe":
             result = client.tool("get_viewport_info")
+        elif args.action == "viewport":
+            result = client.tool("get_screenshot_viewport")
         elif args.action == "area":
             result = client.tool("get_layers_in_area", {
                 "x": 0, "y": args.y, "width": 1960, "height": 1150, "maxDepth": 1})

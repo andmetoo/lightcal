@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Lightcal tray mark">
+  <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="6" width="16" height="15" rx="2"/>
+    <path d="M8 3V8M16 3V8M4 11H20M8 15H10M8 18H10"/>
+  </g>
+  <circle cx="16" cy="16.5" r="1.5" fill="currentColor"/>
+</svg>
