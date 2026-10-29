@@ -2,22 +2,22 @@
 
 Design date: 2026-10-29. Target: native Rust/Slint Windows application. All design changes use Penpot MCP.
 
-Connected file: `app`, file ID `2bd3d7f1-914f-8188-8008-dd6ebe65c25b`.
+Connected local file: `app`, file ID `c2d27051-3cd1-813e-8008-dd81ca9d88c1`. Page IDs and counts are recorded in [manifest.json](manifest.json).
 
 ## Organization
 
-The owner requested separate pages rather than one large canvas. The target structure is:
+The design is organized on six separate pages, in this order:
 
 | Page | Contents |
 | --- | --- |
-| 00 · Overview | Presentation copies of the two calendar modes in both themes |
-| 01 · Calendar | Canonical calendar windows, current/other month, and tray menus |
-| 02 · Settings | General, Appearance, Calendars, and About; light/dark paired by row |
-| 03 · States | Language menu, shortcut conflict, provider unavailable/empty, update checking/available |
-| 04 · Languages | English, Russian, Spanish, Japanese compact calendar examples |
-| 05 · Design system | Paired palettes, controls, toggle states, keyboard focus, error treatment |
+| 00 · Overview | One presentation board showing both modes/themes |
+| 01 · Calendar | 10 boards: canonical windows, current/other month, and tray menus |
+| 02 · Settings | 8 boards: General, Appearance, Calendars, About; light/dark paired by row |
+| 03 · States | 12 boards: language menu, shortcut conflict, provider unavailable/empty, update checking/available |
+| 04 · Languages | 4 compact examples: English, Russian, Spanish, Japanese |
+| 05 · Design system | One board: palettes, controls, toggle states, keyboard focus, error treatment |
 
-Status: the initial 35-screen redesign was created and several boards were visually inspected. Reorganization into these pages is in progress following owner feedback. The plugin must be responsive before page organization and prototype checks can be completed; do not infer completion from the source files alone.
+Status: completed in the local Penpot file on 2026-10-29. The former 35-board mixed canvas was replaced with 36 organized boards, including an added English localization reference. The old canvas and temporary page were removed after verification. A saved version preserves the pre-cleanup file; a final saved version is named `Lightcal redesign — organized into six pages`.
 
 ## Layout and behavior
 
@@ -36,10 +36,14 @@ Status: the initial 35-screen redesign was created and several boards were visua
 - [pages.js](pages.js) defines `storage.lightcal.buildNext()`. Run one phase per MCP call to keep the plugin responsive. Never use one long loop to rebuild and wire the entire design.
 - Upload the owner's [PNG reference](../../assets/icons/better/png/icon-128.png) via `penpot.uploadMediaData` and assign the returned image to `storage.lightcal.image` before running the page builder.
 - Use a fresh connected file for reproduction, or inspect an existing file before rebuilding. Page creation is not an export of a `.penpot` archive.
-- Wire prototypes in short batches, skip self-navigation, and guard root ancestry against cycles. Check page compatibility before adding cross-page navigation; a design mockup need not pretend to execute live OS actions.
+- `wireCurrentPage()` binds representative navigation only within the current page, skips self-navigation, and guards root ancestry against cycles. The Calendar page has 14 transitions and Settings has 26. Cross-page jumps and arbitrary date selection are not simulated. Use the editor page list to inspect the separate scenarios.
+- Prototype flows named `Taskbar calendar` and `Settings` start on their respective pages. About links open the requested public URLs on click. No prototype performs live OS actions.
+- [verify.js](verify.js) checks current-page text overflow and containment without altering the design. Keep calls short; do not loop through an unbounded parent chain or perform one long global wiring operation.
 
 ## Verification limits
 
-The initial calendar overview, General, and Appearance were exported from Penpot and visually inspected. Core text/background contrast pairs range from 5.18:1 to 16.27:1 in light mode and 5.40:1 to 14.79:1 in dark mode. These checks cover the selected palette pairs, not all interactive/system contrast cases.
+The rebuilt overview, dark Appearance, and Japanese calendar were exported from local Penpot and visually inspected; General/Appearance were also reviewed in the initial draft. All six pages passed text-overflow and board-containment checks with zero findings. Penpot's file validation reported zero errors. The final page count/order and board counts were verified after deleting the old canvas.
 
-Final text-bound, containment, prototype, and page-organization checks remain pending until reorganization is complete. Real Windows DPI, accessibility, event APIs, fonts, startup, shortcut registration, and update networking are not implemented or verified by mockups. Translated examples are draft design copy, not complete reviewed translation catalogs.
+Core text/background contrast pairs range from 5.18:1 to 16.27:1 in light mode and 5.40:1 to 14.79:1 in dark mode. These checks cover the selected palette pairs, not all interactive/system contrast cases.
+
+Real Windows DPI, accessibility, event APIs, fonts, startup, shortcut registration, and update networking are not implemented or verified by mockups. Translated examples are draft design copy, not complete reviewed translation catalogs. Prototype links were structurally checked; a complete manual viewer walkthrough is not claimed.

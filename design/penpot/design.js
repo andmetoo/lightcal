@@ -249,6 +249,23 @@ lc.wire=(start=0,limit=12)=>{
   }
   return {linked,noOp,missing:[...new Set(missing)],next:start+limit,total:lc.links.length};
 };
+lc.wireCurrentPage=()=>{
+  const page=penpot.currentPage,rootId=page.root.id,roots=new Set(page.root.children.map(s=>s.id));
+  let linked=0;const seen=new Set();
+  for(const link of lc.links){
+    if(seen.has(link.id))continue;seen.add(link.id);
+    const s=page.getShapeById(link.id),dest=page.getShapeById(lc.screens[link.to]);
+    if(!s||!dest||!roots.has(dest.id)||s.name.startsWith('Date '))continue;
+    let top=s;
+    for(let depth=0;depth<12;depth++){
+      const parent=top.parent;if(!parent||parent.id===rootId||parent.id===top.id)break;top=parent;
+    }
+    if(top.id===dest.id)continue;
+    s.interactions.filter(i=>i.trigger==='click').forEach(i=>s.removeInteraction(i));
+    s.addInteraction('click',{type:'navigate-to',destination:dest});linked++;
+  }
+  return {page:page.name,linked,crossPage:'Not bound; navigate pages in the editor'};
+};
 lc.overview=()=>{
   const c=lc.palette.light,b=lc.board(null,'Lightcal / Calendar overview',0,0,2048,840,'#EDF1F6',0);
   lc.brand(b,40,28,40);lc.text(b,'Brand heading','Lightcal',96,24,700,44,32,c.ink,600);
