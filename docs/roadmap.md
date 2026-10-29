@@ -25,6 +25,7 @@ Acceptance:
 4. Mixed-DPI positioning, first keyboard navigation, and Narrator discoverability are demonstrated.
 5. Release-build metrics are recorded using [validation](validation.md); pass targets or obtain an explicit adjustment backed by measurements.
 6. A macOS launch/menu-bar probe is recorded; unavailable hardware is an open gate, never a claimed pass.
+7. A separate Windows calendar probe demonstrates read-only enumeration and occurrence queries for the intended packaging model, or records a blocker for owner review before package/distribution decisions.
 
 Gate: record passing integration/performance evidence in ADR 0001 before building the full UI; bring blockers to the owner if the accepted decision needs revision.
 
@@ -38,10 +39,11 @@ Acceptance:
 2. Review at 100%, 150%, and 200% scaling; include long localized month/day labels and Windows high-contrast behavior.
 3. Expanded space improves readability and navigation. Do not invent empty agenda content to fill the window.
 4. Owner accepts the previews and interaction behavior before visual implementation.
+5. Apply [the required features](features.md): weekday/date text, selectable gray weekdays, current-month label, event dots, and Settings/Calendars/About designs including the two requested links.
 
 ## 3. Complete the offline calendar (2-4 days)
 
-Implement the approved UI, month/year transitions, leap years, configurable first weekday, optional ISO week numbers, themes, date rollover, and keyboard navigation.
+Implement the approved UI, month/year transitions, leap years, configurable first weekday and gray weekdays, weekday/date display, current-month emphasis, optional ISO week numbers, themes, date rollover, and keyboard navigation. Validate dot layout with explicitly synthetic event data until the provider milestone.
 
 Acceptance:
 
@@ -53,7 +55,7 @@ Acceptance:
 
 ## 4. Preferences and reliable background behavior (1-2 days)
 
-Implement theme/weekday/week-number settings, optional autostart, safe persistence, and tray recovery.
+Implement theme/weekday/week-number settings, optional autostart/global shortcut, safe persistence, tray recovery, and About with GitHub/koona.app links. Complete read-only Windows calendar selection, real event dots, and manual update checking before release.
 
 Acceptance:
 
@@ -61,6 +63,9 @@ Acceptance:
 2. Autostart is off initially; enabling/disabling it affects only Lightcal's entry and is verified in an isolated user profile.
 3. Missing monitor, changed scaling, Explorer restart, and failed settings writes leave the app usable.
 4. Performance targets still hold after features are enabled.
+5. Shortcut capture/change/clear handles conflicts and preserves the last working binding on failure. About opens the correct external links only on user action.
+6. Calendar selection persists by ID; unselected calendars contribute no dots. Access denial, missing/deleted calendars, recurrence, all-day/multi-day events, timezone conversion, and stale provider data are tested with controlled fixtures and a real-provider smoke check.
+7. Manual update checking correctly handles newer/current versions, no stable release, offline, timeout, rate-limit, and invalid responses; it never installs or restarts the app.
 
 ## 5. Prepare the first Windows release (2-3 days, excluding certificate lead time)
 

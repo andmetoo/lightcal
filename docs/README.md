@@ -5,6 +5,7 @@ Planning baseline: October 29, 2026.
 | Document | Purpose |
 | --- | --- |
 | [Product](product.md) | Scope, approved choices, and window behavior |
+| [Required features](features.md) | Owner-required settings, Windows calendars, event dots, updates, and About |
 | [UI framework decision](decisions/0001-ui-framework.md) | Accepted Slint choice, alternatives, evidence, and validation gate |
 | [Architecture](architecture.md) | Rust boundaries and platform integration |
 | [Roadmap](roadmap.md) | Ordered milestones and acceptance criteria |

@@ -7,6 +7,6 @@
 - Keep calendar logic independent of toolkit and platform APIs. Windows ships first; preserve a macOS port path.
 - Measure resource claims in release builds and label unmeasured targets honestly.
 - Use temporary application data for tests. Never alter real autostart/registry/profile state during automated tests without an isolated, explicit test setup.
-- Do not introduce telemetry, accounts, networking, event providers, or auto-update infrastructure without a scope decision.
+- Follow `docs/features.md`: read-only Windows calendar access, manual GitHub update checking, optional startup/shortcut, and About links are approved scope. Direct account sign-in, other event providers, telemetry, and automatic update installation still require an owner decision.
 - Preserve GPL-3.0-only licensing and third-party attribution. Never commit credentials or signing material.
 - Check documentation with `python scripts/check_docs.py`; add documented Rust checks with the first Cargo workspace.

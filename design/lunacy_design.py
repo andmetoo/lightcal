@@ -1,7 +1,7 @@
 """Create and inspect Lightcal concepts through Lunacy's local stdio MCP only.
 
 Requires the installed Lunacy application and its local MCP endpoint.
-Creation adds new layers to the active document; it never edits existing layers.
+Creation adds new layers; explicit revise/contrast actions update existing layers.
 Run `python design/lunacy_design.py probe` before `create`.
 """
 
@@ -98,12 +98,16 @@ def calendar(expanded, dark, x, y):
                 "selected": "245FD0", "on": "FFFFFF", "soft": "EDF3FF"})
     w, h = (440, 480) if expanded else (320, 360)
     pad = 28 if expanded else 20
-    content = []
+    content = [rect("Current month title tint", pad-8, 22, 226 if expanded else 180,
+                    34, palette["soft"], 9)]
     content.append(text("Month title", "October 2026", pad, 22, w-120, 34,
-                        24 if expanded else 19, palette["ink"], True))
+                        24 if expanded else 19, palette["accent"], True))
     if expanded:
-        content.append(text("Current local date", "Today · Thursday, 29 October", pad, 61,
-                            300, 20, 12, palette["muted"]))
+        content.append(text("Current local date", "Thursday, 29 October · Current month", pad, 61,
+                            360, 20, 12, palette["muted"]))
+    else:
+        content.append(text("Current local date", "Thu, 29 Oct · Current month", pad, 57,
+                            270, 16, 10, palette["muted"]))
     for previous, bx in [(True, w-88), (False, w-52)]:
         content.append(rect("Previous month" if previous else "Next month", bx, 25, 30, 30,
                             palette["bg"], 8, border=palette["line"], thickness=1))
@@ -115,6 +119,10 @@ def calendar(expanded, dark, x, y):
     step = 39 if expanded else 31
     column = (w-2*pad)/7
     cell_size = 36 if expanded else 28
+    for column_index in [5, 6]:
+        content.append(rect("Gray weekday " + str(column_index),
+                            pad+column_index*column+1, head_y-2, column-2,
+                            grid_y-head_y+6*step, "2D3036" if dark else "F0F2F5", 7))
     for i, day in enumerate(["MO", "TU", "WE", "TH", "FR", "SA", "SU"]):
         content.append(text("Weekday " + day, day, pad+i*column, head_y, column, 20,
                             10, palette["muted"], True, 2))
@@ -135,6 +143,15 @@ def calendar(expanded, dark, x, y):
         content.append(text(("Adjacent month " if outside else "October ")+str(number),
                             str(number), cx, cy, column, cell_size,
                             16 if expanded else 13, color, today or selected, 2))
+        # Synthetic examples only; live data comes from a separate Windows adapter.
+        if not outside and day in [2, 8, 14, 20, 29, 30]:
+            count = 2 if day in [14, 29, 30] else 1
+            for dot in range(count):
+                dot_color = palette["on"] if selected else palette["accent"] if dot == 0 else ("72C5B5" if dark else "167B68")
+                content.append({"_t": "OVAL", "id": guid(),
+                                "name": f"Event dot {day}/{dot}",
+                                "frame": [cx+column/2-2+(dot-(count-1)/2)*5, cy+cell_size-5, 3, 3],
+                                "fill": dot_color})
     divider_y = 390 if expanded else 308
     content.append(rect("Footer divider", pad, divider_y, w-2*pad, 1, palette["line"]))
     if expanded:
@@ -173,15 +190,114 @@ def board(dark, x, y):
                 calendar(False, dark, 40, 204),
                 text("Expanded caption", "TASKBAR  /  EXPANDED", 420, 120, 440, 20, 10, muted, True),
                 calendar(True, dark, 420, 154),
-                text("Board note", "29  Today outline     30  Selected date     ·     Monday first / ISO weeks",
+                text("Board note", "Today outlined · Selection filled · Gray weekends · Event dots (sample data)",
                      40, 650, 830, 20, 11, muted),
             ]}
 
 
+def preferences_board(dark, x, y):
+    ink, muted, surface, line, accent, soft = (
+        ("F1F3F7", "A4AAB7", "24262B", "3A3D45", "9AC1FF", "303A4C") if dark else
+        ("192230", "596579", "FFFFFF", "E1E5EC", "245FD0", "EDF3FF"))
+    screens = []
+    for index, title in enumerate(["Appearance", "General", "Calendars", "About"]):
+        layers = [text("Settings title", title, 28, 22, 360, 36, 24, ink, True),
+                  text("Settings breadcrumb", "Lightcal / Settings", 28, 64, 350, 20, 12, muted),
+                  rect("Header divider", 28, 103, 384, 1, line)]
+
+        def label(name, value, xx, yy, width=360, height=24, size=13, color=ink, bold=False):
+            layers.append(text(name, value, xx, yy, width, height, size, color, bold))
+
+        def button(name, value, xx, yy, width, active=False):
+            layers.append(rect(name, xx, yy, width, 34, soft if active else surface,
+                               8, border=accent if active else line, thickness=1))
+            layers.append(text(name+" label", value, xx, yy, width, 34, 12,
+                               accent if active else ink, active, 2))
+
+        if title == "Appearance":
+            label("Theme label", "Theme", 28, 124, bold=True)
+            for i, value in enumerate(["Light", "System", "Dark"]):
+                button("Theme " + value, value, 28+i*132, 159, 120, value == "System")
+            label("Week start label", "First day of week", 28, 221, bold=True)
+            button("First weekday", "Monday", 270, 218, 142)
+            label("Gray weekdays label", "Gray weekdays", 28, 287, bold=True)
+            label("Gray weekdays help", "Choose the days to shade in the calendar.", 28, 316,
+                  size=12, color=muted)
+            for i, day in enumerate(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]):
+                button("Gray " + day, day, 28+i*56, 353, 48, i >= 5)
+            label("Weekday display label", "Show weekday in date", 28, 417, bold=True)
+            button("Weekday display enabled", "On", 350, 412, 62, True)
+        elif title == "General":
+            label("Startup label", "Start with Windows", 28, 137, bold=True)
+            label("Startup help", "Start quietly in the tray after sign-in.", 28, 167,
+                  size=12, color=muted)
+            button("Startup disabled", "Off", 350, 134, 62)
+            layers.append(rect("Startup divider", 28, 213, 384, 1, line))
+            label("Shortcut heading", "Global shortcut", 28, 245, bold=True)
+            button("Unassigned shortcut", "Not set", 28, 287, 246)
+            button("Record shortcut", "Record", 290, 287, 122)
+            label("Shortcut help", "Choose a shortcut to toggle the compact calendar.",
+                  28, 340, size=12, color=muted)
+            label("Optional settings hint", "Both options are optional and off by default.",
+                  28, 416, size=12, color=muted)
+        elif title == "Calendars":
+            label("Calendar source heading", "Windows calendars", 28, 126, bold=True)
+            label("Calendar source help", "Choose which calendars appear in Lightcal.",
+                  28, 157, size=12, color=muted)
+            for i, (value, checked, color) in enumerate([
+                    ("Work", True, accent), ("Personal", True, "167B68" if not dark else "72C5B5"),
+                    ("Holidays", False, muted)]):
+                yy = 205+i*66
+                layers.append(rect("Calendar checkbox " + value, 28, yy, 20, 20,
+                                   soft if checked else surface, 5,
+                                   border=accent if checked else line, thickness=1))
+                if checked:
+                    layers.append(path("Checked " + value, "M3 8 L6 11 L13 4", 30, yy+2, accent))
+                layers.append({"_t": "OVAL", "id": guid(), "name": "Calendar color " + value,
+                               "frame": [65, yy+6, 8, 8], "fill": color})
+                label("Calendar " + value, value, 86, yy-3, width=300, bold=True)
+                layers.append(rect("Calendar row divider " + value, 28, yy+44, 384, 1, line))
+            label("Calendar selection help", "Only selected calendars contribute event dots.",
+                  28, 421, size=12, color=muted)
+        else:
+            label("App name", "Lightcal", 28, 130, height=42, size=30, bold=True)
+            label("App version", "Development build", 28, 182, size=12, color=muted)
+            label("App description", "A little calendar. Right where you need it.",
+                  28, 222, size=13, color=muted)
+            button("GitHub link", "GitHub ↗", 28, 273, 180)
+            button("Koona link", "koona.app ↗", 224, 273, 188)
+            label("License", "GPL-3.0-only · Open source", 28, 326, size=12, color=muted)
+            button("Manual update check", "Check for updates", 28, 379, 384, True)
+            label("Update help", "Checks only when requested. No automatic installation.",
+                  28, 430, size=11, color=muted)
+        screens.append({"_t": "FRAME", "id": guid(),
+                        "name": f"Lightcal / Settings / {title} / {'Dark' if dark else 'Light'}",
+                        "frame": [20+(index % 2)*460, 120+(index//2)*510, 440, 480],
+                        "fill": surface, "cornerRadius": [16]*4,
+                        "border": line, "thickness": 1, "layers": layers})
+    return {"_t": "FRAME", "id": guid(),
+            "name": "Lightcal preferences / " + ("Dark" if dark else "Light"),
+            "frame": [x, y, 940, 1150], "fill": "17191E" if dark else "F0F2F6",
+            "layers": [text("Preferences board title", "Make it yours", 28, 24, 800, 42, 28, ink, True),
+                       text("Preferences board note", "Settings concepts · Calendar names and selections are illustrative",
+                            28, 76, 870, 24, 13, muted), *screens]}
+
+
+def reuse_ids(new_layer, old_layer):
+    new_layer["id"] = old_layer["id"]
+    old_children = {(layer["_t"], layer.get("name")): layer
+                    for layer in old_layer.get("layers", [])}
+    for child in new_layer.get("layers", []):
+        previous = old_children.get((child["_t"], child.get("name")))
+        if previous:
+            reuse_ids(child, previous)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["probe", "area", "create", "layers", "contrast", "inspect", "export"])
+    parser.add_argument("action", choices=["probe", "area", "create", "revise", "preferences", "layers", "contrast", "inspect", "export"])
     parser.add_argument("ids", nargs="*")
+    parser.add_argument("--y", type=int, default=0, help="Top coordinate for an area inspection")
     parser.add_argument("--exe", default=r"C:\Program Files\Lunacy\Lunacy.exe")
     args = parser.parse_args()
     client = Lunacy(args.exe)
@@ -190,7 +306,7 @@ def main():
             result = client.tool("get_viewport_info")
         elif args.action == "area":
             result = client.tool("get_layers_in_area", {
-                "x": 0, "y": 0, "width": 1960, "height": 800, "maxDepth": 1})
+                "x": 0, "y": args.y, "width": 1960, "height": 1150, "maxDepth": 1})
         elif args.action == "create":
             client.tool("get_format_documentation")
             # Keep existing document content intact: inspect the destination first.
@@ -200,6 +316,28 @@ def main():
             layers = [board(False, 0, 0), board(True, 1000, 0)]
             result = client.tool("create_layers", {"parentId": "", "layersJson": json.dumps(layers)})
             print(json.dumps({"board_ids": [layer["id"] for layer in layers]}), flush=True)
+        elif args.action == "revise":
+            client.tool("get_format_documentation")
+            existing = client.tool("get_layers_by_ids", {"ids": args.ids})
+            updates = []
+            for item in existing.get("content", []):
+                if item.get("type") != "text":
+                    continue
+                for old in json.loads(item["text"]):
+                    dark = old.get("name", "").endswith("Dark")
+                    new = board(dark, 1000 if dark else 0, 0)
+                    reuse_ids(new, old)
+                    updates.append(new)
+            if len(updates) != 2:
+                raise RuntimeError("Expected exactly two existing concept boards")
+            result = client.tool("update_layers", {"layersJson": json.dumps(updates)})
+        elif args.action == "preferences":
+            client.tool("get_format_documentation")
+            layers = [preferences_board(False, 0, 820), preferences_board(True, 1000, 820)]
+            result = client.tool("create_layers", {"parentId": "", "layersJson": json.dumps(layers)})
+            print(json.dumps({"preferences_ids": [layer["id"] for layer in layers],
+                              "screen_ids": [layer["id"] for board_layer in layers
+                                             for layer in board_layer["layers"] if layer["_t"] == "FRAME"]}), flush=True)
         elif args.action == "layers":
             client.tool("get_format_documentation")
             result = client.tool("get_layers_by_ids", {"ids": args.ids})

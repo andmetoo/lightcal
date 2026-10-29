@@ -10,6 +10,7 @@ A lightweight calendar for Windows with compact tray and expanded taskbar views,
 - Launch or activate the pinned taskbar application for a larger calendar.
 - Navigate months, return to today, and use the calendar with a keyboard.
 - Run quietly in the background, without a browser runtime or an account.
+- Show selected Windows calendar events as dots, with configurable gray weekdays, optional startup/shortcut, and manual update checking. Windows calendar access remains subject to a feasibility probe.
 
 Rust is the implementation language and Slint is the selected UI framework. Platform integration and performance will be verified in a small prototype. Its widgets are drawn by the toolkit; they are not Windows or AppKit controls.
 

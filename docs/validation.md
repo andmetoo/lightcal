@@ -28,6 +28,9 @@ Hidden mode must not repaint continuously, run a busy timer, or poll the tray. C
 - Accessibility: Narrator names, role/selection announcements, focus visibility, contrast, and no color-only selected/today distinction.
 - Dates: leap years including century rules, December/January, first-weekday changes, ISO week-year boundaries, local midnight, timezone changes, and suspend/resume.
 - Persistence: missing settings, malformed settings, unsupported schema, permission failure, and restart after interrupted replacement.
+- Features: weekday display, gray-weekday subsets, current-month label/year matching, optional shortcut registration/conflicts, startup, and About GitHub/koona.app links.
+- Events: checked-calendar filtering, zero/multiple sources, permission/provider failures, loading/stale counts, all-day/recurring/multi-day occurrences, DST and exclusive date boundaries. Use synthetic data for automated tests; keep live-provider checks explicit and read-only.
+- Updates: stable-version comparison, no release, offline, timeout, rate limiting, invalid metadata/link rejection, and no implicit download/install/restart.
 
 ## Automation boundaries
 

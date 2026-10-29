@@ -41,7 +41,17 @@ Store a small versioned JSON preferences file in the OS per-user application con
 
 Write via a temporary file and platform-appropriate atomic replacement, retaining a last-known-good copy. On malformed or unsupported newer preferences, start with safe defaults, inform the user, and preserve the original instead of overwriting it. Log write failures without freezing or closing the calendar.
 
-`LIGHTCAL_DATA_DIR` redirects all application-owned writable data in development and tests. Autostart, registry/shortcut changes, and real profile writes are disabled in automated tests unless explicitly exercised in an isolated profile. Logs are opt-in, bounded, and contain no personal calendar data. Initial runtime behavior requires no outbound requests or telemetry.
+`LIGHTCAL_DATA_DIR` redirects all application-owned writable data in development and tests. Autostart, registry/shortcut changes, and real profile writes are disabled in automated tests unless explicitly exercised in an isolated profile. Logs are opt-in, bounded, and contain no personal calendar data. No telemetry is permitted. Explicit update checks may contact GitHub; About links open only on user action.
+
+## Calendar provider, shortcut, and update checking
+
+Follow [Required features](features.md). Keep provider enumeration and bounded occurrence queries behind a Windows adapter. The provider feasibility probe precedes final installer/package selection. Windows appointment-store access does not imply access to every Outlook calendar. Use read-only APIs and explicit user connection; store selected opaque calendar IDs separately from labels. Query the visible date range, cancel obsolete requests when navigating, and never block calendar opening on provider work. Cache only bounded data in memory initially; keep stale/loading/error distinct from a confirmed absence of events. Do not persist event titles or credentials without another design decision.
+
+Represent event occurrences with source ID, event ID, calendar color, timezone-aware boundaries, and all-day semantics. Map them into displayed local dates in the domain layer, deduplicating per source/event/occurrence. Changes to source selection invalidate dot counts. Tests use a synthetic provider, never the user's live calendars.
+
+Store gray-weekday selection as a weekday set; retain a separate first-weekday preference. A platform shortcut adapter registers only an explicitly configured combination and posts activation into the existing GUI loop. Startup registration and shortcut binding need rollback/error behavior; preferences must not claim registration succeeded when it failed.
+
+The update checker is a separate bounded HTTPS request to GitHub release metadata, invoked manually. Compare stable semantic versions, exclude drafts/prereleases, preserve OS TLS validation, and handle timeout/rate-limit/offline states. Accept release-page links only from the expected repository on github.com; a response must never become an arbitrary executable or shell command. No background polling, binary installation, or restart is introduced. Document GitHub's receipt of normal connection metadata in the release privacy statement.
 
 ## Future macOS port
 

@@ -13,12 +13,13 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 - Future macOS support must remain architecturally possible.
 - All documentation is in English. Changes are reviewed through PRs; protected branches require owner approval.
 - Lunacy is available for UI design. Editable design files and preview exports belong in `design/` when created.
+- Slint is accepted. The additional owner-required features and acceptance criteria are tracked in [Required features](features.md), including Windows calendar selection, event dots, startup, shortcut, update checking, and About links.
 
 ## Proposed first release
 
 Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 and older Windows compatibility require separate validation. macOS is an early feasibility target, not a promised first-release download.
 
-The first release includes a Gregorian month grid, selected date, today highlight, previous/next month, return to today, configurable first weekday, light/dark/system theme, optional ISO week numbers, keyboard navigation, tray menu, and explicit Quit. The tray icon should display the day of month if legibility testing succeeds; its tooltip includes the full local date.
+The first release includes a Gregorian month grid, selected date, today highlight, weekday/date display, previous/next month, current-month emphasis, return to today, configurable first weekday and gray weekdays, light/dark/system theme, optional ISO week numbers, keyboard navigation, tray menu, and explicit Quit. It also includes opt-in startup, an optional global shortcut, manual update checking, selection of Windows-exposed calendars, event dots, and About links. The tray icon should display the day of month if legibility testing succeeds; its tooltip includes the full local date and weekday.
 
 Start with English application text; use system locale for month/day names where supported. Keep strings separate from logic so additional translations are possible. Localization and right-to-left coverage must not be claimed before testing.
 
@@ -41,11 +42,11 @@ Windows controls pinning and tray overflow visibility; Lightcal must not promise
 
 ## Outside the first release
 
-Calendar accounts, event editing, reminders, ICS import, holidays requiring downloads, cloud synchronization, telemetry, accounts, plugins, system clock replacement, and shell injection. Agenda/event providers can be proposed after the lightweight calendar is useful on its own.
+Direct calendar-account sign-in, event editing, reminders, ICS import/subscriptions, holidays requiring downloads, Lightcal-operated cloud synchronization, telemetry, plugins, system clock replacement, shell injection, and automatic update installation. Read-only Windows calendar access and manual update checking are approved scope. Calendar availability must be established by the API probe before committing to release compatibility.
 
 ## Remaining product decisions
 
 - Approve the Lunacy designs and final sizes before polishing the application UI.
 - Confirm proposed Windows support and first-release scope before implementation expands beyond the prototype.
 - Decide release format, signing budget, and distribution identity before public binaries.
-- Decide whether to add event providers after the initial calendar release.
+- Resolve Windows calendar API/package feasibility and record any release blocker; do not substitute an account provider without owner approval.
