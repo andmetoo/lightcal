@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" fill="none">
+  <defs>
+    <!-- Main Squircle Background Gradient -->
+    <linearGradient id="bgGrad" x1="120" y1="80" x2="900" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#090E1A"/>
+    </linearGradient>
+
+    <!-- Luminous Top Calendar Header Gradient -->
+    <linearGradient id="headerGrad" x1="140" y1="140" x2="884" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+
+    <!-- Active Today Tile Gradient -->
+    <linearGradient id="todayGrad" x1="390" y1="450" x2="634" y2="680" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Ambient Glow for Active Tile -->
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="#38BDF8" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- Outer Shadow for macOS/Windows Icon Elevation -->
+    <filter id="cardShadow" x="-10%" y="-8%" width="120%" height="122%">
+      <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#020617" flood-opacity="0.55"/>
+    </filter>
+
+    <!-- Clip Path for Squircle Body -->
+    <clipPath id="squircleClip">
+      <rect x="72" y="72" width="880" height="880" rx="196"/>
+    </clipPath>
+  </defs>
+
+  <!-- Main Icon Squircle with Elevation -->
+  <g filter="url(#cardShadow)">
+    <rect x="72" y="72" width="880" height="880" rx="196" fill="url(#bgGrad)"/>
+  </g>
+
+  <!-- Clipped Interior Content -->
+  <g clip-path="url(#squircleClip)">
+    <!-- Subtle Ambient Top Glow -->
+    <circle cx="512" cy="180" r="380" fill="#38BDF8" fill-opacity="0.12"/>
+
+    <!-- Top Calendar Header Band -->
+    <rect x="72" y="72" width="880" height="256" fill="url(#headerGrad)"/>
+    <!-- Header Bottom Highlight Line -->
+    <rect x="72" y="324" width="880" height="4" fill="#93C5FD" fill-opacity="0.35"/>
+
+    <!-- Minimalist Calendar Ring Binders -->
+    <rect x="296" y="136" width="44" height="104" rx="22" fill="#0F172A" fill-opacity="0.35"/>
+    <rect x="296" y="128" width="44" height="96" rx="22" fill="#F8FAFC"/>
+    <rect x="684" y="136" width="44" height="104" rx="22" fill="#0F172A" fill-opacity="0.35"/>
+    <rect x="684" y="128" width="44" height="96" rx="22" fill="#F8FAFC"/>
+
+    <!-- Current Month Indicator Pill in Header -->
+    <rect x="436" y="164" width="152" height="32" rx="16" fill="#0F172A" fill-opacity="0.28"/>
+    <circle cx="464" cy="180" r="7" fill="#FDE047"/>
+    <rect x="482" y="175" width="86" height="10" rx="5" fill="#FFFFFF" fill-opacity="0.92"/>
+
+    <!-- 3x2 Geometric Date Grid (Scalable down to 16x16 and up to 1024x1024) -->
+    <!-- Row 1, Col 1: Standard Weekday Tile -->
+    <rect x="176" y="412" width="192" height="192" rx="44" fill="#1E293B" stroke="#334155" stroke-width="6"/>
+
+    <!-- Row 1, Col 2: Active "Today" Tile with Luminous Glow & Event Dot -->
+    <g filter="url(#glow)">
+      <rect x="416" y="412" width="192" height="192" rx="44" fill="url(#todayGrad)"/>
+    </g>
+    <!-- Crisp White Numeral Bar / Center Mark inside Today Tile -->
+    <rect x="468" y="476" width="88" height="28" rx="14" fill="#FFFFFF"/>
+    <!-- Signature Event Dot (Amber/Gold) inside Today Tile -->
+    <circle cx="512" cy="548" r="18" fill="#FBBF24"/>
+
+    <!-- Row 1, Col 3: Highlighted Weekend (Gray) Tile -->
+    <rect x="656" y="412" width="192" height="192" rx="44" fill="#151F30" stroke="#263449" stroke-width="6"/>
+
+    <!-- Row 2, Col 1: Standard Weekday Tile with Subtle Sky Event Dot -->
+    <rect x="176" y="652" width="192" height="192" rx="44" fill="#1E293B" stroke="#334155" stroke-width="6"/>
+    <circle cx="250" cy="788" r="13" fill="#38BDF8"/>
+    <circle cx="294" cy="788" r="13" fill="#A855F7"/>
+
+    <!-- Row 2, Col 2: Standard Weekday Tile -->
+    <rect x="416" y="652" width="192" height="192" rx="44" fill="#1E293B" stroke="#334155" stroke-width="6"/>
+
+    <!-- Row 2, Col 3: Highlighted Weekend (Gray) Tile -->
+    <rect x="656" y="652" width="192" height="192" rx="44" fill="#151F30" stroke="#263449" stroke-width="6"/>
+  </g>
+
+  <!-- Squircle Inner Rim Border for Crisp Definition -->
+  <rect x="75" y="75" width="874" height="874" rx="193" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="6"/>
+</svg>

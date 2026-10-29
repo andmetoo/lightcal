@@ -31,7 +31,7 @@ Gate: record passing integration/performance evidence in ADR 0001 before buildin
 
 ## 2. Approve the visual design (about 1 day)
 
-Use Lunacy for editable compact and expanded views. Commit portable design sources and preview exports under `design/`; document asset licenses.
+Use Penpot through MCP for the redesigned compact/expanded views and settings. Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
 
 Acceptance:
 

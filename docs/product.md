@@ -12,7 +12,7 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 - GPL-3.0. This repository uses the precise identifier `GPL-3.0-only`.
 - Future macOS support must remain architecturally possible.
 - All documentation is in English. Changes are reviewed through PRs; protected branches require owner approval.
-- Lunacy is available for UI design. Editable design files and preview exports belong in `design/` when created.
+- Penpot through MCP is the current design tool; the earlier Lunacy concepts are historical. Editable design sources and review evidence belong in `design/`.
 - Slint is accepted. The additional owner-required features and acceptance criteria are tracked in [Required features](features.md), including Windows calendar selection, event dots, startup, shortcut, update checking, and About links.
 
 ## Proposed first release
@@ -27,14 +27,14 @@ Ship English (`en`) as the default regardless of the OS language, with optional 
 
 | Property | Tray popup | Taskbar calendar |
 | --- | --- | --- |
-| Initial design size | About 320 x 360 logical pixels | About 440 x 480 logical pixels |
+| Current design size | 352 x 432 logical pixels | 520 x 600 logical pixels |
 | Entry | Left-click tray icon | Launch shortcut or activate app button |
 | Placement | Next to tray icon, clamped to visible monitor work area | Restore last valid position; otherwise place near taskbar on active monitor |
 | Focus | Keyboard focus on open | Standard application focus |
 | Dismissal | Escape or focus loss hides | Close hides to tray; focus loss leaves it open |
 | Taskbar / Alt-Tab | No separate button or Alt-Tab entry | Normal taskbar button and Alt-Tab entry while visible |
 
-Sizes are starting points for Lunacy, not fixed pixel requirements. Both views share date selection and navigation state. Only one calendar surface is visible at a time: opening one hides the other. Repeated tray clicks toggle the compact popup. Standard Windows taskbar activation/minimization behavior is preserved; custom taskbar click interception is outside scope.
+Sizes are the current Penpot proposal, pending owner acceptance and DPI/localization checks. Settings use a separate 780 x 620 logical-pixel window. Both calendar views share date selection and navigation state. Only one calendar surface is visible at a time: opening one hides the other. Repeated tray clicks toggle the compact popup. Standard Windows taskbar activation/minimization behavior is preserved; custom taskbar click interception is outside scope.
 
 A pinned shortcut launches or forwards activation to the running process and opens the larger view. Launching a second instance must never create a second tray icon. A normal launch opens the larger calendar; `--background` starts hidden for opt-in login startup. Quit exits the process. Autostart is off by default.
 
@@ -46,7 +46,7 @@ Direct calendar-account sign-in, event editing, reminders, ICS import/subscripti
 
 ## Remaining product decisions
 
-- Approve the Lunacy designs and final sizes before polishing the application UI.
+- Approve the Penpot designs and final sizes before polishing the application UI.
 - Confirm proposed Windows support and first-release scope before implementation expands beyond the prototype.
 - Decide release format, signing budget, and distribution identity before public binaries.
 - Resolve Windows calendar API/package feasibility and record any release blocker; do not substitute an account provider without owner approval.

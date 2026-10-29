@@ -1,26 +1,28 @@
 # Lightcal icon artwork
 
-Original vector artwork, created for Lightcal on 2026-10-29 under GPL-3.0-only. No fonts, stock icons, external images, or raster effects are embedded.
+The owner-selected artwork is in `better/`. Earlier icon candidates and their generator have been removed at the owner's request. The owner supplied these assets; retain their provenance and confirm redistribution rights before a public binary release.
 
 | Source | Purpose |
 | --- | --- |
-| [lightcal.svg](lightcal.svg) | Color app icon: blue tile, white calendar, two date strokes and one event dot |
-| [lightcal-mark.svg](lightcal-mark.svg) | White foreground on a genuinely transparent canvas; cutouts remain transparent |
-| [lightcal-background.svg](lightcal-background.svg) | Full-bleed square blue background without rounded masking, for future platform composition |
-| [lightcal-tray.svg](lightcal-tray.svg) | Simplified monochrome tray/menu-bar mark using `currentColor` |
+| [better/lightcal-icon.svg](better/lightcal-icon.svg) | Owner-supplied 1024-viewBox vector master |
+| [better/png/icon-512.png](better/png/icon-512.png) | Clean raster rendition used in the Penpot UI |
+| [better/png/icon-1024.png](better/png/icon-1024.png) | Largest supplied raster rendition |
+| [better/lightcal.ico](better/lightcal.ico) | Windows ICO containing 16/32/48/256 px entries |
+| [better/lightcal-tray-monochrome.svg](better/lightcal-tray-monochrome.svg) | Supplied tray candidate; despite its name, it currently uses multiple colors |
 
-The color artwork and separated layers use a 1024 x 1024 viewBox. They scale without raster upsampling. The tray source uses a 24 x 24 grid with heavier, simplified strokes. Choose explicit foreground colors at export time. The static tray mark is a branding/fallback asset; dynamic day-of-month rendering remains a separate app feature.
+PNG files from 16 through 1024 px include alpha transparency. The SVG and PNG artwork differ: the SVG includes glow, rims, a header indicator, and extra event dots. They have not been silently normalized. The supplied PNG rendition is the visual reference for the new UI; preserve the SVG for future vector work.
 
 ## Visual validation
 
-Imported as editable vectors into Lunacy through MCP. The icon board (`EiyyynnQSFKE-EFUIoP8JQ`) shows a large app preview, color sizes 16/24/32/48/64, and monochrome sizes 16/24/32 on light/dark surfaces. Its exported PNG preview was visually inspected. This checks artwork, not actual Windows shell rendering or macOS packaging.
+The supplied PNG dimensions/alpha and ICO structure were checked. Small raster variants were inspected on light/dark surfaces. This does not verify actual Windows shell rendering or macOS packaging. The earlier Lunacy icon board is historical and no longer the asset source.
 
-Reproduce using [design/icon_design.py](../../design/icon_design.py). It imports these SVG files through Lunacy MCP; use an empty area at y=2100. SVG import coordinates are absolute even with a parent frame. A new run creates new layers. `--board-id` resumes imports into the specified board; do not rerun it blindly after an uncertain timeout. Inspect existing layers first.
+The new application design is maintained in Penpot. See [design notes](../../design/README.md).
 
 ## Platform packaging
 
-- Windows: generate a multi-image `.ico` from the vectors when integrating app resources. Check the actual shell result at small sizes and high DPI; additional optical adjustments may be appropriate.
-- macOS: reuse the unmasked background and transparent foreground as separate layers. Adapt them in the supported Apple toolchain; do not reuse the pre-rounded Windows tile as an Apple background layer. The SVGs are preparation for a port, not a finished `.icon`/`.icns` package.
-- Keep the original vectors authoritative. Generate each raster size from source, rather than enlarging a small PNG. Preserve simple geometry and clear contrast when creating platform appearances.
+- Windows: validate the supplied multi-image ICO in the actual shell. Fine details need optical simplification at small sizes.
+- Tray: prepare a genuinely monochrome version with theme-appropriate foreground color before integration. Dynamic day-of-month rendering remains a separate app feature.
+- macOS: separate the master into unmasked background/foreground layers and adapt in the supported Apple toolchain. The current files are not a finished `.icon`/`.icns` package.
+- Reconcile the vector/raster differences before creating release assets; never upscale a small PNG to make the macOS icon.
 
 Primary platform guidance reviewed on 2026-10-29: [Microsoft icon resources](https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons) and [Apple app icon design and vector layers](https://developer.apple.com/design/human-interface-guidelines/app-icons/).

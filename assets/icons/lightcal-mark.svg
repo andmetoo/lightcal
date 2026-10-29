@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Lightcal calendar mark">
-  <path fill="#fff" fill-rule="evenodd" d="M320 288H704A80 80 0 0 1 784 368V688A80 80 0 0 1 704 768H320A80 80 0 0 1 240 688V368A80 80 0 0 1 320 288Z M240 416H784V464H240Z M352 528H432A24 24 0 0 1 456 552A24 24 0 0 1 432 576H352A24 24 0 0 1 328 552A24 24 0 0 1 352 528Z M352 624H432A24 24 0 0 1 456 648A24 24 0 0 1 432 672H352A24 24 0 0 1 328 648A24 24 0 0 1 352 624Z M696 600A64 64 0 1 1 568 600A64 64 0 1 1 696 600Z"/>
-  <rect x="352" y="208" width="64" height="160" rx="32" fill="#fff"/>
-  <rect x="608" y="208" width="64" height="160" rx="32" fill="#fff"/>
-</svg>
