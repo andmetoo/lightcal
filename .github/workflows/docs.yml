@@ -44,8 +44,8 @@ jobs:
       - name: Run unit tests
         run: cargo test --workspace
 
-  macos-library:
-    name: macOS library portability check
+  macos-build:
+    name: macOS application build
     runs-on: macos-latest
     steps:
       - name: Check out repository
@@ -56,5 +56,9 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
       - name: Cache Cargo
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Check the library without Windows dependencies
-        run: cargo check -p lightcal --lib --locked
+      - name: Build the application
+        run: cargo build -p lightcal --locked
+      - name: Test portable calendar logic
+        run: cargo test -p calendar-core --locked
+      - name: Test the application library
+        run: cargo test -p lightcal --lib --locked

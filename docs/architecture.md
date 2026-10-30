@@ -59,4 +59,8 @@ The update checker is a separate bounded HTTPS request to GitHub release metadat
 
 ## Future macOS port
 
-Reuse date logic, preference schema, and the selected view where practical. Replace tray semantics with a menu-bar status item and review Dock activation separately. Windows taskbar behavior is not a portable abstraction. Build and launch on macOS runners/hardware; successful Windows compilation or cross-compilation alone is insufficient. Signing/notarization is a later distribution gate.
+Reuse date logic, preference schema, and the selected view where practical. Replace tray semantics with a menu-bar status item and review Dock activation separately. Windows taskbar behavior is not a portable abstraction. Signing and notarization are a later distribution gate.
+
+The `macOS application build` check compiles the `lightcal` binary on `macos-latest` and runs the portable tests. Preferences for that binary use `~/Library/Application Support/Lightcal`. Allowed links open with the system `open` command, and the calendar privacy action targets the macOS Privacy pane. Login-item copy on that binary does not mention Windows.
+
+A green compile is not a launch, menu-bar, Dock, accessibility, or notarization result. Those still need a real macOS session. Do not publish a macOS download from this lane.

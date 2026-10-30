@@ -415,6 +415,9 @@ impl AppController {
         // Settings properties
         ui.set_settings_title_text(strings.settings_title.into());
         ui.set_preferences_subtitle_text(strings.preferences_subtitle.into());
+        ui.set_section_region_text(strings.section_region.into());
+        ui.set_section_startup_text(strings.section_startup.into());
+        ui.set_desc_auto_install_text(strings.desc_auto_install.into());
         ui.set_nav_general_text(strings.nav_general.into());
         ui.set_nav_appearance_text(strings.nav_appearance.into());
         ui.set_nav_calendars_text(strings.nav_calendars.into());
@@ -431,6 +434,12 @@ impl AppController {
         ui.set_desc_show_week_numbers_text(strings.desc_show_week_numbers.into());
         ui.set_label_startup_text(strings.label_startup.into());
         ui.set_desc_startup_text(strings.desc_startup.into());
+        #[cfg(target_os = "macos")]
+        {
+            let (label, description, _) = lightcal::i18n::macos_startup_copy(locale);
+            ui.set_label_startup_text(label.into());
+            ui.set_desc_startup_text(description.into());
+        }
         ui.set_label_shortcut_text(strings.label_shortcut.into());
         ui.set_desc_shortcut_text(strings.desc_shortcut.into());
         ui.set_label_theme_text(strings.label_theme.into());
@@ -614,6 +623,8 @@ impl AppController {
 
         let has_conflict = !self.shortcut_error.is_empty();
         ui.set_shortcut_has_conflict(has_conflict);
+        ui.set_shortcut_can_clear(self.prefs.global_shortcut.is_some() || has_conflict);
+        ui.set_shortcut_clear_label(strings.shortcut_clear.into());
         if let Some(conflict) = &self.conflicting_shortcut {
             ui.set_global_shortcut_display(conflict.clone().into());
         } else {
@@ -1746,6 +1757,9 @@ fn main() {
                     c.persist();
                 }
                 Err(err) => {
+                    #[cfg(target_os = "macos")]
+                    let prefix = lightcal::i18n::macos_startup_copy(c.prefs.locale()).2;
+                    #[cfg(not(target_os = "macos"))]
                     let prefix = catalog(c.prefs.locale()).startup_error;
                     c.startup_error = if err.is_empty() {
                         prefix.to_string()
@@ -2106,6 +2120,9 @@ fn main() {
     }
     {
         ui.on_open_privacy_settings(move || {
+            #[cfg(target_os = "macos")]
+            open_browser_link(lightcal::updater::MACOS_CALENDAR_PRIVACY_URL);
+            #[cfg(not(target_os = "macos"))]
             open_browser_link("ms-settings:privacy-calendar");
         });
     }

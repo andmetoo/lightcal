@@ -23,8 +23,8 @@ Lightcal is a native Rust + Slint desktop calendar for Windows (and future macOS
 
 4. **Flat Hairline Settings (`780 × 620`)**
    - Zero boxed cards around individual setting rows.
-   - A `200px` left sidebar (`#F7F7F8` / `#141417`) houses navigation (`General`, `Appearance`, `Calendars`, `About`), while the `580px` right canvas presents flat horizontal rows (`x = 240..740`) separated solely by `1px` `#ECECEF` / `#1F1F24` hairlines.
-   - All dropdowns (`English (US)`, `Monday`, `Dark (Obsidian)`) use left-aligned value text and a right-aligned chevron (`▾`).
+   - A `200px` left sidebar (`#F7F7F8` / `#141417`) houses navigation (`General`, `Appearance`, `Calendars`, `About`). The wordmark and preferences label stack beside the date badge so longer translations are not squeezed onto one line. The right canvas presents flat horizontal rows separated by `1px` `#ECECEF` / `#1F1F24` hairlines.
+   - Selects open an in-flow menu under the control. Text fields use the same control fill and focus ring as selects. A private ICS address stays visible while it is edited and is stored only on the computer.
 
 5. **Native OS Shell, Taskbar, Menu Bar, Dock & Dynamic Icon System (`06 · Shell, Dock & Icons`)**
    - **App Icon Craft**: `rx: 23%` squircle in Alabaster (`#FFFFFF`) or Obsidian (`#18181C`) with a `30%` top **Coral-Vermilion (`#E5484D`)** header band and `1px` hairline seam.
