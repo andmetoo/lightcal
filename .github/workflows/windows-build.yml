@@ -38,13 +38,8 @@ jobs:
             throw "Release tags must point to a commit contained in main."
           }
 
-          $manifest = Get-Content Cargo.toml -Raw
-          if ($manifest -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
-            throw "Workspace version is missing from Cargo.toml."
-          }
-          $expectedTag = "v$($Matches[1])"
-          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
-            throw "Tag $env:GITHUB_REF_NAME does not match workspace version $expectedTag."
+          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tags must be a stable version such as v0.2.0."
           }
 
       - name: Install Rust
@@ -100,14 +95,42 @@ jobs:
           name: lightcal-windows-x64-unsigned
           path: release-assets
 
+      - name: Name Windows zip and NSIS setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Refusing to publish unexpected tag: $tag" >&2
+            exit 1
+          fi
+          mapfile -t zips < <(find release-assets -type f -name '*.zip' | sort)
+          mapfile -t setups < <(find release-assets -type f -name '*-setup.exe' | sort)
+          if [[ ${#zips[@]} -ne 1 || ${#setups[@]} -ne 1 ]]; then
+            echo "Expected one portable zip and one NSIS setup." >&2
+            find release-assets -type f -print >&2
+            exit 1
+          fi
+          mkdir -p named
+          cp "${zips[0]}" "named/lightcal-${tag}-windows-x64-unsigned.zip"
+          cp "${setups[0]}" "named/lightcal-${tag}-windows-x64-setup.exe"
+          (
+            cd named
+            sha256sum "lightcal-${tag}-windows-x64-unsigned.zip" > "lightcal-${tag}-windows-x64-unsigned.zip.sha256"
+            sha256sum "lightcal-${tag}-windows-x64-setup.exe" > "lightcal-${tag}-windows-x64-setup.exe.sha256"
+          )
+
       - name: Publish unsigned prerelease
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Lightcal ${{ github.ref_name }} (unsigned)
           body: |
-            Automated unsigned review build from `main`.
+            Automated unsigned Windows review build from `main`.
             Do not treat these files as an Authenticode-signed production release.
-          files: release-assets/**/*
+            Attached files are the portable ZIP and the NSIS setup, each with a SHA-256 checksum.
+            `lightcal.exe` ProductVersion follows the Cargo workspace version and can differ from this git tag.
+            The macOS disk image is not included.
+          files: named/*
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: true

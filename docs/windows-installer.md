@@ -31,7 +31,7 @@ Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and cert
 
 The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The build job has read-only repository permissions and does not call SimpleSign, Authenticode signing, or `RequireSigned`.
 
-A `v*` tag runs the same build once and publishes its artifacts as an explicitly unsigned GitHub prerelease. Publication fails unless the tagged commit is contained in `main` and the tag exactly matches the workspace version, such as `v0.1.0`. Only the small publication job receives `contents: write`; pull-request and build jobs remain read-only. The workflow never reads signing keys or presents these review files as signed production binaries.
+A stable `vX.Y.Z` tag runs the same build once and publishes its artifacts as an explicitly unsigned GitHub prerelease. Publication fails unless the tagged commit is contained in `main`. The tag names the review build; it does not have to equal the Cargo workspace version, and the executable ProductVersion remains that workspace version. The published files are `lightcal-<tag>-windows-x64-unsigned.zip` and `lightcal-<tag>-windows-x64-setup.exe`, each with a SHA-256 file. The macOS disk image is not attached. Only the small publication job receives `contents: write`; pull-request and build jobs remain read-only. The workflow never reads signing keys or presents these review files as signed production binaries.
 
 An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
 
