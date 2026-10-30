@@ -13,7 +13,7 @@
 
 ## Cloud agents
 
-Cloud agents run on Linux. The image provides Rust stable with rustfmt and clippy, `just`, Bun, and `python` on `PATH`, plus the system libraries used by Slint and native-tls.
+Cloud agents run on Linux. The image provides Rust stable with rustfmt and clippy, `just`, Bun, and `python` on `PATH`, plus the system libraries used by Slint and native-tls. `just` recipes invoke `python`; on Ubuntu that command comes from `python-is-python3`.
 
 `just check` is the Linux gate. It runs documentation checks, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. Windows-only code stays behind `cfg` and does not fail this gate. Use a temporary `LIGHTCAL_DATA_DIR` when a check writes preferences.
 
