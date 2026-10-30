@@ -59,14 +59,26 @@ certificate-info:
 package-release:
     bun run scripts/release.ts package
 
-# Build release binary, invoke SimpleSign Desktop signing workflow, and package portable ZIP + SHA-256 via Bun
+# Build, sign, and verify the app and NSIS setup; also package the portable ZIP
 release:
     bun run scripts/release.ts release
 
-# Build an unsigned MSIX with an explicit preview identity; never install or submit
-build-msix-preview:
-    pwsh -NoLogo -NoProfile -File scripts/package-msix.ps1 -Preview
+# Build an unsigned NSIS review installer
+build-installer:
+    pwsh -NoLogo -NoProfile -File scripts/package-nsis.ps1
 
-# Build an unsigned Store submission package using Partner Center identity values
-build-msix:
-    pwsh -NoLogo -NoProfile -File scripts/package-msix.ps1
+# Package the existing release EXE without rebuilding
+package-installer:
+    pwsh -NoLogo -NoProfile -File scripts/package-nsis.ps1 -SkipBuild
+
+# Verify a signed app, package it, sign the setup, and verify the setup
+sign-installer:
+    bun run scripts/release.ts sign-installer
+
+# Fetch the pinned portable compiler without a system installation
+prepare-nsis:
+    pwsh -NoLogo -NoProfile -File scripts/prepare-nsis.ps1
+
+# Exercise a compile-time isolated installer/uninstaller in target/ only
+test-installer:
+    pwsh -NoLogo -NoProfile -File scripts/test-nsis.ps1

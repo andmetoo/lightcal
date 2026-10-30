@@ -29,6 +29,7 @@ This distribution incorporates the following open-source Rust crates:
 
 ## Design & Typography References
 
-- **Inter Font**: `crates/lightcal/assets/fonts/Inter.ttf` is licensed under the SIL Open Font License, Version 1.1 (Copyright 2016-2024 The Inter Project Authors, Rasmus Andersson). Full license text is preserved in `crates/lightcal/assets/fonts/OFL.txt`. Bundled for dynamic tray and application icon rasterization.
+- **Inter Font**: `crates/lightcal/assets/fonts/Inter.ttf` and the static `Inter-Bold.ttf` instance are licensed under the SIL Open Font License, Version 1.1 (Copyright 2016-2024 The Inter Project Authors, Rasmus Andersson). Full license text is preserved in `crates/lightcal/assets/fonts/OFL.txt`. Bundled for UI and icon rasterization. `Inter-Bold.ttf` is generated from the bundled variable font at `wght=700`, `opsz=14` using fontTools 4.61.1; the font's OFL metadata is preserved.
+- **NSIS installer runtime**: the Windows setup and uninstaller use NSIS (zlib/libpng license), Modern UI, and the public-domain LZMA compressor. The full compiler-distribution notice is installed as `NSIS-LICENSE.txt`; see https://nsis.sourceforge.io/License. NSIS is a packaging tool, not a Cargo dependency.
 - UI design mockups in `design/` use the open-source **Inter** (SIL Open Font License 1.1) and **JetBrains Mono** (SIL Open Font License 1.1) typefaces in Penpot. The compiled desktop calendar UI uses system fonts (`Segoe UI`, `Cascadia Mono`, `Yu Gothic UI`) at runtime.
 

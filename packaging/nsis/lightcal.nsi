@@ -124,6 +124,10 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Lightcal\Lightcal.lnk"
   RMDir "$SMPROGRAMS\Lightcal"
   Delete "$DESKTOP\Lightcal.lnk"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Lightcal"
+  ${If} $0 == '$\"$INSTDIR\lightcal.exe$\" --tray'
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Lightcal"
+  ${EndIf}
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Lightcal"
 !endif
   ; Preferences, DPAPI credentials, and unrelated files are deliberately retained.

@@ -22,7 +22,10 @@ just check
 # Build optimized release binary (target/dist/lightcal.exe) + SHA-256
 just build-release
 
-# Build and sign release binary via SimpleSign Desktop
+# Build an unsigned NSIS installer for local review (target/nsis/)
+just build-installer
+
+# Build and sign both application and NSIS setup via SimpleSign Desktop
 just release
 
 # Sign an existing release binary (or pass custom SimpleSign CLI flags)
@@ -31,15 +34,15 @@ just sign-release
 
 `just run` and `just run-tray` use configured Microsoft Graph / private HTTPS ICS subscriptions. Windows calendars are an optional, off-by-default legacy switch. `just run-demo` explicitly uses sample events. On first connection, select calendars in Settings before expecting event dots. `just probe-calendars` runs the explicit legacy Windows diagnostic; normal tests use fixtures and temporary preferences.
 
-The existing `just release` workflow builds, launches SimpleSign Desktop, verifies Authenticode, and packages only after verification succeeds. It fails if the signer is missing or the signature is invalid. Configure `SIMPLESIGN_PATH` for an installed signer; credentials and signing keys remain outside the repository. For manual signing, use `just build-release`, sign `target/dist/lightcal.exe`, then run `just verify-release` and `just package-release`. `just package-release` alone also permits unsigned review builds; it does not attest a signature.
+`just release` builds and signs the application with SimpleSign Desktop, verifies Authenticode, packages the portable ZIP, builds an NSIS installer containing that signed application, then signs and verifies the installer. It stops on a missing signer or invalid signature. Set `SIMPLESIGN_PATH` for an installed signer; credentials and signing keys stay outside the repository. For manual signing, run `just build-release`, sign `target/dist/lightcal.exe`, then `just verify-release` and `just sign-installer`. The default installer build permits unsigned local-review packages and never claims they are signed.
 
-GitHub Actions checks the Rust workspace and prepares an **unsigned** Windows portable archive for pull requests or a manual workflow run. It does not publish a release or access signing keys. No workflow has been run remotely for unpushed local changes.
+GitHub Actions checks the Rust workspace and prepares an **unsigned** Windows NSIS installer and portable archive for pull requests or a manual workflow run. It does not publish a release or access signing keys. No workflow has been run remotely for unpushed local changes.
 
 Update checking uses GitHub's latest stable release endpoint. Manual checks run on a worker thread with a 15-second request/body deadline. The optional automatic check is off by default; when enabled it runs at startup and daily. Signed automatic installation is separately opt-in and requires a build-configured certificate SHA-256 pin, matching Authenticode trust/version, and a signed portable installation. No update is installed without that trust configuration.
 
 Copy [.env.example](.env.example) to the ignored `.env.local` for public build settings. Microsoft sign-in can remain unconfigured until the owner creates an Entra Desktop app registration; the Client ID is configured at build time, never edited in Settings. See [provider and signing setup](docs/provider-setup.md) for exact registration steps, supported ICS features, SimpleSign fingerprint extraction, and remaining live-test gates. Google sign-in is deferred.
 
-Microsoft Store MSIX preparation is also available: `just build-msix-preview` creates an unsigned review package; `just build-msix` requires the real Partner Center identity. Microsoft signs Store-distributed MSIX packages after certification and supplies their update channel. This does not sign portable GitHub EXE downloads. The MSIX workflow only builds/uploads review artifacts; nothing submits or publishes. See [Store distribution setup](docs/store-distribution.md) for identity values, the first manual publication requirement, costs, and remaining installed-package validation.
+Windows distribution uses an NSIS `setup.exe`: a per-user installation, Start menu shortcut, optional desktop shortcut, and an uninstaller that retains calendar settings and credentials. Use `just build-installer` to build or `just package-installer` to package the existing release binary. The build locates NSIS or downloads a checksum-verified portable compiler into `target/tools`; no compiler installation is required. See [Windows installer setup](docs/windows-installer.md) for signing, CI artifacts, and isolated installation tests.
 
 See the [implementation audit](docs/implementation-audit-2026-10-30.md) for verified fixes, provider limitations, and remaining release gates.
 

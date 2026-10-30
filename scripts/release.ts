@@ -23,7 +23,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const BIN_NAME = process.platform === "win32" ? "lightcal.exe" : "lightcal";
@@ -110,7 +110,7 @@ function writeChecksums(targetPath = DIST_BIN): void {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const sizeMiB = (statSync(targetPath).size / (1024 * 1024)).toFixed(2);
 
-  const checksumLine = `${sha256}  ${BIN_NAME}\n`;
+  const checksumLine = `${sha256}  ${basename(targetPath)}\n`;
   writeFileSync(`${targetPath}.sha256`, checksumLine, "utf8");
 
   console.log(`Staged binary: ${targetPath}`);
@@ -118,8 +118,9 @@ function writeChecksums(targetPath = DIST_BIN): void {
   console.log(`SHA-256:       ${sha256}`);
 }
 
-function signWithSimpleSign(): void {
-  if (!existsSync(DIST_BIN)) {
+function signWithSimpleSign(target = DIST_BIN): void {
+  if (!existsSync(target) && target !== DIST_BIN) throw new Error(`Missing signing target: ${target}`);
+  if (!existsSync(target)) {
     if (existsSync(RELEASE_BIN)) {
       mkdirSync(DIST_DIR, { recursive: true });
       copyFileSync(RELEASE_BIN, DIST_BIN);
@@ -134,15 +135,14 @@ function signWithSimpleSign(): void {
     : [];
 
   if (simpleSignExe) {
-    console.log(`=== Launching SimpleSign Desktop for ${DIST_BIN} ===`);
-    runCmd([simpleSignExe, ...extraArgs, DIST_BIN]);
+    console.log(`=== Launching SimpleSign Desktop for ${target} ===`);
+    runCmd([simpleSignExe, ...extraArgs, target]);
   } else {
-    throw new Error(`SimpleSign Desktop was not found. Sign ${DIST_BIN} manually, then run 'just verify-release' and 'just package-release'.`);
+    throw new Error(`SimpleSign Desktop was not found. Sign ${target} manually, then run 'just verify-release' and 'just package-release'.`);
   }
 }
 
-function verifySignature(): void {
-  const target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN;
+function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN): void {
   if (!existsSync(target)) {
     console.error(`Error: No binary found at ${target}. Run 'just build-release' first.`);
     process.exit(1);
@@ -213,6 +213,17 @@ function packagePortableArchive(): void {
   }
 }
 
+function signInstaller(): void {
+  verifySignature(DIST_BIN);
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", "scripts/package-nsis.ps1", "-SkipBuild", "-RequireSigned", "-BinaryPath", DIST_BIN]);
+  const manifest = readFileSync(join(ROOT, "Cargo.toml"), "utf8");
+  const version = manifest.match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1];
+  if (!version) throw new Error("Workspace version is invalid");
+  const setup = join(ROOT, "target", "nsis", `lightcal-${version}-windows-x64-setup.exe`);
+  signWithSimpleSign(setup);
+  verifySignature(setup);
+}
+
 const action = (process.argv[2] || "release").toLowerCase();
 switch (action) {
   case "build":
@@ -232,15 +243,19 @@ switch (action) {
   case "package":
     packagePortableArchive();
     break;
+  case "sign-installer":
+    signInstaller();
+    break;
   case "release":
     buildRelease();
     signWithSimpleSign();
     verifySignature();
     packagePortableArchive();
+    signInstaller();
     break;
   default:
     console.error(
-      `Unknown command '${action}'. Expected: build | sign | verify | certificate-info | package | release`
+      `Unknown command '${action}'. Expected: build | sign | verify | certificate-info | package | sign-installer | release`
     );
     process.exit(1);
 }
