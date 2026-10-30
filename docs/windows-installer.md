@@ -29,7 +29,15 @@ Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and cert
 
 ## CI and validation
 
-The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The job has read-only repository permissions. It does not call SimpleSign, Authenticode signing, or `RequireSigned`, and it never publishes a release or reads signing keys. An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
+GitHub Actions has three workflows. All have read-only repository permissions except the draft-release job, and none calls SimpleSign, Authenticode signing, or `RequireSigned`, or reads signing keys.
+
+- `ci.yml` (pull requests and `main`): documentation links, `rustfmt`, Clippy, workspace tests, and the macOS library check. Cargo dependencies are cached; only `main` saves the cache so pull requests cannot evict it.
+- `windows-build.yml` (every push to `main`, manual runs, and pull requests that touch `packaging/` or the NSIS scripts): builds a locked release, packages the unsigned portable ZIP and NSIS setup, runs the isolated installer smoke test, and uploads one artifact. Releases are not compiled on pull requests otherwise. The portable NSIS compiler is cached.
+- `release.yml` (tags `vX.Y.Z`): compiles nothing. It checks that the tag is on `main` and equals the Cargo workspace version, waits for or downloads the `windows-build.yml` artifact of the tagged commit, verifies the setup checksum, and creates a **draft** GitHub release. Sign locally with `just release`, attach the signed `lightcal.exe`, and publish manually; CI never publishes.
+
+To release: merge to `main`, wait for the Windows build to pass, then push a `vX.Y.Z` tag on that merge commit. If the artifact has expired (90 days), run `windows-build.yml` manually on `main` for that commit and re-run the release workflow.
+
+An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
 
 Run `just test-installer` after building release code. The test compiles the same NSIS script with `TEST_SETUP`: registry registration, shortcuts, application launch, and real-profile detection are omitted at compile time. It installs under a checked `target/installer-tests/<random>` path, verifies the executable hash, uninstalls, and checks that an unrelated sentinel file survives. No real account, app profile, autostart, shortcuts, or uninstall registry entries are modified. This validates payload installation and removal; real installed-app registration, signing, and SmartScreen behavior require separate owner-driven validation.
 

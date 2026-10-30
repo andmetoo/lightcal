@@ -1,0 +1,62 @@
+name: Draft release
+
+# Compiles nothing. Reuses the unsigned artifact that windows-build.yml produced for
+# the tagged commit on main, and creates a DRAFT release. Signing and publishing
+# remain owner actions (see docs/windows-installer.md).
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: Draft GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify tag is on main and matches Cargo.toml
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::Tag $GITHUB_REF_NAME is not on main; releases are made from main only."; exit 1; }
+          version=$(sed -n 's/^version = "\([0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)
+          [ "$GITHUB_REF_NAME" = "v$version" ] \
+            || { echo "::error::Tag $GITHUB_REF_NAME does not match workspace version $version."; exit 1; }
+
+      - name: Download the build of this commit
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --workflow windows-build.yml --commit "$GITHUB_SHA" --limit 20 \
+            --json databaseId,conclusion \
+            --jq 'map(select(.conclusion != "failure" and .conclusion != "cancelled")) | .[0].databaseId // empty')
+          [ -n "$run_id" ] \
+            || { echo "::error::No Windows build for $GITHUB_SHA. Run 'Windows build and NSIS installer' on main for this commit, then re-run this workflow."; exit 1; }
+          gh run watch "$run_id" --exit-status
+          gh run download "$run_id" --name lightcal-windows-x64-unsigned --dir dist
+          (cd dist && sha256sum --check ./*-setup.exe.sha256)
+
+      - name: Create draft release
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --draft --verify-tag --title "Lightcal ${GITHUB_REF_NAME#v}" \
+            --notes "CI build of the tagged commit. Assets are UNSIGNED. Sign lightcal.exe and the setup locally with just release, attach the signed lightcal.exe, then publish." \
+            --generate-notes

@@ -4,7 +4,7 @@
 
 The owner renamed the default branch from `master` to `main` on 2026-10-29. Use `main` as the base for feature branches and pull requests. The local branch and remote HEAD have been updated to match.
 
-Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, and an unsigned Windows build workflow. That workflow produces review artifacts only. It does not sign or publish a release.
+Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation and Rust CI, Dependabot configuration, an unsigned Windows build on `main`, and a tag workflow that creates a draft release. CI does not sign or publish a release.
 
 ## Maintainer settings to apply on GitHub
 
