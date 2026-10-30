@@ -193,6 +193,29 @@ component IconPreview inherits Rectangle {
     }
 }
 
+component TrayPaletteSwatch inherits Rectangle {
+    in property <bool> selected: false;
+    in property <bool> dark-mode: false;
+    in property <image> source;
+
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: root.selected
+        ? (root.dark-mode ? #1D203A : #EEF0FF)
+        : transparent;
+    border-width: root.selected ? 1.5px : 1px;
+    border-color: root.selected
+        ? #5E6AD2
+        : (root.dark-mode ? #1F1F24 : #ECECEF);
+
+    IconPreview {
+        x: 4px;
+        y: 4px;
+        source: root.source;
+    }
+}
+
 component SettingsSelect inherits Rectangle {
     in property <string> text;
     in property <bool> is-open: false;
@@ -437,11 +460,42 @@ component SettingsMenu inherits Rectangle {
     }
 }
 
+component SettingsMenuRow inherits HorizontalLayout {
+    in property <bool> dark-mode: false;
+
+    alignment: end;
+    padding-bottom: 8px;
+
+    SettingsMenu {
+        dark-mode: root.dark-mode;
+        @children
+    }
+}
+
 component SettingsLine inherits HorizontalLayout {
     min-height: 62px;
     spacing: 16px;
     alignment: space-between;
     @children
+}
+
+component SettingsSwitchRow inherits SettingsLine {
+    in property <string> title;
+    in property <string> description;
+    in property <bool> checked;
+    in property <bool> dark-mode: false;
+    callback toggled();
+
+    SettingsRowText {
+        title: root.title;
+        description: root.description;
+        dark-mode: root.dark-mode;
+    }
+    SwitchToggle {
+        checked: root.checked;
+        dark-mode: root.dark-mode;
+        toggled => { root.toggled(); }
+    }
 }
 
 component SettingsGroup inherits Rectangle {
@@ -591,8 +645,7 @@ export component AppWindow inherits Window {
     in property <string> shortcut-error-message: "";
     in property <[CalendarSourceItem]> calendar-sources: [];
     in property <string> update-status-text: "Checks GitHub Releases only when you ask. Never auto-installs.";
-    in property <bool> update-available: false;
-    in property <bool> update-is-available: root.update-available;
+    in property <bool> update-is-available: false;
 
     // Redesigned Settings View State & Dropdowns
     in property <bool> highlight-current-month: true;
@@ -608,10 +661,13 @@ export component AppWindow inherits Window {
     in property <string> shortcut-record-label: "Change";
     in property <string> shortcut-clear-label: "Clear";
     in property <bool> shortcut-can-clear: false;
-    in property <string> shortcut-conflict-badge: "Conflict";
     in property <string> section-region-text: "Region";
     in property <string> section-startup-text: "Startup";
     in property <string> desc-auto-install-text: "Install the signed release and restart after a successful check.";
+    in property <string> lang-en-us-label: "English (US)";
+    in property <string> lang-ru-label: "Русский";
+    in property <string> lang-es-label: "Español";
+    in property <string> lang-ja-label: "日本語";
     in property <string> weekday-monday-label: "Monday";
     in property <string> weekday-sunday-label: "Sunday";
     in property <string> theme-light-label: "Light (Alabaster)";
@@ -1397,35 +1453,31 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-language-dropdown(); }
                             }
                         }
-                        if root.language-dropdown-open : HorizontalLayout {
-                            alignment: end;
-                            padding-bottom: 8px;
-                            SettingsMenu {
+                        if root.language-dropdown-open : SettingsMenuRow {
+                            dark-mode: root.dark-mode;
+                            SettingsDropdownOption {
+                                label: root.lang-en-us-label;
+                                active: root.current-language-code == "en";
                                 dark-mode: root.dark-mode;
-                                SettingsDropdownOption {
-                                    label: "English (US)";
-                                    active: root.current-language-code == "en";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-language("en"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: "Русский";
-                                    active: root.current-language-code == "ru";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-language("ru"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: "Español";
-                                    active: root.current-language-code == "es";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-language("es"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: "日本語";
-                                    active: root.current-language-code == "ja";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-language("ja"); }
-                                }
+                                clicked => { root.select-language("en"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.lang-ru-label;
+                                active: root.current-language-code == "ru";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-language("ru"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.lang-es-label;
+                                active: root.current-language-code == "es";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-language("es"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.lang-ja-label;
+                                active: root.current-language-code == "ja";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-language("ja"); }
                             }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
@@ -1443,38 +1495,29 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-first-day-dropdown(); }
                             }
                         }
-                        if root.first-day-dropdown-open : HorizontalLayout {
-                            alignment: end;
-                            padding-bottom: 8px;
-                            SettingsMenu {
+                        if root.first-day-dropdown-open : SettingsMenuRow {
+                            dark-mode: root.dark-mode;
+                            SettingsDropdownOption {
+                                label: root.weekday-monday-label;
+                                active: root.first-weekday-monday;
                                 dark-mode: root.dark-mode;
-                                SettingsDropdownOption {
-                                    label: root.weekday-monday-label;
-                                    active: root.first-weekday-monday;
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-first-weekday-option(true); }
-                                }
-                                SettingsDropdownOption {
-                                    label: root.weekday-sunday-label;
-                                    active: !root.first-weekday-monday;
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-first-weekday-option(false); }
-                                }
+                                clicked => { root.select-first-weekday-option(true); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.weekday-sunday-label;
+                                active: !root.first-weekday-monday;
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-first-weekday-option(false); }
                             }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        SettingsLine {
-                            SettingsRowText {
-                                title: root.label-show-week-numbers-text;
-                                description: root.desc-show-week-numbers-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.show-week-numbers;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-show-week-numbers(); }
-                            }
+                        SettingsSwitchRow {
+                            title: root.label-show-week-numbers-text;
+                            description: root.desc-show-week-numbers-text;
+                            checked: root.show-week-numbers;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-show-week-numbers(); }
                         }
                         }
 
@@ -1484,17 +1527,12 @@ export component AppWindow inherits Window {
                         }
                         SettingsGroup {
                             dark-mode: root.dark-mode;
-                        SettingsLine {
-                            SettingsRowText {
-                                title: root.label-startup-text;
-                                description: root.desc-startup-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.start-with-windows;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-start-with-windows(); }
-                            }
+                        SettingsSwitchRow {
+                            title: root.label-startup-text;
+                            description: root.desc-startup-text;
+                            checked: root.start-with-windows;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-start-with-windows(); }
                         }
                         if root.startup-status-text != "" : Text {
                             text: root.startup-status-text;
@@ -1628,29 +1666,25 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-theme-dropdown(); }
                             }
                         }
-                        if root.theme-dropdown-open : HorizontalLayout {
-                            alignment: end;
-                            padding-bottom: 8px;
-                            SettingsMenu {
+                        if root.theme-dropdown-open : SettingsMenuRow {
+                            dark-mode: root.dark-mode;
+                            SettingsDropdownOption {
+                                label: root.theme-light-label;
+                                active: root.current-theme-code == "light";
                                 dark-mode: root.dark-mode;
-                                SettingsDropdownOption {
-                                    label: root.theme-light-label;
-                                    active: root.current-theme-code == "light";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-theme("light"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: root.theme-dark-label;
-                                    active: root.current-theme-code == "dark";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-theme("dark"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: root.theme-system-label;
-                                    active: root.current-theme-code == "system";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-theme("system"); }
-                                }
+                                clicked => { root.select-theme("light"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.theme-dark-label;
+                                active: root.current-theme-code == "dark";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-theme("dark"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.theme-system-label;
+                                active: root.current-theme-code == "system";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-theme("system"); }
                             }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
@@ -1693,31 +1727,21 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        SettingsLine {
-                            SettingsRowText {
-                                title: root.label-highlight-current-month-text;
-                                description: root.desc-highlight-current-month-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.highlight-current-month;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-highlight-current-month(); }
-                            }
+                        SettingsSwitchRow {
+                            title: root.label-highlight-current-month-text;
+                            description: root.desc-highlight-current-month-text;
+                            checked: root.highlight-current-month;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-highlight-current-month(); }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        SettingsLine {
-                            SettingsRowText {
-                                title: root.label-show-event-dots-text;
-                                description: root.desc-show-event-dots-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.show-event-dots;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-show-event-dots(); }
-                            }
+                        SettingsSwitchRow {
+                            title: root.label-show-event-dots-text;
+                            description: root.desc-show-event-dots-text;
+                            checked: root.show-event-dots;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-show-event-dots(); }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
@@ -1764,39 +1788,15 @@ export component AppWindow inherits Window {
                                 spacing: 8px;
                                 alignment: center;
 
-                                Rectangle {
-                                    width: 40px;
-                                    height: 40px;
-                                    border-radius: 8px;
-                                    background: !root.tray-icon-monochrome
-                                        ? (root.dark-mode ? #1D203A : #EEF0FF)
-                                        : transparent;
-                                    border-width: !root.tray-icon-monochrome ? 1.5px : 1px;
-                                    border-color: !root.tray-icon-monochrome
-                                        ? #5E6AD2
-                                        : (root.dark-mode ? #1F1F24 : #ECECEF);
-                                    IconPreview {
-                                        x: 4px;
-                                        y: 4px;
-                                        source: root.colored-icon-preview;
-                                    }
+                                TrayPaletteSwatch {
+                                    selected: !root.tray-icon-monochrome;
+                                    dark-mode: root.dark-mode;
+                                    source: root.colored-icon-preview;
                                 }
-                                Rectangle {
-                                    width: 40px;
-                                    height: 40px;
-                                    border-radius: 8px;
-                                    background: root.tray-icon-monochrome
-                                        ? (root.dark-mode ? #1D203A : #EEF0FF)
-                                        : transparent;
-                                    border-width: root.tray-icon-monochrome ? 1.5px : 1px;
-                                    border-color: root.tray-icon-monochrome
-                                        ? #5E6AD2
-                                        : (root.dark-mode ? #1F1F24 : #ECECEF);
-                                    IconPreview {
-                                        x: 4px;
-                                        y: 4px;
-                                        source: root.monochrome-icon-preview;
-                                    }
+                                TrayPaletteSwatch {
+                                    selected: root.tray-icon-monochrome;
+                                    dark-mode: root.dark-mode;
+                                    source: root.monochrome-icon-preview;
                                 }
                                 TactileButton {
                                     label: root.tray-icon-monochrome ? root.palette-monochrome-text : root.palette-colored-text;
@@ -2258,30 +2258,20 @@ export component AppWindow inherits Window {
                         }
                         if root.update-is-available : Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        if !root.package-managed-updates : SettingsLine {
-                            SettingsRowText {
-                                title: root.auto-install-label;
-                                description: root.desc-auto-install-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.auto-install-updates;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-auto-install-updates(); }
-                            }
+                        if !root.package-managed-updates : SettingsSwitchRow {
+                            title: root.auto-install-label;
+                            description: root.desc-auto-install-text;
+                            checked: root.auto-install-updates;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-auto-install-updates(); }
                         }
                         if !root.package-managed-updates : Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
-                        if !root.package-managed-updates : SettingsLine {
-                            SettingsRowText {
-                                title: root.label-auto-updates-text;
-                                description: root.desc-auto-updates-text;
-                                dark-mode: root.dark-mode;
-                            }
-                            SwitchToggle {
-                                checked: root.auto-check-updates;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-auto-check-updates(); }
-                            }
+                        if !root.package-managed-updates : SettingsSwitchRow {
+                            title: root.label-auto-updates-text;
+                            description: root.desc-auto-updates-text;
+                            checked: root.auto-check-updates;
+                            dark-mode: root.dark-mode;
+                            toggled => { root.toggle-auto-check-updates(); }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
@@ -2298,23 +2288,19 @@ export component AppWindow inherits Window {
                                 clicked => { root.toggle-update-channel-dropdown(); }
                             }
                         }
-                        if root.update-channel-dropdown-open : HorizontalLayout {
-                            alignment: end;
-                            padding-bottom: 8px;
-                            SettingsMenu {
+                        if root.update-channel-dropdown-open : SettingsMenuRow {
+                            dark-mode: root.dark-mode;
+                            SettingsDropdownOption {
+                                label: root.channel-stable-label;
+                                active: !root.update-channel-is-preview;
                                 dark-mode: root.dark-mode;
-                                SettingsDropdownOption {
-                                    label: root.channel-stable-label;
-                                    active: !root.update-channel-is-preview;
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-update-channel("stable"); }
-                                }
-                                SettingsDropdownOption {
-                                    label: root.channel-preview-label;
-                                    active: root.update-channel-is-preview;
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.select-update-channel("preview"); }
-                                }
+                                clicked => { root.select-update-channel("stable"); }
+                            }
+                            SettingsDropdownOption {
+                                label: root.channel-preview-label;
+                                active: root.update-channel-is-preview;
+                                dark-mode: root.dark-mode;
+                                clicked => { root.select-update-channel("preview"); }
                             }
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }

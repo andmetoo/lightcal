@@ -12,6 +12,7 @@ storage.lc = {
       weekendBand: '#F8F8FA',
       control: '#FFFFFF',
       controlSubtle: '#F2F2F5',
+      group: '#F4F4F6',
       controlHover: '#EFEFF2',
       borderWindow: '#DFDFE4',
       hairline: '#ECECEF',
@@ -40,6 +41,7 @@ storage.lc = {
       weekendBand: '#151519',
       control: '#1E1E22',
       controlSubtle: '#18181C',
+      group: '#18181C',
       controlHover: '#26262B',
       borderWindow: '#27272A',
       hairline: '#1F1F24',
@@ -544,8 +546,8 @@ lc.drawSettingsBoard = function(name, x, y, themeName, section, stateVariant = n
   lc.rect(b, 'Section Header Hairline', 240, 80, 500, 1, t.hairline);
 
   if (section === 'General') {
-    lc.rect(b, 'Region Group', 228, 88, 524, 176, t.mode === 'light' ? '#F4F4F6' : '#18181C', null, 14);
-    lc.rect(b, 'Startup Group', 228, 276, 524, 148, t.mode === 'light' ? '#F4F4F6' : '#18181C', null, 14);
+    lc.rect(b, 'Region Group', 228, 88, 524, 176, t.group, null, 14);
+    lc.rect(b, 'Startup Group', 228, 276, 524, 148, t.group, null, 14);
     lc.drawFlatRow(b, 92, 'Language', 'Interface language for month names, weekdays, and controls', t, true);
     lc.drawDropdown(b, 568, 104, 172, 'English (US)', t, stateVariant === 'lang-open');
 

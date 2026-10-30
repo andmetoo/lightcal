@@ -432,14 +432,9 @@ impl AppController {
         ui.set_desc_first_weekday_text(strings.desc_first_weekday.into());
         ui.set_label_show_week_numbers_text(strings.label_show_week_numbers.into());
         ui.set_desc_show_week_numbers_text(strings.desc_show_week_numbers.into());
-        ui.set_label_startup_text(strings.label_startup.into());
-        ui.set_desc_startup_text(strings.desc_startup.into());
-        #[cfg(target_os = "macos")]
-        {
-            let (label, description, _) = lightcal::i18n::macos_startup_copy(locale);
-            ui.set_label_startup_text(label.into());
-            ui.set_desc_startup_text(description.into());
-        }
+        let startup = lightcal::i18n::startup_copy(locale);
+        ui.set_label_startup_text(startup.label.into());
+        ui.set_desc_startup_text(startup.description.into());
         ui.set_label_shortcut_text(strings.label_shortcut.into());
         ui.set_desc_shortcut_text(strings.desc_shortcut.into());
         ui.set_label_theme_text(strings.label_theme.into());
@@ -557,7 +552,6 @@ impl AppController {
         ui.set_shortcut_conflict_title(strings.shortcut_conflict_title.into());
         ui.set_shortcut_conflict_hint(strings.shortcut_conflict_hint.into());
         ui.set_shortcut_reset_label(strings.shortcut_reset_button.into());
-        ui.set_shortcut_conflict_badge(strings.shortcut_conflict_badge.into());
         ui.set_calendars_denied_title_text(strings.calendars_denied_title.into());
         ui.set_calendars_denied_desc_text(strings.access_denied_desc.into());
         ui.set_open_privacy_settings_label(strings.open_privacy_settings_button.into());
@@ -639,6 +633,10 @@ impl AppController {
         ui.set_shortcut_error_message(self.shortcut_error.clone().into());
         ui.set_startup_status_text(self.startup_error.clone().into());
         ui.set_shortcut_record_label(strings.shortcut_record.into());
+        ui.set_lang_en_us_label(strings.lang_en_us.into());
+        ui.set_lang_ru_label(strings.lang_ru.into());
+        ui.set_lang_es_label(strings.lang_es.into());
+        ui.set_lang_ja_label(strings.lang_ja.into());
         ui.set_weekday_monday_label(strings.start_of_week_monday.into());
         ui.set_weekday_sunday_label(strings.start_of_week_sunday.into());
         ui.set_theme_light_label(strings.theme_light_obsidian.into());
@@ -687,7 +685,7 @@ impl AppController {
             .collect();
         ui.set_calendar_sources(ModelRc::new(VecModel::from(cal_items)));
 
-        let (mut upd_text, upd_avail) = format_update_status(locale, &self.update_state);
+        let mut upd_text = format_update_status(locale, &self.update_state);
         if self.update_state == UpdateCheckState::Idle {
             upd_text=match locale {
                 LocaleCode::En=>"Check stable GitHub releases. Installation requires a configured signing certificate.",
@@ -705,7 +703,6 @@ impl AppController {
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
-        ui.set_update_available(upd_avail && !managed);
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
@@ -1757,10 +1754,7 @@ fn main() {
                     c.persist();
                 }
                 Err(err) => {
-                    #[cfg(target_os = "macos")]
-                    let prefix = lightcal::i18n::macos_startup_copy(c.prefs.locale()).2;
-                    #[cfg(not(target_os = "macos"))]
-                    let prefix = catalog(c.prefs.locale()).startup_error;
+                    let prefix = lightcal::i18n::startup_copy(c.prefs.locale()).error;
                     c.startup_error = if err.is_empty() {
                         prefix.to_string()
                     } else {

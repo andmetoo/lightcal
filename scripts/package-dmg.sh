@@ -160,35 +160,36 @@ hdiutil verify "$dmg" >/dev/null
 
 # /tmp on macOS is /private/tmp, so hdiutil's reported path is not a reliable key.
 mnt_parent=$(mktemp -d "${TMPDIR:-/tmp}/lightcal-mnt.XXXXXX")
-trap 'rm -rf "$stage" "$mnt_parent"' EXIT
+mount=
+cleanup() {
+  if [ -n "${mount:-}" ]; then
+    hdiutil detach "$mount" >/dev/null 2>&1 || hdiutil detach -force "$mount" >/dev/null 2>&1 || true
+    mount=
+  fi
+  rm -rf "$stage" "$mnt_parent"
+}
+trap cleanup EXIT
 if ! attach_output=$(hdiutil attach -nobrowse -readonly -mountrandom "$mnt_parent" "$dmg" 2>&1); then
   printf '%s\n' "$attach_output" >&2
   echo "Could not attach the disk image." >&2
   exit 1
 fi
 
-find_mount() {
-  mount=
+attempt=0
+while [ "$attempt" -lt 10 ]; do
   for candidate in "$mnt_parent"/*; do
     if [ -d "$candidate" ]; then
       mount=$candidate
-      return 0
+      break
     fi
   done
-  return 1
-}
-
-ready=0
-attempt=0
-while [ "$attempt" -lt 10 ]; do
-  if find_mount; then
-    ready=1
+  if [ -n "$mount" ]; then
     break
   fi
   attempt=$((attempt + 1))
   sleep 0.2
 done
-if [ "$ready" -ne 1 ]; then
+if [ -z "$mount" ]; then
   printf '%s\n' "$attach_output" >&2
   printf '%s\n' "$attach_output" | awk '/^\/dev\// { print $1 }' | while read -r device; do
     hdiutil detach "$device" >/dev/null 2>&1 || true
@@ -196,13 +197,6 @@ if [ "$ready" -ne 1 ]; then
   echo "Could not mount the disk image." >&2
   exit 1
 fi
-
-cleanup_mount() {
-  if [ -n "${mount:-}" ]; then
-    hdiutil detach "$mount" >/dev/null 2>&1 || hdiutil detach -force "$mount" >/dev/null 2>&1 || true
-  fi
-}
-trap 'cleanup_mount; rm -rf "$stage" "$mnt_parent"' EXIT
 
 if [ ! -x "$mount/Lightcal.app/Contents/MacOS/lightcal" ] \
   || [ ! -f "$mount/Lightcal.app/Contents/Resources/AppIcon.icns" ] \
@@ -219,8 +213,7 @@ if ! grep -q "<string>${version}</string>" "$mount/Lightcal.app/Contents/Info.pl
   exit 1
 fi
 
-cleanup_mount
-trap 'rm -rf "$stage" "$mnt_parent"' EXIT
+cleanup
 
 # A signed image would contradict this review artifact. Do not sign it.
 if codesign --verify "$dmg" >/dev/null 2>&1; then
