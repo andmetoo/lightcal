@@ -1,0 +1,11 @@
+[package]
+name = "calendar-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Toolkit-independent Gregorian calendar arithmetic, navigation state, and event-dot projection for Lightcal"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+

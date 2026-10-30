@@ -15,7 +15,7 @@ Acceptance:
 
 ## 1. Prove the platform and framework (2-3 days)
 
-Build the smallest useful Windows application: tray icon, month view, larger taskbar window, explicit Quit. Resolve exact crate versions from current stable releases, pin the Rust toolchain, commit `Cargo.lock`, and record licenses. Establish Rust CI for format, Clippy, tests, and Windows release compilation. Add a macOS compile lane and arrange a real launch probe.
+Build the smallest useful Windows application: tray icon, compact month view, settings window, explicit Quit. Resolve exact crate versions from current stable releases, pin the Rust toolchain, commit `Cargo.lock`, and record licenses. Establish Rust CI for format, Clippy, tests, and Windows release compilation. Add a macOS compile lane and arrange a real launch probe.
 
 Acceptance:
 
@@ -31,13 +31,13 @@ Gate: record passing integration/performance evidence in ADR 0001 before buildin
 
 ## 2. Approve the visual design (about 1 day)
 
-Use Penpot through MCP for the redesigned compact/expanded views and settings. Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
+Use Penpot through MCP for the redesigned compact view and settings (expanded-view designs are historical). Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
 
 Acceptance:
 
 1. Both views have light/dark designs, readable selected/today/weekend states, keyboard focus, month navigation, optional week numbers, and tray menu.
 2. Review at 100%, 150%, and 200% scaling; include long localized month/day labels and Windows high-contrast behavior.
-3. Expanded space improves readability and navigation. Do not invent empty agenda content to fill the window.
+3. Keep the compact calendar readable. The owner removed the expanded agenda view; do not restore it or add placeholder event actions.
 4. Owner accepts the previews and interaction behavior before visual implementation.
 5. Apply [the required features](features.md): weekday/date text, selectable gray weekdays, current-month label, event dots, and Settings/Calendars/About designs including the two requested links.
 6. General includes a language selector: English by default, Russian, Spanish, and Japanese. Check layout with long Spanish/Russian strings and Japanese glyphs; do not assume the English layout proves localized usability.

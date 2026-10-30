@@ -1,24 +1,409 @@
 {
-  "verifiedOn": "2026-10-29",
-  "fileName": "app",
-  "fileId": "c2d27051-3cd1-813e-8008-dd81ca9d88c1",
-  "instance": "local",
-  "savedVersion": "Lightcal redesign — organized into six pages",
+  "fileId": "c2d27051-3cd1-813e-8008-dd9b45707753",
+  "fileName": "Новый файл 1",
+  "designSystem": "Lightcal 2026 — Alabaster & Ink (Light) / Obsidian Graphite (Dark)",
+  "totalPages": 7,
+  "totalBoards": 39,
   "pages": [
-    { "name": "00 · Overview", "id": "837761bc-b3c9-80fe-8008-dd83770d7ca7", "boards": 1 },
-    { "name": "01 · Calendar", "id": "837761bc-b3c9-80fe-8008-dd83ae620de8", "boards": 10 },
-    { "name": "02 · Settings", "id": "837761bc-b3c9-80fe-8008-dd83fa138f99", "boards": 8 },
-    { "name": "03 · States", "id": "837761bc-b3c9-80fe-8008-dd840e641e39", "boards": 12 },
-    { "name": "04 · Languages", "id": "837761bc-b3c9-80fe-8008-dd842a6454ea", "boards": 4 },
-    { "name": "05 · Design system", "id": "837761bc-b3c9-80fe-8008-dd84d15eb2d9", "boards": 1 }
-  ],
-  "checks": {
-    "totalBoards": 36,
-    "textOverflows": 0,
-    "containmentViolations": 0,
-    "fileValidationErrors": 0,
-    "calendarNavigationLinks": 14,
-    "settingsNavigationLinks": 26,
-    "manualViewerWalkthrough": false
-  }
+    {
+      "pageId": "c2d27051-3cd1-813e-8008-dd9b45707754",
+      "pageName": "00 · Overview",
+      "boardCount": 1,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda74f32df89",
+          "name": "Overview · Light & Dark Showcase",
+          "x": 0,
+          "y": 0,
+          "width": 2060,
+          "height": 860,
+          "childrenCount": 462
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dd9c27e56322",
+      "pageName": "01 · Calendar",
+      "boardCount": 10,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f5a02b904",
+          "name": "Calendar · Compact · Light · Current Month",
+          "x": 0,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f5b5aa430",
+          "name": "Calendar · Expanded · Light · Current Month",
+          "x": 400,
+          "y": 0,
+          "width": 520,
+          "height": 600,
+          "childrenCount": 123
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f5e028af7",
+          "name": "Calendar · Compact · Light · Next Month",
+          "x": 968,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 93
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f6b5aad6e",
+          "name": "Calendar · Expanded · Light · Next Month",
+          "x": 1368,
+          "y": 0,
+          "width": 520,
+          "height": 600,
+          "childrenCount": 108
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f6cf747d9",
+          "name": "Tray Menu · Light",
+          "x": 1936,
+          "y": 0,
+          "width": 240,
+          "height": 216,
+          "childrenCount": 12
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f6d390807",
+          "name": "Tray Menu · Dark",
+          "x": 1936,
+          "y": 660,
+          "width": 240,
+          "height": 216,
+          "childrenCount": 12
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f765426b1",
+          "name": "Calendar · Compact · Dark · Current Month",
+          "x": 0,
+          "y": 660,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f77deaf76",
+          "name": "Calendar · Expanded · Dark · Current Month",
+          "x": 400,
+          "y": 660,
+          "width": 520,
+          "height": 600,
+          "childrenCount": 123
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f848a01ad",
+          "name": "Calendar · Compact · Dark · Next Month",
+          "x": 968,
+          "y": 660,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 93
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dd9f880c6f90",
+          "name": "Calendar · Expanded · Dark · Next Month",
+          "x": 1368,
+          "y": 660,
+          "width": 520,
+          "height": 600,
+          "childrenCount": 108
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dd9c27e62dd1",
+      "pageName": "02 · Settings",
+      "boardCount": 8,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda87f75ebf8",
+          "name": "Settings · General · Light",
+          "x": 0,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 46
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8835e2876",
+          "name": "Settings · Appearance · Light",
+          "x": 828,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 57
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8898c0de7",
+          "name": "Settings · Calendars · Light",
+          "x": 1656,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 44
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda88b878bd0",
+          "name": "Settings · About · Light",
+          "x": 2484,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 39
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8954d3802",
+          "name": "Settings · General · Dark",
+          "x": 0,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 46
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda89891f4c8",
+          "name": "Settings · Appearance · Dark",
+          "x": 828,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 57
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda899dd267b",
+          "name": "Settings · Calendars · Dark",
+          "x": 1656,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 44
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda89b6a1c6f",
+          "name": "Settings · About · Dark",
+          "x": 2484,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 39
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dd9c27e6b4c1",
+      "pageName": "03 · States",
+      "boardCount": 12,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8bc51a64b",
+          "name": "State · General · Languages Dropdown Open · Light",
+          "x": 0,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 54
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8bf380f2e",
+          "name": "State · General · Shortcut Conflict · Light",
+          "x": 828,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 51
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8c7b3cd01",
+          "name": "State · Calendars · Access Denied · Light",
+          "x": 1656,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 26
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8c934e4cf",
+          "name": "State · Calendars · Empty · Light",
+          "x": 2484,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 24
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8d30ce520",
+          "name": "State · About · Checking Updates · Light",
+          "x": 3312,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 40
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8d5789166",
+          "name": "State · About · Update Available · Light",
+          "x": 4140,
+          "y": 0,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 41
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8bc51a64c",
+          "name": "State · General · Languages Dropdown Open · Dark",
+          "x": 0,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 54
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8bf380f2f",
+          "name": "State · General · Shortcut Conflict · Dark",
+          "x": 828,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 51
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8c7b3cd02",
+          "name": "State · Calendars · Access Denied · Dark",
+          "x": 1656,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 26
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8c934e4d0",
+          "name": "State · Calendars · Empty · Dark",
+          "x": 2484,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 24
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8e61e2625",
+          "name": "State · About · Checking Updates · Dark",
+          "x": 3312,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 40
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8e80b0ee2",
+          "name": "State · About · Update Available · Dark",
+          "x": 4140,
+          "y": 668,
+          "width": 780,
+          "height": 620,
+          "childrenCount": 41
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dd9c27e7235f",
+      "pageName": "04 · Languages",
+      "boardCount": 4,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda81faaf41e",
+          "name": "Language · English (en-US) · Light",
+          "x": 0,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda821475c83",
+          "name": "Language · Русский (ru-RU) · Dark",
+          "x": 400,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda8292bf997",
+          "name": "Language · Español (es-ES) · Light",
+          "x": 800,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda82a89266b",
+          "name": "Language · 日本語 (ja-JP) · Dark",
+          "x": 1200,
+          "y": 0,
+          "width": 352,
+          "height": 432,
+          "childrenCount": 101
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dd9c27e7b57c",
+      "pageName": "05 · Design system",
+      "boardCount": 1,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda18547eb89",
+          "name": "Design System · Tokens, Typography & Native Primitives",
+          "x": 0,
+          "y": 0,
+          "width": 1640,
+          "height": 660,
+          "childrenCount": 168
+        }
+      ]
+    },
+    {
+      "pageId": "1fee1a1f-bdd8-80c5-8008-dda24e907294",
+      "pageName": "06 · Shell, Dock & Icons",
+      "boardCount": 3,
+      "boards": [
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda950ef8455",
+          "name": "Windows 11 · Taskbar & System Tray Integration",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 620,
+          "childrenCount": 376
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-dda997756c5a",
+          "name": "macOS · Menu Bar (Status Bar) & Dock Integration",
+          "x": 0,
+          "y": 668,
+          "width": 1440,
+          "height": 620,
+          "childrenCount": 372
+        },
+        {
+          "id": "1fee1a1f-bdd8-80c5-8008-ddaa7d2a27e1",
+          "name": "Lightcal · Icon System & Dynamic Variants",
+          "x": 0,
+          "y": 1336,
+          "width": 1440,
+          "height": 520,
+          "childrenCount": 227
+        }
+      ]
+    }
+  ]
 }

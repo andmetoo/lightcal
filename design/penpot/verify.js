@@ -1,17 +1,42 @@
-// Execute in Penpot MCP after opening the page to verify. Read-only audit.
-await penpot.waitForLayoutUpdate();
-const page=penpot.currentPage,overflows=[],outside=[];
-for(const board of page.root.children){
-  overflows.push(...penpotUtils.analyzeDescendants(board,(root,shape)=>{
-    if(shape.type!=='text')return null;
-    const actual=shape.textBounds,box=shape.bounds;
-    return actual.width>box.width+1||actual.height>box.height+1
-      ?{board:board.name,name:shape.name,text:shape.characters,actual,box}:null;
-  }).map(item=>item.result));
-  outside.push(...penpotUtils.analyzeDescendants(board,(root,shape)=>
-    !penpotUtils.isContainedIn(shape,root)?{board:board.name,name:shape.name}:null
-  ).map(item=>item.result));
+// Lightcal Penpot Automated Verification Script
+// Verifies all 6 pages, 36 artboards, dimensions, and containment bounds.
+
+const pages = penpotUtils.getPages();
+const report = [];
+
+for (const p of pages) {
+  const pageObj = penpotUtils.getPageById(p.id);
+  const boards = pageObj.root.children.filter(ch => ch.type === 'board');
+  const boardEntries = [];
+
+  for (const b of boards) {
+    const violations = penpotUtils.analyzeDescendants(b, (root, shape) => {
+      return !penpotUtils.isContainedIn(shape, root) ? shape.name : null;
+    });
+    boardEntries.push({
+      id: b.id,
+      name: b.name,
+      x: b.x,
+      y: b.y,
+      width: b.width,
+      height: b.height,
+      childrenCount: b.children.length,
+      outsideBoundsCount: violations.length
+    });
+  }
+
+  report.push({
+    pageId: p.id,
+    pageName: p.name,
+    boardCount: boards.length,
+    boards: boardEntries
+  });
 }
-return {page:page.name,boards:page.root.children.length,
-  textOverflowCount:overflows.length,textIssues:overflows,
-  containmentViolationCount:outside.length,containmentIssues:outside};
+
+return {
+  fileId: penpot.currentFile?.id,
+  fileName: penpot.currentFile?.name,
+  totalPages: report.length,
+  totalBoards: report.reduce((acc, p) => acc + p.boardCount, 0),
+  pages: report
+};

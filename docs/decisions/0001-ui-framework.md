@@ -36,6 +36,17 @@ Time-box the initial prototype to 2-3 implementation days. Demonstrate tray show
 
 If tray integration or accessibility blocks the prototype, or resource targets fail after one bounded tuning pass, document the evidence and propose revisiting this decision with the owner. Do not switch frameworks without owner approval. Record prototype results in this ADR.
 
+## Prototype platform results
+
+Review note (2026-10-30): the statements below describe implemented paths and earlier prototype observations. They do not establish that the complete validation gate passed. The [implementation audit](../implementation-audit-2026-10-30.md) records the current evidence and open gates; resource measurements, full shell/accessibility checks, and macOS validation remain outstanding.
+
+Validated on Windows 11 (October 2026):
+
+1. **WinRT Calendar Provider**: `Windows.ApplicationModel.Appointments.AppointmentManager.RequestStoreAsync(AppointmentStoreAccessType::AllCalendarsReadOnly)` verified on live Windows environment. Successfully enumerates configured account calendars (retrieving local ID, display name, account label, and color hex) and occurrence queries across the visible month ± 1 week range. Handles `AccessDenied`, empty calendar stores, and unpackaged desktop environments safely without crashing or hanging. Runs off the UI thread via `std::thread` + `slint::invoke_from_event_loop`.
+2. **Tray & Window Lifecycle**: Tray icon with left-click popover toggle, bottom-right taskbar anchoring, dynamic date/weekday/time squircle rendering (with 2×2 supersampling from 64×64 master buffer), and right-click menu (`Open Lightcal`, `Today`, `Settings…`, `Exit`). Closing the window hides to tray (`CloseRequestResponse::HideWindow`) while `slint::run_event_loop_until_quit()` maintains background execution until explicitly exited.
+3. **Single Instance**: Named per-user mutex and event synchronization verified (`Local\Lightcal_SingleInstance_*`). Secondary invocations signal the primary instance and exit immediately; the primary instance restores and activates its window.
+4. **Icons & Packaging**: Embedded 7-size Windows icon (`.ico` containing 16, 24, 32, 48, 64, 128, 256 px resolutions) compiled into the executable via `winres`. Font rasterization powered by `fontdue` using the bundled open-source Inter typeface (OFL 1.1 attribution preserved in notices).
+
 ## Evidence
 
 Official sources reviewed on 2026-10-29; recheck against the pinned release during implementation. Some `latest` documentation may describe unreleased functionality.

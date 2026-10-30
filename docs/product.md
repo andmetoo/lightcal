@@ -7,7 +7,7 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 ## Approved choices
 
 - Windows first; Rust implementation; no web container.
-- Two entry points: compact tray popup and larger taskbar calendar.
+- One compact calendar, opened from the tray or pinned taskbar app; a separate settings layout. The owner removed the expanded agenda view on October 30, 2026; see [ADR 0004](decisions/0004-compact-view-and-account-settings.md).
 - Taskbar means a normal user-pinned application icon. It does not mean replacing the system clock or embedding a custom toolbar in Explorer.
 - GPL-3.0. This repository uses the precise identifier `GPL-3.0-only`.
 - Future macOS support must remain architecturally possible.
@@ -23,20 +23,17 @@ The first release includes a Gregorian month grid, selected date, today highligh
 
 Ship English (`en`) as the default regardless of the OS language, with optional Russian (`ru`), Spanish (`es`), and Japanese (`ja`) selected in Settings. Persist the choice and apply it to application text, accessible labels, weekday/month names, and date formatting. Keep the system timezone and explicit first-weekday/gray-weekday preferences independent of the UI language. Store strings separately from logic; use English as the fallback for missing/invalid translations. Validate all four languages before release; right-to-left languages are outside this release scope.
 
-## Two presentation modes
+## Tray and taskbar entry points
 
-| Property | Tray popup | Taskbar calendar |
-| --- | --- | --- |
-| Current design size | 352 x 432 logical pixels | 520 x 600 logical pixels |
-| Entry | Left-click tray icon | Launch shortcut or activate app button |
-| Placement | Next to tray icon, clamped to visible monitor work area | Restore last valid position; otherwise place near taskbar on active monitor |
-| Focus | Keyboard focus on open | Standard application focus |
-| Dismissal | Escape or focus loss hides | Close hides to tray; focus loss leaves it open |
-| Taskbar / Alt-Tab | No separate button or Alt-Tab entry | Normal taskbar button and Alt-Tab entry while visible |
+Both entry points open the same 352 by 432 logical-pixel compact calendar. Settings use a 780 by 620 layout. Removing the expanded agenda does not remove the normal taskbar button.
 
-Sizes are the current Penpot proposal, pending owner acceptance and DPI/localization checks. Settings use a separate 780 x 620 logical-pixel window. Both calendar views share date selection and navigation state. Only one calendar surface is visible at a time: opening one hides the other. Repeated tray clicks toggle the compact popup. Standard Windows taskbar activation/minimization behavior is preserved; custom taskbar click interception is outside scope.
+- Tray clicks and the global shortcut restore the calendar, or minimize it when the calendar is already open. Taskbar activation restores the existing native window.
+- Escape and Close minimize the window while preserving its taskbar button. Focus loss does not hide or destroy the window, including when Explorer opens the taskbar context menu.
+- A normal launch opens the calendar. `--background` starts quietly in the tray until the first activation. A second launch forwards activation to the running instance.
+- Windows DWM receives a rendered calendar bitmap for thumbnail and Peek requests, including while minimized. Settings retain the last available calendar preview. Images preserve aspect ratio and fit DWM's requested bounds.
+- Portable builds use a stable application ID. Installed MSIX builds retain the identity assigned by Windows. Only explicit Quit terminates the process.
 
-A pinned shortcut launches or forwards activation to the running process and opens the larger view. Launching a second instance must never create a second tray icon. A normal launch opens the larger calendar; `--background` starts hidden for opt-in login startup. Quit exits the process. Autostart is off by default.
+See [ADR 0005](decisions/0005-taskbar-calendar-presence.md) for the regression and verification limits.
 
 Windows controls pinning and tray overflow visibility; Lightcal must not promise that it can force either setting. Shortcut identity and reactivation behavior are prototype acceptance criteria.
 
