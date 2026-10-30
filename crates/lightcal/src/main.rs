@@ -6,10 +6,11 @@ use lightcal::i18n::{
     catalog, format_active_calendars_heading, format_calendar_count, format_date_line,
     format_event_count, format_month_year, format_sync_status, format_update_status, weekday_short,
 };
+#[cfg(windows)]
+use lightcal::platform::windows::render_native_tray_icon;
 use lightcal::platform::windows::{
-    bring_to_foreground, primary_work_area, query_calendar_provider, render_native_tray_icon,
-    render_squircle_icon_rgba_64, system_prefers_dark_mode, ShortcutManager, SingleInstance,
-    StartupManager,
+    bring_to_foreground, primary_work_area, query_calendar_provider, render_squircle_icon_rgba_64,
+    system_prefers_dark_mode, ShortcutManager, SingleInstance, StartupManager,
 };
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
@@ -47,6 +48,7 @@ pub(crate) struct AppController {
     pub(crate) startup_mgr: StartupManager,
     pub(crate) shortcut_mgr: ShortcutManager,
     pub(crate) shortcut_error: String,
+    pub(crate) startup_error: String,
     pub(crate) conflicting_shortcut: Option<String>,
     pub(crate) update_state: UpdateCheckState,
     pub(crate) settings_open: bool,
@@ -289,9 +291,9 @@ impl AppController {
             format_date_line(locale, self.cal_state.today, self.prefs.show_weekday).into(),
         );
         ui.set_today_button_label(strings.today_button.into());
-        ui.set_week_header_label("W".into());
+        ui.set_week_header_label(strings.week_col_header.into());
         ui.set_show_week_numbers(self.prefs.show_week_numbers);
-        ui.set_show_weekday_header(self.prefs.show_weekday);
+        ui.set_show_weekday_header(true);
 
         let wd_headers: Vec<SharedString> = grid
             .weekdays
@@ -490,7 +492,10 @@ impl AppController {
                     )
                     || self.prefs.windows_calendars_enabled),
         );
-        ui.set_calendars_subtitle_text(labels[10].into());
+        ui.set_outlook_section_text(strings.outlook_section.into());
+        ui.set_ics_section_text(strings.ics_section.into());
+        ui.set_ics_help_text(strings.ics_help.into());
+        ui.set_calendars_dot_note_text(strings.calendars_dot_note.into());
         ui.set_provider_error_text(match &self.provider.status {
             lightcal::platform::ProviderStatus::ProviderUnavailable(message) => {
                 message.clone().into()
@@ -549,12 +554,23 @@ impl AppController {
         ui.set_open_privacy_settings_label(strings.open_privacy_settings_button.into());
         ui.set_retry_sync_label(strings.retry_sync_button.into());
         ui.set_calendars_empty_title_text(strings.calendars_empty_title.into());
-        ui.set_calendars_empty_desc_text(labels[10].into());
+        ui.set_calendars_empty_desc_text(strings.calendars_unavailable_desc.into());
         ui.set_add_calendar_account_label(strings.add_calendar_account_button.into());
         ui.set_add_calendar_label(strings.add_calendar_button.into());
         ui.set_checking_updates_label(strings.checking_updates_label.into());
-        ui.set_update_available_badge_text(strings.update_available_badge.into());
-        ui.set_update_ready_title_text(strings.update_ready_title.into());
+        if let UpdateCheckState::UpdateAvailable { latest_version, .. } = &self.update_state {
+            ui.set_update_available_badge_text(format!("v{latest_version}").into());
+            let title = match locale {
+                LocaleCode::En => format!("Version {latest_version} is available"),
+                LocaleCode::Ru => format!("Доступна версия {latest_version}"),
+                LocaleCode::Es => format!("La versión {latest_version} está disponible"),
+                LocaleCode::Ja => format!("バージョン {latest_version} が利用できます"),
+            };
+            ui.set_update_ready_title_text(title.into());
+        } else {
+            ui.set_update_available_badge_text(strings.update_available_badge.into());
+            ui.set_update_ready_title_text(strings.update_ready_title.into());
+        }
         ui.set_update_ready_notes_text(strings.update_ready_notes.into());
         ui.set_release_notes_button_text(strings.release_notes_button.into());
 
@@ -610,6 +626,18 @@ impl AppController {
             );
         }
         ui.set_shortcut_error_message(self.shortcut_error.clone().into());
+        ui.set_startup_status_text(self.startup_error.clone().into());
+        ui.set_shortcut_record_label(strings.shortcut_record.into());
+        ui.set_weekday_monday_label(strings.start_of_week_monday.into());
+        ui.set_weekday_sunday_label(strings.start_of_week_sunday.into());
+        ui.set_theme_light_label(strings.theme_light_obsidian.into());
+        ui.set_theme_dark_label(strings.theme_dark_obsidian.into());
+        ui.set_theme_system_label(strings.theme_system_obsidian.into());
+        ui.set_channel_stable_label(strings.channel_stable.into());
+        ui.set_channel_preview_label(strings.channel_preview.into());
+        ui.set_update_channel_is_preview(self.prefs.update_channel == "preview");
+        ui.set_github_button_text(strings.github_repo_button.into());
+        ui.set_koona_button_text(strings.koona_app_button.into());
 
         ui.set_calendars_access_denied(self.calendars_access_denied);
         ui.set_calendars_is_empty(self.calendars_is_empty);
@@ -770,9 +798,14 @@ fn invalidate_taskbar_preview() {
 }
 
 fn open_browser_link(url: &str) {
-    if !is_allowed_external_link(url) {
-        return;
+    if is_allowed_external_link(url) {
+        #[cfg(any(windows, target_os = "macos"))]
+        open_allowed_browser_link(url);
     }
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn open_allowed_browser_link(url: &str) {
     #[cfg(windows)]
     {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -1270,6 +1303,7 @@ fn main() {
         startup_mgr,
         shortcut_mgr,
         shortcut_error: String::new(),
+        startup_error: String::new(),
         conflicting_shortcut: None,
         update_state: UpdateCheckState::Idle,
         settings_open: false,
@@ -1705,9 +1739,20 @@ fn main() {
             let mut c = ctrl.borrow_mut();
             let desired = !c.prefs.start_with_windows;
             let exe = env::current_exe().unwrap_or_default();
-            if c.startup_mgr.set_enabled(desired, &exe).is_ok() {
-                c.prefs.start_with_windows = desired;
-                c.persist();
+            match c.startup_mgr.set_enabled(desired, &exe) {
+                Ok(()) => {
+                    c.prefs.start_with_windows = desired;
+                    c.startup_error.clear();
+                    c.persist();
+                }
+                Err(err) => {
+                    let prefix = catalog(c.prefs.locale()).startup_error;
+                    c.startup_error = if err.is_empty() {
+                        prefix.to_string()
+                    } else {
+                        format!("{prefix} {err}")
+                    };
+                }
             }
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);

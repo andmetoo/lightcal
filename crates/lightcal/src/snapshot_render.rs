@@ -65,6 +65,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         startup_mgr,
         shortcut_mgr,
         shortcut_error: String::new(),
+        startup_error: String::new(),
         conflicting_shortcut: None,
         update_state: UpdateCheckState::Idle,
         settings_open: false,

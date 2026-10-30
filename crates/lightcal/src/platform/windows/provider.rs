@@ -319,6 +319,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::ProviderStatus;
 
     #[test]
     fn synthetic_mode_returns_available_sample_data() {
