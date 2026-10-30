@@ -37,4 +37,12 @@ Hidden mode must not repaint continuously, run a busy timer, or poll the tray. C
 
 Pure Rust unit tests cover date arithmetic and state transitions. Integration tests use a temporary `LIGHTCAL_DATA_DIR`. OS shell and accessibility behavior need real desktop smoke checks; a headless successful build is insufficient. Add regression tests for concrete defects, not snapshots duplicating the implementation.
 
-Current documentation check: `python scripts/check_docs.py` (Python 3.9 or newer). It checks local file targets and whitespace, not external URLs, heading anchors, or YAML semantics. Rust build/test commands will be added with the Cargo workspace. This planning baseline does not claim application tests have passed.
+Current checks: `python scripts/check_docs.py` (Python 3.9 or newer), `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. The documentation check validates local file targets and whitespace, not external URLs, heading anchors, or YAML semantics.
+
+## Review regression checks
+
+- Window geometry reuses the shared work-area clamp. Tests include the 780 by 620 settings layout at 200% DPI on a 1920 by 1040 work area, oversized windows in both axes, and negative monitor origins. An oversized layout is anchored safely rather than causing invalid clamp bounds; this does not claim that its entire content fits a smaller screen.
+- A process-owned offscreen native Windows window tests visibility, taskbar-style minimization, restoration, and hidden state. Tray and shortcut toggles read native state rather than a controller visibility flag. Dismissal minimizes the existing window and preserves its HWND for Explorer and DWM.
+- Fixture snapshots preserve `AccessDenied` through provider aggregation and retain other providers' sources and events. Headless settings renders cover denied-only and mixed readable/denied sources in both themes; permission-recovery controls and readable calendar selection must coexist.
+- Check the non-Windows library with `cargo check -p lightcal --lib --target aarch64-apple-darwin --locked` when that Rust target is installed. The macOS CI job performs a native library check. A successful library check is not evidence of a working macOS application or runtime calendar integration.
+- `pwsh -NoProfile -File scripts/test-nsis.ps1` exercises the installer and uninstaller with all real-profile operations compiled out, verifying the payload hash and preservation of unrelated files.

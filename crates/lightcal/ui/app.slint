@@ -1676,7 +1676,7 @@ export component AppWindow inherits Window {
                                     spacing: 10px;
                                     alignment: start;
                                     SettingsButton {
-                                        button-width: 164px;
+                                        button-width: 240px;
                                         label: root.open-privacy-settings-label;
                                         dark-mode: root.dark-mode;
                                         clicked => { root.open-privacy-settings(); }
@@ -1684,6 +1684,7 @@ export component AppWindow inherits Window {
                                     SettingsButton {
                                         button-width: 88px;
                                         label: root.retry-sync-label;
+                                        enabled: !root.provider-loading && !root.connection-busy;
                                         kind: "subtle";
                                         dark-mode: root.dark-mode;
                                         clicked => { root.retry-calendar-sync(); }
@@ -1692,7 +1693,7 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        if root.calendars-is-empty : Rectangle {
+                        if root.calendars-is-empty && !root.calendars-access-denied : Rectangle {
                             height: 160px;
                             border-radius: 10px;
                             background: root.dark-mode ? #141417 : #F7F7F8;

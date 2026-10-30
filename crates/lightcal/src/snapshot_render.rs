@@ -10,6 +10,7 @@ use lightcal::preferences::{
 use lightcal::snapshot::{write_rgba_png, HeadlessPlatform};
 use lightcal::updater::UpdateCheckState;
 use slint::ComponentHandle;
+use slint::Model;
 use std::env;
 use std::path::Path;
 
@@ -659,6 +660,48 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             );
             helper.render_to_png(
                 &out_dir.join(format!("20-account-{}-{name}.png", theme.as_str())),
+                780,
+                620,
+            )?;
+        }
+    }
+    // Permission recovery must coexist with readable calendars from other providers.
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 2;
+    ctrl.connection_busy = false;
+    ctrl.provider_loading = false;
+    ctrl.prefs.windows_calendars_enabled = true;
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        for partial in [false, true] {
+            ctrl.provider = ProviderSnapshot::synthetic(anchor);
+            ctrl.provider.status = lightcal::platform::ProviderStatus::AccessDenied;
+            ctrl.provider.occurrences.clear();
+            if partial {
+                for (i, source) in ctrl.provider.sources.iter_mut().enumerate() {
+                    source.id = format!("graph:permission-fixture-{i}");
+                    source.account_label = "Outlook".into();
+                }
+                ctrl.microsoft_account =
+                    lightcal::calendars::account::MicrosoftAccountState::Connected {
+                        label: Some("demo@example.invalid".into()),
+                    };
+            } else {
+                ctrl.provider.sources.clear();
+                ctrl.microsoft_account =
+                    lightcal::calendars::account::MicrosoftAccountState::Disconnected;
+            }
+            ctrl.calendars_access_denied = true;
+            ctrl.calendars_is_empty = !partial;
+            ctrl.sync_to_ui(&ui);
+            assert!(ui.get_calendars_access_denied());
+            assert_eq!(ui.get_calendar_sources().row_count() > 0, partial);
+            helper.render_to_png(
+                &out_dir.join(format!(
+                    "21-permission-{}-{}.png",
+                    theme.as_str(),
+                    if partial { "partial" } else { "denied" }
+                )),
                 780,
                 620,
             )?;

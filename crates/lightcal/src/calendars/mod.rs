@@ -129,6 +129,37 @@ fn finish_status(snapshot: &mut ProviderSnapshot, errors: &[String]) {
     };
 }
 
+fn failure(error: String) -> CalendarLoad {
+    CalendarLoad {
+        microsoft: MicrosoftAccountState::Unavailable {
+            saved_credentials: false,
+        },
+        snapshot: ProviderSnapshot {
+            status: ProviderStatus::ProviderUnavailable(error),
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        },
+    }
+}
+
+pub fn add_feed(credentials: &mut Credentials, name: &str, raw: &str) -> Result<String, String> {
+    let url = crate::net::https_url(raw.trim())?;
+    if name.trim().is_empty() || name.len() > 100 {
+        return Err("Enter a calendar name (1–100 characters)".into());
+    }
+    if credentials.ics.iter().any(|feed| feed.url == url.as_str()) {
+        return Err("This subscription is already connected".into());
+    }
+    let id = format!("ics:{}", random_key()?);
+    credentials.ics.push(crate::secure_store::IcsSubscription {
+        id: id.clone(),
+        name: name.trim().into(),
+        url: url.into(),
+        color: "#10B981".into(),
+    });
+    Ok(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,35 +217,4 @@ mod tests {
             ProviderStatus::ProviderUnavailable("offline".into())
         );
     }
-}
-
-fn failure(error: String) -> CalendarLoad {
-    CalendarLoad {
-        microsoft: MicrosoftAccountState::Unavailable {
-            saved_credentials: false,
-        },
-        snapshot: ProviderSnapshot {
-            status: ProviderStatus::ProviderUnavailable(error),
-            sources: Vec::new(),
-            occurrences: Vec::new(),
-        },
-    }
-}
-
-pub fn add_feed(credentials: &mut Credentials, name: &str, raw: &str) -> Result<String, String> {
-    let url = crate::net::https_url(raw.trim())?;
-    if name.trim().is_empty() || name.len() > 100 {
-        return Err("Enter a calendar name (1–100 characters)".into());
-    }
-    if credentials.ics.iter().any(|feed| feed.url == url.as_str()) {
-        return Err("This subscription is already connected".into());
-    }
-    let id = format!("ics:{}", random_key()?);
-    credentials.ics.push(crate::secure_store::IcsSubscription {
-        id: id.clone(),
-        name: name.trim().into(),
-        url: url.into(),
-        color: "#10B981".into(),
-    });
-    Ok(id)
 }

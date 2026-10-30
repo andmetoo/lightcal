@@ -700,7 +700,6 @@ impl AppController {
 
 fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
-    ui.window().set_minimized(false);
     #[cfg(windows)]
     {
         let (lw, lh) = target_logical_size(ui.get_settings_open());
@@ -715,9 +714,9 @@ fn show_application_window(ui: &AppWindow) {
     sync_window_geometry(ui, ui.get_settings_open());
 }
 
-fn minimize_application_window(ui: &AppWindow) {
-    // Keep the HWND registered with Explorer for taskbar restoration and DWM previews.
-    ui.window().set_minimized(true);
+fn hide_application_window(ui: &AppWindow) {
+    // Preserve the known working hide/show path for Slint's software renderer.
+    let _ = ui.hide();
     #[cfg(windows)]
     {
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
@@ -725,7 +724,7 @@ fn minimize_application_window(ui: &AppWindow) {
             unsafe {
                 windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
                     hwnd,
-                    windows_sys::Win32::UI::WindowsAndMessaging::SW_MINIMIZE,
+                    windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE,
                 );
             }
         }
@@ -1201,7 +1200,7 @@ fn main() {
         let _ = slint::invoke_from_event_loop(move || {
             with_active_controller(&ui_w, |c, w| {
                 if !c.settings_open && application_window_is_open(w) {
-                    minimize_application_window(w);
+                    hide_application_window(w);
                 } else {
                     c.settings_open = false;
                     c.sync_to_ui(w);
@@ -1382,7 +1381,7 @@ fn main() {
                 let _ = slint::invoke_from_event_loop(move || {
                     with_active_controller(&ui_w, |c, w| {
                         if !c.settings_open && application_window_is_open(w) {
-                            minimize_application_window(w);
+                            hide_application_window(w);
                         } else {
                             c.settings_open = false;
                             c.sync_to_ui(w);
@@ -1901,7 +1900,7 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_dismiss_compact(move || {
             if let Some(w) = ui_weak.upgrade() {
-                minimize_application_window(&w);
+                hide_application_window(&w);
             }
         });
     }
@@ -1909,7 +1908,7 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.window().on_close_requested(move || {
             if let Some(w) = ui_weak.upgrade() {
-                minimize_application_window(&w);
+                hide_application_window(&w);
             }
             slint::CloseRequestResponse::KeepWindowShown
         });
@@ -2083,7 +2082,7 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_minimize_window(move || {
             if let Some(w) = ui_weak.upgrade() {
-                minimize_application_window(&w);
+                hide_application_window(&w);
             }
         });
     }
