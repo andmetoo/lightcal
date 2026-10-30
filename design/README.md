@@ -21,10 +21,11 @@ Lightcal is a native Rust + Slint desktop calendar for Windows (and future macOS
    - Non-working weekday columns (`Sa`, `Su`) are tinted with a continuous vertical rounded band (`#F8F8FA` Light / `#151519` Dark, `rx: 8px`).
    - ISO week numbers (`W40`–`W45`) sit quietly in the left margin (`10px` `#A0A0AB` / `#52525B`).
 
-4. **Flat Hairline Settings (`780 × 620`)**
-   - Zero boxed cards around individual setting rows.
-   - A `200px` left sidebar (`#F7F7F8` / `#141417`) houses navigation (`General`, `Appearance`, `Calendars`, `About`). The wordmark and preferences label stack beside the date badge so longer translations are not squeezed onto one line. The right canvas presents flat horizontal rows separated by `1px` `#ECECEF` / `#1F1F24` hairlines.
-   - Selects open an in-flow menu under the control. Text fields use the same control fill and focus ring as selects. A private ICS address stays visible while it is edited and is stored only on the computer.
+4. **Grouped Settings (`780 × 620`)**
+   - Related rows sit in a soft rounded group (`14px` radius, `#F4F4F6` light / `#18181C` dark) on the plain canvas. Dividers stay inside the group. Individual rows are not boxed.
+   - The sidebar keeps navigation for General, Appearance, Calendars, and About. The active item is an indigo wash (`#EEF0FF` / `#1D203A`) without a heavy border.
+   - Switches are `46 × 28` with a `22px` white knob and a soft shadow. Off state is a filled stone track (`#E4E4EA` / `#3A3A42`), not an empty outline.
+   - Selects, fields, and buttons are `36px` / `34px` tall with a `10px` radius. Selects open an in-flow menu under the control. A private ICS address stays visible while it is edited and is stored only on the computer.
 
 5. **Native OS Shell, Taskbar, Menu Bar, Dock & Dynamic Icon System (`06 · Shell, Dock & Icons`)**
    - **App Icon Craft**: `rx: 23%` squircle in Alabaster (`#FFFFFF`) or Obsidian (`#18181C`) with a `30%` top **Coral-Vermilion (`#E5484D`)** header band and `1px` hairline seam.

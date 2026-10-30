@@ -128,24 +128,30 @@ component SwitchToggle inherits Rectangle {
     in property <bool> dark-mode: false;
     callback toggled();
 
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
+    // Soft track and a shadowed knob, closer to a modern system switch than a flat pill.
+    width: 46px;
+    height: 28px;
+    border-radius: 14px;
     background: root.checked
-        ? #5E6AD2
-        : (root.dark-mode ? #2C2C32 : #E2E2E6);
+        ? (touch.has-hover ? #6E79D6 : #5E6AD2)
+        : (touch.has-hover
+            ? (root.dark-mode ? #45454E : #D8D8E0)
+            : (root.dark-mode ? #3A3A42 : #E4E4EA));
 
     Rectangle {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        x: root.checked ? 18px : 2px;
-        y: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        x: root.checked ? 21px : 3px;
+        y: 3px;
         background: #FFFFFF;
-        animate x { duration: 120ms; easing: ease-in-out; }
+        drop-shadow-blur: 6px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #14141633;
+        animate x { duration: 160ms; easing: ease-out; }
     }
 
-    TouchArea {
+    touch := TouchArea {
         clicked => { root.toggled(); }
     }
 }
@@ -162,13 +168,13 @@ component SettingsRowText inherits VerticalLayout {
     Text {
         text: root.title;
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 500;
         color: root.dark-mode ? #F4F4F6 : #141416;
         overflow: elide;
     }
     Text {
         text: root.description;
-        font-size: 11px;
+        font-size: 12px;
         color: root.dark-mode ? #94949E : #64646C;
         wrap: word-wrap;
     }
@@ -195,8 +201,8 @@ component SettingsSelect inherits Rectangle {
     callback clicked();
 
     width: root.select-width;
-    height: 30px;
-    border-radius: 6px;
+    height: 36px;
+    border-radius: 10px;
     background: touch.has-hover
         ? (root.dark-mode ? #26262B : #EFEFF2)
         : (root.dark-mode ? #1E1E22 : #FFFFFF);
@@ -249,8 +255,8 @@ component SettingsButton inherits Rectangle {
     callback clicked();
 
     width: root.button-width > 0px ? root.button-width : self.preferred-width;
-    height: 30px;
-    border-radius: 6px;
+    height: 34px;
+    border-radius: 10px;
     background: root.kind == "primary"
         ? (touch.has-hover ? #4E5AC0 : #5E6AD2)
         : (root.kind == "subtle"
@@ -302,17 +308,17 @@ component SettingsModePill inherits Rectangle {
     in property <bool> dark-mode: false;
     callback clicked();
 
-    height: 28px;
-    border-radius: 6px;
+    height: 32px;
+    border-radius: 10px;
     background: root.active
-        ? (root.dark-mode ? #1E1E22 : #FFFFFF)
+        ? (root.dark-mode ? #1D203A : #EEF0FF)
         : (pill-touch.has-hover
             ? (root.dark-mode ? #222228 : #EBEBEF)
             : (root.dark-mode ? #18181C : #F2F2F5));
     border-width: 1px;
     border-color: root.active
-        ? (root.dark-mode ? #5E6AD2 : #141416)
-        : (root.dark-mode ? #1F1F24 : #ECECEF);
+        ? #5E6AD2
+        : (root.dark-mode ? #2C2C32 : #E4E4EA);
 
     HorizontalLayout {
         padding-left: 10px;
@@ -381,8 +387,8 @@ component SettingsField inherits Rectangle {
     in property <bool> dark-mode: false;
     in property <bool> enabled: true;
 
-    height: 32px;
-    border-radius: 6px;
+    height: 36px;
+    border-radius: 10px;
     opacity: root.enabled ? 1 : 0.45;
     background: root.dark-mode ? #1E1E22 : #FFFFFF;
     border-width: input.has-focus ? 1.5px : 1px;
@@ -416,10 +422,10 @@ component SettingsMenu inherits Rectangle {
     horizontal-stretch: 0;
     width: 172px;
     height: content.preferred-height;
-    border-radius: 8px;
+    border-radius: 12px;
     background: root.dark-mode ? #1E1E22 : #FFFFFF;
     border-width: 1px;
-    border-color: #5E6AD2;
+    border-color: root.dark-mode ? #2C2C32 : #E4E4EA;
     drop-shadow-blur: 14px;
     drop-shadow-offset-y: 4px;
     drop-shadow-color: root.dark-mode ? #00000088 : #1414161A;
@@ -432,10 +438,27 @@ component SettingsMenu inherits Rectangle {
 }
 
 component SettingsLine inherits HorizontalLayout {
-    min-height: 56px;
+    min-height: 62px;
     spacing: 16px;
     alignment: space-between;
     @children
+}
+
+component SettingsGroup inherits Rectangle {
+    in property <bool> dark-mode: false;
+    in property <length> pad-top: 2px;
+    in property <length> pad-bottom: 2px;
+
+    border-radius: 14px;
+    background: root.dark-mode ? #18181C : #F4F4F6;
+
+    VerticalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: root.pad-top;
+        padding-bottom: root.pad-bottom;
+        @children
+    }
 }
 
 component SettingsSectionLabel inherits VerticalLayout {
@@ -1185,27 +1208,17 @@ export component AppWindow inherits Window {
                             root.nav-calendars-text,
                             root.nav-about-text
                         ] : Rectangle {
-                            height: 32px;
-                            border-radius: 6px;
+                            height: 36px;
+                            border-radius: 10px;
                             background: root.settings-tab == tab-idx
-                                ? (root.dark-mode ? #1E1E22 : #FFFFFF)
-                                : (nav-touch.has-hover ? (root.dark-mode ? #18181C : #F2F2F5) : transparent);
-                            border-width: root.settings-tab == tab-idx ? 1px : 0px;
-                            border-color: root.dark-mode ? #2C2C32 : #E2E2E6;
+                                ? (root.dark-mode ? #1D203A : #EEF0FF)
+                                : (nav-touch.has-hover ? (root.dark-mode ? #1C1C20 : #EEEEF2) : transparent);
 
                             HorizontalLayout {
-                                padding-left: 10px;
-                                padding-right: 10px;
+                                padding-left: 12px;
+                                padding-right: 12px;
                                 spacing: 8px;
                                 alignment: start;
-
-                                if root.settings-tab == tab-idx : Rectangle {
-                                    width: 3px;
-                                    height: 16px;
-                                    border-radius: 1.5px;
-                                    background: #5E6AD2;
-                                    y: (parent.height - self.height) / 2;
-                                }
 
                                 Text {
                                     text: nav-label;
@@ -1359,7 +1372,7 @@ export component AppWindow inherits Window {
 
                     // TAB 0: GENERAL
                     if root.settings-tab == 0 : ScrollView {
-                        height: 488px;
+                        height: 508px;
                         VerticalLayout {
                         spacing: 0px;
                         padding-bottom: 12px;
@@ -1369,6 +1382,8 @@ export component AppWindow inherits Window {
                             dark-mode: root.dark-mode;
                             first: true;
                         }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
                         SettingsLine {
                             SettingsRowText {
                                 title: root.label-language-text;
@@ -1461,12 +1476,14 @@ export component AppWindow inherits Window {
                                 toggled => { root.toggle-show-week-numbers(); }
                             }
                         }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
+                        }
 
                         SettingsSectionLabel {
                             label: root.section-startup-text;
                             dark-mode: root.dark-mode;
                         }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
                         SettingsLine {
                             SettingsRowText {
                                 title: root.label-startup-text;
@@ -1500,15 +1517,18 @@ export component AppWindow inherits Window {
 
                                 Rectangle {
                                     width: 148px;
-                                    height: 30px;
-                                    border-radius: 6px;
+                                    height: 34px;
+                                    border-radius: 10px;
                                     background: root.shortcut-has-conflict
                                         ? (root.dark-mode ? #2A1618 : #FFF0F0)
-                                        : (root.dark-mode ? #18181C : #F2F2F5);
+                                        : (root.dark-mode ? #222228 : #FFFFFF);
                                     border-width: 1px;
                                     border-color: root.shortcut-has-conflict
                                         ? (root.dark-mode ? #F87171 : #E5484D)
-                                        : (root.dark-mode ? #2C2C32 : #E2E2E6);
+                                        : (root.dark-mode ? #3A3A42 : #E4E4EA);
+                                    drop-shadow-blur: 4px;
+                                    drop-shadow-offset-y: 1px;
+                                    drop-shadow-color: root.shortcut-has-conflict ? #00000000 : #14141614;
 
                                     Text {
                                         x: 10px;
@@ -1583,15 +1603,18 @@ export component AppWindow inherits Window {
                             }
                         }
                         }
+                        }
                     }
 
                     // TAB 1: APPEARANCE
                     if root.settings-tab == 1 : ScrollView {
-                        height: 488px;
+                        height: 508px;
                         VerticalLayout {
                         spacing: 0px;
                         padding-bottom: 12px;
 
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
                         SettingsLine {
                             SettingsRowText {
                                 title: root.label-theme-text;
@@ -1784,11 +1807,12 @@ export component AppWindow inherits Window {
                             }
                         }
                         }
+                        }
                     }
 
                     // TAB 2: CALENDARS
                     if root.settings-tab == 2 : ScrollView {
-                        height: 488px;
+                        height: 508px;
                         VerticalLayout {
                         spacing: 0px;
                         padding-bottom: 16px;
@@ -1798,15 +1822,24 @@ export component AppWindow inherits Window {
                             dark-mode: root.dark-mode;
                             first: true;
                         }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                            pad-top: 12px;
+                            pad-bottom: 12px;
                         HorizontalLayout {
                             alignment: start;
                             padding-bottom: 10px;
                             Rectangle {
+                                horizontal-stretch: 0;
                                 height: 26px;
                                 border-radius: 13px;
                                 background: root.account-connected
                                     ? (root.dark-mode ? #10241C : #ECFDF3)
-                                    : (root.dark-mode ? #18181C : #F2F2F5);
+                                    : (root.dark-mode ? #222228 : #FFFFFF);
+                                border-width: 1px;
+                                border-color: root.account-connected
+                                    ? (root.dark-mode ? #14532D : #A7F3D0)
+                                    : (root.dark-mode ? #3A3A42 : #E4E4EA);
                                 HorizontalLayout {
                                     padding-left: 10px;
                                     padding-right: 10px;
@@ -1830,14 +1863,18 @@ export component AppWindow inherits Window {
                             SettingsButton { label: root.disconnect-microsoft-label; enabled: root.can-disconnect-microsoft; dark-mode: root.dark-mode; clicked => { root.disconnect-microsoft(); } }
                             SettingsButton { label: root.refresh-button-text; enabled: root.can-refresh-calendars; kind: "subtle"; dark-mode: root.dark-mode; clicked => { root.refresh-calendars(); } }
                         }
+                        }
 
                         Rectangle { height: 16px; }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
                         SettingsSectionLabel {
                             label: root.ics-section-text;
                             dark-mode: root.dark-mode;
                         }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                            pad-top: 12px;
+                            pad-bottom: 14px;
                         Text {
                             text: root.ics-name-placeholder;
                             font-size: 11px;
@@ -1877,9 +1914,9 @@ export component AppWindow inherits Window {
                             dark-mode: root.dark-mode;
                             clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
                         }
+                        }
 
                         Rectangle { height: 16px; }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
                         Rectangle { height: 8px; }
                         HorizontalLayout {
                             height: 36px;
@@ -2082,11 +2119,13 @@ export component AppWindow inherits Window {
                         }
                     // TAB 3: ABOUT
                     if root.settings-tab == 3 : ScrollView {
-                        height: 488px;
+                        height: 508px;
                         VerticalLayout {
                         spacing: 0px;
                         padding-bottom: 12px;
 
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
                         SettingsLine {
                             VerticalLayout {
                                 spacing: 3px;
@@ -2303,6 +2342,7 @@ export component AppWindow inherits Window {
                                     clicked => { root.open-external-url("https://koona.app"); }
                                 }
                             }
+                        }
                         }
                         }
                     }
