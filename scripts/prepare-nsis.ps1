@@ -14,5 +14,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not download NSIS; set LIGHTCAL_NSIS_COM
 $expected = 'BA63DFFC4410EE89193E1CB5A41989991BD77C61068DA17E3156D136B7B0B3D8'
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) { throw 'Official NSIS archive checksum mismatch' }
 Expand-Archive -LiteralPath $archive -DestinationPath $tools -Force
+Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'Verified NSIS archive did not contain the expected compiler' }
 Write-Output $compiler

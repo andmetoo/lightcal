@@ -59,4 +59,9 @@ try {
     [IO.File]::WriteAllText("$output.sha256", "$checksum  $([IO.Path]::GetFileName($output))`n",[Text.UTF8Encoding]::new($false))
     Write-Output "Created NSIS installer: $output"
     Write-Output 'No installer was run, and no package was installed or published.'
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    if (Test-Path -LiteralPath $stage) {
+        Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
