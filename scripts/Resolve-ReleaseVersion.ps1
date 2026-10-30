@@ -11,14 +11,22 @@ function Resolve-LightcalReleaseVersion([string]$ProjectRoot) {
         $tagged = Convert-StableVersion $env:GITHUB_REF_NAME
         if ($tagged) { return $tagged }
     }
+    # Untagged commits make `git describe --exact-match` exit 1. GitHub Actions
+    # dot-sources this script with pwsh -Command, and that host exits with the
+    # last native code. Run-Native uses Process.Start, so it does not clear it.
+    $described = $null
+    $gitOk = $false
     try {
         $described = & git -C $ProjectRoot describe --tags --exact-match 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            $fromGit = Convert-StableVersion "$described"
-            if ($fromGit) { return $fromGit }
-        }
+        $gitOk = $LASTEXITCODE -eq 0
     } catch {
-        # Cargo.toml remains the fallback when git is unavailable.
+        $gitOk = $false
+    } finally {
+        $global:LASTEXITCODE = 0
+    }
+    if ($gitOk) {
+        $fromGit = Convert-StableVersion "$described"
+        if ($fromGit) { return $fromGit }
     }
     $manifest = [IO.File]::ReadAllText((Join-Path $ProjectRoot 'Cargo.toml'))
     $match = [regex]::Match($manifest, '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"\s*$')
