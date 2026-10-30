@@ -153,6 +153,9 @@ pub struct UiStrings {
     pub update_available_badge: &'static str,
     pub update_ready_title: &'static str,
     pub update_ready_notes: &'static str,
+    pub download_release_button: &'static str,
+    pub manual_update_notes: &'static str,
+    pub manual_install_status: &'static str,
     pub release_notes_button: &'static str,
     pub label_auto_updates: &'static str,
     pub desc_auto_updates: &'static str,
@@ -263,6 +266,11 @@ const EN_STRINGS: UiStrings = UiStrings {
     update_available_badge: "Update available",
     update_ready_title: "A newer version is available",
     update_ready_notes: "Open the release page to review it. You choose when to install.",
+    download_release_button: "Download",
+    manual_update_notes:
+        "This build cannot install updates by itself. Download the newer release from GitHub.",
+    manual_install_status:
+        "Automatic installation needs a signed build. Download updates from GitHub.",
     release_notes_button: "Release notes",
     label_auto_updates: "Automatic updates",
     desc_auto_updates: "Download and verify signed releases in the background",
@@ -373,6 +381,11 @@ const RU_STRINGS: UiStrings = UiStrings {
     update_ready_title: "Доступна новая версия",
     update_ready_notes:
         "Откройте страницу релиза, чтобы посмотреть изменения. Установка только по вашему выбору.",
+    download_release_button: "Скачать",
+    manual_update_notes:
+        "Эта сборка не устанавливает обновления сама. Скачайте новую версию на GitHub.",
+    manual_install_status:
+        "Автоустановка доступна только для подписанной сборки. Скачайте обновление на GitHub.",
     release_notes_button: "Что нового ↗",
     label_auto_updates: "Автоматические обновления",
     desc_auto_updates: "Фоновая загрузка и проверка подписанных релизов",
@@ -483,6 +496,11 @@ const ES_STRINGS: UiStrings = UiStrings {
     update_ready_title: "Hay una versión más reciente",
     update_ready_notes:
         "Abra la página de la versión para revisarla. Usted decide cuándo instalar.",
+    download_release_button: "Descargar",
+    manual_update_notes:
+        "Esta compilación no instala actualizaciones sola. Descarga la versión nueva en GitHub.",
+    manual_install_status:
+        "La instalación automática solo está en una compilación firmada. Descárgala en GitHub.",
     release_notes_button: "Notas de la versión ↗",
     label_auto_updates: "Actualizaciones automáticas",
     desc_auto_updates: "Descargar y verificar versiones firmadas en segundo plano",
@@ -593,6 +611,11 @@ const JA_STRINGS: UiStrings = UiStrings {
     update_ready_title: "新しいバージョンがあります",
     update_ready_notes:
         "リリースページで内容を確認できます。インストールするタイミングは自分で選べます。",
+    download_release_button: "ダウンロード",
+    manual_update_notes:
+        "このビルドは更新を自分ではインストールできません。新しい版は GitHub からダウンロードしてください。",
+    manual_install_status:
+        "自動インストールは署名付きビルドでのみ使えます。更新は GitHub からダウンロードしてください。",
     release_notes_button: "リリースノート ↗",
     label_auto_updates: "自動アップデート",
     desc_auto_updates: "署名付きリリースをバックグラウンドでダウンロードおよび検証します",
@@ -1029,5 +1052,20 @@ mod tests {
             format_update_status(LocaleCode::Ru, &up_to_date),
             "Установлена последняя версия (v0.1.0)"
         );
+    }
+
+    #[test]
+    fn manual_update_copy_is_present_for_every_language() {
+        for locale in [
+            LocaleCode::En,
+            LocaleCode::Ru,
+            LocaleCode::Es,
+            LocaleCode::Ja,
+        ] {
+            let strings = catalog(locale);
+            assert!(!strings.download_release_button.is_empty());
+            assert!(strings.manual_update_notes.contains("GitHub"));
+            assert!(strings.manual_install_status.contains("GitHub"));
+        }
     }
 }

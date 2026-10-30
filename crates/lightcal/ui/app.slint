@@ -2139,12 +2139,14 @@ export component AppWindow inherits Window {
                                 }
                                 if root.update-status-text != "" : Text {
                                     text: root.update-status-text;
+                                    width: 300px;
                                     wrap: word-wrap;
                                     color: root.dark-mode ? #94949E : #64646C;
                                     font-size: 11px;
                                 }
                                 if root.install-status-text != "" : Text {
                                     text: root.install-status-text;
+                                    width: 300px;
                                     wrap: word-wrap;
                                     color: root.dark-mode ? #94949E : #64646C;
                                     font-size: 11px;
@@ -2210,7 +2212,6 @@ export component AppWindow inherits Window {
 
                         // Release Card (if update available)
                         if root.update-is-available : Rectangle {
-                            height: 86px;
                             border-radius: 8px;
                             background: root.dark-mode ? #141417 : #F7F7F8;
                             border-width: 1px;
@@ -2232,10 +2233,11 @@ export component AppWindow inherits Window {
                                 }
                                 Text {
                                     text: root.update-ready-notes-text;
+                                    width: 440px;
+                                    wrap: word-wrap;
                                     font-size: 11px;
                                     font-weight: 400;
                                     color: root.dark-mode ? #94949E : #64646C;
-                                    overflow: elide;
                                 }
                                 HorizontalLayout {
                                     spacing: 10px;

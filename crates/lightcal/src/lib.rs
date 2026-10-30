@@ -10,3 +10,5 @@ pub mod preferences;
 pub mod secure_store;
 pub mod snapshot;
 pub mod updater;
+pub mod version;
+pub mod version_policy;

@@ -34,6 +34,11 @@ pub fn ensure_portable_update_allowed(managed: bool) -> Result<(), String> {
 pub fn certificate_pin() -> Result<String, String> {
     normalize_pin(option_env!("LIGHTCAL_UPDATE_CERT_SHA256").unwrap_or(""))
 }
+
+/// Signed in-place installation is only offered when this build has a certificate pin.
+pub fn automatic_install_configured() -> bool {
+    certificate_pin().is_ok() && cfg!(all(windows, target_arch = "x86_64"))
+}
 fn normalize_pin(raw: &str) -> Result<String, String> {
     let pin = raw.replace([' ', ':'], "").to_ascii_uppercase();
     if pin.len() != 64 || !pin.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -106,7 +111,7 @@ pub fn stage(data_dir: &Path) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|_| "Could not resolve installation path")?;
     // A trusted current installation is required, preventing an unsigned bootstrap from asserting trust.
-    verify_signed_file(&target, env!("CARGO_PKG_VERSION"), &pin)?;
+    verify_signed_file(&target, crate::version::VERSION, &pin)?;
     let plan = InstallPlan {
         target,
         candidate,
@@ -125,7 +130,7 @@ pub fn stage(data_dir: &Path) -> Result<PathBuf, String> {
 
 fn validate_version(version: &str) -> Result<(), String> {
     let next = crate::updater::SemVer::parse(version).ok_or("Invalid update version")?;
-    let current = crate::updater::SemVer::parse(env!("CARGO_PKG_VERSION"))
+    let current = crate::updater::SemVer::parse(crate::version::VERSION)
         .ok_or("Invalid installed version")?;
     if next <= current {
         return Err("Update version must be newer than this installation".into());
@@ -249,7 +254,7 @@ pub fn apply(plan_path: &Path) -> Result<(), String> {
     verify_payload(&plan.candidate, &plan.sha256)?;
     verify_signed_file(&plan.candidate, &plan.expected_version, &pin)?;
     wait_for_parent(plan.parent_pid, &plan_path.with_extension("ready"))?;
-    verify_signed_file(&plan.target, env!("CARGO_PKG_VERSION"), &pin)?;
+    verify_signed_file(&plan.target, crate::version::VERSION, &pin)?;
     let parent = plan
         .target
         .parent()
@@ -357,7 +362,7 @@ pub fn recover_after_failure(plan_path: &Path) {
         if plan.target.file_name().and_then(|s| s.to_str()) != Some("lightcal.exe") {
             return Err("Invalid recovery target".into());
         }
-        verify_signed_file(&plan.target, env!("CARGO_PKG_VERSION"), &certificate_pin()?)?;
+        verify_signed_file(&plan.target, crate::version::VERSION, &certificate_pin()?)?;
         std::process::Command::new(plan.target)
             .arg("--tray")
             .spawn()
@@ -423,7 +428,7 @@ mod tests {
             assert!(normalize_pin(pin).is_err());
         }
         assert_eq!(normalize_pin(&"ab".repeat(32)).unwrap(), "AB".repeat(32));
-        assert!(validate_version(env!("CARGO_PKG_VERSION")).is_err());
+        assert!(validate_version(crate::version::VERSION).is_err());
         assert!(validate_version("0.0.0").is_err());
         assert!(validate_version("999.0.0-beta").is_err());
     }

@@ -24,10 +24,8 @@ if ([string]::IsNullOrWhiteSpace($compiler)) {
 }
 if ([string]::IsNullOrWhiteSpace($compiler)) { $compiler = & (Join-Path $PSScriptRoot 'prepare-nsis.ps1') }
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'NSIS compiler was not found' }
-$manifest = [IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.toml'))
-$match = [regex]::Match($manifest, '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"\s*$')
-if (-not $match.Success) { throw 'Expected a stable workspace version' }
-$version = $match.Groups[1].Value
+. (Join-Path $PSScriptRoot 'Resolve-ReleaseVersion.ps1')
+$version = Resolve-LightcalReleaseVersion $projectRoot
 $outputDir = Join-Path $projectRoot 'target\nsis'
 $stage = Join-Path $outputDir ('stage-' + [Guid]::NewGuid().ToString('N'))
 Push-Location $projectRoot
@@ -37,7 +35,7 @@ try {
     $BinaryPath = [IO.Path]::GetFullPath($BinaryPath)
     if (-not (Test-Path -LiteralPath $BinaryPath)) { throw 'Build the release executable before packaging' }
     $actualVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($BinaryPath).ProductVersion
-    if ($actualVersion -ne $version) { throw 'Payload ProductVersion differs from Cargo.toml' }
+    if ($actualVersion -ne $version) { throw "Payload ProductVersion $actualVersion differs from release version $version" }
     if ($RequireSigned -and (Get-AuthenticodeSignature -LiteralPath $BinaryPath).Status -ne 'Valid') { throw 'Signed packaging requires a trusted signed application payload' }
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $stage 'lightcal.exe')

@@ -234,6 +234,14 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         780,
         620,
     )?;
+    ctrl.install_status = "Automatic installation is unavailable: build with LIGHTCAL_UPDATE_CERT_SHA256 set to the SHA-256 fingerprint of your SimpleSign signing certificate".into();
+    ctrl.sync_to_ui(&ui);
+    helper.render_to_png(
+        &out_dir.join("state-about-install-status-light.png"),
+        780,
+        620,
+    )?;
+    ctrl.install_status.clear();
     ctrl.update_state = UpdateCheckState::Idle;
 
     // Localized Japanese Settings (Dark & Light)

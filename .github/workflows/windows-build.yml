@@ -128,7 +128,7 @@ jobs:
             Automated unsigned Windows review build from `main`.
             Do not treat these files as an Authenticode-signed production release.
             Attached files are the portable ZIP and the NSIS setup, each with a SHA-256 checksum.
-            `lightcal.exe` ProductVersion follows the Cargo workspace version and can differ from this git tag.
+            `lightcal.exe` ProductVersion matches this git tag.
             The macOS disk image is not included.
           files: named/*
           fail_on_unmatched_files: true
