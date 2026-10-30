@@ -2,10 +2,17 @@ name: Windows build and NSIS installer
 
 on:
   pull_request:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   portable:
@@ -19,6 +26,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '0' || '1' }}
+
+      - name: Verify release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tags must point to a commit contained in main."
+          }
+
+          $manifest = Get-Content Cargo.toml -Raw
+          if ($manifest -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+            throw "Workspace version is missing from Cargo.toml."
+          }
+          $expectedTag = "v$($Matches[1])"
+          if ($env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Tag $env:GITHUB_REF_NAME does not match workspace version $expectedTag."
+          }
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -58,3 +85,29 @@ jobs:
             target/nsis/*-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14
+
+  release:
+    name: Publish unsigned prerelease
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: portable
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: lightcal-windows-x64-unsigned
+          path: release-assets
+
+      - name: Publish unsigned prerelease
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          name: Lightcal ${{ github.ref_name }} (unsigned)
+          body: |
+            Automated unsigned review build from `main`.
+            Do not treat these files as an Authenticode-signed production release.
+          files: release-assets/**/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: true

@@ -27,9 +27,13 @@ The existing trusted updater continues to require a signed release asset named e
 
 Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and certificate-service credentials remain in the signer, outside this repository. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
 
-## CI and validation
+## CI, tagged prereleases, and validation
 
-The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The job has read-only repository permissions. It does not call SimpleSign, Authenticode signing, or `RequireSigned`, and it never publishes a release or reads signing keys. An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
+The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The build job has read-only repository permissions and does not call SimpleSign, Authenticode signing, or `RequireSigned`.
+
+A `v*` tag runs the same build once and publishes its artifacts as an explicitly unsigned GitHub prerelease. Publication fails unless the tagged commit is contained in `main` and the tag exactly matches the workspace version, such as `v0.1.0`. Only the small publication job receives `contents: write`; pull-request and build jobs remain read-only. The workflow never reads signing keys or presents these review files as signed production binaries.
+
+An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
 
 Run `just test-installer` after building release code. The test compiles the same NSIS script with `TEST_SETUP`: registry registration, shortcuts, application launch, and real-profile detection are omitted at compile time. It installs under a checked `target/installer-tests/<random>` path, verifies the executable hash, uninstalls, and checks that an unrelated sentinel file survives. No real account, app profile, autostart, shortcuts, or uninstall registry entries are modified. This validates payload installation and removal; real installed-app registration, signing, and SmartScreen behavior require separate owner-driven validation.
 
