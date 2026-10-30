@@ -136,7 +136,6 @@ pub struct UiStrings {
     pub shortcut_conflict_title: &'static str,
     pub shortcut_conflict_hint: &'static str,
     pub shortcut_reset_button: &'static str,
-    pub shortcut_conflict_badge: &'static str,
     pub theme_light_obsidian: &'static str,
     pub theme_dark_obsidian: &'static str,
     pub theme_system_obsidian: &'static str,
@@ -245,7 +244,6 @@ const EN_STRINGS: UiStrings = UiStrings {
     shortcut_conflict_title: "Shortcut unavailable: Alt + Space is already registered by Raycast.",
     shortcut_conflict_hint: "Press a new key combination (for example Alt + C) or click Reset.",
     shortcut_reset_button: "Reset",
-    shortcut_conflict_badge: "Conflict",
     theme_light_obsidian: "Light (Alabaster)",
     theme_dark_obsidian: "Dark (Obsidian)",
     theme_system_obsidian: "System default",
@@ -356,7 +354,6 @@ const RU_STRINGS: UiStrings = UiStrings {
     shortcut_conflict_title: "Сочетание недоступно: комбинация уже занята другим приложением.",
     shortcut_conflict_hint: "Нажмите другое сочетание клавиш или нажмите «Сбросить».",
     shortcut_reset_button: "Сбросить",
-    shortcut_conflict_badge: "Конфликт",
     theme_light_obsidian: "Светлая (Alabaster)",
     theme_dark_obsidian: "Тёмная (Obsidian)",
     theme_system_obsidian: "Как в системе",
@@ -468,7 +465,6 @@ const ES_STRINGS: UiStrings = UiStrings {
     shortcut_conflict_title: "Atajo no disponible: combinación ya registrada por otra aplicación.",
     shortcut_conflict_hint: "Presione una nueva combinación o haga clic en Restablecer.",
     shortcut_reset_button: "Restablecer",
-    shortcut_conflict_badge: "Conflicto",
     theme_light_obsidian: "Claro (Alabaster)",
     theme_dark_obsidian: "Oscuro (Obsidian)",
     theme_system_obsidian: "Predeterminado del sistema",
@@ -579,7 +575,6 @@ const JA_STRINGS: UiStrings = UiStrings {
     shortcut_conflict_hint:
         "別のキーの組み合わせを入力するか、「リセット」をクリックしてください。",
     shortcut_reset_button: "リセット",
-    shortcut_conflict_badge: "競合",
     theme_light_obsidian: "ライト (Alabaster)",
     theme_dark_obsidian: "ダーク (Obsidian)",
     theme_system_obsidian: "システム設定",
@@ -625,30 +620,47 @@ pub fn catalog(locale: LocaleCode) -> &'static UiStrings {
     }
 }
 
-/// Login-item copy for the macOS binary. Windows keeps the catalog strings.
-#[cfg(target_os = "macos")]
-pub fn macos_startup_copy(locale: LocaleCode) -> (&'static str, &'static str, &'static str) {
-    match locale {
-        LocaleCode::En => (
-            "Launch at login",
-            "Start Lightcal quietly in the menu bar when you sign in",
-            "Could not update the login item.",
-        ),
-        LocaleCode::Ru => (
-            "Запускать при входе",
-            "Открывать в строке меню при входе в систему.",
-            "Не удалось изменить объект входа.",
-        ),
-        LocaleCode::Es => (
-            "Abrir al iniciar sesión",
-            "Iniciar en la barra de menús al entrar en la cuenta.",
-            "No se pudo cambiar el ítem de inicio.",
-        ),
-        LocaleCode::Ja => (
-            "ログイン時に起動",
-            "サインイン時にメニューバーへ静かに起動します。",
-            "ログイン項目を変更できませんでした。",
-        ),
+pub struct StartupCopy {
+    pub label: &'static str,
+    pub description: &'static str,
+    pub error: &'static str,
+}
+
+/// Startup-row copy. macOS uses login-item wording; other targets use the catalog.
+pub fn startup_copy(locale: LocaleCode) -> StartupCopy {
+    #[cfg(target_os = "macos")]
+    {
+        match locale {
+            LocaleCode::En => StartupCopy {
+                label: "Launch at login",
+                description: "Start Lightcal quietly in the menu bar when you sign in",
+                error: "Could not update the login item.",
+            },
+            LocaleCode::Ru => StartupCopy {
+                label: "Запускать при входе",
+                description: "Открывать в строке меню при входе в систему.",
+                error: "Не удалось изменить объект входа.",
+            },
+            LocaleCode::Es => StartupCopy {
+                label: "Abrir al iniciar sesión",
+                description: "Iniciar en la barra de menús al entrar en la cuenta.",
+                error: "No se pudo cambiar el ítem de inicio.",
+            },
+            LocaleCode::Ja => StartupCopy {
+                label: "ログイン時に起動",
+                description: "サインイン時にメニューバーへ静かに起動します。",
+                error: "ログイン項目を変更できませんでした。",
+            },
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let strings = catalog(locale);
+        StartupCopy {
+            label: strings.label_startup,
+            description: strings.desc_startup,
+            error: strings.startup_error,
+        }
     }
 }
 
@@ -924,88 +936,51 @@ pub fn format_sync_status(locale: LocaleCode, count: usize) -> String {
 pub fn format_update_status(
     locale: LocaleCode,
     state: &crate::updater::UpdateCheckState,
-) -> (String, bool) {
+) -> String {
     use crate::updater::UpdateCheckState;
     let strings = catalog(locale);
     match state {
-        UpdateCheckState::Idle => (strings.updates_idle_desc.to_string(), false),
-        UpdateCheckState::Checking => (strings.updates_checking_desc.to_string(), false),
+        UpdateCheckState::Idle => strings.updates_idle_desc.to_string(),
+        UpdateCheckState::Checking => strings.updates_checking_desc.to_string(),
         UpdateCheckState::UpToDate { current_version } => match locale {
-            LocaleCode::En => (format!("Up to date (v{current_version})"), false),
-            LocaleCode::Ru => (
-                format!("Установлена последняя версия (v{current_version})"),
-                false,
-            ),
-            LocaleCode::Es => (format!("Actualizado (v{current_version})"), false),
-            LocaleCode::Ja => (format!("最新バージョンです (v{current_version})"), false),
+            LocaleCode::En => format!("Up to date (v{current_version})"),
+            LocaleCode::Ru => format!("Установлена последняя версия (v{current_version})"),
+            LocaleCode::Es => format!("Actualizado (v{current_version})"),
+            LocaleCode::Ja => format!("最新バージョンです (v{current_version})"),
         },
         UpdateCheckState::UpdateAvailable { latest_version, .. } => match locale {
-            LocaleCode::En => (format!("Update available: v{latest_version}"), true),
-            LocaleCode::Ru => (format!("Доступно обновление: v{latest_version}"), true),
-            LocaleCode::Es => (format!("Actualización disponible: v{latest_version}"), true),
-            LocaleCode::Ja => (format!("アップデートがあります: v{latest_version}"), true),
+            LocaleCode::En => format!("Update available: v{latest_version}"),
+            LocaleCode::Ru => format!("Доступно обновление: v{latest_version}"),
+            LocaleCode::Es => format!("Actualización disponible: v{latest_version}"),
+            LocaleCode::Ja => format!("アップデートがあります: v{latest_version}"),
         },
         UpdateCheckState::NoStableRelease => match locale {
-            LocaleCode::En => (
-                "No stable release published on GitHub yet.".to_string(),
-                false,
-            ),
-            LocaleCode::Ru => ("Стабильных релизов на GitHub пока нет.".to_string(), false),
-            LocaleCode::Es => (
-                "Aún no hay versiones estables en GitHub.".to_string(),
-                false,
-            ),
-            LocaleCode::Ja => (
-                "GitHub にまだ安定版リリースがありません。".to_string(),
-                false,
-            ),
+            LocaleCode::En => "No stable release published on GitHub yet.".to_string(),
+            LocaleCode::Ru => "Стабильных релизов на GitHub пока нет.".to_string(),
+            LocaleCode::Es => "Aún no hay versiones estables en GitHub.".to_string(),
+            LocaleCode::Ja => "GitHub にまだ安定版リリースがありません。".to_string(),
         },
         UpdateCheckState::Offline => match locale {
-            LocaleCode::En => ("Offline: could not reach GitHub.".to_string(), false),
-            LocaleCode::Ru => (
-                "Нет сети: не удалось подключиться к GitHub.".to_string(),
-                false,
-            ),
-            LocaleCode::Es => (
-                "Sin conexión: no se pudo acceder a GitHub.".to_string(),
-                false,
-            ),
-            LocaleCode::Ja => (
-                "オフライン: GitHub にアクセスできません。".to_string(),
-                false,
-            ),
+            LocaleCode::En => "Offline: could not reach GitHub.".to_string(),
+            LocaleCode::Ru => "Нет сети: не удалось подключиться к GitHub.".to_string(),
+            LocaleCode::Es => "Sin conexión: no se pudo acceder a GitHub.".to_string(),
+            LocaleCode::Ja => "オフライン: GitHub にアクセスできません。".to_string(),
         },
         UpdateCheckState::Timeout => match locale {
-            LocaleCode::En => ("Update check timed out.".to_string(), false),
-            LocaleCode::Ru => ("Превышено время ожидания ответа.".to_string(), false),
-            LocaleCode::Es => (
-                "Tiempo de espera de actualización agotado.".to_string(),
-                false,
-            ),
-            LocaleCode::Ja => (
-                "アップデートの確認がタイムアウトしました。".to_string(),
-                false,
-            ),
+            LocaleCode::En => "Update check timed out.".to_string(),
+            LocaleCode::Ru => "Превышено время ожидания ответа.".to_string(),
+            LocaleCode::Es => "Tiempo de espera de actualización agotado.".to_string(),
+            LocaleCode::Ja => "アップデートの確認がタイムアウトしました。".to_string(),
         },
         UpdateCheckState::RateLimited => match locale {
-            LocaleCode::En => (
-                "GitHub API rate limit reached. Try again later.".to_string(),
-                false,
-            ),
-            LocaleCode::Ru => (
-                "Лимит запросов к GitHub API исчерпан. Повторите позже.".to_string(),
-                false,
-            ),
-            LocaleCode::Es => (
-                "Límite de GitHub API alcanzado. Inténtelo más tarde.".to_string(),
-                false,
-            ),
-            LocaleCode::Ja => (
-                "GitHub API のレート制限に達しました。後でお試しください。".to_string(),
-                false,
-            ),
+            LocaleCode::En => "GitHub API rate limit reached. Try again later.".to_string(),
+            LocaleCode::Ru => "Лимит запросов к GitHub API исчерпан. Повторите позже.".to_string(),
+            LocaleCode::Es => "Límite de GitHub API alcanzado. Inténtelo más tarde.".to_string(),
+            LocaleCode::Ja => {
+                "GitHub API のレート制限に達しました。後でお試しください。".to_string()
+            }
         },
-        UpdateCheckState::InvalidResponse(msg) => (msg.clone(), false),
+        UpdateCheckState::InvalidResponse(msg) => msg.clone(),
     }
 }
 
@@ -1051,7 +1026,7 @@ mod tests {
             current_version: "0.1.0".into(),
         };
         assert_eq!(
-            format_update_status(LocaleCode::Ru, &up_to_date).0,
+            format_update_status(LocaleCode::Ru, &up_to_date),
             "Установлена последняя версия (v0.1.0)"
         );
     }
