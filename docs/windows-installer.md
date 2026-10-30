@@ -29,7 +29,7 @@ Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and cert
 
 ## CI and validation
 
-The pull-request/manual Windows workflow builds an unsigned portable ZIP and unsigned NSIS setup, runs the isolated smoke test, and uploads review artifacts. It has read-only repository permissions and never publishes a release or accesses signing keys. Builds need the public `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable for a configured Outlook sign-in button.
+The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The job has read-only repository permissions. It does not call SimpleSign, Authenticode signing, or `RequireSigned`, and it never publishes a release or reads signing keys. An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
 
 Run `just test-installer` after building release code. The test compiles the same NSIS script with `TEST_SETUP`: registry registration, shortcuts, application launch, and real-profile detection are omitted at compile time. It installs under a checked `target/installer-tests/<random>` path, verifies the executable hash, uninstalls, and checks that an unrelated sentinel file survives. No real account, app profile, autostart, shortcuts, or uninstall registry entries are modified. This validates payload installation and removal; real installed-app registration, signing, and SmartScreen behavior require separate owner-driven validation.
 

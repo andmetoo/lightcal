@@ -414,8 +414,8 @@ export component AppWindow inherits Window {
     in property <string> nav-calendars-text: "Calendars";
     in property <string> nav-about-text: "About";
     in property <string> general-subtitle-text: "Regional conventions, startup behavior, and global keyboard shortcuts.";
-    in property <string> appearance-subtitle-text: "Theme mode, density, gray weekday columns, and visual indicators.";
-    in property <string> calendars-subtitle-text: "Connected local and CalDAV calendar feeds and visibility.";
+    in property <string> appearance-subtitle-text: "Theme, gray weekdays, event dots, and the tray icon.";
+    in property <string> calendars-subtitle-text: "Read-only Outlook and private ICS links. Checked calendars show event dots.";
     in property <string> about-subtitle-text: "Version status, release channel, and automatic update preferences.";
     in property <string> label-language-text: "Language";
     in property <string> desc-language-text: "Interface language for month names, weekdays, and controls";
@@ -436,7 +436,7 @@ export component AppWindow inherits Window {
     in property <string> label-show-event-dots-text: "Show event dots on dates";
     in property <string> desc-show-event-dots-text: "Render up to 3 semantic color dots beneath days with scheduled events";
     in property <string> label-tray-mode-text: "Tray / Status Bar icon mode";
-    in property <string> desc-tray-mode-text: "Date numeral (29), Weekday + Date (THU 29), or Clock Replacement (22:01)";
+    in property <string> desc-tray-mode-text: "Date, weekday and date, or time. This changes Lightcal's icon only.";
     in property <string> label-tray-palette-text: "Tray / Status Bar icon palette";
     in property <string> desc-tray-palette-text: "Colored Coral (#E5484D) cap or native OS Monochrome";
     in property <string> palette-colored-text: "Colored (#E5484D)";
@@ -503,23 +503,39 @@ export component AppWindow inherits Window {
     in property <string> shortcut-conflict-title: "Shortcut unavailable: Alt + Space is already registered by Raycast.";
     in property <string> shortcut-conflict-hint: "Press a new key combination (for example Alt + C) or click Reset.";
     in property <string> shortcut-reset-label: "Reset";
+    in property <string> shortcut-record-label: "Record";
     in property <string> shortcut-conflict-badge: "Conflict";
+    in property <string> weekday-monday-label: "Monday";
+    in property <string> weekday-sunday-label: "Sunday";
+    in property <string> theme-light-label: "Light (Alabaster)";
+    in property <string> theme-dark-label: "Dark (Obsidian)";
+    in property <string> theme-system-label: "System default";
+    in property <string> channel-stable-label: "Stable";
+    in property <string> channel-preview-label: "Preview";
+    in property <bool> update-channel-is-preview: false;
+    in property <string> github-button-text: "GitHub ↗";
+    in property <string> koona-button-text: "koona.app ↗";
+    in property <string> startup-status-text: "";
+    in property <string> outlook-section-text: "Outlook";
+    in property <string> ics-section-text: "Private calendar link";
+    in property <string> ics-help-text: "";
+    in property <string> calendars-dot-note-text: "Only checked calendars show event dots.";
     in property <bool> calendars-access-denied: false;
     in property <string> calendars-denied-title-text: "Calendar access is turned off in System Privacy Settings";
-    in property <string> calendars-denied-desc-text: "Lightcal needs read permission to display your local OS and CalDAV events.";
+    in property <string> calendars-denied-desc-text: "Lightcal needs permission to read calendar events. The month view still works without them.";
     in property <string> open-privacy-settings-label: "Open Privacy Settings";
     in property <string> retry-sync-label: "Retry Sync";
     in property <bool> calendars-is-empty: false;
     in property <string> calendars-empty-title-text: "No calendar accounts connected yet";
-    in property <string> calendars-empty-desc-text: "Connect iCloud, Google, Fastmail CalDAV, or a local .ics feed.";
+    in property <string> calendars-empty-desc-text: "Nothing is connected yet. Add Outlook or a private ICS link, then choose which calendars to show.";
     in property <string> add-calendar-account-label: "+ Add Calendar Account";
     in property <string> active-calendars-count-label: "ACTIVE CALENDARS (3)";
     in property <string> add-calendar-label: "+ Add Calendar";
     in property <bool> update-is-checking: false;
     in property <string> checking-updates-label: "Checking updates…";
-    in property <string> update-available-badge-text: "v0.5.0 available";
-    in property <string> update-ready-title-text: "Lightcal v0.5.0 is ready to install";
-    in property <string> update-ready-notes-text: "Faster CalDAV background sync, native macOS vibrancy, and localized Japanese grid.";
+    in property <string> update-available-badge-text: "Update available";
+    in property <string> update-ready-title-text: "A newer version is available";
+    in property <string> update-ready-notes-text: "Open the release page to review it. You choose when to install.";
     in property <string> release-notes-button-text: "Release notes";
     in property <bool> auto-check-updates: false;
     in property <string> label-auto-updates-text: "Automatic updates";
@@ -528,7 +544,7 @@ export component AppWindow inherits Window {
     in property <string> desc-update-channel-text: "Receive verified stable releases or preview builds";
     in property <string> label-license-source-text: "License & source";
     in property <string> desc-license-source-text: "GPL-3.0-only · Built with Rust, Slint, and zero webview bloat";
-    in property <string> app-version-line-text: "Version 0.4.2 (2026.10) · Native Rust + Slint UI · 64-bit";
+    in property <string> app-version-line-text: "Lightcal · Rust + Slint";
 
     // Callbacks
     callback prev-month();
@@ -643,7 +659,8 @@ export component AppWindow inherits Window {
                 // Month Title + Current-Month Indicator (Left)
                 VerticalLayout {
                     x: 16px;
-                    y: (root.is-current-month ? 9px : 15px);
+                    y: (root.is-current-month ? 8px : 14px);
+                    width: parent.width - 188px;
                     spacing: 3px;
                     alignment: start;
 
@@ -656,6 +673,8 @@ export component AppWindow inherits Window {
                             font-size: 15px;
                             font-weight: 700;
                             color: root.dark-mode ? #F4F4F6 : #141416;
+                            overflow: elide;
+                            horizontal-stretch: 1;
                         }
 
 
@@ -686,6 +705,8 @@ export component AppWindow inherits Window {
                             font-weight: 500;
                             color: root.dark-mode ? #94949E : #64646C;
                             vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
                         }
                     }
 
@@ -694,11 +715,13 @@ export component AppWindow inherits Window {
 
                 // Right Navigation Controls
                 HorizontalLayout {
-                    y: 13px;
+                    x: 0px;
+                    y: 12px;
+                    width: parent.width;
                     height: 26px;
                     spacing: 4px;
                     alignment: end;
-                    padding-right: 14px;
+                    padding-right: 12px;
 
                     IconSquareButton {
                         glyph: "‹";
@@ -783,7 +806,7 @@ export component AppWindow inherits Window {
                         text: wd;
                         font-size: 11px;
                         font-weight: 500;
-                        color: col-idx >= 5
+                        color: root.gray-columns[col-idx]
                             ? (root.dark-mode ? #52525B : #A0A0AB)
                             : (root.dark-mode ? #94949E : #64646C);
                         horizontal-alignment: center;
@@ -810,21 +833,24 @@ export component AppWindow inherits Window {
                     for col-idx in [0, 1, 2, 3, 4, 5, 6] : cell-box := Rectangle {
                         property <int> cell-index: row-idx * 7 + col-idx;
                         property <DayCellData> cell: root.cells[self.cell-index];
+                        property <bool> today-in-month: self.cell.is-today && self.cell.in-month;
 
                         x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + (month-grid-area.col-width - month-grid-area.tile-width) / 2;
                         y: (parent.height - month-grid-area.tile-height) / 2;
                         width: month-grid-area.tile-width;
                         height: month-grid-area.tile-height;
                         border-radius: 8px;
+                        accessible-role: button;
+                        accessible-label: self.cell.accessible-label;
 
-                        background: (self.cell.is-today && self.cell.in-month)
+                        background: self.today-in-month
                             ? #E5484D
                             : (self.cell.is-selected
                                 ? (root.dark-mode ? #1D203A : #EEF0FF)
-                                : (cell-touch.has-hover
+                                : (cell-touch.has-hover && self.cell.in-month
                                     ? (root.dark-mode ? #1C1C21 : #F2F2F5)
                                     : transparent));
-                        border-width: (self.cell.is-selected && !(self.cell.is-today && self.cell.in-month)) ? 1.5px : 0px;
+                        border-width: (self.cell.is-selected && !self.today-in-month) ? 1.5px : 0px;
                         border-color: #5E6AD2;
 
                         // Centered day numeral
@@ -891,31 +917,36 @@ export component AppWindow inherits Window {
 
             // Zone C: Selected-Date Summary & Agenda Preview Strip
             bottom-area := Rectangle {
-                height: 74px;
+                height: 76px;
 
-                // Compact View Strip (74px)
                 VerticalLayout {
                     padding-top: 8px;
                     padding-bottom: 8px;
                     padding-left: 16px;
                     padding-right: 14px;
-                    spacing: 4px;
+                    spacing: 3px;
 
                     HorizontalLayout {
                         height: 18px;
+                        spacing: 8px;
                         alignment: space-between;
 
                         Text {
-                            text: root.compact-summary-header != ""
-                                ? root.compact-summary-header
-                                : (root.selected-date-line + "  ·  " + root.selected-event-summary);
-                            font-size: 10px;
+                            text: root.selected-date-line;
+                            font-size: 12px;
                             font-weight: 600;
+                            color: root.dark-mode ? #F4F4F6 : #141416;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: root.selected-event-summary;
+                            font-size: 11px;
+                            font-weight: 500;
                             color: root.dark-mode ? #94949E : #64646C;
                             vertical-alignment: center;
                         }
-
-
                     }
 
                     for ev in root.selected-day-events : HorizontalLayout {
@@ -957,24 +988,27 @@ export component AppWindow inherits Window {
 
                     if root.selected-day-events.length == 0 : HorizontalLayout {
                         height: 18px;
+                        spacing: 8px;
                         alignment: space-between;
                         Text {
                             text: root.active-calendars-label;
                             font-size: 11px;
                             color: root.dark-mode ? #52525B : #A0A0AB;
                             vertical-alignment: center;
+                            horizontal-stretch: 1;
+                            overflow: elide;
                         }
-                        TouchArea {
-                            width: 68px;
+                        calendars-link := TouchArea {
+                            width: 88px;
                             height: 18px;
                             clicked => { root.open-settings(2); }
                             Text {
                                 width: parent.width;
                                 height: parent.height;
                                 text: root.nav-calendars-text;
-                                font-size: 10px;
+                                font-size: 11px;
                                 font-weight: 600;
-                                color: root.dark-mode ? #94949E : #64646C;
+                                color: calendars-link.has-hover ? #5E6AD2 : (root.dark-mode ? #94949E : #64646C);
                                 horizontal-alignment: right;
                                 vertical-alignment: center;
                             }
@@ -1024,7 +1058,7 @@ export component AppWindow inherits Window {
                                 width: 22px;
                                 height: 22px;
                                 border-radius: 6px;
-                                background: #5E6AD2;
+                                background: #E5484D;
                                 y: (parent.height - self.height) / 2;
 
                                 Text {
@@ -1194,6 +1228,10 @@ export component AppWindow inherits Window {
                             Rectangle {
                                 width: 22px;
                                 height: 22px;
+                                border-radius: 6px;
+                                background: min-btn-touch.has-hover ? (root.dark-mode ? #26262B : #EFEFF2) : transparent;
+                                accessible-role: button;
+                                accessible-label: "Minimize";
                                 Text {
                                     width: parent.width;
                                     height: parent.height;
@@ -1212,6 +1250,10 @@ export component AppWindow inherits Window {
                             Rectangle {
                                 width: 22px;
                                 height: 22px;
+                                border-radius: 6px;
+                                background: close-btn-touch.has-hover ? (root.dark-mode ? #2A1618 : #FFF0F0) : transparent;
+                                accessible-role: button;
+                                accessible-label: root.back-to-calendar-text;
                                 Text {
                                     width: parent.width;
                                     height: parent.height;
@@ -1315,6 +1357,12 @@ export component AppWindow inherits Window {
                                 toggled => { root.toggle-start-with-windows(); }
                             }
                         }
+                        if root.startup-status-text != "" : Text {
+                            text: root.startup-status-text;
+                            wrap: word-wrap;
+                            font-size: 11px;
+                            color: root.dark-mode ? #F87171 : #B42328;
+                        }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
                         // Row 5: Global shortcut
@@ -1358,7 +1406,7 @@ export component AppWindow inherits Window {
                                     }
 
                                     Text {
-                                        text: root.shortcut-has-conflict ? root.shortcut-conflict-badge : "Record";
+                                        text: root.shortcut-has-conflict ? root.shortcut-conflict-badge : root.shortcut-record-label;
                                         font-size: 10px;
                                         font-weight: root.shortcut-has-conflict ? 600 : 500;
                                         color: root.shortcut-has-conflict
@@ -1605,32 +1653,115 @@ export component AppWindow inherits Window {
                         height: root.height - 116px;
                         VerticalLayout {
                         spacing: 0px;
+                        padding-bottom: 12px;
 
-                        HorizontalLayout {
-                            height: 38px;
-                            spacing: 8px;
-                            Text { text:root.account-status-text; font-size:12px; font-weight:600; wrap:word-wrap; color:root.account-connected ? (root.dark-mode ? #6EE7B7 : #087443) : (root.dark-mode ? #D4D4D8 : #3F3F46); vertical-alignment:center; }
-                            SettingsButton { button-width: 132px; label: root.connect-microsoft-label; enabled:root.can-connect-microsoft; dark-mode: root.dark-mode; clicked => { root.connect-microsoft(); } }
+                        Text {
+                            text: root.outlook-section-text;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: root.dark-mode ? #F4F4F6 : #141416;
                         }
-                        HorizontalLayout {
-                            height: 34px;
-                            spacing: 8px;
-                            SettingsButton { button-width: 172px; label: root.disconnect-microsoft-label; enabled:root.can-disconnect-microsoft; dark-mode: root.dark-mode; clicked => { root.disconnect-microsoft(); } }
-                            SettingsButton { button-width: 116px; label: root.refresh-button-text; enabled:root.can-refresh-calendars; dark-mode: root.dark-mode; clicked => { root.refresh-calendars(); } }
+                        Rectangle { height: 4px; }
+                        Text {
+                            text: root.account-status-text;
+                            wrap: word-wrap;
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: root.account-connected ? (root.dark-mode ? #6EE7B7 : #087443) : (root.dark-mode ? #94949E : #64646C);
                         }
+                        Rectangle { height: 10px; }
                         HorizontalLayout {
-                            height: 38px;
                             spacing: 8px;
-                            LineEdit { text <=> root.ics-source-name; placeholder-text: root.ics-name-placeholder; enabled: !root.connection-busy && !root.provider-loading; }
-                            LineEdit { text <=> root.ics-source-url; placeholder-text: root.ics-url-placeholder; input-type: password; enabled: !root.connection-busy && !root.provider-loading; }
-                            SettingsButton { button-width: 104px; label: root.add-ics-label; enabled:!root.connection-busy && !root.provider-loading && root.ics-source-name!="" && root.ics-source-url!=""; dark-mode: root.dark-mode; clicked => { root.add-ics-source(root.ics-source-name,root.ics-source-url); } }
+                            alignment: start;
+                            SettingsButton { label: root.connect-microsoft-label; enabled: root.can-connect-microsoft; kind: "primary"; dark-mode: root.dark-mode; clicked => { root.connect-microsoft(); } }
+                            SettingsButton { label: root.disconnect-microsoft-label; enabled: root.can-disconnect-microsoft; dark-mode: root.dark-mode; clicked => { root.disconnect-microsoft(); } }
+                            SettingsButton { label: root.refresh-button-text; enabled: root.can-refresh-calendars; kind: "subtle"; dark-mode: root.dark-mode; clicked => { root.refresh-calendars(); } }
                         }
+
+                        Rectangle { height: 16px; }
+                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
+                        Rectangle { height: 14px; }
+
+                        Text {
+                            text: root.ics-section-text;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: root.dark-mode ? #F4F4F6 : #141416;
+                        }
+                        Rectangle { height: 8px; }
+                        Text {
+                            text: root.ics-name-placeholder;
+                            font-size: 11px;
+                            color: root.dark-mode ? #94949E : #64646C;
+                        }
+                        Rectangle { height: 4px; }
+                        LineEdit {
+                            height: 30px;
+                            font-size: 12px;
+                            text <=> root.ics-source-name;
+                            placeholder-text: root.ics-name-placeholder;
+                            enabled: !root.connection-busy && !root.provider-loading;
+                        }
+                        Rectangle { height: 8px; }
+                        Text {
+                            text: root.ics-url-placeholder;
+                            font-size: 11px;
+                            color: root.dark-mode ? #94949E : #64646C;
+                        }
+                        Rectangle { height: 4px; }
+                        LineEdit {
+                            height: 30px;
+                            font-size: 12px;
+                            text <=> root.ics-source-url;
+                            placeholder-text: root.ics-url-placeholder;
+                            input-type: password;
+                            enabled: !root.connection-busy && !root.provider-loading;
+                        }
+                        Rectangle { height: 6px; }
+                        Text {
+                            text: root.ics-help-text;
+                            wrap: word-wrap;
+                            font-size: 11px;
+                            color: root.dark-mode ? #52525B : #A0A0AB;
+                        }
+                        Rectangle { height: 8px; }
+                        SettingsButton {
+                            label: root.add-ics-label;
+                            enabled: !root.connection-busy && !root.provider-loading && root.ics-source-name != "" && root.ics-source-url != "";
+                            dark-mode: root.dark-mode;
+                            clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
+                        }
+
+                        Rectangle { height: 16px; }
+                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
+                        Rectangle { height: 8px; }
                         HorizontalLayout {
                             height: 36px;
-                            spacing: 8px;
-                            Text { text: root.legacy-windows-label; font-size: 11px; color: root.dark-mode ? #94949E : #64646C; vertical-alignment: center; }
-                            SwitchToggle { checked: root.legacy-windows-enabled; dark-mode: root.dark-mode; toggled => { root.toggle-legacy-windows(); } }
+                            spacing: 12px;
+                            alignment: space-between;
+                            Text {
+                                text: root.legacy-windows-label;
+                                font-size: 12px;
+                                color: root.dark-mode ? #94949E : #64646C;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                                wrap: word-wrap;
+                            }
+                            SwitchToggle {
+                                y: (parent.height - self.height) / 2;
+                                checked: root.legacy-windows-enabled;
+                                dark-mode: root.dark-mode;
+                                toggled => { root.toggle-legacy-windows(); }
+                            }
                         }
+                        Rectangle { height: 8px; }
+                        Text {
+                            text: root.calendars-dot-note-text;
+                            wrap: word-wrap;
+                            font-size: 11px;
+                            color: root.dark-mode ? #52525B : #A0A0AB;
+                        }
+                        Rectangle { height: 8px; }
                         if root.connection-message != "" : Text {
                             text: root.connection-message;
                             wrap: word-wrap;
@@ -1646,7 +1777,7 @@ export component AppWindow inherits Window {
                         }
 
                         if root.calendars-access-denied : Rectangle {
-                            height: 88px;
+                            height: 112px;
                             border-radius: 8px;
                             background: root.dark-mode ? #2A1618 : #FFF0F0;
                             border-width: 1px;
@@ -1670,6 +1801,7 @@ export component AppWindow inherits Window {
                                     text: root.calendars-denied-desc-text;
                                     font-size: 11px;
                                     font-weight: 400;
+                                    wrap: word-wrap;
                                     color: root.dark-mode ? #94949E : #64646C;
                                 }
                                 HorizontalLayout {
@@ -1703,6 +1835,8 @@ export component AppWindow inherits Window {
                             VerticalLayout {
                                 alignment: center;
                                 spacing: 8px;
+                                padding-left: 24px;
+                                padding-right: 24px;
 
                                 Text {
                                     text: root.calendars-empty-title-text;
@@ -1710,6 +1844,7 @@ export component AppWindow inherits Window {
                                     font-weight: 600;
                                     color: root.dark-mode ? #F4F4F6 : #141416;
                                     horizontal-alignment: center;
+                                    wrap: word-wrap;
                                 }
                                 Text {
                                     text: root.calendars-empty-desc-text;
@@ -1717,6 +1852,7 @@ export component AppWindow inherits Window {
                                     font-weight: 400;
                                     color: root.dark-mode ? #94949E : #64646C;
                                     horizontal-alignment: center;
+                                    wrap: word-wrap;
                                 }
                                 Rectangle { height: 6px; }
                             }
@@ -2010,15 +2146,13 @@ export component AppWindow inherits Window {
                                 y: (parent.height - 30px) / 2;
 
                                 SettingsButton {
-                                    button-width: 104px;
-                                    label: "GitHub Repo ↗";
+                                    label: root.github-button-text;
                                     kind: "subtle";
                                     dark-mode: root.dark-mode;
                                     clicked => { root.open-external-url("https://github.com/andmetoo/lightcal"); }
                                 }
                                 SettingsButton {
-                                    button-width: 96px;
-                                    label: "koona.app ↗";
+                                    label: root.koona-button-text;
                                     kind: "subtle";
                                     dark-mode: root.dark-mode;
                                     clicked => { root.open-external-url("https://koona.app"); }
@@ -2093,13 +2227,13 @@ export component AppWindow inherits Window {
                         alignment: center;
 
                         SettingsDropdownOption {
-                            label: "Monday";
+                            label: root.weekday-monday-label;
                             active: root.first-weekday-monday;
                             dark-mode: root.dark-mode;
                             clicked => { root.select-first-weekday-option(true); }
                         }
                         SettingsDropdownOption {
-                            label: "Sunday";
+                            label: root.weekday-sunday-label;
                             active: !root.first-weekday-monday;
                             dark-mode: root.dark-mode;
                             clicked => { root.select-first-weekday-option(false); }
@@ -2126,19 +2260,19 @@ export component AppWindow inherits Window {
                         alignment: center;
 
                         SettingsDropdownOption {
-                            label: "Light (Alabaster)";
+                            label: root.theme-light-label;
                             active: root.current-theme-code == "light";
                             dark-mode: root.dark-mode;
                             clicked => { root.select-theme("light"); }
                         }
                         SettingsDropdownOption {
-                            label: "Dark (Obsidian)";
+                            label: root.theme-dark-label;
                             active: root.current-theme-code == "dark";
                             dark-mode: root.dark-mode;
                             clicked => { root.select-theme("dark"); }
                         }
                         SettingsDropdownOption {
-                            label: "System default";
+                            label: root.theme-system-label;
                             active: root.current-theme-code == "system";
                             dark-mode: root.dark-mode;
                             clicked => { root.select-theme("system"); }
@@ -2168,16 +2302,16 @@ export component AppWindow inherits Window {
                         alignment: center;
 
                         SettingsDropdownOption {
-                            label: "Stable";
-                            active: root.current-update-channel-display == "Stable";
+                            label: root.channel-stable-label;
+                            active: !root.update-channel-is-preview;
                             dark-mode: root.dark-mode;
-                            clicked => { root.select-update-channel("Stable"); }
+                            clicked => { root.select-update-channel("stable"); }
                         }
                         SettingsDropdownOption {
-                            label: "Preview";
-                            active: root.current-update-channel-display == "Preview";
+                            label: root.channel-preview-label;
+                            active: root.update-channel-is-preview;
                             dark-mode: root.dark-mode;
-                            clicked => { root.select-update-channel("Preview"); }
+                            clicked => { root.select-update-channel("preview"); }
                         }
                     }
                 }
