@@ -17,6 +17,7 @@ Cloud agents run on Linux. The image provides Rust stable with rustfmt and clipp
 
 - `python scripts/check_docs.py`, `cargo fmt --all -- --check`, and `cargo test -p calendar-core --locked` are the checks that pass here.
 - `just check` also runs workspace Clippy with warnings denied and `cargo test --workspace`. Those still fail on Linux because Windows-only items are `cfg`-gated. That is existing source, not a missing toolchain.
+- Clippy for the Windows target works on Linux, as in CI: `rustup target add x86_64-pc-windows-msvc`, then `cargo clippy --workspace --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings`.
 - Headless UI proof: `cargo run -p lightcal --locked -- --render-snapshots <directory>`.
 - On a display, `just run-demo` opens the compact window with sample events and does not contact Microsoft Graph.
 - NSIS, Authenticode, and SimpleSign recipes are Windows-only.

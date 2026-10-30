@@ -29,7 +29,25 @@ Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and cert
 
 ## CI and validation
 
-The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The job has read-only repository permissions. It does not call SimpleSign, Authenticode signing, or `RequireSigned`, and it never publishes a release or reads signing keys. An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
+GitHub Actions uses three workflows:
+
+| Workflow | Runs on | Work |
+| --- | --- | --- |
+| `docs.yml` | Every pull request and `main` push | `Documentation checks` on Ubuntu |
+| `rust.yml` | Pull requests that change more than documentation, every `main` push | Formatting and Clippy for `x86_64-pc-windows-msvc` on Ubuntu, unit tests on Windows, macOS library check |
+| `release.yml` | `main` pushes that change more than documentation, `vX.Y.Z` tags, manual runs, and pull requests that change packaging | Locked release build, unsigned portable ZIP, unsigned NSIS setup, isolated installer smoke test |
+
+Cargo builds are cached with `Swatinem/rust-cache`. Only `main` pushes save caches; pull requests and tags restore them, so caches never come from unreviewed branches. Debug information is disabled for CI test builds to keep caches small.
+
+The release build job has read-only repository permissions. It does not call SimpleSign, Authenticode signing, or `RequireSigned`, and it never reads signing keys. An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
+
+### Release from a tag
+
+1. Update the workspace version in `Cargo.toml` through a reviewed pull request and merge it into `main`.
+2. Tag that `main` commit with `v` plus the same version, for example `git tag v0.2.0 && git push origin v0.2.0`.
+3. CI rejects a tag that does not match the Cargo version or does not point at a `main` commit. Otherwise it builds the unsigned artifacts and creates a **draft** GitHub release with generated notes. A draft is invisible to the update checker.
+4. Run `just release` locally from the same tag. Upload the signed `lightcal.exe`, signed setup, portable ZIP, and their checksums to the draft, for example with `gh release upload <tag> <files> --clobber`, and delete the unsigned ZIP.
+5. The owner reviews and publishes the draft. CI never publishes a release.
 
 Run `just test-installer` after building release code. The test compiles the same NSIS script with `TEST_SETUP`: registry registration, shortcuts, application launch, and real-profile detection are omitted at compile time. It installs under a checked `target/installer-tests/<random>` path, verifies the executable hash, uninstalls, and checks that an unrelated sentinel file survives. No real account, app profile, autostart, shortcuts, or uninstall registry entries are modified. This validates payload installation and removal; real installed-app registration, signing, and SmartScreen behavior require separate owner-driven validation.
 
