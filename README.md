@@ -38,6 +38,8 @@ just sign-release
 
 GitHub Actions checks the Rust workspace on Windows and Linux and prepares an **unsigned** Windows NSIS installer and portable archive for pull requests or a manual workflow run. The Windows job installs Rust, builds with `--locked`, and skips executable signing. It does not access signing keys. A version tag contained in `main` may publish those files as an explicitly unsigned prerelease.
 
+The macOS job also builds an **unsigned** review disk image with `scripts/package-dmg.sh` (`just package-dmg` on a Mac). The image is not code-signed, notarized, or published. Gatekeeper blocks the application until it is opened explicitly, and a successful build does not show that the application launches.
+
 Update checking uses GitHub's latest stable release endpoint. Manual checks run on a worker thread with a 15-second request/body deadline. The optional automatic check is off by default; when enabled it runs at startup and daily. Signed automatic installation is separately opt-in and requires a build-configured certificate SHA-256 pin, matching Authenticode trust/version, and a signed portable installation. No update is installed without that trust configuration.
 
 Copy [.env.example](.env.example) to the ignored `.env.local` for public build settings. Microsoft sign-in can remain unconfigured until the owner creates an Entra Desktop app registration; the Client ID is configured at build time, never edited in Settings. See [provider and signing setup](docs/provider-setup.md) for exact registration steps, supported ICS features, SimpleSign fingerprint extraction, and remaining live-test gates. Google sign-in is deferred.

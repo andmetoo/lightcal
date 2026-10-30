@@ -435,10 +435,18 @@ lc.drawDropdown = function(container, x, y, w, valueText, t, active = false) {
 };
 
 lc.drawToggle = function(container, x, y, on, t) {
-  const trackCol = on ? t.primaryAccent : t.borderControl;
-  lc.rect(container, 'Toggle Track', x, y, 36, 20, trackCol, null, 10);
-  const thumbX = on ? x + 18 : x + 2;
-  lc.rect(container, 'Toggle Thumb', thumbX, y + 2, 16, 16, '#FFFFFF', null, 8);
+  const trackCol = on ? t.primaryAccent : (t.mode === 'light' ? '#E4E4EA' : '#3A3A42');
+  lc.rect(container, 'Toggle Track', x, y, 46, 28, trackCol, null, 14);
+  const thumbX = on ? x + 21 : x + 3;
+  const thumb = lc.rect(container, 'Toggle Thumb', thumbX, y + 3, 22, 22, '#FFFFFF', null, 11);
+  thumb.shadows = [{
+    style: 'drop-shadow',
+    offsetX: 0,
+    offsetY: 1,
+    blur: 6,
+    spread: 0,
+    color: { color: '#141416', opacity: 0.2 }
+  }];
 };
 
 lc.drawButton = function(container, x, y, w, label, t, kind = 'secondary') {
@@ -514,8 +522,7 @@ lc.drawSettingsBoard = function(name, x, y, themeName, section, stateVariant = n
     const ny = 68 + i * 38;
     const isActive = item === section;
     if (isActive) {
-      lc.rect(b, 'Nav Active ' + item, 12, ny, 176, 32, t.control, t.borderControl, 6, 1);
-      lc.rect(b, 'Nav Accent Bar', 16, ny + 8, 3, 16, t.primaryAccent, null, 1.5);
+      lc.rect(b, 'Nav Active ' + item, 12, ny, 176, 36, t.primarySoft, null, 10);
     }
     lc.text(b, 'Nav Label ' + item, item, 28, ny + 9, 13, isActive ? '600' : '500', isActive ? t.ink : t.secondary, 'Inter');
   }
@@ -537,6 +544,8 @@ lc.drawSettingsBoard = function(name, x, y, themeName, section, stateVariant = n
   lc.rect(b, 'Section Header Hairline', 240, 80, 500, 1, t.hairline);
 
   if (section === 'General') {
+    lc.rect(b, 'Region Group', 228, 88, 524, 176, t.mode === 'light' ? '#F4F4F6' : '#18181C', null, 14);
+    lc.rect(b, 'Startup Group', 228, 276, 524, 148, t.mode === 'light' ? '#F4F4F6' : '#18181C', null, 14);
     lc.drawFlatRow(b, 92, 'Language', 'Interface language for month names, weekdays, and controls', t, true);
     lc.drawDropdown(b, 568, 104, 172, 'English (US)', t, stateVariant === 'lang-open');
 

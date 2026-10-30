@@ -17,7 +17,7 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 
 ## Proposed first release
 
-Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 and older Windows compatibility require separate validation. macOS is an early feasibility target, not a promised first-release download.
+Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 and older Windows compatibility require separate validation. macOS is an early feasibility target, not a promised first-release download. Pull requests may attach an unsigned review disk image; that image is not signed, notarized, or evidence that the application launches.
 
 The first release includes a Gregorian month grid, selected date, today highlight, weekday/date display, previous/next month, current-month emphasis, return to today, configurable first weekday and gray weekdays, light/dark/system theme, optional ISO week numbers, keyboard navigation, tray menu, and explicit Quit. It also includes opt-in startup, an optional global shortcut, manual update checking, selection of Windows-exposed calendars, event dots, and About links. The tray icon should display the day of month if legibility testing succeeds; its tooltip includes the full local date and weekday.
 

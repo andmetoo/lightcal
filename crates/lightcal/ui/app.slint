@@ -3,7 +3,7 @@
 // Signature Coral-Vermilion (#E5484D) Today tile & icon cap · Linear Indigo (#5E6AD2) selection & active controls
 
 import "../assets/fonts/Inter.ttf";
-import { ScrollView, LineEdit } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export struct DayCellData {
     day-number: string,
@@ -128,24 +128,30 @@ component SwitchToggle inherits Rectangle {
     in property <bool> dark-mode: false;
     callback toggled();
 
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
+    // Soft track and a shadowed knob, closer to a modern system switch than a flat pill.
+    width: 46px;
+    height: 28px;
+    border-radius: 14px;
     background: root.checked
-        ? #5E6AD2
-        : (root.dark-mode ? #2C2C32 : #E2E2E6);
+        ? (touch.has-hover ? #6E79D6 : #5E6AD2)
+        : (touch.has-hover
+            ? (root.dark-mode ? #45454E : #D8D8E0)
+            : (root.dark-mode ? #3A3A42 : #E4E4EA));
 
     Rectangle {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        x: root.checked ? 18px : 2px;
-        y: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        x: root.checked ? 21px : 3px;
+        y: 3px;
         background: #FFFFFF;
-        animate x { duration: 120ms; easing: ease-in-out; }
+        drop-shadow-blur: 6px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #14141633;
+        animate x { duration: 160ms; easing: ease-out; }
     }
 
-    TouchArea {
+    touch := TouchArea {
         clicked => { root.toggled(); }
     }
 }
@@ -162,13 +168,13 @@ component SettingsRowText inherits VerticalLayout {
     Text {
         text: root.title;
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 500;
         color: root.dark-mode ? #F4F4F6 : #141416;
         overflow: elide;
     }
     Text {
         text: root.description;
-        font-size: 11px;
+        font-size: 12px;
         color: root.dark-mode ? #94949E : #64646C;
         wrap: word-wrap;
     }
@@ -195,8 +201,8 @@ component SettingsSelect inherits Rectangle {
     callback clicked();
 
     width: root.select-width;
-    height: 30px;
-    border-radius: 6px;
+    height: 36px;
+    border-radius: 10px;
     background: touch.has-hover
         ? (root.dark-mode ? #26262B : #EFEFF2)
         : (root.dark-mode ? #1E1E22 : #FFFFFF);
@@ -249,8 +255,8 @@ component SettingsButton inherits Rectangle {
     callback clicked();
 
     width: root.button-width > 0px ? root.button-width : self.preferred-width;
-    height: 30px;
-    border-radius: 6px;
+    height: 34px;
+    border-radius: 10px;
     background: root.kind == "primary"
         ? (touch.has-hover ? #4E5AC0 : #5E6AD2)
         : (root.kind == "subtle"
@@ -302,17 +308,17 @@ component SettingsModePill inherits Rectangle {
     in property <bool> dark-mode: false;
     callback clicked();
 
-    height: 28px;
-    border-radius: 6px;
+    height: 32px;
+    border-radius: 10px;
     background: root.active
-        ? (root.dark-mode ? #1E1E22 : #FFFFFF)
+        ? (root.dark-mode ? #1D203A : #EEF0FF)
         : (pill-touch.has-hover
             ? (root.dark-mode ? #222228 : #EBEBEF)
             : (root.dark-mode ? #18181C : #F2F2F5));
     border-width: 1px;
     border-color: root.active
-        ? (root.dark-mode ? #5E6AD2 : #141416)
-        : (root.dark-mode ? #1F1F24 : #ECECEF);
+        ? #5E6AD2
+        : (root.dark-mode ? #2C2C32 : #E4E4EA);
 
     HorizontalLayout {
         padding-left: 10px;
@@ -372,6 +378,102 @@ component SettingsDropdownOption inherits Rectangle {
 
     opt-touch := TouchArea {
         clicked => { root.clicked(); }
+    }
+}
+
+component SettingsField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> dark-mode: false;
+    in property <bool> enabled: true;
+
+    height: 36px;
+    border-radius: 10px;
+    opacity: root.enabled ? 1 : 0.45;
+    background: root.dark-mode ? #1E1E22 : #FFFFFF;
+    border-width: input.has-focus ? 1.5px : 1px;
+    border-color: input.has-focus ? #5E6AD2 : (root.dark-mode ? #2C2C32 : #E2E2E6);
+
+    if root.text == "" && root.placeholder != "" : Text {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - 20px;
+        text: root.placeholder;
+        font-size: 12px;
+        color: root.dark-mode ? #52525B : #A0A0AB;
+        overflow: elide;
+    }
+
+    input := TextInput {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width - 20px;
+        text <=> root.text;
+        font-size: 12px;
+        color: root.dark-mode ? #F4F4F6 : #141416;
+        single-line: true;
+        enabled: root.enabled;
+    }
+}
+
+component SettingsMenu inherits Rectangle {
+    in property <bool> dark-mode: false;
+
+    horizontal-stretch: 0;
+    width: 172px;
+    height: content.preferred-height;
+    border-radius: 12px;
+    background: root.dark-mode ? #1E1E22 : #FFFFFF;
+    border-width: 1px;
+    border-color: root.dark-mode ? #2C2C32 : #E4E4EA;
+    drop-shadow-blur: 14px;
+    drop-shadow-offset-y: 4px;
+    drop-shadow-color: root.dark-mode ? #00000088 : #1414161A;
+
+    content := VerticalLayout {
+        padding: 6px;
+        spacing: 2px;
+        @children
+    }
+}
+
+component SettingsLine inherits HorizontalLayout {
+    min-height: 62px;
+    spacing: 16px;
+    alignment: space-between;
+    @children
+}
+
+component SettingsGroup inherits Rectangle {
+    in property <bool> dark-mode: false;
+    in property <length> pad-top: 2px;
+    in property <length> pad-bottom: 2px;
+
+    border-radius: 14px;
+    background: root.dark-mode ? #18181C : #F4F4F6;
+
+    VerticalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: root.pad-top;
+        padding-bottom: root.pad-bottom;
+        @children
+    }
+}
+
+component SettingsSectionLabel inherits VerticalLayout {
+    in property <string> label;
+    in property <bool> dark-mode: false;
+    in property <bool> first: false;
+
+    padding-top: root.first ? 2px : 14px;
+    padding-bottom: 4px;
+
+    Text {
+        text: root.label;
+        font-size: 11px;
+        font-weight: 600;
+        color: root.dark-mode ? #52525B : #A0A0AB;
     }
 }
 
@@ -503,8 +605,13 @@ export component AppWindow inherits Window {
     in property <string> shortcut-conflict-title: "Shortcut unavailable: Alt + Space is already registered by Raycast.";
     in property <string> shortcut-conflict-hint: "Press a new key combination (for example Alt + C) or click Reset.";
     in property <string> shortcut-reset-label: "Reset";
-    in property <string> shortcut-record-label: "Record";
+    in property <string> shortcut-record-label: "Change";
+    in property <string> shortcut-clear-label: "Clear";
+    in property <bool> shortcut-can-clear: false;
     in property <string> shortcut-conflict-badge: "Conflict";
+    in property <string> section-region-text: "Region";
+    in property <string> section-startup-text: "Startup";
+    in property <string> desc-auto-install-text: "Install the signed release and restart after a successful check.";
     in property <string> weekday-monday-label: "Monday";
     in property <string> weekday-sunday-label: "Sunday";
     in property <string> theme-light-label: "Light (Alabaster)";
@@ -1049,15 +1156,15 @@ export component AppWindow inherits Window {
                     VerticalLayout {
                         spacing: 6px;
 
-                        // Sidebar Header: App Icon Badge (29) + Lightcal Preferences
+                        // Sidebar identity: date badge, wordmark, and a quiet preferences label.
                         HorizontalLayout {
-                            spacing: 8px;
+                            spacing: 10px;
                             alignment: start;
 
                             Rectangle {
-                                width: 22px;
-                                height: 22px;
-                                border-radius: 6px;
+                                width: 28px;
+                                height: 28px;
+                                border-radius: 8px;
                                 background: #E5484D;
                                 y: (parent.height - self.height) / 2;
 
@@ -1065,7 +1172,7 @@ export component AppWindow inherits Window {
                                     width: parent.width;
                                     height: parent.height;
                                     text: root.live-day-text;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     font-weight: 700;
                                     color: #FFFFFF;
                                     horizontal-alignment: center;
@@ -1073,23 +1180,21 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            HorizontalLayout {
-                                spacing: 6px;
+                            VerticalLayout {
                                 alignment: center;
+                                spacing: 0px;
 
                                 Text {
                                     text: "Lightcal";
                                     font-size: 14px;
                                     font-weight: 700;
                                     color: root.dark-mode ? #F4F4F6 : #141416;
-                                    vertical-alignment: center;
                                 }
                                 Text {
                                     text: root.preferences-subtitle-text;
-                                    font-size: 12px;
+                                    font-size: 11px;
                                     font-weight: 500;
                                     color: root.dark-mode ? #52525B : #A0A0AB;
-                                    vertical-alignment: center;
                                 }
                             }
                         }
@@ -1103,32 +1208,24 @@ export component AppWindow inherits Window {
                             root.nav-calendars-text,
                             root.nav-about-text
                         ] : Rectangle {
-                            height: 32px;
-                            border-radius: 6px;
+                            height: 36px;
+                            border-radius: 10px;
                             background: root.settings-tab == tab-idx
-                                ? (root.dark-mode ? #1E1E22 : #FFFFFF)
-                                : (nav-touch.has-hover ? (root.dark-mode ? #18181C : #F2F2F5) : transparent);
-                            border-width: root.settings-tab == tab-idx ? 1px : 0px;
-                            border-color: root.dark-mode ? #2C2C32 : #E2E2E6;
+                                ? (root.dark-mode ? #1D203A : #EEF0FF)
+                                : (nav-touch.has-hover ? (root.dark-mode ? #1C1C20 : #EEEEF2) : transparent);
 
                             HorizontalLayout {
-                                padding-left: 10px;
-                                padding-right: 10px;
+                                padding-left: 12px;
+                                padding-right: 12px;
                                 spacing: 8px;
                                 alignment: start;
 
-                                if root.settings-tab == tab-idx : Rectangle {
-                                    width: 3px;
-                                    height: 16px;
-                                    border-radius: 1.5px;
-                                    background: #5E6AD2;
-                                    y: (parent.height - self.height) / 2;
-                                }
-
                                 Text {
                                     text: nav-label;
+                                    horizontal-stretch: 1;
                                     font-size: 13px;
                                     font-weight: root.settings-tab == tab-idx ? 600 : 500;
+                                    overflow: elide;
                                     color: root.settings-tab == tab-idx
                                         ? (root.dark-mode ? #F4F4F6 : #141416)
                                         : (root.dark-mode ? #94949E : #64646C);
@@ -1274,84 +1371,126 @@ export component AppWindow inherits Window {
                     Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
                     // TAB 0: GENERAL
-                    if root.settings-tab == 0 : VerticalLayout {
+                    if root.settings-tab == 0 : ScrollView {
+                        height: 508px;
+                        VerticalLayout {
                         spacing: 0px;
+                        padding-bottom: 12px;
 
-                        // Row 1: Language
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsSectionLabel {
+                            label: root.section-region-text;
+                            dark-mode: root.dark-mode;
+                            first: true;
+                        }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-language-text;
                                 description: root.desc-language-text;
                                 dark-mode: root.dark-mode;
                             }
                             SettingsSelect {
-                                y: (parent.height - self.height) / 2;
                                 text: root.current-language-display;
                                 is-open: root.language-dropdown-open;
                                 dark-mode: root.dark-mode;
                                 clicked => { root.toggle-language-dropdown(); }
                             }
                         }
+                        if root.language-dropdown-open : HorizontalLayout {
+                            alignment: end;
+                            padding-bottom: 8px;
+                            SettingsMenu {
+                                dark-mode: root.dark-mode;
+                                SettingsDropdownOption {
+                                    label: "English (US)";
+                                    active: root.current-language-code == "en";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-language("en"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: "Русский";
+                                    active: root.current-language-code == "ru";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-language("ru"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: "Español";
+                                    active: root.current-language-code == "es";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-language("es"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: "日本語";
+                                    active: root.current-language-code == "ja";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-language("ja"); }
+                                }
+                            }
+                        }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 2: Start of week
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-first-weekday-text;
                                 description: root.desc-first-weekday-text;
                                 dark-mode: root.dark-mode;
                             }
                             SettingsSelect {
-                                y: (parent.height - self.height) / 2;
                                 text: root.current-first-weekday-display;
                                 is-open: root.first-day-dropdown-open;
                                 dark-mode: root.dark-mode;
                                 clicked => { root.toggle-first-day-dropdown(); }
                             }
                         }
+                        if root.first-day-dropdown-open : HorizontalLayout {
+                            alignment: end;
+                            padding-bottom: 8px;
+                            SettingsMenu {
+                                dark-mode: root.dark-mode;
+                                SettingsDropdownOption {
+                                    label: root.weekday-monday-label;
+                                    active: root.first-weekday-monday;
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-first-weekday-option(true); }
+                                }
+                                SettingsDropdownOption {
+                                    label: root.weekday-sunday-label;
+                                    active: !root.first-weekday-monday;
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-first-weekday-option(false); }
+                                }
+                            }
+                        }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 3: Show week numbers
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-show-week-numbers-text;
                                 description: root.desc-show-week-numbers-text;
                                 dark-mode: root.dark-mode;
                             }
                             SwitchToggle {
-                                y: (parent.height - self.height) / 2;
                                 checked: root.show-week-numbers;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-show-week-numbers(); }
                             }
                         }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
+                        }
 
-                        // Row 4: Launch at login
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsSectionLabel {
+                            label: root.section-startup-text;
+                            dark-mode: root.dark-mode;
+                        }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-startup-text;
                                 description: root.desc-startup-text;
                                 dark-mode: root.dark-mode;
                             }
                             SwitchToggle {
-                                y: (parent.height - self.height) / 2;
                                 checked: root.start-with-windows;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-start-with-windows(); }
@@ -1365,59 +1504,56 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 5: Global shortcut
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-shortcut-text;
                                 description: root.desc-shortcut-text;
                                 dark-mode: root.dark-mode;
                             }
 
-                            Rectangle {
-                                y: (parent.height - self.height) / 2;
-                                width: 172px;
-                                height: 30px;
-                                border-radius: 6px;
-                                background: root.shortcut-has-conflict
-                                    ? (root.dark-mode ? #2A1618 : #FFF0F0)
-                                    : (root.dark-mode ? #18181C : #F2F2F5);
-                                border-width: root.shortcut-has-conflict ? 1.5px : 1px;
-                                border-color: root.shortcut-has-conflict
-                                    ? (root.dark-mode ? #F87171 : #E5484D)
-                                    : (root.dark-mode ? #2C2C32 : #E2E2E6);
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: center;
 
-                                HorizontalLayout {
-                                    padding-left: 10px;
-                                    padding-right: 10px;
-                                    alignment: space-between;
+                                Rectangle {
+                                    width: 148px;
+                                    height: 34px;
+                                    border-radius: 10px;
+                                    background: root.shortcut-has-conflict
+                                        ? (root.dark-mode ? #2A1618 : #FFF0F0)
+                                        : (root.dark-mode ? #222228 : #FFFFFF);
+                                    border-width: 1px;
+                                    border-color: root.shortcut-has-conflict
+                                        ? (root.dark-mode ? #F87171 : #E5484D)
+                                        : (root.dark-mode ? #3A3A42 : #E4E4EA);
+                                    drop-shadow-blur: 4px;
+                                    drop-shadow-offset-y: 1px;
+                                    drop-shadow-color: root.shortcut-has-conflict ? #00000000 : #14141614;
 
                                     Text {
+                                        x: 10px;
+                                        width: parent.width - 20px;
+                                        height: parent.height;
                                         text: root.global-shortcut-display;
                                         font-size: 12px;
                                         font-weight: 600;
+                                        overflow: elide;
                                         color: root.shortcut-has-conflict
                                             ? (root.dark-mode ? #F87171 : #E5484D)
                                             : (root.dark-mode ? #F4F4F6 : #141416);
                                         vertical-alignment: center;
                                     }
-
-                                    Text {
-                                        text: root.shortcut-has-conflict ? root.shortcut-conflict-badge : root.shortcut-record-label;
-                                        font-size: 10px;
-                                        font-weight: root.shortcut-has-conflict ? 600 : 500;
-                                        color: root.shortcut-has-conflict
-                                            ? (root.dark-mode ? #F87171 : #E5484D)
-                                            : (root.dark-mode ? #52525B : #A0A0AB);
-                                        vertical-alignment: center;
-                                    }
                                 }
-
-                                TouchArea {
+                                SettingsButton {
+                                    label: root.shortcut-record-label;
+                                    dark-mode: root.dark-mode;
                                     clicked => { root.cycle-shortcut-preset(); }
+                                }
+                                if root.shortcut-can-clear : SettingsButton {
+                                    label: root.shortcut-clear-label;
+                                    kind: "subtle";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.clear-shortcut(); }
                                 }
                             }
                         }
@@ -1466,39 +1602,60 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
+                        }
+                        }
                     }
 
                     // TAB 1: APPEARANCE
-                    if root.settings-tab == 1 : VerticalLayout {
+                    if root.settings-tab == 1 : ScrollView {
+                        height: 508px;
+                        VerticalLayout {
                         spacing: 0px;
+                        padding-bottom: 12px;
 
-                        // Row 1: Theme
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-theme-text;
                                 description: root.desc-theme-text;
                                 dark-mode: root.dark-mode;
                             }
                             SettingsSelect {
-                                y: (parent.height - self.height) / 2;
                                 text: root.current-theme-display;
                                 is-open: root.theme-dropdown-open;
                                 dark-mode: root.dark-mode;
                                 clicked => { root.toggle-theme-dropdown(); }
                             }
                         }
+                        if root.theme-dropdown-open : HorizontalLayout {
+                            alignment: end;
+                            padding-bottom: 8px;
+                            SettingsMenu {
+                                dark-mode: root.dark-mode;
+                                SettingsDropdownOption {
+                                    label: root.theme-light-label;
+                                    active: root.current-theme-code == "light";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-theme("light"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: root.theme-dark-label;
+                                    active: root.current-theme-code == "dark";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-theme("dark"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: root.theme-system-label;
+                                    active: root.current-theme-code == "system";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-theme("system"); }
+                                }
+                            }
+                        }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 3: Gray days of week
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-gray-weekdays-text;
                                 description: root.desc-gray-weekdays-text;
@@ -1507,14 +1664,13 @@ export component AppWindow inherits Window {
 
                             HorizontalLayout {
                                 spacing: 4px;
-                                y: (parent.height - 26px) / 2;
 
                                 for chip in root.gray-weekday-chips : Rectangle {
                                     width: 28px;
                                     height: 26px;
                                     border-radius: 6px;
                                     background: chip.active
-                                        ? (root.dark-mode ? #5E6AD2 : #141416)
+                                        ? #5E6AD2
                                         : (root.dark-mode ? #18181C : #F2F2F5);
                                     border-width: chip.active ? 0px : 1px;
                                     border-color: root.dark-mode ? #1F1F24 : #ECECEF;
@@ -1537,19 +1693,13 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 4: Highlight current month
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-highlight-current-month-text;
                                 description: root.desc-highlight-current-month-text;
                                 dark-mode: root.dark-mode;
                             }
                             SwitchToggle {
-                                y: (parent.height - self.height) / 2;
                                 checked: root.highlight-current-month;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-highlight-current-month(); }
@@ -1557,19 +1707,13 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 5: Show event dots on dates
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-show-event-dots-text;
                                 description: root.desc-show-event-dots-text;
                                 dark-mode: root.dark-mode;
                             }
                             SwitchToggle {
-                                y: (parent.height - self.height) / 2;
                                 checked: root.show-event-dots;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-show-event-dots(); }
@@ -1577,12 +1721,7 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 6: Tray icon mode (from 06 · Shell, Dock & Icons)
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-tray-mode-text;
                                 description: root.desc-tray-mode-text;
@@ -1591,7 +1730,6 @@ export component AppWindow inherits Window {
 
                             HorizontalLayout {
                                 spacing: 6px;
-                                y: (parent.height - 28px) / 2;
 
                                 SettingsModePill {
                                     label: root.live-day-text;
@@ -1615,12 +1753,7 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 7: Tray icon palette
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-tray-palette-text;
                                 description: root.desc-tray-palette-text;
@@ -1631,14 +1764,41 @@ export component AppWindow inherits Window {
                                 spacing: 8px;
                                 alignment: center;
 
-                                IconPreview {
-                                    source: root.colored-icon-preview;
+                                Rectangle {
+                                    width: 40px;
+                                    height: 40px;
+                                    border-radius: 8px;
+                                    background: !root.tray-icon-monochrome
+                                        ? (root.dark-mode ? #1D203A : #EEF0FF)
+                                        : transparent;
+                                    border-width: !root.tray-icon-monochrome ? 1.5px : 1px;
+                                    border-color: !root.tray-icon-monochrome
+                                        ? #5E6AD2
+                                        : (root.dark-mode ? #1F1F24 : #ECECEF);
+                                    IconPreview {
+                                        x: 4px;
+                                        y: 4px;
+                                        source: root.colored-icon-preview;
+                                    }
                                 }
-                                IconPreview {
-                                    source: root.monochrome-icon-preview;
+                                Rectangle {
+                                    width: 40px;
+                                    height: 40px;
+                                    border-radius: 8px;
+                                    background: root.tray-icon-monochrome
+                                        ? (root.dark-mode ? #1D203A : #EEF0FF)
+                                        : transparent;
+                                    border-width: root.tray-icon-monochrome ? 1.5px : 1px;
+                                    border-color: root.tray-icon-monochrome
+                                        ? #5E6AD2
+                                        : (root.dark-mode ? #1F1F24 : #ECECEF);
+                                    IconPreview {
+                                        x: 4px;
+                                        y: 4px;
+                                        source: root.monochrome-icon-preview;
+                                    }
                                 }
                                 TactileButton {
-                                    y: (parent.height - self.height) / 2;
                                     label: root.tray-icon-monochrome ? root.palette-monochrome-text : root.palette-colored-text;
                                     show-coral-dot: !root.tray-icon-monochrome;
                                     dark-mode: root.dark-mode;
@@ -1646,30 +1806,56 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
+                        }
+                        }
                     }
 
                     // TAB 2: CALENDARS
                     if root.settings-tab == 2 : ScrollView {
-                        height: root.height - 116px;
+                        height: 508px;
                         VerticalLayout {
                         spacing: 0px;
-                        padding-bottom: 12px;
+                        padding-bottom: 16px;
 
-                        Text {
-                            text: root.outlook-section-text;
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: root.dark-mode ? #F4F4F6 : #141416;
+                        SettingsSectionLabel {
+                            label: root.outlook-section-text;
+                            dark-mode: root.dark-mode;
+                            first: true;
                         }
-                        Rectangle { height: 4px; }
-                        Text {
-                            text: root.account-status-text;
-                            wrap: word-wrap;
-                            font-size: 12px;
-                            font-weight: 500;
-                            color: root.account-connected ? (root.dark-mode ? #6EE7B7 : #087443) : (root.dark-mode ? #94949E : #64646C);
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                            pad-top: 12px;
+                            pad-bottom: 12px;
+                        HorizontalLayout {
+                            alignment: start;
+                            padding-bottom: 10px;
+                            Rectangle {
+                                horizontal-stretch: 0;
+                                height: 26px;
+                                border-radius: 13px;
+                                background: root.account-connected
+                                    ? (root.dark-mode ? #10241C : #ECFDF3)
+                                    : (root.dark-mode ? #222228 : #FFFFFF);
+                                border-width: 1px;
+                                border-color: root.account-connected
+                                    ? (root.dark-mode ? #14532D : #A7F3D0)
+                                    : (root.dark-mode ? #3A3A42 : #E4E4EA);
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    alignment: center;
+                                    Text {
+                                        text: root.account-status-text;
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: root.account-connected
+                                            ? (root.dark-mode ? #6EE7B7 : #087443)
+                                            : (root.dark-mode ? #94949E : #64646C);
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
                         }
-                        Rectangle { height: 10px; }
                         HorizontalLayout {
                             spacing: 8px;
                             alignment: start;
@@ -1677,29 +1863,28 @@ export component AppWindow inherits Window {
                             SettingsButton { label: root.disconnect-microsoft-label; enabled: root.can-disconnect-microsoft; dark-mode: root.dark-mode; clicked => { root.disconnect-microsoft(); } }
                             SettingsButton { label: root.refresh-button-text; enabled: root.can-refresh-calendars; kind: "subtle"; dark-mode: root.dark-mode; clicked => { root.refresh-calendars(); } }
                         }
+                        }
 
                         Rectangle { height: 16px; }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
-                        Rectangle { height: 14px; }
 
-                        Text {
-                            text: root.ics-section-text;
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: root.dark-mode ? #F4F4F6 : #141416;
+                        SettingsSectionLabel {
+                            label: root.ics-section-text;
+                            dark-mode: root.dark-mode;
                         }
-                        Rectangle { height: 8px; }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                            pad-top: 12px;
+                            pad-bottom: 14px;
                         Text {
                             text: root.ics-name-placeholder;
                             font-size: 11px;
                             color: root.dark-mode ? #94949E : #64646C;
                         }
                         Rectangle { height: 4px; }
-                        LineEdit {
-                            height: 30px;
-                            font-size: 12px;
+                        SettingsField {
                             text <=> root.ics-source-name;
-                            placeholder-text: root.ics-name-placeholder;
+                            placeholder: "";
+                            dark-mode: root.dark-mode;
                             enabled: !root.connection-busy && !root.provider-loading;
                         }
                         Rectangle { height: 8px; }
@@ -1709,12 +1894,10 @@ export component AppWindow inherits Window {
                             color: root.dark-mode ? #94949E : #64646C;
                         }
                         Rectangle { height: 4px; }
-                        LineEdit {
-                            height: 30px;
-                            font-size: 12px;
+                        SettingsField {
                             text <=> root.ics-source-url;
-                            placeholder-text: root.ics-url-placeholder;
-                            input-type: password;
+                            placeholder: "https://";
+                            dark-mode: root.dark-mode;
                             enabled: !root.connection-busy && !root.provider-loading;
                         }
                         Rectangle { height: 6px; }
@@ -1731,9 +1914,9 @@ export component AppWindow inherits Window {
                             dark-mode: root.dark-mode;
                             clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
                         }
+                        }
 
                         Rectangle { height: 16px; }
-                        Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
                         Rectangle { height: 8px; }
                         HorizontalLayout {
                             height: 36px;
@@ -1825,36 +2008,23 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        if root.calendars-is-empty && !root.calendars-access-denied : Rectangle {
-                            height: 160px;
-                            border-radius: 10px;
-                            background: root.dark-mode ? #141417 : #F7F7F8;
-                            border-width: 1px;
-                            border-color: root.dark-mode ? #1F1F24 : #ECECEF;
+                        if root.calendars-is-empty && !root.calendars-access-denied : VerticalLayout {
+                            spacing: 4px;
+                            padding-top: 8px;
+                            padding-bottom: 8px;
 
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 8px;
-                                padding-left: 24px;
-                                padding-right: 24px;
-
-                                Text {
-                                    text: root.calendars-empty-title-text;
-                                    font-size: 14px;
-                                    font-weight: 600;
-                                    color: root.dark-mode ? #F4F4F6 : #141416;
-                                    horizontal-alignment: center;
-                                    wrap: word-wrap;
-                                }
-                                Text {
-                                    text: root.calendars-empty-desc-text;
-                                    font-size: 12px;
-                                    font-weight: 400;
-                                    color: root.dark-mode ? #94949E : #64646C;
-                                    horizontal-alignment: center;
-                                    wrap: word-wrap;
-                                }
-                                Rectangle { height: 6px; }
+                            Text {
+                                text: root.calendars-empty-title-text;
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: root.dark-mode ? #F4F4F6 : #141416;
+                                wrap: word-wrap;
+                            }
+                            Text {
+                                text: root.calendars-empty-desc-text;
+                                font-size: 12px;
+                                color: root.dark-mode ? #94949E : #64646C;
+                                wrap: word-wrap;
                             }
                         }
 
@@ -1948,31 +2118,40 @@ export component AppWindow inherits Window {
 
                         }
                     // TAB 3: ABOUT
-                    if root.settings-tab == 3 : VerticalLayout {
+                    if root.settings-tab == 3 : ScrollView {
+                        height: 508px;
+                        VerticalLayout {
                         spacing: 0px;
+                        padding-bottom: 12px;
 
-                        if root.install-status-text != "" : Text {
-                            text: root.install-status-text;
-                            wrap: word-wrap;
-                            color: root.dark-mode ? #94949E : #64646C;
-                            font-size: 12px;
-                        }
-                        Text { text: root.update-status-text; wrap: word-wrap; color: root.dark-mode ? #94949E : #64646C; font-size: 11px; }
+                        SettingsGroup {
+                            dark-mode: root.dark-mode;
+                        SettingsLine {
+                            VerticalLayout {
+                                spacing: 3px;
+                                alignment: center;
+                                horizontal-stretch: 1;
 
-                        // Row 1: Lightcal Desktop
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
-                            SettingsRowText {
-                                title: "Lightcal Desktop";
-                                description: root.app-version-line-text;
-                                dark-mode: root.dark-mode;
+                                SettingsRowText {
+                                    title: "Lightcal";
+                                    description: root.app-version-line-text;
+                                    dark-mode: root.dark-mode;
+                                }
+                                if root.update-status-text != "" : Text {
+                                    text: root.update-status-text;
+                                    wrap: word-wrap;
+                                    color: root.dark-mode ? #94949E : #64646C;
+                                    font-size: 11px;
+                                }
+                                if root.install-status-text != "" : Text {
+                                    text: root.install-status-text;
+                                    wrap: word-wrap;
+                                    color: root.dark-mode ? #94949E : #64646C;
+                                    font-size: 11px;
+                                }
                             }
 
                             if root.update-is-checking : Rectangle {
-                                y: (parent.height - self.height) / 2;
                                 width: 164px;
                                 height: 30px;
                                 border-radius: 6px;
@@ -2002,7 +2181,6 @@ export component AppWindow inherits Window {
                             }
 
                             if root.update-is-available : Rectangle {
-                                y: (parent.height - self.height) / 2;
                                 width: 128px;
                                 height: 26px;
                                 border-radius: 6px;
@@ -2023,8 +2201,6 @@ export component AppWindow inherits Window {
                             }
 
                             if !root.package-managed-updates && !root.update-is-checking && !root.update-is-available : SettingsButton {
-                                button-width: 136px;
-                                y: (parent.height - self.height) / 2;
                                 label: root.updates-check-button-text;
                                 dark-mode: root.dark-mode;
                                 clicked => { root.check-updates(); }
@@ -2082,25 +2258,26 @@ export component AppWindow inherits Window {
                         }
                         if root.update-is-available : Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 2: Automatic updates
-                        if !root.package-managed-updates : HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            Text { text: root.auto-install-label; color: root.dark-mode ? #F4F4F6 : #141416; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
-                            SwitchToggle { checked: root.auto-install-updates; dark-mode: root.dark-mode; toggled => { root.toggle-auto-install-updates(); } }
+                        if !root.package-managed-updates : SettingsLine {
+                            SettingsRowText {
+                                title: root.auto-install-label;
+                                description: root.desc-auto-install-text;
+                                dark-mode: root.dark-mode;
+                            }
+                            SwitchToggle {
+                                checked: root.auto-install-updates;
+                                dark-mode: root.dark-mode;
+                                toggled => { root.toggle-auto-install-updates(); }
+                            }
                         }
-                        if !root.package-managed-updates : HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        if !root.package-managed-updates : Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
+                        if !root.package-managed-updates : SettingsLine {
                             SettingsRowText {
                                 title: root.label-auto-updates-text;
                                 description: root.desc-auto-updates-text;
                                 dark-mode: root.dark-mode;
                             }
                             SwitchToggle {
-                                y: (parent.height - self.height) / 2;
                                 checked: root.auto-check-updates;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-auto-check-updates(); }
@@ -2108,33 +2285,41 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 3: Update channel
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-update-channel-text;
                                 description: root.desc-update-channel-text;
                                 dark-mode: root.dark-mode;
                             }
                             SettingsSelect {
-                                y: (parent.height - self.height) / 2;
                                 text: root.current-update-channel-display;
                                 is-open: root.update-channel-dropdown-open;
                                 dark-mode: root.dark-mode;
                                 clicked => { root.toggle-update-channel-dropdown(); }
                             }
                         }
+                        if root.update-channel-dropdown-open : HorizontalLayout {
+                            alignment: end;
+                            padding-bottom: 8px;
+                            SettingsMenu {
+                                dark-mode: root.dark-mode;
+                                SettingsDropdownOption {
+                                    label: root.channel-stable-label;
+                                    active: !root.update-channel-is-preview;
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-update-channel("stable"); }
+                                }
+                                SettingsDropdownOption {
+                                    label: root.channel-preview-label;
+                                    active: root.update-channel-is-preview;
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.select-update-channel("preview"); }
+                                }
+                            }
+                        }
                         Rectangle { height: 1px; background: root.dark-mode ? #1F1F24 : #ECECEF; }
 
-                        // Row 4: License & source
-                        HorizontalLayout {
-                            height: 52px;
-                            spacing: 16px;
-                            alignment: space-between;
-
+                        SettingsLine {
                             SettingsRowText {
                                 title: root.label-license-source-text;
                                 description: root.desc-license-source-text;
@@ -2143,7 +2328,6 @@ export component AppWindow inherits Window {
                             HorizontalLayout {
                                 spacing: 8px;
                                 alignment: end;
-                                y: (parent.height - 30px) / 2;
 
                                 SettingsButton {
                                     label: root.github-button-text;
@@ -2159,162 +2343,11 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                    }
-                }
-
-                // ==================== DROPDOWN OVERLAYS ====================
-                // Language Dropdown Overlay
-                if root.language-dropdown-open && root.settings-tab == 0 : Rectangle {
-                    x: parent.width - 172px - 28px;
-                    y: 130px;
-                    z: 100;
-                    width: 172px;
-                    height: 132px;
-                    border-radius: 8px;
-                    background: root.dark-mode ? #1E1E22 : #FFFFFF;
-                    border-width: 1px;
-                    border-color: #5E6AD2;
-                    clip: true;
-
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 2px;
-                        alignment: center;
-
-                        SettingsDropdownOption {
-                            label: "English (US)";
-                            active: root.current-language-code == "en";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-language("en"); }
                         }
-                        SettingsDropdownOption {
-                            label: "Русский";
-                            active: root.current-language-code == "ru";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-language("ru"); }
-                        }
-                        SettingsDropdownOption {
-                            label: "Español";
-                            active: root.current-language-code == "es";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-language("es"); }
-                        }
-                        SettingsDropdownOption {
-                            label: "日本語";
-                            active: root.current-language-code == "ja";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-language("ja"); }
                         }
                     }
                 }
 
-                // Start of Week Dropdown Overlay
-                if root.first-day-dropdown-open && root.settings-tab == 0 : Rectangle {
-                    x: parent.width - 172px - 28px;
-                    y: 183px;
-                    z: 100;
-                    width: 172px;
-                    height: 72px;
-                    border-radius: 8px;
-                    background: root.dark-mode ? #1E1E22 : #FFFFFF;
-                    border-width: 1px;
-                    border-color: #5E6AD2;
-                    clip: true;
-
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 2px;
-                        alignment: center;
-
-                        SettingsDropdownOption {
-                            label: root.weekday-monday-label;
-                            active: root.first-weekday-monday;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-first-weekday-option(true); }
-                        }
-                        SettingsDropdownOption {
-                            label: root.weekday-sunday-label;
-                            active: !root.first-weekday-monday;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-first-weekday-option(false); }
-                        }
-                    }
-                }
-
-                // Theme Dropdown Overlay
-                if root.theme-dropdown-open && root.settings-tab == 1 : Rectangle {
-                    x: parent.width - 172px - 28px;
-                    y: 130px;
-                    z: 100;
-                    width: 172px;
-                    height: 102px;
-                    border-radius: 8px;
-                    background: root.dark-mode ? #1E1E22 : #FFFFFF;
-                    border-width: 1px;
-                    border-color: #5E6AD2;
-                    clip: true;
-
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 2px;
-                        alignment: center;
-
-                        SettingsDropdownOption {
-                            label: root.theme-light-label;
-                            active: root.current-theme-code == "light";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-theme("light"); }
-                        }
-                        SettingsDropdownOption {
-                            label: root.theme-dark-label;
-                            active: root.current-theme-code == "dark";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-theme("dark"); }
-                        }
-                        SettingsDropdownOption {
-                            label: root.theme-system-label;
-                            active: root.current-theme-code == "system";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-theme("system"); }
-                        }
-                    }
-                }
-
-                // Default View Mode Dropdown Overlay
-
-
-                // Update Channel Dropdown Overlay
-                if root.update-channel-dropdown-open && root.settings-tab == 3 : Rectangle {
-                    x: parent.width - 172px - 28px;
-                    y: root.update-is-available ? 334px : 236px;
-                    z: 100;
-                    width: 172px;
-                    height: 72px;
-                    border-radius: 8px;
-                    background: root.dark-mode ? #1E1E22 : #FFFFFF;
-                    border-width: 1px;
-                    border-color: #5E6AD2;
-                    clip: true;
-
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 2px;
-                        alignment: center;
-
-                        SettingsDropdownOption {
-                            label: root.channel-stable-label;
-                            active: !root.update-channel-is-preview;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-update-channel("stable"); }
-                        }
-                        SettingsDropdownOption {
-                            label: root.channel-preview-label;
-                            active: root.update-channel-is-preview;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.select-update-channel("preview"); }
-                        }
-                    }
-                }
             }
         }
     }

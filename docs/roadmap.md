@@ -83,4 +83,4 @@ Acceptance:
 
 ## 6. macOS product port (after the Windows baseline)
 
-Complete menu-bar activation, appearance, preferences location, accessibility, packaging, signing, and notarization on macOS. Re-run Windows checks throughout. Select macOS versions/architectures from actual testing and publish a separate support matrix.
+Complete menu-bar activation, appearance, preferences location, accessibility, packaging, signing, and notarization on macOS. Re-run Windows checks throughout. Select macOS versions/architectures from actual testing and publish a separate support matrix. An unsigned review disk image may already be attached to pull requests. Signing, notarization, and a published macOS download remain later gates, and the image does not show that the application launches.

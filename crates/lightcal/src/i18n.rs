@@ -83,6 +83,8 @@ pub struct UiStrings {
     pub shortcut_unset: &'static str,
     pub shortcut_record: &'static str,
     pub shortcut_clear: &'static str,
+    pub section_region: &'static str,
+    pub section_startup: &'static str,
     pub appearance_subtitle: &'static str,
     pub label_theme: &'static str,
     pub desc_theme: &'static str,
@@ -166,6 +168,7 @@ pub struct UiStrings {
     pub outlook_section: &'static str,
     pub ics_section: &'static str,
     pub ics_help: &'static str,
+    pub desc_auto_install: &'static str,
     pub startup_error: &'static str,
 }
 
@@ -188,8 +191,10 @@ const EN_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Global shortcut",
     desc_shortcut: "Toggle the calendar popover from anywhere on the desktop",
     shortcut_unset: "Not set",
-    shortcut_record: "Record",
+    shortcut_record: "Change",
     shortcut_clear: "Clear",
+    section_region: "Region",
+    section_startup: "Startup",
     appearance_subtitle: "Theme, gray weekdays, event dots, and the tray icon.",
     label_theme: "Theme",
     desc_theme: "Choose Alabaster Light, Obsidian Dark, or follow system appearance",
@@ -273,7 +278,8 @@ const EN_STRINGS: UiStrings = UiStrings {
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
     ics_section: "Private calendar link",
-    ics_help: "Paste a secret HTTPS ICS address. It stays on this computer and is hidden after you type it.",
+    ics_help: "Paste a private HTTPS ICS address. It is stored only on this computer.",
+    desc_auto_install: "Install the signed release and restart after a successful check.",
     startup_error: "Could not update the Windows startup entry.",
 };
 
@@ -296,8 +302,10 @@ const RU_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Глобальное сочетание клавиш",
     desc_shortcut: "Открывать или скрывать компактный календарь из любого окна.",
     shortcut_unset: "Не задано",
-    shortcut_record: "Записать",
+    shortcut_record: "Изменить",
     shortcut_clear: "Сбросить",
+    section_region: "Регион",
+    section_startup: "Запуск",
     appearance_subtitle: "Тема оформления, первый день недели и выделенные колонки.",
     label_theme: "Тема оформления",
     desc_theme: "Системная, светлая или тёмная тема.",
@@ -366,7 +374,8 @@ const RU_STRINGS: UiStrings = UiStrings {
     checking_updates_label: "Проверка обновлений…",
     update_available_badge: "Доступно обновление",
     update_ready_title: "Доступна новая версия",
-    update_ready_notes: "Откройте страницу релиза, чтобы посмотреть изменения. Установка только по вашему выбору.",
+    update_ready_notes:
+        "Откройте страницу релиза, чтобы посмотреть изменения. Установка только по вашему выбору.",
     release_notes_button: "Что нового ↗",
     label_auto_updates: "Автоматические обновления",
     desc_auto_updates: "Фоновая загрузка и проверка подписанных релизов",
@@ -380,7 +389,8 @@ const RU_STRINGS: UiStrings = UiStrings {
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
     ics_section: "Ссылка на личный календарь",
-    ics_help: "Вставьте секретную HTTPS-ссылку ICS. Она хранится только на этом компьютере и скрывается после ввода.",
+    ics_help: "Вставьте личную HTTPS-ссылку ICS. Она хранится только на этом компьютере.",
+    desc_auto_install: "После успешной проверки установить подписанный релиз и перезапустить.",
     startup_error: "Не удалось изменить автозапуск Windows.",
 };
 
@@ -403,8 +413,10 @@ const ES_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Atajo global",
     desc_shortcut: "Mostrar u ocultar el calendario compacto desde cualquier aplicación.",
     shortcut_unset: "Sin asignar",
-    shortcut_record: "Grabar",
+    shortcut_record: "Cambiar",
     shortcut_clear: "Borrar",
+    section_region: "Región",
+    section_startup: "Inicio",
     appearance_subtitle: "Tema visual, primer día de la semana y columnas sombreadas.",
     label_theme: "Tema",
     desc_theme: "Usar el tema del sistema o elegir Claro / Oscuro.",
@@ -488,8 +500,8 @@ const ES_STRINGS: UiStrings = UiStrings {
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
     ics_section: "Enlace de calendario privado",
-    ics_help:
-        "Pegue una dirección HTTPS ICS secreta. Permanece en este equipo y se oculta al escribirla.",
+    ics_help: "Pegue una dirección HTTPS ICS privada. Se guarda solo en este equipo.",
+    desc_auto_install: "Instala la versión firmada y reinicia tras una comprobación correcta.",
     startup_error: "No se pudo cambiar el inicio con Windows.",
 };
 
@@ -512,8 +524,10 @@ const JA_STRINGS: UiStrings = UiStrings {
     label_shortcut: "グローバルショートカット",
     desc_shortcut: "どのアプリからでもトレイカレンダーを表示・非表示にします。",
     shortcut_unset: "未設定",
-    shortcut_record: "登録",
+    shortcut_record: "変更",
     shortcut_clear: "クリア",
+    section_region: "地域",
+    section_startup: "起動",
     appearance_subtitle: "テーマ、週の開始曜日、グレー表示する曜日の選択。",
     label_theme: "テーマ",
     desc_theme: "システム設定に従うか、ライト・ダークを固定します。",
@@ -582,7 +596,8 @@ const JA_STRINGS: UiStrings = UiStrings {
     checking_updates_label: "アップデートを確認中…",
     update_available_badge: "アップデートがあります",
     update_ready_title: "新しいバージョンがあります",
-    update_ready_notes: "リリースページで内容を確認できます。インストールするタイミングは自分で選べます。",
+    update_ready_notes:
+        "リリースページで内容を確認できます。インストールするタイミングは自分で選べます。",
     release_notes_button: "リリースノート ↗",
     label_auto_updates: "自動アップデート",
     desc_auto_updates: "署名付きリリースをバックグラウンドでダウンロードおよび検証します",
@@ -596,7 +611,8 @@ const JA_STRINGS: UiStrings = UiStrings {
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
     ics_section: "非公開カレンダーのリンク",
-    ics_help: "秘密の HTTPS ICS アドレスを貼り付けます。このパソコンにだけ保存され、入力後は表示されません。",
+    ics_help: "非公開の HTTPS ICS アドレスを貼り付けます。このパソコンにだけ保存されます。",
+    desc_auto_install: "確認に成功したら、署名付きリリースをインストールして再起動します。",
     startup_error: "Windows のスタートアップを変更できませんでした。",
 };
 
@@ -606,6 +622,33 @@ pub fn catalog(locale: LocaleCode) -> &'static UiStrings {
         LocaleCode::Ru => &RU_STRINGS,
         LocaleCode::Es => &ES_STRINGS,
         LocaleCode::Ja => &JA_STRINGS,
+    }
+}
+
+/// Login-item copy for the macOS binary. Windows keeps the catalog strings.
+#[cfg(target_os = "macos")]
+pub fn macos_startup_copy(locale: LocaleCode) -> (&'static str, &'static str, &'static str) {
+    match locale {
+        LocaleCode::En => (
+            "Launch at login",
+            "Start Lightcal quietly in the menu bar when you sign in",
+            "Could not update the login item.",
+        ),
+        LocaleCode::Ru => (
+            "Запускать при входе",
+            "Открывать в строке меню при входе в систему.",
+            "Не удалось изменить объект входа.",
+        ),
+        LocaleCode::Es => (
+            "Abrir al iniciar sesión",
+            "Iniciar en la barra de menús al entrar en la cuenta.",
+            "No se pudo cambiar el ítem de inicio.",
+        ),
+        LocaleCode::Ja => (
+            "ログイン時に起動",
+            "サインイン時にメニューバーへ静かに起動します。",
+            "ログイン項目を変更できませんでした。",
+        ),
     }
 }
 
