@@ -1,16 +1,25 @@
-name: Windows build and NSIS installer
+name: Windows release build
 
 on:
-  pull_request:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   portable:
     name: Unsigned Windows build
     runs-on: windows-latest
+    timeout-minutes: 45
+    # Manual runs are limited to main. Tag pushes are checked against main below.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     env:
       LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
       LIGHTCAL_UPDATE_CERT_SHA256: ${{ vars.LIGHTCAL_UPDATE_CERT_SHA256 }}
@@ -20,6 +29,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Require a commit on main
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release builds run only for commits that are on main.' }
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $manifest = Get-Content -Raw -Path Cargo.toml
+            $match = [regex]::Match($manifest, '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"\s*$')
+            if (-not $match.Success) { throw 'Expected a stable workspace version in Cargo.toml.' }
+            $expected = 'v' + $match.Groups[1].Value
+            if ($env:GITHUB_REF_NAME -ne $expected) {
+              throw "Tag '$($env:GITHUB_REF_NAME)' must match the workspace version ($expected)."
+            }
+          }
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
@@ -28,33 +54,31 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
-      - name: Build locked release
-        run: cargo build --release --workspace --locked
+      - name: Cache portable NSIS
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/tools/nsis-3.13
+          key: nsis-3.13-ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8
 
-      - name: Stage unsigned review archive
+      - name: Build, package, and smoke-test
         shell: pwsh
         run: |
+          cargo build --release --workspace --locked
           New-Item -ItemType Directory -Path target/ci-package -Force | Out-Null
           Copy-Item target/release/lightcal.exe, LICENSE, THIRD_PARTY_NOTICES.md, README.md target/ci-package/
           $hash = (Get-FileHash target/ci-package/lightcal.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  lightcal.exe" | Set-Content target/ci-package/lightcal.exe.sha256 -Encoding ascii
           Compress-Archive -Path target/ci-package/* -DestinationPath target/lightcal-windows-x64-unsigned.zip
-
-      - name: Build unsigned NSIS installer
-        shell: pwsh
-        run: ./scripts/package-nsis.ps1 -SkipBuild
-
-      - name: Smoke-test isolated installation and uninstallation
-        shell: pwsh
-        run: ./scripts/test-nsis.ps1
+          ./scripts/package-nsis.ps1 -SkipBuild
+          ./scripts/test-nsis.ps1
 
       - name: Upload unsigned build for review
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: lightcal-windows-x64-unsigned
+          name: lightcal-${{ github.ref_name }}-windows-x64-unsigned
           path: |
             target/lightcal-windows-x64-unsigned.zip
-            target/nsis/*-setup.exe
-            target/nsis/*-setup.exe.sha256
+            target/nsis/lightcal-*-windows-x64-setup.exe
+            target/nsis/lightcal-*-windows-x64-setup.exe.sha256
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90

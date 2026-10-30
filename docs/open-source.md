@@ -4,7 +4,7 @@
 
 The owner renamed the default branch from `master` to `main` on 2026-10-29. Use `main` as the base for feature branches and pull requests. The local branch and remote HEAD have been updated to match.
 
-Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, and an unsigned Windows build workflow. That workflow produces review artifacts only. It does not sign or publish a release.
+Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation and Rust CI, Dependabot configuration, and an unsigned Windows build workflow. Checks run on pull requests and on `main`. The unsigned installer workflow runs for version tags on `main` and for a manual run from `main`. It produces review artifacts only. It does not sign or publish a release.
 
 ## Maintainer settings to apply on GitHub
 
@@ -13,7 +13,7 @@ These are required settings/checks, not settings already applied by this change:
 - Protect the actual default branch with a ruleset: require a PR, block force pushes/deletion, and require passing `Documentation checks` once the workflow has run.
 - Require owner review and resolution of review conversations; do not allow automation to merge. For external contributors, require a maintainer approval. GitHub does not let an author approve their own PR: if the owner authors a PR, explicit owner acceptance and a manual merge remain the policy, with any ruleset bypass controlled by the owner.
 - Enable private vulnerability reporting before public binaries. Until then, the security policy must not imply that a private channel already exists.
-- Enable appropriate dependency/security alerts when Cargo manifests exist. Consider secret scanning and push protection where available.
+- Enable appropriate dependency/security alerts when Cargo manifests exist. `.github/dependabot.yml` schedules weekly Cargo and GitHub Actions updates. Consider secret scanning and push protection where available.
 - Audit public history and future contributions for secrets, private paths, unlicensed assets, and generated personal data. The local planning inspection is not a complete remote history/security audit.
 
 Protection and security settings must be verified on GitHub; documentation does not apply them automatically. Publishing a feature branch or opening a PR does not authorize merging or releasing.
