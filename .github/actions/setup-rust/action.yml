@@ -1,0 +1,25 @@
+name: Set up Rust
+description: Install the stable Rust toolchain and restore the shared Cargo cache.
+
+inputs:
+  components:
+    description: Comma-separated rustup components to install.
+    required: false
+    default: ""
+  cache-key:
+    description: Shared rust-cache key that isolates this job's cache entries.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      with:
+        components: ${{ inputs.components }}
+
+    - name: Cache Cargo registry and build artifacts
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      with:
+        shared-key: ${{ inputs.cache-key }}
+        cache-on-failure: true

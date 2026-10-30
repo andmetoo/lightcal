@@ -4,7 +4,7 @@
 
 The owner renamed the default branch from `master` to `main` on 2026-10-29. Use `main` as the base for feature branches and pull requests. The local branch and remote HEAD have been updated to match.
 
-Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, and an unsigned Windows build workflow. That workflow produces review artifacts only. It does not sign or publish a release.
+Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, Dependabot configuration (`.github/dependabot.yml`, grouped weekly Cargo and GitHub Actions updates), and a tag-triggered release workflow. Only the release workflow publishes, only from a `v*.*.*` tag on `main`, and its binaries are unsigned; signing stays a local SimpleSign step. One known Dependabot limitation: the transitive `glib` 0.18 line enters `Cargo.lock` only through the Linux tray backend (`libappindicator`/`gtk`) and is never compiled into the Windows binary; its parents pin that line, so no resolvable fixed version exists yet. It is ignored in `.github/dependabot.yml` with that rationale, and the matching GitHub alert should be dismissed as not used until a parent update resolves it.
 
 ## Maintainer settings to apply on GitHub
 

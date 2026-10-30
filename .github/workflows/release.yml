@@ -1,0 +1,101 @@
+name: Release
+
+# Releases are published only from version tags. A manual dispatch runs the
+# same build, packaging, and installer smoke test without publishing.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Unsigned Windows release
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
+      LIGHTCAL_UPDATE_CERT_SHA256: ${{ vars.LIGHTCAL_UPDATE_CERT_SHA256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the tag is on main and matches the workspace version
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Release tag must point at a commit on main' }
+          $manifest = [IO.File]::ReadAllText((Join-Path $PWD 'Cargo.toml'))
+          $match = [regex]::Match($manifest, '(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"\s*$')
+          if (-not $match.Success) { throw 'Expected a stable workspace version' }
+          if ("v$($match.Groups[1].Value)" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match workspace version $($match.Groups[1].Value)"
+          }
+
+      - name: Set up Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key: release-windows
+
+      - name: Cache the pinned portable NSIS compiler
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: target/tools
+          key: nsis-${{ hashFiles('scripts/prepare-nsis.ps1') }}
+
+      - name: Build locked release
+        run: cargo build --release -p lightcal --locked
+
+      - name: Stage portable archive and build unsigned NSIS installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/ci-package -Force | Out-Null
+          Copy-Item target/release/lightcal.exe, LICENSE, THIRD_PARTY_NOTICES.md, README.md target/ci-package/
+          $hash = (Get-FileHash target/ci-package/lightcal.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  lightcal.exe" | Set-Content target/ci-package/lightcal.exe.sha256 -Encoding ascii
+          Compress-Archive -Path target/ci-package/* -DestinationPath target/lightcal-windows-x64-unsigned.zip
+          ./scripts/package-nsis.ps1 -SkipBuild
+
+      - name: Smoke-test isolated installation and uninstallation
+        shell: pwsh
+        run: ./scripts/test-nsis.ps1
+
+      - name: Upload unsigned build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lightcal-windows-x64-unsigned
+          path: |
+            target/lightcal-windows-x64-unsigned.zip
+            target/nsis/*-setup.exe
+            target/nsis/*-setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish the GitHub release
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $notes = @(
+            'Unsigned Windows build from the tagged commit on main.'
+            'Verify downloads with the attached SHA-256 files. Signed releases are produced locally with SimpleSign; see docs/windows-installer.md.'
+          ) -join "`n"
+          gh release create $env:GITHUB_REF_NAME `
+            target/lightcal-windows-x64-unsigned.zip `
+            target/nsis/*-setup.exe `
+            target/nsis/*-setup.exe.sha256 `
+            --title "Lightcal $env:GITHUB_REF_NAME" `
+            --notes $notes

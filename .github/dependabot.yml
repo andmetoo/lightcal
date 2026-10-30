@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # glib is transitive-only (Linux tray backend of tray-icon via
+      # libappindicator/gtk) and is never compiled into the Windows binary.
+      # Its parent chain pins the 0.18 line, so no resolvable version reaches
+      # the fixed 0.20+ range; updates resume through the parents instead.
+      - dependency-name: glib
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
