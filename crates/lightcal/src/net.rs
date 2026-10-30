@@ -80,10 +80,9 @@ pub fn get_with_headers(
 ) -> Result<(u16, Vec<u8>), String> {
     https_url(raw)?;
     let client = agent(Duration::from_secs(60));
-    let mut request = client.get(raw).header(
-        "User-Agent",
-        concat!("Lightcal/", env!("CARGO_PKG_VERSION")),
-    );
+    let mut request = client
+        .get(raw)
+        .header("User-Agent", concat!("Lightcal/", env!("LIGHTCAL_VERSION")));
     if let Some(token) = bearer {
         request = request.header("Authorization", &format!("Bearer {token}"));
     }

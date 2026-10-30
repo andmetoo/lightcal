@@ -1,58 +1,51 @@
 # Lightcal
 
-A lightweight calendar for Windows with a compact calendar accessible from the tray or taskbar, with a future macOS version in mind.
+A compact calendar for Windows. Open the month from the tray or the taskbar, without a browser and without a required account.
 
-**Status: prototype & workspace implemented.** The `calendar-core` and `lightcal` (Slint) Cargo workspace, multi-page Penpot design system, and `just` + `bun` release/signing pipeline for SimpleSign Desktop are implemented on the feature branch.
+![Lightcal calendar, light theme](docs/images/calendar-light.png)
 
-## Features & Architecture
+The calendar is 352 by 432 logical pixels. Settings use a separate 780 by 620 window. English is the default, with Russian, Spanish, and Japanese included.
 
-- Open the compact calendar (`352×432`) from the tray or pinned app; settings use a separate `780×620` layout. The expanded agenda view has been removed.
-- Configurable dynamic tray icon modes: **Date**, **Weekday + Date**, or **Time + Date**. These change Lightcal's icon; they do not replace Windows' system clock. Pinned shortcut artwork can remain static even while the running window and tray icons update.
-- Navigate months, return to today (`Today` pill with `#E5484D` coral dot), and navigate the 42-day grid with keyboard shortcuts.
-- Run quietly in the background without a browser runtime or mandatory account.
-- English by default, with bundled Russian (`ru`), Spanish (`es`), and Japanese (`ja`) catalogs.
-- Read-only Microsoft Graph / ICS event dots (capped at 3 per day), configurable gray weekdays, isolated startup/shortcut management, GitHub update checking, and optional signed portable-update installation.
+![Lightcal calendar, dark theme](docs/images/calendar-dark.png)
 
-## Build, Check & Sign Release (`just` + `bun`)
+![Lightcal on Windows](docs/images/windows-calendar.png)
+
+The Windows capture is the running application on 31 October 2026. The theme renders above are the same window, drawn by the app with sample events.
+
+## Download
+
+Windows builds are published on [GitHub Releases](https://github.com/andmetoo/lightcal/releases). A stable tag `vX.Y.Z` is the version shown in About and in the Windows file properties. Untagged builds keep the Cargo workspace version.
+
+The files attached to those tags are unsigned review builds. Lightcal does not replace an unsigned build by itself. When a newer release exists, **Download** opens that release page. Signed in-place installation is a separate opt-in: it needs a build-configured certificate pin and a signed `lightcal.exe` asset. See [provider and signing setup](docs/provider-setup.md).
+
+## Features
+
+- Month navigation, Today, and keyboard movement on the 42-day grid.
+- Tray icon modes for the date, weekday and date, or time and date. The icon is Lightcal's; it does not replace the Windows clock.
+- Optional read-only Outlook (Microsoft Graph) and private HTTPS ICS calendars. Event dots are capped at three per day.
+- Startup and a global shortcut stay off until you turn them on.
+
+## Build
+
+Rust and [just](https://github.com/casey/just) are required.
 
 ```powershell
-# Run documentation, formatting, clippy, and unit test gates
 just check
-
-# Build optimized release binary (target/dist/lightcal.exe) + SHA-256
 just build-release
-
-# Build an unsigned NSIS installer for local review (target/nsis/)
 just build-installer
-
-# Build and sign both application and NSIS setup via SimpleSign Desktop
-just release
-
-# Sign an existing release binary (or pass custom SimpleSign CLI flags)
-just sign-release
 ```
 
-`just run` and `just run-tray` use configured Microsoft Graph / private HTTPS ICS subscriptions. Windows calendars are an optional, off-by-default legacy switch. `just run-demo` explicitly uses sample events. On first connection, select calendars in Settings before expecting event dots. `just probe-calendars` runs the explicit legacy Windows diagnostic; normal tests use fixtures and temporary preferences.
+`just run-demo` needs a display and uses sample events. Headless renders do not use the network:
 
-`just release` builds and signs the application with SimpleSign Desktop, verifies Authenticode, packages the portable ZIP, builds an NSIS installer containing that signed application, then signs and verifies the installer. It stops on a missing signer or invalid signature. Set `SIMPLESIGN_PATH` for an installed signer; credentials and signing keys stay outside the repository. For manual signing, run `just build-release`, sign `target/dist/lightcal.exe`, then `just verify-release` and `just sign-installer`. The default installer build permits unsigned local-review packages and never claims they are signed.
+```powershell
+cargo run -p lightcal --locked -- --render-snapshots target/snapshots
+```
 
-GitHub Actions checks the Rust workspace on Windows and Linux and prepares an **unsigned** Windows NSIS installer and portable archive for pull requests or a manual workflow run. The Windows job installs Rust, builds with `--locked`, and skips executable signing. It does not access signing keys. A stable version tag contained in `main` publishes those unsigned files, the portable ZIP and the NSIS setup, as an explicitly unsigned prerelease. The git tag labels that review build, and the executable ProductVersion stays the Cargo workspace version. The macOS disk image stays a pull-request review artifact.
+Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env.local` for the public Microsoft client id and the update certificate pin.
 
-The macOS job also builds an **unsigned** review disk image with `scripts/package-dmg.sh` (`just package-dmg` on a Mac). The image is not code-signed, notarized, or published. Gatekeeper blocks the application until it is opened explicitly, and a successful build does not show that the application launches.
+## Documentation
 
-Update checking uses GitHub's latest stable release endpoint. Manual checks run on a worker thread with a 15-second request/body deadline. The optional automatic check is off by default; when enabled it runs at startup and daily. Signed automatic installation is separately opt-in and requires a build-configured certificate SHA-256 pin, matching Authenticode trust/version, and a signed portable installation. No update is installed without that trust configuration.
-
-Copy [.env.example](.env.example) to the ignored `.env.local` for public build settings. Microsoft sign-in can remain unconfigured until the owner creates an Entra Desktop app registration; the Client ID is configured at build time, never edited in Settings. See [provider and signing setup](docs/provider-setup.md) for exact registration steps, supported ICS features, SimpleSign fingerprint extraction, and remaining live-test gates. Google sign-in is deferred.
-
-Windows distribution uses an NSIS `setup.exe`: a per-user installation, Start menu shortcut, optional desktop shortcut, and an uninstaller that retains calendar settings and credentials. Use `just build-installer` to build or `just package-installer` to package the existing release binary. The build locates NSIS or downloads a checksum-verified portable compiler into `target/tools`; no compiler installation is required. See [Windows installer setup](docs/windows-installer.md) for signing, CI artifacts, and isolated installation tests.
-
-See the [implementation audit](docs/implementation-audit-2026-10-30.md) for verified fixes, provider limitations, and remaining release gates.
-
-## Start here
-
-See the [documentation index](docs/README.md), [implementation plan](docs/roadmap.md), and [framework decision](docs/decisions/0001-ui-framework.md).
-
-All repository documentation is written in English. Contributions go through pull requests; see [CONTRIBUTING.md](CONTRIBUTING.md).
+[Documentation index](docs/README.md) · [Required features](docs/features.md) · [Contributing](CONTRIBUTING.md)
 
 ## License
 

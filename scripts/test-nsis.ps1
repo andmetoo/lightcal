@@ -6,8 +6,8 @@ $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $projectRoot
 try {
     & (Join-Path $PSScriptRoot 'package-nsis.ps1') -SkipBuild -TestSetup
-    $manifest = [IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.toml'))
-    $version = [regex]::Match($manifest,'(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"').Groups[1].Value
+    . (Join-Path $PSScriptRoot 'Resolve-ReleaseVersion.ps1')
+    $version = Resolve-LightcalReleaseVersion $projectRoot
     $installer = Join-Path $projectRoot "target\nsis\lightcal-$version-windows-x64-setup-isolated-test.exe"
     $testRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot ('target\installer-tests\' + [Guid]::NewGuid().ToString('N'))))
     $expectedRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot 'target\installer-tests')) + [IO.Path]::DirectorySeparatorChar

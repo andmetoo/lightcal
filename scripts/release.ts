@@ -26,6 +26,34 @@ import {
 import { basename, join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
+
+function stableSemver(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const match = raw.trim().match(/^v?([0-9]+\.[0-9]+\.[0-9]+)$/);
+  return match ? match[1] : null;
+}
+
+function releaseVersion(): string {
+  const explicit = stableSemver(process.env.LIGHTCAL_RELEASE_VERSION);
+  if (explicit) return explicit;
+  if (process.env.GITHUB_REF_TYPE === "tag") {
+    const tagged = stableSemver(process.env.GITHUB_REF_NAME);
+    if (tagged) return tagged;
+  }
+  const described = Bun.spawnSync(["git", "describe", "--tags", "--exact-match"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  if (described.exitCode === 0) {
+    const tagged = stableSemver(new TextDecoder().decode(described.stdout));
+    if (tagged) return tagged;
+  }
+  const manifest = readFileSync(join(ROOT, "Cargo.toml"), "utf8");
+  const version = manifest.match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1];
+  if (!version) throw new Error("Workspace version is missing or invalid");
+  return version;
+}
 const BIN_NAME = process.platform === "win32" ? "lightcal.exe" : "lightcal";
 const RELEASE_BIN = join(ROOT, "target", "release", BIN_NAME);
 const DIST_DIR = join(ROOT, "target", "dist");
@@ -178,9 +206,7 @@ function packagePortableArchive(): void {
   }
   writeChecksums(DIST_BIN);
 
-  const manifest = readFileSync(join(ROOT, "Cargo.toml"), "utf8");
-  const version = manifest.match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1];
-  if (!version) throw new Error("Workspace version is missing or invalid");
+  const version = releaseVersion();
   const pkgDirName = `lightcal-v${version}-windows-x64`;
   const pkgStageDir = join(DIST_DIR, pkgDirName);
   mkdirSync(pkgStageDir, { recursive: true });
@@ -216,9 +242,7 @@ function packagePortableArchive(): void {
 function signInstaller(): void {
   verifySignature(DIST_BIN);
   runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", "scripts/package-nsis.ps1", "-SkipBuild", "-RequireSigned", "-BinaryPath", DIST_BIN]);
-  const manifest = readFileSync(join(ROOT, "Cargo.toml"), "utf8");
-  const version = manifest.match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1];
-  if (!version) throw new Error("Workspace version is invalid");
+  const version = releaseVersion();
   const setup = join(ROOT, "target", "nsis", `lightcal-${version}-windows-x64-setup.exe`);
   signWithSimpleSign(setup);
   verifySignature(setup);

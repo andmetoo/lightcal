@@ -544,7 +544,7 @@ impl AppController {
         ui.set_app_version_line_text(
             format!(
                 "Lightcal {} · Rust + Slint · {}",
-                env!("CARGO_PKG_VERSION"),
+                lightcal::version::VERSION,
                 std::env::consts::ARCH
             )
             .into(),
@@ -574,7 +574,22 @@ impl AppController {
             ui.set_update_available_badge_text(strings.update_available_badge.into());
             ui.set_update_ready_title_text(strings.update_ready_title.into());
         }
-        ui.set_update_ready_notes_text(strings.update_ready_notes.into());
+        let update_available =
+            matches!(self.update_state, UpdateCheckState::UpdateAvailable { .. });
+        if lightcal::installer::automatic_install_configured() {
+            ui.set_install_update_label(labels[8].into());
+            ui.set_update_ready_notes_text(strings.update_ready_notes.into());
+            ui.set_desc_auto_install_text(strings.desc_auto_install.into());
+        } else {
+            ui.set_desc_auto_install_text(strings.manual_install_status.into());
+            if update_available {
+                ui.set_install_update_label(strings.download_release_button.into());
+                ui.set_update_ready_notes_text(strings.manual_update_notes.into());
+            } else {
+                ui.set_install_update_label(labels[8].into());
+                ui.set_update_ready_notes_text(strings.update_ready_notes.into());
+            }
+        }
         ui.set_release_notes_button_text(strings.release_notes_button.into());
 
         let lang_disp = match locale {
@@ -805,6 +820,16 @@ fn invalidate_taskbar_preview() {
     });
 }
 
+fn ctrl_release_url(ui_weak: &slint::Weak<AppWindow>) -> String {
+    let mut url = lightcal::updater::DEFAULT_RELEASE_PAGE.to_string();
+    with_active_controller(ui_weak, |ctrl, _| {
+        if let UpdateCheckState::UpdateAvailable { release_url, .. } = &ctrl.update_state {
+            url = release_url.clone();
+        }
+    });
+    url
+}
+
 fn open_browser_link(url: &str) {
     if is_allowed_external_link(url) {
         #[cfg(any(windows, target_os = "macos"))]
@@ -898,7 +923,7 @@ fn request_update_check(ui_weak: slint::Weak<AppWindow>) {
     });
     if start {
         std::thread::spawn(move || {
-            let state = lightcal::updater::check_latest_release(env!("CARGO_PKG_VERSION"));
+            let state = lightcal::updater::check_latest_release(lightcal::version::VERSION);
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_weak, |ctrl, ui| {
                     ctrl.update_state = state;
@@ -942,7 +967,13 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
             }
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
-                ctrl.install_status = error;
+                ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {
+                    catalog(ctrl.prefs.locale())
+                        .manual_install_status
+                        .to_string()
+                } else {
+                    error
+                };
                 ctrl.sync_to_ui(ui);
             }),
         });
@@ -1900,7 +1931,14 @@ fn main() {
     }
     {
         let weak = ui.as_weak();
-        ui.on_install_update(move || request_install(weak.clone()));
+        ui.on_install_update(move || {
+            if lightcal::installer::automatic_install_configured() {
+                request_install(weak.clone());
+                return;
+            }
+            let url = ctrl_release_url(&weak);
+            open_browser_link(&url);
+        });
     }
     {
         let ctrl = Rc::clone(&ctrl);
@@ -1908,14 +1946,12 @@ fn main() {
         ui.on_toggle_auto_install_updates(move || {
             let mut c = ctrl.borrow_mut();
             let desired = !c.prefs.auto_install_updates;
-            if desired {
-                if let Err(error) = lightcal::installer::certificate_pin() {
-                    c.install_status = error;
-                    if let Some(w) = weak.upgrade() {
-                        c.sync_to_ui(&w);
-                    }
-                    return;
+            if desired && !lightcal::installer::automatic_install_configured() {
+                c.install_status = catalog(c.prefs.locale()).manual_install_status.to_string();
+                if let Some(w) = weak.upgrade() {
+                    c.sync_to_ui(&w);
                 }
+                return;
             }
             c.prefs.auto_install_updates = desired;
             if desired {

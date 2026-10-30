@@ -18,7 +18,7 @@ pub fn check_latest_release(installed_version: &str) -> UpdateCheckState {
         let headers = client.DefaultRequestHeaders()?;
         headers.Append(
             &HSTRING::from("User-Agent"),
-            &HSTRING::from(concat!("Lightcal/", env!("CARGO_PKG_VERSION"))),
+            &HSTRING::from(concat!("Lightcal/", env!("LIGHTCAL_VERSION"))),
         )?;
         headers.Append(
             &HSTRING::from("Accept"),
@@ -303,7 +303,7 @@ mod tests {
     #[test]
     #[ignore = "Explicit live HTTPS smoke probe; normal tests use response fixtures"]
     fn live_release_check_finishes() {
-        let state = check_latest_release(env!("CARGO_PKG_VERSION"));
+        let state = check_latest_release(crate::version::VERSION);
         println!("GitHub update check: {state:?}");
         assert!(!matches!(
             state,
