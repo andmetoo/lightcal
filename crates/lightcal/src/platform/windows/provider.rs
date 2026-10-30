@@ -1,11 +1,18 @@
 //! Real read-only Windows WinRT AppointmentStore provider.
 
-use crate::platform::{ProviderSnapshot, ProviderStatus};
-use calendar_core::{CalendarOccurrence, CalendarSource, LocalDate};
+use crate::platform::ProviderSnapshot;
+#[cfg(windows)]
+use crate::platform::ProviderStatus;
+use calendar_core::LocalDate;
+#[cfg(windows)]
+use calendar_core::{CalendarOccurrence, CalendarSource};
+#[cfg(windows)]
 use chrono::{Datelike, Timelike};
 use std::env;
 
+#[cfg(windows)]
 const FILETIME_EPOCH_DIFF_SECS: i64 = 11_644_473_600;
+#[cfg(windows)]
 const TICKS_PER_SECOND: i64 = 10_000_000;
 
 #[cfg(windows)]

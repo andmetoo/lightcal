@@ -43,7 +43,7 @@ fn main() {
     #[cfg(windows)]
     {
         let ico_path = std::path::Path::new("assets/lightcal.ico");
-        if ico_path.exists() {
+        if ico_path.exists() && std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
             let mut res = winres::WindowsResource::new();
             res.set_icon("assets/lightcal.ico");
             res.set("ProductName", "Lightcal");

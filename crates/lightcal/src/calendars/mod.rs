@@ -71,8 +71,7 @@ pub fn query(
             &mut account,
         ) {
             Ok(data) => {
-                snapshot.sources.extend(data.sources);
-                snapshot.occurrences.extend(data.occurrences);
+                append_provider(&mut snapshot, data, &mut errors);
             }
             Err(e) => errors.push(e),
         }
@@ -93,20 +92,99 @@ pub fn query(
     }
     if legacy_windows {
         let data = crate::platform::windows::query_calendar_provider(anchor, false);
-        if let ProviderStatus::ProviderUnavailable(error) = data.status {
-            errors.push(error);
-        }
-        snapshot.sources.extend(data.sources);
-        snapshot.occurrences.extend(data.occurrences);
+        append_provider(&mut snapshot, data, &mut errors);
     }
-    if !errors.is_empty() {
-        snapshot.status = ProviderStatus::ProviderUnavailable(errors.join("\n"));
-    } else if snapshot.sources.is_empty() {
-        snapshot.status = ProviderStatus::NoCalendars;
-    }
+    finish_status(&mut snapshot, &errors);
     CalendarLoad {
         snapshot,
         microsoft: account,
+    }
+}
+
+fn append_provider(
+    snapshot: &mut ProviderSnapshot,
+    data: ProviderSnapshot,
+    errors: &mut Vec<String>,
+) {
+    match data.status {
+        ProviderStatus::AccessDenied => snapshot.status = ProviderStatus::AccessDenied,
+        ProviderStatus::ProviderUnavailable(error) => errors.push(error),
+        _ => {}
+    }
+    snapshot.sources.extend(data.sources);
+    snapshot.occurrences.extend(data.occurrences);
+}
+
+fn finish_status(snapshot: &mut ProviderSnapshot, errors: &[String]) {
+    // Keep permission recovery available even when another provider reports a transient error.
+    if snapshot.status == ProviderStatus::AccessDenied {
+        return;
+    }
+    snapshot.status = if !errors.is_empty() {
+        ProviderStatus::ProviderUnavailable(errors.join("\n"))
+    } else if snapshot.sources.is_empty() {
+        ProviderStatus::NoCalendars
+    } else {
+        ProviderStatus::Available
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn empty(status: ProviderStatus) -> ProviderSnapshot {
+        ProviderSnapshot {
+            status,
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        }
+    }
+    #[test]
+    fn denied_provider_is_not_downgraded_to_no_calendars() {
+        let mut snapshot = empty(ProviderStatus::Available);
+        let mut errors = Vec::new();
+        append_provider(
+            &mut snapshot,
+            empty(ProviderStatus::AccessDenied),
+            &mut errors,
+        );
+        finish_status(&mut snapshot, &errors);
+        assert_eq!(snapshot.status, ProviderStatus::AccessDenied);
+    }
+    #[test]
+    fn permission_denial_retains_other_providers_data() {
+        let anchor = LocalDate::new(2026, 10, 30).unwrap();
+        let mut snapshot = ProviderSnapshot::synthetic(anchor);
+        let sources = snapshot.sources.clone();
+        let occurrences = snapshot.occurrences.clone();
+        let mut errors = vec!["Outlook is temporarily offline".into()];
+        append_provider(
+            &mut snapshot,
+            empty(ProviderStatus::AccessDenied),
+            &mut errors,
+        );
+        append_provider(&mut snapshot, empty(ProviderStatus::Available), &mut errors);
+        finish_status(&mut snapshot, &errors);
+        assert_eq!(snapshot.status, ProviderStatus::AccessDenied);
+        assert_eq!(snapshot.sources, sources);
+        assert_eq!(snapshot.occurrences, occurrences);
+    }
+    #[test]
+    fn empty_and_unavailable_providers_keep_distinct_statuses() {
+        let mut snapshot = empty(ProviderStatus::Available);
+        finish_status(&mut snapshot, &[]);
+        assert_eq!(snapshot.status, ProviderStatus::NoCalendars);
+        let mut errors = Vec::new();
+        append_provider(
+            &mut snapshot,
+            empty(ProviderStatus::ProviderUnavailable("offline".into())),
+            &mut errors,
+        );
+        finish_status(&mut snapshot, &errors);
+        assert_eq!(
+            snapshot.status,
+            ProviderStatus::ProviderUnavailable("offline".into())
+        );
     }
 }
 

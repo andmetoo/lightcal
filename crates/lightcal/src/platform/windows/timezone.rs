@@ -1,4 +1,5 @@
 //! Windows timezone-name adapter used only at the provider boundary.
+#[cfg(windows)]
 use chrono::{Datelike, Timelike};
 
 pub fn calendar_date(

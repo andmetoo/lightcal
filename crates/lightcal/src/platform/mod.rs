@@ -148,7 +148,7 @@ pub struct WorkArea {
 }
 
 impl WorkArea {
-    /// Clamps a window rectangle (`win_w`, `win_h`) so it remains fully visible inside the work area.
+    /// Clamps a window origin, aligning oversized windows to the work area's leading edge.
     pub fn clamp_window(
         self,
         desired_x: i32,
@@ -249,6 +249,29 @@ mod tests {
         };
         assert_eq!(area.clamp_window(2200, 1200, 352, 432), (1560, 600));
         assert_eq!(area.clamp_window(-200, -50, 520, 600), (8, 8));
+    }
+
+    #[test]
+    fn anchors_oversized_settings_without_invalid_clamp_bounds() {
+        let area = WorkArea {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1040,
+        };
+        // 780x620 logical settings at 200% DPI exceeds a 1080p monitor's work height.
+        assert_eq!(area.anchor_above_tray(1560, 1240, 24), (336, 8));
+        let left_monitor = WorkArea {
+            x: -1280,
+            y: -900,
+            width: 1280,
+            height: 720,
+        };
+        assert_eq!(
+            left_monitor.anchor_above_tray(1560, 1240, 24),
+            (-1272, -892)
+        );
+        assert_eq!(area.anchor_above_tray(1920, 1040, 24), (8, 8));
     }
 
     #[test]

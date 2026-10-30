@@ -18,9 +18,12 @@ pub use provider::{
     load_provider_snapshot_async, query_calendar_provider, query_windows_calendar_store,
 };
 pub use shell::{
-    bring_to_foreground, find_lightcal_hwnd, position_window_above_tray, primary_work_area,
-    show_and_restore_window, system_prefers_dark_mode, ShortcutManager, SingleInstance,
-    SingleInstanceGuard, StartupManager, RUN_KEY_VALUE_NAME,
+    bring_to_foreground, primary_work_area, system_prefers_dark_mode, ShortcutManager,
+    SingleInstance, SingleInstanceGuard, StartupManager, RUN_KEY_VALUE_NAME,
+};
+#[cfg(windows)]
+pub use shell::{
+    find_lightcal_hwnd, main_window_is_open, position_window_above_tray, show_and_restore_window,
 };
 
 #[cfg(test)]

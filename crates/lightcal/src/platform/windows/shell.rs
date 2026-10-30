@@ -629,6 +629,7 @@ impl SingleInstance {
 }
 
 /// Finds the main application HWND owned by this process.
+#[cfg(windows)]
 pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
     use windows_sys::Win32::Foundation::{HWND, LPARAM};
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
@@ -660,11 +661,23 @@ pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
     hwnd
 }
 
+/// Reads the actual native state, including taskbar minimization outside Slint callbacks.
+#[cfg(windows)]
+pub fn main_window_is_open() -> Option<bool> {
+    let hwnd = find_lightcal_hwnd();
+    if hwnd.is_null() {
+        return None;
+    }
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+    Some(unsafe { IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 })
+}
+
 /// Atomically positions and sizes the window above the system tray / taskbar on the current monitor.
 ///
 /// # Safety
 ///
 /// `hwnd` must be a valid, live Win32 window handle owned by this process.
+#[cfg(windows)]
 pub unsafe fn position_window_above_tray(
     hwnd: windows_sys::Win32::Foundation::HWND,
     logical_w: f32,
@@ -704,8 +717,13 @@ pub unsafe fn position_window_above_tray(
         (wa.x, wa.y, wa.width, wa.height)
     };
 
-    let target_x = (work_x + work_w - phys_w - margin).clamp(work_x, work_x + work_w - phys_w);
-    let target_y = (work_y + work_h - phys_h - margin).clamp(work_y, work_y + work_h - phys_h);
+    let (target_x, target_y) = WorkArea {
+        x: work_x,
+        y: work_y,
+        width: work_w,
+        height: work_h,
+    }
+    .anchor_above_tray(phys_w, phys_h, margin);
 
     SetWindowPos(
         hwnd,
@@ -723,6 +741,7 @@ pub unsafe fn position_window_above_tray(
 /// # Safety
 ///
 /// `hwnd` must be a valid, live Win32 window handle owned by this process.
+#[cfg(windows)]
 pub unsafe fn show_and_restore_window(
     hwnd: windows_sys::Win32::Foundation::HWND,
     logical_w: f32,
@@ -771,6 +790,59 @@ pub fn bring_to_foreground() {
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(windows)]
+    #[test]
+    fn native_window_state_follows_taskbar_minimize_restore_and_hide() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::*;
+        struct TestWindow(windows_sys::Win32::Foundation::HWND);
+        impl Drop for TestWindow {
+            fn drop(&mut self) {
+                unsafe {
+                    DestroyWindow(self.0);
+                }
+            }
+        }
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "Lightcal\0".encode_utf16().collect();
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_OVERLAPPEDWINDOW,
+                -10000,
+                -10000,
+                352,
+                432,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!hwnd.is_null());
+        let _window = TestWindow(hwnd);
+        assert_eq!(main_window_is_open(), Some(false));
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        assert_eq!(main_window_is_open(), Some(true));
+        // Windows taskbar actions bypass the controller: the next toggle must still restore.
+        unsafe {
+            ShowWindow(hwnd, SW_MINIMIZE);
+        }
+        assert_eq!(main_window_is_open(), Some(false));
+        assert_eq!(find_lightcal_hwnd(), hwnd);
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        assert_eq!(main_window_is_open(), Some(true));
+        unsafe {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+        assert_eq!(main_window_is_open(), Some(false));
+    }
 
     #[test]
     fn isolated_startup_manager_writes_and_removes_marker_without_touching_registry() {

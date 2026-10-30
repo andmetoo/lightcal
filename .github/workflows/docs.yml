@@ -33,3 +33,14 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run unit tests
         run: cargo test --workspace
+
+  macos-library:
+    name: macOS library portability check
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the library without Windows dependencies
+        run: cargo check -p lightcal --lib --locked

@@ -49,7 +49,6 @@ pub(crate) struct AppController {
     pub(crate) shortcut_error: String,
     pub(crate) conflicting_shortcut: Option<String>,
     pub(crate) update_state: UpdateCheckState,
-    pub(crate) window_visible: bool,
     pub(crate) settings_open: bool,
     pub(crate) settings_tab: i32,
     #[cfg(windows)]
@@ -234,7 +233,7 @@ impl AppController {
         ui.set_dark_mode(dark_mode);
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
-        if self.window_visible {
+        if application_window_is_open(ui) {
             sync_window_geometry(ui, self.settings_open);
         }
 
@@ -701,6 +700,7 @@ impl AppController {
 
 fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
+    ui.window().set_minimized(false);
     #[cfg(windows)]
     {
         let (lw, lh) = target_logical_size(ui.get_settings_open());
@@ -715,8 +715,9 @@ fn show_application_window(ui: &AppWindow) {
     sync_window_geometry(ui, ui.get_settings_open());
 }
 
-fn hide_application_window(ui: &AppWindow) {
-    let _ = ui.hide();
+fn minimize_application_window(ui: &AppWindow) {
+    // Keep the HWND registered with Explorer for taskbar restoration and DWM previews.
+    ui.window().set_minimized(true);
     #[cfg(windows)]
     {
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
@@ -724,11 +725,19 @@ fn hide_application_window(ui: &AppWindow) {
             unsafe {
                 windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
                     hwnd,
-                    windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE,
+                    windows_sys::Win32::UI::WindowsAndMessaging::SW_MINIMIZE,
                 );
             }
         }
     }
+}
+
+fn application_window_is_open(ui: &AppWindow) -> bool {
+    #[cfg(windows)]
+    if let Some(open) = lightcal::platform::windows::main_window_is_open() {
+        return open;
+    }
+    ui.window().is_visible() && !ui.window().is_minimized()
 }
 
 #[cfg(windows)]
@@ -815,7 +824,7 @@ fn apply_loaded_provider(snapshot: ProviderSnapshot, ui_weak: slint::Weak<AppWin
         match &snapshot.status {
             lightcal::platform::ProviderStatus::AccessDenied => {
                 ctrl.calendars_access_denied = true;
-                ctrl.calendars_is_empty = false;
+                ctrl.calendars_is_empty = snapshot.sources.is_empty();
             }
             lightcal::platform::ProviderStatus::NoCalendars => {
                 ctrl.calendars_access_denied = false;
@@ -1191,11 +1200,9 @@ fn main() {
         let ui_w = ui_weak_shortcut.clone();
         let _ = slint::invoke_from_event_loop(move || {
             with_active_controller(&ui_w, |c, w| {
-                if !c.settings_open && c.window_visible {
-                    hide_application_window(w);
-                    c.window_visible = false;
+                if !c.settings_open && application_window_is_open(w) {
+                    minimize_application_window(w);
                 } else {
-                    c.window_visible = true;
                     c.settings_open = false;
                     c.sync_to_ui(w);
                     show_application_window(w);
@@ -1266,7 +1273,6 @@ fn main() {
         shortcut_error: String::new(),
         conflicting_shortcut: None,
         update_state: UpdateCheckState::Idle,
-        window_visible: !start_in_tray,
         settings_open: false,
         settings_tab: 0,
         #[cfg(windows)]
@@ -1336,7 +1342,7 @@ fn main() {
                 if is_visible {
                     if let Some(w) = ui_weak.upgrade() {
                         let c = ctrl.borrow();
-                        if c.window_visible {
+                        if application_window_is_open(&w) {
                             sync_window_geometry(&w, c.settings_open);
                         }
                         #[cfg(windows)]
@@ -1355,7 +1361,6 @@ fn main() {
             let ui_w = ui_weak_act.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_w, |c, w| {
-                    c.window_visible = true;
                     c.settings_open = false;
                     c.sync_to_ui(w);
                     show_application_window(w);
@@ -1376,11 +1381,9 @@ fn main() {
                 let ui_w = ui_weak_tray.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     with_active_controller(&ui_w, |c, w| {
-                        if !c.settings_open && c.window_visible {
-                            hide_application_window(w);
-                            c.window_visible = false;
+                        if !c.settings_open && application_window_is_open(w) {
+                            minimize_application_window(w);
                         } else {
-                            c.window_visible = true;
                             c.settings_open = false;
                             c.sync_to_ui(w);
                             show_application_window(w);
@@ -1409,14 +1412,12 @@ fn main() {
             let _ = slint::invoke_from_event_loop(move || {
                 if id == open_id {
                     with_active_controller(&ui_w, |c, w| {
-                        c.window_visible = true;
                         c.sync_to_ui(w);
                         show_application_window(w);
                         bring_to_foreground();
                     });
                 } else if id == today_id {
                     with_active_controller(&ui_w, |c, w| {
-                        c.window_visible = true;
                         c.cal_state.update_today(current_local_date());
                         c.cal_state.return_to_today();
                         c.settings_open = false;
@@ -1427,7 +1428,6 @@ fn main() {
                     request_visible_calendars(ui_w.clone(), use_synthetic);
                 } else if id == settings_id {
                     with_active_controller(&ui_w, |c, w| {
-                        c.window_visible = true;
                         c.settings_open = true;
                         c.settings_tab = 0;
                         c.sync_to_ui(w);
@@ -1898,24 +1898,18 @@ fn main() {
         });
     }
     {
-        let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
         ui.on_dismiss_compact(move || {
-            let mut c = ctrl.borrow_mut();
-            c.window_visible = false;
             if let Some(w) = ui_weak.upgrade() {
-                hide_application_window(&w);
+                minimize_application_window(&w);
             }
         });
     }
     {
-        let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
         ui.window().on_close_requested(move || {
-            let mut c = ctrl.borrow_mut();
-            c.window_visible = false;
             if let Some(w) = ui_weak.upgrade() {
-                hide_application_window(&w);
+                minimize_application_window(&w);
             }
             slint::CloseRequestResponse::KeepWindowShown
         });
@@ -2086,13 +2080,10 @@ fn main() {
         });
     }
     {
-        let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
         ui.on_minimize_window(move || {
-            let mut c = ctrl.borrow_mut();
-            c.window_visible = false;
             if let Some(w) = ui_weak.upgrade() {
-                hide_application_window(&w);
+                minimize_application_window(&w);
             }
         });
     }
