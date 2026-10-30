@@ -30,8 +30,12 @@ slint = { version = "1.18", default-features = false, features = [
 ] }
 
 [target.'cfg(windows)'.dependencies]
-tray-icon = "0.25"
-muda = "0.20"
+# Default features enable the Linux GTK3 tray (libappindicator, muda/gtk3).
+# That stack is pinned to glib ^0.18, and RUSTSEC-2024-0429 is only fixed in
+# glib >= 0.20, so Dependabot cannot open a security update. Windows menus
+# do not use those features.
+tray-icon = { version = "0.25", default-features = false }
+muda = { version = "0.20", default-features = false }
 windows = { version = "0.61", features = [
     "ApplicationModel_Appointments",
     "Foundation",
