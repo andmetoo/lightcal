@@ -4,7 +4,7 @@
 
 The owner renamed the default branch from `master` to `main` on 2026-10-29. Use `main` as the base for feature branches and pull requests. The local branch and remote HEAD have been updated to match.
 
-Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, and an unsigned Windows build workflow. Pull requests and manual runs produce review artifacts only. A version tag contained in `main` may publish those files as an explicitly unsigned prerelease; it does not sign or label them as production binaries.
+Included now: GPLv3 license text, README, English plans, contributing and community rules, security-reporting guidance, issue forms, PR template, documentation CI, Linux workspace checks, and an unsigned Windows build workflow. Pull requests and manual runs produce review artifacts only. A version tag contained in `main` may publish those files as an explicitly unsigned prerelease; it does not sign or label them as production binaries.
 
 ## Maintainer settings to apply on GitHub
 

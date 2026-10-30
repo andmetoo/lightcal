@@ -17,11 +17,11 @@ fmt-check:
 
 # Run Clippy across the workspace with warnings denied
 clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --locked -- -D warnings
 
 # Run all workspace unit tests
 test:
-    cargo test --workspace
+    cargo test --workspace --locked
 
 # Run the compact calendar
 run:
