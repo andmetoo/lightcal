@@ -1,0 +1,120 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "design/**"
+      - ".cursor/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "crates/lightcal/build.rs"
+      - "packaging/**"
+      - "scripts/*nsis*.ps1"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ARTIFACT_NAME: lightcal-windows-x64-unsigned
+
+jobs:
+  build:
+    name: Unsigned Windows build
+    runs-on: windows-latest
+    env:
+      CARGO_TERM_COLOR: always
+      LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
+      LIGHTCAL_UPDATE_CERT_SHA256: ${{ vars.LIGHTCAL_UPDATE_CERT_SHA256 }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - name: Verify release tag
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+          $version = ($metadata.packages | Where-Object name -eq 'lightcal').version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME does not match Cargo version v$version" }
+          $status = gh api "repos/$env:GITHUB_REPOSITORY/compare/main...$env:GITHUB_SHA" --jq .status
+          if ($status -notin @('identical', 'behind')) { throw "Tag $env:GITHUB_REF_NAME is not on main (compare status: $status)" }
+
+      # Only main pushes save this cache, so tag builds restore dependencies
+      # compiled from reviewed main commits.
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3 # zizmor: ignore[cache-poisoning]
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build locked release
+        run: cargo build --release --workspace --locked
+
+      - name: Stage unsigned portable archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/ci-package -Force | Out-Null
+          Copy-Item target/release/lightcal.exe, LICENSE, THIRD_PARTY_NOTICES.md, README.md target/ci-package/
+          $hash = (Get-FileHash target/ci-package/lightcal.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  lightcal.exe" | Set-Content target/ci-package/lightcal.exe.sha256 -Encoding ascii
+          Compress-Archive -Path target/ci-package/* -DestinationPath target/$env:ARTIFACT_NAME.zip
+
+      - name: Build unsigned NSIS installer
+        shell: pwsh
+        run: ./scripts/package-nsis.ps1 -SkipBuild
+
+      - name: Smoke-test isolated installation and uninstallation
+        shell: pwsh
+        run: ./scripts/test-nsis.ps1
+
+      - name: Upload unsigned build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            target/${{ env.ARTIFACT_NAME }}.zip
+            target/nsis/*-setup.exe
+            target/nsis/*-setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-release:
+    name: Draft GitHub release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download unsigned build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          find dist -type f -print0 | xargs -0 gh release create "$GITHUB_REF_NAME" \
+            --draft --verify-tag --generate-notes --title "Lightcal $GITHUB_REF_NAME" \
+            --notes "Unsigned CI build. Before publishing, sign lightcal.exe and the setup with SimpleSign Desktop (\`just release\`) and attach the signed lightcal.exe, setup, and checksums."
