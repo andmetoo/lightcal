@@ -20,3 +20,4 @@ Cloud agents run on Linux. The image provides Rust stable with rustfmt and clipp
 - Headless UI proof: `cargo run -p lightcal --locked -- --render-snapshots <directory>`.
 - On a display, `just run-demo` opens the compact window with sample events and does not contact Microsoft Graph.
 - NSIS, Authenticode, and SimpleSign recipes are Windows-only.
+- Penpot uses `.cursor/mcp.json`. Set `PENPOT_MCP_USER_TOKEN` to the MCP key from Penpot account → Integrations → MCP Server. Open the Lightcal file and choose File → MCP Server → Connect before asking an agent to read or change that design. Do not commit the key.
