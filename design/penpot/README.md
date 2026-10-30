@@ -8,3 +8,9 @@ This directory contains the reproducible Penpot Plugin API scripts that generate
 - [`pages.js`](./pages.js) — Creates the 7 pages (`00 · Overview`, `01 · Calendar`, `02 · Settings`, `03 · States`, `04 · Languages`, `05 · Design system`, `06 · Shell, Dock & Icons`) and populates all 39 artboards.
 - [`verify.js`](./verify.js) — Audits all 7 pages, verifying board counts, dimensions, and shape containment.
 - [`manifest.json`](./manifest.json) — Machine-readable inventory of the generated pages, board IDs, and dimensions.
+
+## Cursor MCP
+
+Agents connect to the hosted Penpot MCP server through [`.cursor/mcp.json`](../../.cursor/mcp.json). The server is `https://design.penpot.app/mcp/stream`. The MCP key is read from `PENPOT_MCP_USER_TOKEN` and is never stored in this repository.
+
+Before an agent can see the file, open it in Penpot and choose File → MCP Server → Connect. Remote MCP follows the focused page in that tab and can edit it, so start with a read-only request such as listing pages.
