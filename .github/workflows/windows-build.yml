@@ -60,6 +60,8 @@ jobs:
           Copy-Item target/release/lightcal.exe, LICENSE, THIRD_PARTY_NOTICES.md, README.md target/ci-package/
           $hash = (Get-FileHash target/ci-package/lightcal.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  lightcal.exe" | Set-Content target/ci-package/lightcal.exe.sha256 -Encoding ascii
+          Copy-Item target/ci-package/lightcal.exe target/lightcal-unsigned.exe
+          "$hash  lightcal-unsigned.exe" | Set-Content target/lightcal-unsigned.exe.sha256 -Encoding ascii
           Compress-Archive -Path target/ci-package/* -DestinationPath target/lightcal-windows-x64-unsigned.zip
 
       - name: Build unsigned NSIS installer
@@ -76,13 +78,15 @@ jobs:
           name: lightcal-windows-x64-unsigned
           path: |
             target/lightcal-windows-x64-unsigned.zip
+            target/lightcal-unsigned.exe
+            target/lightcal-unsigned.exe.sha256
             target/nsis/*-setup.exe
             target/nsis/*-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14
 
   release:
-    name: Publish unsigned prerelease
+    name: Open unsigned draft release
     if: startsWith(github.ref, 'refs/tags/')
     needs: portable
     runs-on: ubuntu-latest
@@ -95,42 +99,82 @@ jobs:
           name: lightcal-windows-x64-unsigned
           path: release-assets
 
-      - name: Name Windows zip and NSIS setup
+      - name: Open unsigned draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Refusing to publish unexpected tag: $tag" >&2
+            echo "Refusing to open a draft for unexpected tag: $tag" >&2
             exit 1
           fi
           mapfile -t zips < <(find release-assets -type f -name '*.zip' | sort)
           mapfile -t setups < <(find release-assets -type f -name '*-setup.exe' | sort)
-          if [[ ${#zips[@]} -ne 1 || ${#setups[@]} -ne 1 ]]; then
-            echo "Expected one portable zip and one NSIS setup." >&2
+          mapfile -t exes < <(find release-assets -type f -name 'lightcal-unsigned.exe' | sort)
+          mapfile -t exe_sums < <(find release-assets -type f -name 'lightcal-unsigned.exe.sha256' | sort)
+          if [[ ${#zips[@]} -ne 1 || ${#setups[@]} -ne 1 || ${#exes[@]} -ne 1 || ${#exe_sums[@]} -ne 1 ]]; then
+            echo "Expected one portable zip, one NSIS setup, and one unsigned executable." >&2
             find release-assets -type f -print >&2
             exit 1
           fi
           mkdir -p named
+          cp "${exes[0]}" named/lightcal-unsigned.exe
           cp "${zips[0]}" "named/lightcal-${tag}-windows-x64-unsigned.zip"
-          cp "${setups[0]}" "named/lightcal-${tag}-windows-x64-setup.exe"
+          cp "${setups[0]}" "named/lightcal-${tag}-windows-x64-unsigned-setup.exe"
+          sum_text="$(tr -d '\r' < "${exe_sums[0]}")"
+          expected_name="$(awk '{print $2}' <<< "$sum_text")"
+          expected_hash="$(awk '{print $1}' <<< "$sum_text")"
+          actual_hash="$(sha256sum named/lightcal-unsigned.exe | awk '{print $1}')"
+          if [[ "$expected_name" != "lightcal-unsigned.exe" || "$expected_hash" != "$actual_hash" ]]; then
+            echo "Unsigned executable checksum does not match the build." >&2
+            exit 1
+          fi
           (
             cd named
+            printf '%s  lightcal-unsigned.exe\n' "$actual_hash" > lightcal-unsigned.exe.sha256
+            sha256sum -c lightcal-unsigned.exe.sha256
             sha256sum "lightcal-${tag}-windows-x64-unsigned.zip" > "lightcal-${tag}-windows-x64-unsigned.zip.sha256"
-            sha256sum "lightcal-${tag}-windows-x64-setup.exe" > "lightcal-${tag}-windows-x64-setup.exe.sha256"
+            sha256sum "lightcal-${tag}-windows-x64-unsigned-setup.exe" > "lightcal-${tag}-windows-x64-unsigned-setup.exe.sha256"
           )
+          if [[ -e named/lightcal.exe ]]; then
+            echo "Refusing to attach an unsigned file named lightcal.exe." >&2
+            exit 1
+          fi
+          notes="${RUNNER_TEMP}/lightcal-draft-notes.md"
+          cat > "$notes" <<EOF
+          Unsigned Windows draft for ${tag}.
 
-      - name: Publish unsigned prerelease
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          name: Lightcal ${{ github.ref_name }} (unsigned)
-          body: |
-            Automated unsigned Windows review build from `main`.
-            Do not treat these files as an Authenticode-signed production release.
-            Attached files are the portable ZIP and the NSIS setup, each with a SHA-256 checksum.
-            `lightcal.exe` ProductVersion matches this git tag.
-            The macOS disk image is not included.
-          files: named/*
-          fail_on_unmatched_files: true
-          generate_release_notes: true
-          prerelease: true
+          These files are not Authenticode-signed. SimpleSign Desktop runs only on the maintainer's Windows PC, so this workflow does not sign them.
+
+          On that PC, check out this tag and run just sign-draft. It downloads lightcal-unsigned.exe, checks the SHA-256, signs the application, builds the NSIS setup from that signed application, signs the setup, and uploads the signed files to this draft.
+
+          The draft stays unpublished. When the signed lightcal.exe asset should become the public release, run just publish-release from the same tag.
+          EOF
+          title="Lightcal ${tag} (unsigned draft)"
+          files=(
+            "named/lightcal-unsigned.exe"
+            "named/lightcal-unsigned.exe.sha256"
+            "named/lightcal-${tag}-windows-x64-unsigned.zip"
+            "named/lightcal-${tag}-windows-x64-unsigned.zip.sha256"
+            "named/lightcal-${tag}-windows-x64-unsigned-setup.exe"
+            "named/lightcal-${tag}-windows-x64-unsigned-setup.exe.sha256"
+          )
+          for file in "${files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Missing $file" >&2
+              exit 1
+            fi
+          done
+          if draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$draft" != "true" ]]; then
+              echo "::error::${tag} is already published. A signed upload needs a new version." >&2
+              exit 1
+            fi
+            gh release upload "$tag" "${files[@]}" --clobber
+            gh release edit "$tag" --draft=true --title "$title" --notes-file "$notes"
+          else
+            gh release create "$tag" --draft --verify-tag --title "$title" --notes-file "$notes" "${files[@]}"
+          fi
+          echo "Draft ${tag} is unsigned. On Windows, at this tag: just sign-draft" >> "$GITHUB_STEP_SUMMARY"

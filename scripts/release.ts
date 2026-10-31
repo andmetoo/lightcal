@@ -7,6 +7,8 @@
  *   bun run scripts/release.ts sign     # Sign binary via SimpleSign Desktop, verify signature, update SHA-256
  *   bun run scripts/release.ts verify   # Verify Authenticode signature & update SHA-256 after SimpleSign Desktop
  *   bun run scripts/release.ts release  # Full pipeline: build -> stage -> SimpleSign Desktop -> checksum
+ *   bun run scripts/release.ts sign-draft      # Download the tag draft, sign on Windows, upload signed files
+ *   bun run scripts/release.ts publish-release # Publish that draft after the signed assets are attached
  *
  * Optional environment variables:
  *   SIMPLESIGN_PATH  - Path to SimpleSign Desktop executable (auto-detected if installed in standard paths)
@@ -24,6 +26,26 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import {
+  UNSIGNED_EXE,
+  assertChecksum,
+  assertFilesExist,
+  assertPublishCheckout,
+  assertSignDraftCheckout,
+  assertUnsignedDraft,
+  assertWindowsExecutable,
+  deleteAssetArgs,
+  editReleaseArgs,
+  missingSignedAssets,
+  parseReleaseView,
+  publishedReleaseNotes,
+  publishedReleaseTitle,
+  signedUploadPaths,
+  tagForVersion,
+  unsignedAssetsPresent,
+  uploadArgs,
+  versionFromCheckout,
+} from "./release-draft.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 
@@ -248,6 +270,183 @@ function signInstaller(): void {
   verifySignature(setup);
 }
 
+function textOf(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes).trim();
+}
+
+function gitText(args: string[], allowFailure = false): string | null {
+  const proc = Bun.spawnSync(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) {
+    if (allowFailure) return null;
+    const detail = textOf(proc.stderr);
+    throw new Error(detail || `git ${args.join(" ")} failed`);
+  }
+  return textOf(proc.stdout);
+}
+
+function exactGitTag(): string | null {
+  return gitText(["describe", "--tags", "--exact-match"], true);
+}
+
+function fetchTag(tag: string): void {
+  const fetched = Bun.spawnSync(["git", "fetch", "--quiet", "origin", "tag", tag, "--force"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (fetched.exitCode !== 0) {
+    console.log(`Could not fetch ${tag} from origin; using the local tag.`);
+  }
+}
+
+function ensureGh(): void {
+  const version = Bun.spawnSync(["gh", "--version"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  if (version.exitCode !== 0) {
+    throw new Error("gh is not installed. Install GitHub CLI (https://cli.github.com) and run gh auth login.");
+  }
+  const auth = Bun.spawnSync(["gh", "auth", "status"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  if (auth.exitCode !== 0) {
+    throw new Error("gh is not signed in. Run gh auth login, then repeat this command.");
+  }
+}
+
+function ghJson(args: string[]): string {
+  const proc = Bun.spawnSync(["gh", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) {
+    throw new Error(textOf(proc.stderr) || `gh ${args.join(" ")} failed`);
+  }
+  return textOf(proc.stdout);
+}
+
+function ghInherit(args: string[]): number {
+  console.log(`> gh ${args.join(" ")}`);
+  const proc = Bun.spawnSync(["gh", ...args], {
+    cwd: ROOT,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  return proc.exitCode ?? 1;
+}
+
+function loadRelease(tag: string) {
+  try {
+    return parseReleaseView(ghJson(["release", "view", tag, "--json", "isDraft,assets,url"]));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/release not found/i.test(message) || /not found/i.test(message)) return null;
+    throw error;
+  }
+}
+
+function draftVersion(): string {
+  return versionFromCheckout(process.argv[3], exactGitTag());
+}
+
+function signDraft(): void {
+  if (process.platform !== "win32") {
+    throw new Error(
+      "SimpleSign Desktop can sign only on the maintainer's Windows PC. Run `just sign-draft` there.",
+    );
+  }
+  const version = draftVersion();
+  const tag = tagForVersion(version);
+  fetchTag(tag);
+  const tagCommit = gitText(["rev-parse", "--verify", `${tag}^{commit}`]);
+  const head = gitText(["rev-parse", "HEAD"]);
+  const dirty = gitText(["status", "--porcelain", "--untracked-files=no"]) ?? "";
+  assertSignDraftCheckout({
+    platform: process.platform,
+    head: head ?? "",
+    tagCommit: tagCommit ?? "",
+    dirty,
+    tag,
+  });
+  ensureGh();
+  const view = loadRelease(tag);
+  assertUnsignedDraft(view, tag);
+
+  const dir = join(ROOT, "target", "draft-sign");
+  mkdirSync(dir, { recursive: true });
+  const downloaded = ghInherit([
+    "release",
+    "download",
+    tag,
+    "--dir",
+    dir,
+    "--clobber",
+    "--pattern",
+    UNSIGNED_EXE,
+    "--pattern",
+    `${UNSIGNED_EXE}.sha256`,
+  ]);
+  if (downloaded !== 0) {
+    throw new Error(`Could not download ${UNSIGNED_EXE} from draft ${tag}.`);
+  }
+  const exePath = join(dir, UNSIGNED_EXE);
+  const bytes = readFileSync(exePath);
+  assertChecksum(bytes, readFileSync(`${exePath}.sha256`, "utf8"), UNSIGNED_EXE);
+  assertWindowsExecutable(bytes);
+
+  mkdirSync(DIST_DIR, { recursive: true });
+  copyFileSync(exePath, DIST_BIN);
+  process.env.LIGHTCAL_RELEASE_VERSION = version;
+  signWithSimpleSign(DIST_BIN);
+  verifySignature(DIST_BIN);
+  packagePortableArchive();
+  signInstaller();
+
+  const uploads = signedUploadPaths(ROOT, version);
+  assertFilesExist(uploads, existsSync);
+  console.log(`=== Uploading signed files to draft ${tag} ===`);
+  if (ghInherit(uploadArgs(tag, uploads)) !== 0) {
+    throw new Error(`Upload to draft ${tag} failed. Re-run just sign-draft after SimpleSign finishes.`);
+  }
+  console.log("Uploaded. The release stays a draft. Publish it with: just publish-release");
+}
+
+function publishDraft(): void {
+  const version = draftVersion();
+  const tag = tagForVersion(version);
+  fetchTag(tag);
+  const tagCommit = gitText(["rev-parse", "--verify", `${tag}^{commit}`]);
+  const head = gitText(["rev-parse", "HEAD"]);
+  assertPublishCheckout({ head: head ?? "", tagCommit: tagCommit ?? "", tag });
+  ensureGh();
+  const view = loadRelease(tag);
+  assertUnsignedDraft(view, tag);
+  const missing = missingSignedAssets(view!, version);
+  if (missing.length > 0) {
+    throw new Error(
+      `Draft ${tag} is missing signed files: ${missing.join(", ")}. On Windows, run just sign-draft.`,
+    );
+  }
+  for (const name of unsignedAssetsPresent(view!, tag)) {
+    console.log(`Removing unsigned draft file ${name}`);
+    if (ghInherit(deleteAssetArgs(tag, name)) !== 0) {
+      throw new Error(`Could not remove unsigned file ${name} from ${tag}.`);
+    }
+  }
+  const notesDir = join(ROOT, "target", "draft-sign");
+  mkdirSync(notesDir, { recursive: true });
+  const notesPath = join(notesDir, "published-notes.md");
+  writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
+  console.log(`=== Publishing ${tag} ===`);
+  if (ghInherit(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath)) !== 0) {
+    throw new Error(`Could not publish ${tag}. It remains a draft when the edit fails.`);
+  }
+  console.log(`Published ${tag}.`);
+}
+
+function runDraftCommand(action: "sign-draft" | "publish-release"): void {
+  try {
+    if (action === "sign-draft") signDraft();
+    else publishDraft();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 const action = (process.argv[2] || "release").toLowerCase();
 switch (action) {
   case "build":
@@ -277,9 +476,15 @@ switch (action) {
     packagePortableArchive();
     signInstaller();
     break;
+  case "sign-draft":
+    runDraftCommand("sign-draft");
+    break;
+  case "publish-release":
+    runDraftCommand("publish-release");
+    break;
   default:
     console.error(
-      `Unknown command '${action}'. Expected: build | sign | verify | certificate-info | package | sign-installer | release`
+      `Unknown command '${action}'. Expected: build | sign | verify | certificate-info | package | sign-installer | release | sign-draft | publish-release`
     );
     process.exit(1);
 }

@@ -4,12 +4,16 @@ set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
 default:
     @just --list
 
-# Run documentation, formatting, clippy, and unit tests
-check: check-docs fmt-check clippy test
+# Run documentation, draft-signing script tests, formatting, clippy, and unit tests
+check: check-docs check-scripts fmt-check clippy test
 
 # Check Markdown links and trailing whitespace
 check-docs:
     python scripts/check_docs.py
+
+# Check the draft-release signing plan
+check-scripts:
+    bun test scripts/release-draft.test.ts
 
 # Check Rust formatting
 fmt-check:
@@ -46,6 +50,14 @@ build-release:
 # Sign target/dist/lightcal.exe via SimpleSign Desktop and update SHA-256 via Bun
 sign-release:
     bun run scripts/release.ts sign
+
+# Download the tag draft, sign it on Windows, and upload the signed files
+sign-draft:
+    bun run scripts/release.ts sign-draft
+
+# Publish the draft after the signed executable, archive, and setup are attached
+publish-release:
+    bun run scripts/release.ts publish-release
 
 # Verify Authenticode signature on target/dist/lightcal.exe and refresh SHA-256 checksum
 verify-release:

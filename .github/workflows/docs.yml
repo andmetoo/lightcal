@@ -74,6 +74,12 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Check local Markdown links and whitespace
         run: python scripts/check_docs.py
+      - name: Install Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Check draft-signing script
+        run: bun test scripts/release-draft.test.ts
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run Clippy

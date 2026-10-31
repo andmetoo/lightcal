@@ -27,11 +27,31 @@ The existing trusted updater continues to require a signed release asset named e
 
 Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and certificate-service credentials remain in the signer, outside this repository. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
 
-## CI, tagged prereleases, and validation
+## Sign a draft release from Windows
 
-The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP plus an unsigned NSIS setup. It runs the isolated installer smoke test. The build job has read-only repository permissions and does not call SimpleSign, Authenticode signing, or `RequireSigned`.
+SimpleSign Desktop can sign only on the maintainer's Windows PC. A stable tag does not publish a release. It opens a GitHub **draft** that holds the unsigned CI build. The maintainer downloads that draft, signs it locally, and uploads the signed files back to the same draft.
 
-A stable `vX.Y.Z` tag runs the same build once and publishes its artifacts as an explicitly unsigned GitHub prerelease. Publication fails unless the tagged commit is contained in `main`. The executable version and Windows ProductVersion match that tag, so About and the update check report the release the user installed. Untagged builds keep the Cargo workspace version. The published files are `lightcal-<tag>-windows-x64-unsigned.zip` and `lightcal-<tag>-windows-x64-setup.exe`, each with a SHA-256 file. Unsigned review builds do not install updates in place: About opens the newer release page instead. The macOS disk image is not attached. Only the small publication job receives `contents: write`; pull-request and build jobs remain read-only. The workflow never reads signing keys or presents these review files as signed production binaries.
+On that PC, with [GitHub CLI](https://cli.github.com) signed in (`gh auth login`):
+
+```powershell
+git fetch origin tag vX.Y.Z
+git switch --detach vX.Y.Z
+just sign-draft
+```
+
+`just sign-draft` checks that HEAD is that tag and the tree is clean. It downloads `lightcal-unsigned.exe`, checks its SHA-256, and refuses a file that is not a Windows executable. It then signs `target/dist/lightcal.exe` with SimpleSign Desktop, verifies Authenticode, writes the portable ZIP, builds the NSIS setup from that signed application, signs the setup, and uploads:
+
+- `lightcal.exe` and `lightcal.exe.sha256` (the updater asset; this name is never used for the unsigned draft file)
+- `lightcal-vX.Y.Z-windows-x64.zip` and its SHA-256 file
+- `lightcal-X.Y.Z-windows-x64-setup.exe` and its SHA-256 file
+
+The release stays a draft. A signing window that returns without a valid signature fails the command. Signing does not recompile: the certificate pin is the `LIGHTCAL_UPDATE_CERT_SHA256` repository variable from the tagged CI build. Changing the pin needs a new tag. `just publish-release`, from the same tag, deletes the unsigned draft files and marks the release public. Run it only when that signed `lightcal.exe` should become the stable download. The updater ignores drafts and installs only a published asset named exactly `lightcal.exe`.
+
+## CI, draft releases, and validation
+
+The pull-request and manual Windows workflow installs the stable Rust toolchain, builds a locked release, and uploads an unsigned portable ZIP, `lightcal-unsigned.exe`, and an unsigned NSIS setup as job artifacts. It runs the isolated installer smoke test. The build job has read-only repository permissions and does not call SimpleSign, Authenticode signing, or `RequireSigned`.
+
+A stable `vX.Y.Z` tag runs the same build once and opens an unsigned GitHub draft. The job fails unless the tagged commit is contained in `main`, and it fails again if that tag is already a public release, including an existing unsigned prerelease. Already published tags are left unchanged. The executable version and Windows ProductVersion match that tag. Untagged builds keep the Cargo workspace version. The draft files are `lightcal-unsigned.exe`, `lightcal-<tag>-windows-x64-unsigned.zip`, and `lightcal-<tag>-windows-x64-unsigned-setup.exe`, each with a SHA-256 file. The workflow never attaches an unsigned file named `lightcal.exe`. Unsigned review builds do not install updates in place. The macOS disk image is not attached. Only the draft job receives `contents: write`; pull-request and build jobs remain read-only. The workflow never reads signing keys or presents these review files as signed production binaries.
 
 An empty `LIGHTCAL_MICROSOFT_CLIENT_ID` repository variable still builds; Outlook sign-in stays disabled until that public client id is set.
 
