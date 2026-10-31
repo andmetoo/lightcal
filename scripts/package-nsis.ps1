@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$SkipBuild, [switch]$RequireSigned, [switch]$TestSetup, [string]$BinaryPath)
+param([switch]$SkipBuild, [switch]$RequireSigned, [switch]$TestSetup, [string]$BinaryPath, [string]$Version)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -24,6 +24,7 @@ if ([string]::IsNullOrWhiteSpace($compiler)) {
 }
 if ([string]::IsNullOrWhiteSpace($compiler)) { $compiler = & (Join-Path $PSScriptRoot 'prepare-nsis.ps1') }
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'NSIS compiler was not found' }
+if (-not [string]::IsNullOrWhiteSpace($Version)) { $env:LIGHTCAL_RELEASE_VERSION = $Version }
 . (Join-Path $PSScriptRoot 'Resolve-ReleaseVersion.ps1')
 $version = Resolve-LightcalReleaseVersion $projectRoot
 $outputDir = Join-Path $projectRoot 'target\nsis'

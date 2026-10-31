@@ -88,6 +88,7 @@ function runCmd(cmd: string[], cwd = ROOT, allowFailure = false): number {
   console.log(`> ${cmd.join(" ")}`);
   const proc = Bun.spawnSync(cmd, {
     cwd,
+    env: process.env,
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -234,8 +235,20 @@ function packagePortableArchive(): void {
 
 function signInstaller(): void {
   verifySignature(DIST_BIN);
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", "scripts/package-nsis.ps1", "-SkipBuild", "-RequireSigned", "-BinaryPath", DIST_BIN]);
   const version = releaseVersion();
+  runCmd([
+    "pwsh",
+    "-NoLogo",
+    "-NoProfile",
+    "-File",
+    "scripts/package-nsis.ps1",
+    "-SkipBuild",
+    "-RequireSigned",
+    "-BinaryPath",
+    DIST_BIN,
+    "-Version",
+    version,
+  ]);
   const setup = join(ROOT, "target", "nsis", `lightcal-${version}-windows-x64-setup.exe`);
   signWithSigntool(setup);
   verifySignature(setup);
