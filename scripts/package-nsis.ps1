@@ -58,3 +58,5 @@ try {
     Write-Output "Created NSIS installer: $output"
     Write-Output 'No installer was run, and no package was installed or published.'
 } finally { Pop-Location }
+# Keep a failed `git describe` from failing the step after a successful package.
+$global:LASTEXITCODE = 0
