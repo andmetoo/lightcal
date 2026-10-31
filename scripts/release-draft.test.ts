@@ -149,6 +149,9 @@ describe("checksum and upload", () => {
 
 test("the tag workflow opens a draft and does not publish a prerelease", () => {
   const workflow = readFileSync(join(root, ".github", "workflows", "windows-build.yml"), "utf8");
+  const releaseJob = workflow.slice(workflow.indexOf("name: Open unsigned draft release"));
+  expect(releaseJob.indexOf("actions/checkout@")).toBeGreaterThan(-1);
+  expect(releaseJob.indexOf("actions/checkout@")).toBeLessThan(releaseJob.indexOf("gh release create"));
   expect(workflow).toContain("gh release create");
   expect(workflow).toContain("--draft");
   expect(workflow).toContain("lightcal-unsigned.exe");
