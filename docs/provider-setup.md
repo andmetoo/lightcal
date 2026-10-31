@@ -2,11 +2,12 @@
 
 ## Local build configuration
 
-Copy `.env.example` in the repository root to `.env`. Git ignores `.env`. Only public configuration belongs there:
+Copy `.env.example` in the repository root to `.env`. Git ignores `.env`. Public client IDs and the Google Desktop client secret belong there:
 
 ```dotenv
 LIGHTCAL_MICROSOFT_CLIENT_ID=
 LIGHTCAL_GOOGLE_CLIENT_ID=
+LIGHTCAL_GOOGLE_CLIENT_SECRET=
 LIGHTCAL_UPDATE_CERT_SHA256=
 ```
 
@@ -14,7 +15,7 @@ Cargo's build script reads those keys from the process environment, then from `.
 
 The public Microsoft Client ID is build configuration only (`LIGHTCAL_MICROSOFT_CLIENT_ID` in `.env`); Settings never displays or edits it. Obsolete per-user Client ID preferences are ignored. A failed/cancelled connection preserves the previous account credentials. Existing OAuth credentials retain their own client association, so changing a build default does not refresh an old token using a different registration.
 
-Do not put client secrets, refresh/access tokens, account passwords, or private ICS URLs in environment files. The app needs no Microsoft client secret. Windows protects refresh tokens and feed URLs using current-user DPAPI in the application data directory (`credentials.dpapi`). They cannot be carried to another user/computer as ordinary settings. `LIGHTCAL_DATA_DIR` redirects app-owned data during development.
+Do not put refresh/access tokens, account passwords, or private ICS URLs in environment files. The app needs no Microsoft client secret. Google’s Desktop client still requires `LIGHTCAL_GOOGLE_CLIENT_SECRET` on the token exchange; keep that value only in the ignored `.env` file. Windows protects refresh tokens and feed URLs using current-user DPAPI in the application data directory (`credentials.dpapi`). They cannot be carried to another user/computer as ordinary settings. `LIGHTCAL_DATA_DIR` redirects app-owned data during development.
 
 ## Register Microsoft Graph access
 
@@ -24,7 +25,7 @@ The account used for Edge or Microsoft Store publishing is not automatically an 
 2. Open **Entra ID → App registrations → New registration**. Use a recognizable name, for example `Lightcal Desktop`.
 3. Choose **Any Entra ID tenant + personal Microsoft accounts**, or the equivalent label **Accounts in any organizational directory and personal Microsoft accounts**. This matches the app's `common` authority and permits Outlook.com as well as work/school accounts, subject to their administrator policies.
 4. Register the application and copy **Application (client) ID** from Overview. This is a public GUID, not a secret.
-5. Under **Authentication → Add a platform**, choose **Mobile and desktop applications**. Register the system-browser redirect URI **`http://localhost/lightcalendar/oauth/microsoft`**. Use the native/public desktop platform, not Web or SPA. The app listens on `127.0.0.1` port 80 and sends exactly `http://localhost/lightcalendar/oauth/microsoft`. The path must match the registered URI, with no extra port. `lightcalendar` includes the `t`; the earlier `lighcalendar` spelling was a typo. Remove the old root-only redirect if it is no longer needed. Windows socket exclusivity is set before binding to prevent a competing reuse bind; the exact callback path, per-attempt state, and PKCE S256 are all required. The path is routing, not a secret or a replacement for PKCE.
+5. Under **Authentication → Add a platform**, choose **Mobile and desktop applications**. Register the system-browser redirect URI **`http://localhost/lightcalendar/oauth/microsoft`**. Use the native/public desktop platform, not Web or SPA. The desktop platform ignores the port, so the app binds a free loopback port and sends `http://localhost:{port}/lightcalendar/oauth/microsoft`. It does not listen on port 80. The path must match the registered URI. `lightcalendar` includes the `t`; the earlier `lighcalendar` spelling was a typo. Remove the old root-only redirect if it is no longer needed. Windows socket exclusivity is set before binding to prevent a competing reuse bind; the exact callback path, per-attempt state, and PKCE S256 are all required. The path is routing, not a secret or a replacement for PKCE.
 6. Under **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, add **`Calendars.Read`**. Do not add `Calendars.ReadWrite`, application-level calendar permissions, mail access, or a client secret. The app also requests `offline_access` during user consent so it can refresh its read-only access. Remove the default `User.Read` permission if it is not needed by another use of the registration.
 7. If the tenant requires admin consent, have its administrator approve the delegated permission under the organization's policy. Otherwise the user consents in the normal browser flow. Do not turn on implicit token grants or password/device-code flows for this app.
 8. Set `LIGHTCAL_MICROSOFT_CLIENT_ID` in build configuration and rebuild. Click **Connect Outlook**, choose the account in the browser, and inspect/accept the requested read-only calendar permission yourself.
@@ -32,11 +33,20 @@ The account used for Edge or Microsoft Store publishing is not automatically an 
 
 If sign-in fails, retain the error code shown by Microsoft; never share the callback URL, authorization code, or token. `AADSTS50011` usually indicates a redirect/platform mismatch. An organizational account may lack an Exchange Online mailbox or be restricted by policy even though sign-in works. Current implementation connects one Microsoft account at a time; reconnecting successfully replaces it. Disconnect removes local tokens but does not delete remote calendars or revoke the user's entire Microsoft account.
 
-Google sign-in is deferred. This implementation does not use Google OAuth, CalDAV, Windows account settings, or a web container as a substitute for Graph.
+## Register Google Calendar access
+
+Google sign-in is a separate desktop OAuth client. It does not replace Microsoft Graph.
+
+1. In Google Cloud, create an OAuth client of type **Desktop**. Copy the client ID (`….apps.googleusercontent.com`) and the client secret shown for that client.
+2. The app sends `http://127.0.0.1:{port}` with a free port. Google’s desktop loopback accepts that port without registering each one. Scopes are `calendar.calendarlist.readonly` and `calendar.events.readonly` only.
+3. Set `LIGHTCAL_GOOGLE_CLIENT_ID` in `.env` and rebuild so the client id is embedded. Set `LIGHTCAL_GOOGLE_CLIENT_SECRET` in the same ignored `.env` file. The running app reads that secret when it starts and stores it with the refresh token; the build script does not print or embed it. Google requires the secret when exchanging the code, even with PKCE. Restart after changing the secret. In Accounts, choose **Add an account**, then **Google Calendar**. The system browser asks for read-only calendar access. The first connection selects no calendars.
+4. Disconnect removes the local refresh token. It does not delete remote events or revoke the Google account itself.
+
+This implementation does not use CalDAV, Windows account settings, or a web container as a substitute for Graph or Google Calendar.
 
 ## Add a private ICS subscription
 
-In Settings → Calendars, enter a calendar name and the provider's direct HTTPS ICS address, then choose **Add ICS**. The address field is masked. The app validates the download and parses it before saving the protected subscription; check the resulting source to display its events. The URL is cleared from the input after successful connection. Remove deletes the local subscription and its selection.
+In Accounts, choose **Add an account**, then **Private ICS link**. Enter a calendar name and the provider's direct HTTPS ICS address, then choose **Subscribe**. The app validates the download and parses it before saving the protected subscription; check the resulting source to display its events. The URL is cleared from the input after successful connection. Remove deletes the local subscription and its selection.
 
 Use a direct UTF-8 `VCALENDAR` response with HTTP 200. Embedded username/password credentials, plain HTTP, fragments, redirects, and non-calendar responses are rejected. A private feed URL grants access to that feed: use the provider's revoke/regenerate operation if it is exposed elsewhere.
 

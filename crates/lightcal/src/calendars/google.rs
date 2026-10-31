@@ -20,12 +20,19 @@ const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const SCOPES: &str = "https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events.readonly";
 
+pub fn valid_client_secret(raw: &str) -> bool {
+    let raw = raw.trim();
+    (10..256).contains(&raw.len())
+        && raw
+            .bytes()
+            .all(|b| b.is_ascii_graphic() && b != b'"' && b != b'\'')
+}
+
 pub fn valid_client_id(raw: &str) -> bool {
-    let Some((left, right)) = raw.rsplit_once('.') else {
+    let Some(left) = raw.strip_suffix(".apps.googleusercontent.com") else {
         return false;
     };
-    right == "apps.googleusercontent.com"
-        && left.contains('-')
+    left.contains('-')
         && left.len() > 8
         && left
             .bytes()
@@ -73,9 +80,16 @@ fn callback_listener() -> Result<TcpListener, String> {
     Ok(listener)
 }
 
-pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<String, String> {
+pub fn connect(
+    client_id: &str,
+    client_secret: &str,
+    open_browser: impl FnOnce(String),
+) -> Result<String, String> {
     if !valid_client_id(client_id) {
         return Err("Configure a Google Desktop OAuth client ID first".into());
+    }
+    if !valid_client_secret(client_secret) {
+        return Err("Set the Google Desktop client secret. Google requires it when exchanging the authorization code.".into());
     }
     let listener = callback_listener()?;
     let port = listener
@@ -146,6 +160,7 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
         TOKEN_URL,
         &[
             ("client_id", client_id),
+            ("client_secret", client_secret),
             ("grant_type", "authorization_code"),
             ("code", &code),
             ("redirect_uri", &redirect),
@@ -201,19 +216,26 @@ pub struct GoogleQuery {
     pub snapshot: ProviderSnapshot,
     pub needs_signin: bool,
     pub label: Option<String>,
+    pub skipped: usize,
 }
 
 pub fn query(
     anchor: LocalDate,
     client_id: &str,
+    client_secret: &str,
     selected: &BTreeSet<String>,
     credentials: &mut Credentials,
     store: &SecureStore,
 ) -> Result<GoogleQuery, String> {
     let configured = credentials.google_client_id.clone();
     let client_id = configured.as_deref().unwrap_or(client_id);
+    let stored_secret = credentials.google_client_secret.clone();
+    let client_secret = stored_secret.as_deref().unwrap_or(client_secret);
     if !valid_client_id(client_id) {
         return Err("Set the Google Desktop client ID before refreshing".into());
+    }
+    if !valid_client_secret(client_secret) {
+        return Err("Set the Google Desktop client secret before refreshing".into());
     }
     let refresh = credentials
         .google_refresh_token
@@ -223,6 +245,7 @@ pub fn query(
         TOKEN_URL,
         &[
             ("client_id", client_id),
+            ("client_secret", client_secret),
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh),
         ],
@@ -246,6 +269,7 @@ pub fn query(
         .filter(|id| id.contains('@'))
         .map(str::to_string);
     let (from, to) = range(anchor);
+    let mut skipped = 0;
     let mut snapshot = ProviderSnapshot {
         status: ProviderStatus::Available,
         sources: Vec::new(),
@@ -292,18 +316,50 @@ pub fn query(
                 "timeMax",
                 &format!("{:04}-{:02}-{:02}T00:00:00Z", to.year, to.month, to.day),
             );
-        for event in pages(uri.as_str(), token)? {
-            if event["status"].as_str() == Some("cancelled") {
-                continue;
-            }
-            snapshot.occurrences.push(parse_event(&event, &id, color)?);
-        }
+        let (events, unreadable) = collect_events(pages(uri.as_str(), token)?, &id, color);
+        skipped += unreadable;
+        snapshot.occurrences.extend(events);
     }
     Ok(GoogleQuery {
         snapshot,
         needs_signin: false,
         label,
+        skipped,
     })
+}
+
+fn with_page_token(current: &str, token: &str) -> String {
+    let mut continued = url::Url::parse(current).unwrap();
+    let pairs: Vec<(String, String)> = continued
+        .query_pairs()
+        .filter(|(key, _)| key != "pageToken")
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    continued
+        .query_pairs_mut()
+        .clear()
+        .extend_pairs(pairs)
+        .append_pair("pageToken", token);
+    continued.to_string()
+}
+
+fn collect_events(
+    events: Vec<Value>,
+    source: &str,
+    color: &str,
+) -> (Vec<CalendarOccurrence>, usize) {
+    let mut occurrences = Vec::new();
+    let mut skipped = 0;
+    for event in events {
+        if event["status"].as_str() == Some("cancelled") {
+            continue;
+        }
+        match parse_event(&event, source, color) {
+            Ok(occurrence) => occurrences.push(occurrence),
+            Err(_) => skipped += 1,
+        }
+    }
+    (occurrences, skipped)
 }
 
 fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
@@ -331,11 +387,9 @@ fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
         if items.len() > 20_000 {
             return Err("Google calendar response exceeded the supported event limit".into());
         }
-        next = page["nextPageToken"].as_str().map(|token| {
-            let mut continued = url::Url::parse(&current).unwrap();
-            continued.query_pairs_mut().append_pair("pageToken", token);
-            continued.to_string()
-        });
+        next = page["nextPageToken"]
+            .as_str()
+            .map(|token| with_page_token(&current, token));
     }
     Err("Google calendar pagination exceeded the supported limit".into())
 }
@@ -407,6 +461,9 @@ mod tests {
         ));
         assert!(!valid_client_id("not-a-google-id"));
         assert!(!valid_client_id("secret"));
+        assert!(valid_client_secret("GOCSPX-abcdefghij123456"));
+        assert!(!valid_client_secret(""));
+        assert!(!valid_client_secret("short"));
     }
 
     #[test]
@@ -415,7 +472,46 @@ mod tests {
             callback_code("GET /?code=abc&state=nonce HTTP/1.1", "nonce").unwrap(),
             Some("abc".into())
         );
+        let google = "GET /?state=nonce&iss=https://accounts.google.com&code=4/0fake-code_with-slash&scope=https://www.googleapis.com/auth/calendar.events.readonly HTTP/1.1";
+        assert_eq!(
+            callback_code(google, "nonce").unwrap(),
+            Some("4/0fake-code_with-slash".into())
+        );
         assert!(callback_code("GET /?error=access_denied&state=nonce HTTP/1.1", "nonce").is_err());
         assert!(callback_code("GET /?code=abc&state=other HTTP/1.1", "nonce").is_err());
+    }
+
+    #[test]
+    fn page_token_replaces_the_previous_token() {
+        let first = with_page_token(
+            "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=100",
+            "a",
+        );
+        let second = with_page_token(&first, "b");
+        assert_eq!(second.matches("pageToken=").count(), 1);
+        assert!(second.contains("pageToken=b"));
+        assert!(second.contains("maxResults=100"));
+        assert!(!second.contains("pageToken=a"));
+    }
+
+    #[test]
+    fn one_unreadable_event_does_not_drop_the_rest() {
+        let events = vec![
+            serde_json::json!({"id":"ok","summary":"Standup","start":{"date":"2026-10-31"},"end":{"date":"2026-11-01"}}),
+            serde_json::json!({"id":"bad","summary":"Broken","start":{}}),
+            serde_json::json!({"id":"gone","status":"cancelled","start":{"date":"2026-10-31"},"end":{"date":"2026-11-01"}}),
+        ];
+        let (occurrences, skipped) = collect_events(events, "google:primary", "#008573");
+        assert_eq!(skipped, 1);
+        assert_eq!(occurrences.len(), 1);
+        assert_eq!(occurrences[0].event_id, "ok");
+        assert_eq!(
+            occurrences[0].start_date,
+            LocalDate::new(2026, 10, 31).unwrap()
+        );
+        assert_eq!(
+            occurrences[0].end_date_exclusive,
+            LocalDate::new(2026, 11, 1).unwrap()
+        );
     }
 }

@@ -1,6 +1,6 @@
 # Required features
 
-Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph, private ICS, and signed automatic update installation are approved. The 2026-10-31 owner request in [ADR 0008](decisions/0008-google-calendar-and-platform-design.md) approves planned read-only Google Calendar OAuth and platform-specific design; Google integration is designed but not implemented. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter.
+Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph, private ICS, and signed automatic update installation are approved. The 2026-10-31 owner request in [ADR 0008](decisions/0008-google-calendar-and-platform-design.md) approves read-only Google Calendar OAuth. The Windows app connects that account in the system browser and loads selected calendars. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter.
 
 | Feature | Expected behavior and acceptance |
 | --- | --- |

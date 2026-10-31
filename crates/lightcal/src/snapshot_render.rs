@@ -81,8 +81,17 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         add_account_open: false,
         ics_dialog_open: false,
         sign_in_cancelled: false,
+        active_sign_in: crate::ActiveSignIn::None,
+        held_microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
+        held_google_connected: false,
+        held_google_needs_signin: false,
+        held_google_label: String::new(),
+        held_google_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
+        google_label: String::new(),
+        google_error: String::new(),
+        ics_error: String::new(),
     };
 
     let helper = HeadlessPlatform {

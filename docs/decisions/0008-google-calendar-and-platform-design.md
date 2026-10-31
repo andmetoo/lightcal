@@ -45,8 +45,10 @@ mail access, event editing, telemetry, or a UI framework change.
 ## Implementation boundary
 
 The original refinement produces Penpot boards, an interactive review prototype, vector
-icon sources, raster design exports and documentation. It does not implement
-Google OAuth or change the shipped application or installer. Provider work must
+icon sources, raster design exports and documentation. Those boards do not perform
+OAuth. The Windows application now connects Google Calendar with the read-only
+scopes below, stores the refresh token with the other account credentials, and
+loads selected calendars. Provider work must
 still use the toolkit-independent core and isolated fixture tests.
 
 The subsequent [calendar status icon decision](0010-windows-calendar-tray-icon.md)

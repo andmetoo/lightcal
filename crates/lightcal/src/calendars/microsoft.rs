@@ -78,11 +78,15 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
     if !valid_client_id(client_id) {
         return Err("Configure a Microsoft Entra Desktop app Client ID first (see provider setup documentation)".into());
     }
-    let listener = callback_listener(80).map_err(|_| {
-        "Could not listen on port 80 for Microsoft sign-in. The redirect URI is http://localhost/lightcalendar/oauth/microsoft."
-            .to_string()
-    })?;
-    let redirect = format!("http://localhost{CALLBACK_PATH}");
+    // Entra registers the URI without a port. A desktop client ignores the port,
+    // so the listener uses a free port instead of requiring 127.0.0.1:80.
+    let listener =
+        callback_listener(0).map_err(|_| "Could not listen for Microsoft sign-in".to_string())?;
+    let port = listener
+        .local_addr()
+        .map_err(|_| "Could not configure sign-in port")?
+        .port();
+    let redirect = format!("http://localhost:{port}{CALLBACK_PATH}");
     let verifier = random_key()?;
     let state = random_key()?;
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -443,11 +447,18 @@ mod tests {
         let result = connect("00000000-0000-0000-0000-000000000000", |raw| {
             let auth = url::Url::parse(&raw).unwrap();
             let params = auth.query_pairs().collect::<BTreeMap<_, _>>();
-            let redirect = url::Url::parse(params.get("redirect_uri").unwrap()).unwrap();
+            let redirect_raw = params.get("redirect_uri").unwrap().to_string();
+            let redirect = url::Url::parse(&redirect_raw).unwrap();
+            assert_eq!(redirect.scheme(), "http");
+            assert_eq!(redirect.host_str(), Some("localhost"));
             assert_eq!(redirect.path(), "/lightcalendar/oauth/microsoft");
+            let port = redirect.port().expect("ephemeral redirect port");
+            assert_eq!(
+                redirect_raw,
+                format!("http://localhost:{port}/lightcalendar/oauth/microsoft")
+            );
             assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
             let state = params.get("state").unwrap().to_string();
-            let port = redirect.port().unwrap_or(80);
             responder = Some(std::thread::spawn(move || {
                 let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
                 stream

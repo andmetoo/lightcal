@@ -162,11 +162,30 @@ fn evaluate_authentication_response(
         {
             return Err(AuthenticationError::SignInRequired);
         }
-        return Err(AuthenticationError::Failed(format!(
-            "Authentication request failed (HTTP {status})"
+        return Err(AuthenticationError::Failed(authentication_failure(
+            status, &payload,
         )));
     }
     Ok(payload)
+}
+
+fn authentication_failure(status: u16, payload: &serde_json::Value) -> String {
+    let error = payload["error"].as_str().unwrap_or("").trim();
+    let description = payload["error_description"]
+        .as_str()
+        .unwrap_or("")
+        .split(['\r', '\n'])
+        .next()
+        .unwrap_or("")
+        .trim();
+    let description: String = description.chars().take(180).collect();
+    if description.is_empty() {
+        format!("Authentication request failed (HTTP {status})")
+    } else if error.is_empty() {
+        format!("Authentication request failed (HTTP {status}): {description}")
+    } else {
+        format!("Authentication request failed (HTTP {status}): {error}: {description}")
+    }
 }
 
 #[cfg(test)]
@@ -178,10 +197,15 @@ mod tests {
             evaluate_authentication_response(400, r#"{"error":"invalid_grant"}"#),
             Err(AuthenticationError::SignInRequired)
         );
-        assert!(matches!(
-            evaluate_authentication_response(400, r#"{"error":"invalid_client"}"#),
-            Err(AuthenticationError::Failed(_))
-        ));
+        assert_eq!(
+            evaluate_authentication_response(
+                400,
+                r#"{"error":"invalid_request","error_description":"client_secret is missing."}"#
+            ),
+            Err(AuthenticationError::Failed(
+                "Authentication request failed (HTTP 400): invalid_request: client_secret is missing.".into()
+            ))
+        );
         assert!(evaluate_authentication_response(200, r#"{"access_token":"fixture"}"#).is_ok());
     }
     #[test]
@@ -195,5 +219,9 @@ mod tests {
             assert!(https_url(raw).is_err());
         }
         assert!(https_url("https://example.org/private/token.ics").is_ok());
+        assert!(https_url(
+            "https://calendar.google.com/calendar/ical/ru.rs%23holiday%40group.v.calendar.google.com/public/basic.ics"
+        )
+        .is_ok());
     }
 }

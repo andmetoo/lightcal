@@ -23,8 +23,15 @@ use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static SIGN_IN_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ActiveSignIn {
+    None,
+    Microsoft,
+    Google,
+}
 use slint::{
-    Color, ComponentHandle, Image, LogicalSize, ModelRc, PhysicalPosition, Rgba8Pixel,
+    Color, ComponentHandle, Image, LogicalSize, Model, ModelRc, PhysicalPosition, Rgba8Pixel,
     SharedPixelBuffer, SharedString, VecModel,
 };
 use std::cell::RefCell;
@@ -67,8 +74,115 @@ pub(crate) struct AppController {
     pub(crate) add_account_open: bool,
     pub(crate) ics_dialog_open: bool,
     pub(crate) sign_in_cancelled: bool,
+    pub(crate) active_sign_in: ActiveSignIn,
+    pub(crate) held_microsoft: lightcal::calendars::account::MicrosoftAccountState,
+    pub(crate) held_google_connected: bool,
+    pub(crate) held_google_needs_signin: bool,
+    pub(crate) held_google_label: String,
+    pub(crate) held_google_error: String,
     pub(crate) google_connected: bool,
     pub(crate) google_needs_signin: bool,
+    pub(crate) google_label: String,
+    pub(crate) google_error: String,
+    pub(crate) ics_error: String,
+}
+
+fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
+    match locale {
+        LocaleCode::Ru => format!("Не прочитано событий Google: {count}"),
+        LocaleCode::Es => format!("Eventos de Google no leídos: {count}"),
+        LocaleCode::Ja => format!("読み取れなかった Google の予定: {count}"),
+        LocaleCode::En => format!("Google events not read: {count}"),
+    }
+}
+
+fn google_status_line(
+    locale: LocaleCode,
+    connected: bool,
+    needs_signin: bool,
+    label: &str,
+    error: &str,
+) -> String {
+    let connected_text = match locale {
+        LocaleCode::Ru => "Google подключён",
+        LocaleCode::Es => "Google conectado",
+        LocaleCode::Ja => "Google に接続済み",
+        LocaleCode::En => "Google connected",
+    };
+    let expired = match locale {
+        LocaleCode::Ru => "Сеанс Google истёк — войдите повторно",
+        LocaleCode::Es => "La sesión de Google caducó; vuelve a iniciar sesión",
+        LocaleCode::Ja => "Google のセッションが切れました。再度サインインしてください",
+        LocaleCode::En => "Google session expired — sign in again",
+    };
+    if needs_signin {
+        expired.into()
+    } else if connected && !error.is_empty() {
+        let base = if label.is_empty() {
+            connected_text.to_string()
+        } else {
+            format!("{connected_text} · {label}")
+        };
+        format!("{base} — {error}")
+    } else if !error.is_empty() {
+        error.to_string()
+    } else if connected && !label.is_empty() {
+        format!("{connected_text} · {label}")
+    } else if connected {
+        connected_text.into()
+    } else {
+        String::new()
+    }
+}
+
+fn publish_sources(
+    existing: ModelRc<CalendarSourceItem>,
+    next: Vec<CalendarSourceItem>,
+) -> ModelRc<CalendarSourceItem> {
+    if let Some(model) = existing
+        .as_any()
+        .downcast_ref::<VecModel<CalendarSourceItem>>()
+    {
+        if model.row_count() == next.len()
+            && (0..next.len()).all(|index| {
+                model
+                    .row_data(index)
+                    .is_some_and(|row| row.id == next[index].id)
+            })
+        {
+            for (index, item) in next.into_iter().enumerate() {
+                model.set_row_data(index, item);
+            }
+            return existing;
+        }
+    }
+    ModelRc::new(VecModel::from(next))
+}
+
+fn split_sources(
+    items: &[CalendarSourceItem],
+) -> (
+    Vec<CalendarSourceItem>,
+    Vec<CalendarSourceItem>,
+    Vec<CalendarSourceItem>,
+    Vec<CalendarSourceItem>,
+) {
+    let mut outlook = Vec::new();
+    let mut google = Vec::new();
+    let mut ics = Vec::new();
+    let mut windows = Vec::new();
+    for item in items {
+        if item.id.starts_with("graph:") {
+            outlook.push(item.clone());
+        } else if item.id.starts_with("google:") {
+            google.push(item.clone());
+        } else if item.id.starts_with("ics:") {
+            ics.push(item.clone());
+        } else {
+            windows.push(item.clone());
+        }
+    }
+    (outlook, google, ics, windows)
 }
 
 fn current_local_date() -> LocalDate {
@@ -243,9 +357,6 @@ impl AppController {
         ui.set_dark_mode(dark_mode);
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
-        if application_window_is_open(ui) {
-            sync_window_geometry(ui, self.settings_open);
-        }
 
         let now = chrono::Local::now();
         ui.set_live_day_text(self.cal_state.today.day.to_string().into());
@@ -626,6 +737,33 @@ impl AppController {
         ui.set_ics_stays_local_text(stays.into());
         ui.set_subscribe_label(subscribe.into());
         ui.set_google_unavailable_text(google_missing.into());
+        ui.set_disconnect_google_label(
+            match locale {
+                LocaleCode::Ru => "Отключить Google",
+                LocaleCode::Es => "Desconectar Google",
+                LocaleCode::Ja => "Google を切断",
+                LocaleCode::En => "Disconnect Google",
+            }
+            .into(),
+        );
+        ui.set_ics_status_text(self.ics_error.clone().into());
+        ui.set_google_status_text(
+            google_status_line(
+                locale,
+                self.google_connected,
+                self.google_needs_signin,
+                &self.google_label,
+                &self.google_error,
+            )
+            .into(),
+        );
+        ui.set_sign_in_title(if self.active_sign_in == ActiveSignIn::Google {
+            ui.get_google_account_label()
+        } else {
+            strings.outlook_section.into()
+        });
+        ui.set_add_account_enabled(account_idle);
+        let refresh_ready = !self.connection_busy;
         ui.set_can_connect_microsoft(
             account_idle
                 && self.microsoft_account.can_connect()
@@ -633,7 +771,7 @@ impl AppController {
         );
         ui.set_can_disconnect_microsoft(account_idle && self.microsoft_account.can_disconnect());
         ui.set_can_refresh_calendars(
-            account_idle
+            refresh_ready
                 && (self
                     .provider
                     .sources
@@ -646,6 +784,8 @@ impl AppController {
                                 saved_credentials: true
                             }
                     )
+                    || self.google_connected
+                    || self.google_needs_signin
                     || self.prefs.windows_calendars_enabled),
         );
         ui.set_outlook_section_text(strings.outlook_section.into());
@@ -852,7 +992,12 @@ impl AppController {
                 removable: s.id.starts_with("ics:"),
             })
             .collect();
-        ui.set_calendar_sources(ModelRc::new(VecModel::from(cal_items)));
+        let (outlook_items, google_items, ics_items, windows_items) = split_sources(&cal_items);
+        ui.set_calendar_sources(publish_sources(ui.get_calendar_sources(), cal_items));
+        ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), outlook_items));
+        ui.set_google_sources(publish_sources(ui.get_google_sources(), google_items));
+        ui.set_ics_sources(publish_sources(ui.get_ics_sources(), ics_items));
+        ui.set_windows_sources(publish_sources(ui.get_windows_sources(), windows_items));
 
         let mut upd_text = format_update_status(locale, &self.update_state);
         if self.update_state == UpdateCheckState::Idle {
@@ -917,6 +1062,7 @@ fn show_application_window(ui: &AppWindow) {
         ensure_taskbar_preview(ui);
     }
     sync_window_geometry(ui, ui.get_settings_open());
+    ui.invoke_focus_calendar_keys();
 }
 
 fn hide_application_window(ui: &AppWindow) {
@@ -1148,9 +1294,11 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
         anchor = LocalDate::new(month.year, month.month, 1);
         config = Some((ctrl.store.dir().to_path_buf(), ctrl.prefs.clone()));
         ctrl.provider_loading = true;
-        if ctrl.microsoft_account
-            != lightcal::calendars::account::MicrosoftAccountState::Disconnected
-        {
+        if !matches!(
+            ctrl.microsoft_account,
+            lightcal::calendars::account::MicrosoftAccountState::Disconnected
+                | lightcal::calendars::account::MicrosoftAccountState::Connected { .. }
+        ) {
             ctrl.microsoft_account = lightcal::calendars::account::MicrosoftAccountState::Checking;
         }
         ctrl.sync_to_ui(ui);
@@ -1163,6 +1311,10 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                     microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
                     google_connected: false,
                     google_needs_signin: false,
+                    google_label: None,
+                    google_error: String::new(),
+                    google_skipped: 0,
+                    ics_error: String::new(),
                 }
             } else {
                 lightcal::calendars::query(
@@ -1170,6 +1322,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                     &dir,
                     &prefs.microsoft_client_id,
                     &prefs.google_client_id,
+                    &prefs.google_client_secret,
                     &prefs.selected_calendar_ids,
                     prefs.windows_calendars_enabled,
                 )
@@ -1183,6 +1336,15 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                 if still_visible {
                     with_active_controller(&ui_weak, |ctrl, _| {
                         ctrl.microsoft_account = data.microsoft;
+                        ctrl.google_connected = data.google_connected;
+                        ctrl.google_needs_signin = data.google_needs_signin;
+                        ctrl.google_label = data.google_label.unwrap_or_default();
+                        ctrl.google_error = data.google_error;
+                        if data.google_skipped > 0 && ctrl.google_error.is_empty() {
+                            ctrl.google_error =
+                                skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
+                        }
+                        ctrl.ics_error = data.ics_error;
                         ctrl.provider_loading = false;
                     });
                     apply_loaded_provider(data.snapshot, ui_weak);
@@ -1194,7 +1356,12 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
 
 enum CalendarAction {
     ConnectMicrosoft(String),
+    ConnectGoogle {
+        client_id: String,
+        client_secret: String,
+    },
     DisconnectMicrosoft,
+    DisconnectGoogle,
     AddIcs(String, String),
     Remove(String),
 }
@@ -1203,10 +1370,15 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
     let mut config = None;
     with_active_controller(&ui_weak, |ctrl, ui| {
         let allowed = match &action {
-            CalendarAction::ConnectMicrosoft(_) => ctrl.microsoft_account.can_connect(),
             CalendarAction::DisconnectMicrosoft => ctrl.microsoft_account.can_disconnect(),
+            CalendarAction::DisconnectGoogle => {
+                ctrl.google_connected || ctrl.google_needs_signin || !ctrl.google_error.is_empty()
+            }
             CalendarAction::Remove(id) if id.starts_with("graph:") => {
                 ctrl.microsoft_account.can_disconnect()
+            }
+            CalendarAction::Remove(id) if id.starts_with("google:") => {
+                ctrl.google_connected || ctrl.google_needs_signin || !ctrl.google_error.is_empty()
             }
             _ => true,
         };
@@ -1220,8 +1392,21 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 ctrl.microsoft_account.clone(),
             ));
             if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
+                ctrl.held_microsoft = ctrl.microsoft_account.clone();
+                ctrl.active_sign_in = ActiveSignIn::Microsoft;
                 ctrl.microsoft_account =
                     lightcal::calendars::account::MicrosoftAccountState::Connecting;
+                ctrl.sign_in_cancelled = false;
+                ctrl.add_account_open = false;
+                ctrl.ics_dialog_open = false;
+            }
+            if matches!(action, CalendarAction::ConnectGoogle { .. }) {
+                ctrl.held_google_connected = ctrl.google_connected;
+                ctrl.held_google_needs_signin = ctrl.google_needs_signin;
+                ctrl.held_google_label = ctrl.google_label.clone();
+                ctrl.held_google_error = ctrl.google_error.clone();
+                ctrl.active_sign_in = ActiveSignIn::Google;
+                ctrl.google_error.clear();
                 ctrl.sign_in_cancelled = false;
                 ctrl.add_account_open = false;
                 ctrl.ics_dialog_open = false;
@@ -1232,7 +1417,10 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
     let Some((dir, anchor, previous_account)) = config else {
         return;
     };
-    let sign_in_epoch = if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
+    let sign_in_epoch = if matches!(
+        action,
+        CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
+    ) {
         SIGN_IN_EPOCH.fetch_add(1, Ordering::Relaxed) + 1
     } else {
         0
@@ -1240,30 +1428,60 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
     std::thread::spawn(move || {
         let operation = || -> Result<Option<String>, String> {
             // Browser consent must not hold the credential lock for its whole lifetime.
-            let refresh = if let CalendarAction::ConnectMicrosoft(client) = &action {
-                let token = lightcal::calendars::microsoft::connect(client, |url| {
-                    let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
-                })?;
-                if SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
-                    return Err("Sign-in cancelled".into());
+            let mut microsoft_token = None;
+            let mut google_token = None;
+            match &action {
+                CalendarAction::ConnectMicrosoft(client) => {
+                    let token = lightcal::calendars::microsoft::connect(client, |url| {
+                        let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
+                    })?;
+                    if SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
+                        return Err("Sign-in cancelled".into());
+                    }
+                    microsoft_token = Some(token);
                 }
-                Some(token)
-            } else {
-                None
-            };
+                CalendarAction::ConnectGoogle {
+                    client_id,
+                    client_secret,
+                } => {
+                    let token =
+                        lightcal::calendars::google::connect(client_id, client_secret, |url| {
+                            let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
+                        })?;
+                    if SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
+                        return Err("Sign-in cancelled".into());
+                    }
+                    google_token = Some(token);
+                }
+                _ => {}
+            }
             let _guard = lightcal::secure_store::credential_lock()?;
             let store = lightcal::secure_store::SecureStore::new(&dir);
             let mut credentials = store.load()?;
             let mut removed = None;
             match &action {
                 CalendarAction::ConnectMicrosoft(client) => {
-                    credentials.microsoft_refresh_token = refresh;
+                    credentials.microsoft_refresh_token = microsoft_token;
                     credentials.microsoft_client_id = Some(client.clone());
+                }
+                CalendarAction::ConnectGoogle {
+                    client_id,
+                    client_secret,
+                } => {
+                    credentials.google_refresh_token = google_token;
+                    credentials.google_client_id = Some(client_id.clone());
+                    credentials.google_client_secret = Some(client_secret.clone());
                 }
                 CalendarAction::DisconnectMicrosoft => {
                     credentials.microsoft_refresh_token = None;
                     credentials.microsoft_client_id = None;
                     removed = Some("graph:".to_string());
+                }
+                CalendarAction::DisconnectGoogle => {
+                    credentials.google_refresh_token = None;
+                    credentials.google_client_id = None;
+                    credentials.google_client_secret = None;
+                    removed = Some("google:".to_string());
                 }
                 CalendarAction::AddIcs(name, address) => {
                     let id = lightcal::calendars::add_feed(&mut credentials, name, address)?;
@@ -1279,6 +1497,11 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                         credentials.microsoft_refresh_token = None;
                         credentials.microsoft_client_id = None;
                         removed = Some("graph:".to_string());
+                    } else if id.starts_with("google:") {
+                        credentials.google_refresh_token = None;
+                        credentials.google_client_id = None;
+                        credentials.google_client_secret = None;
+                        removed = Some("google:".to_string());
                     } else if id.starts_with("ics:") {
                         credentials.ics.retain(|f| f.id != *id);
                         removed = Some(id.clone());
@@ -1292,10 +1515,13 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
         };
         let result = operation();
         let added_ics = matches!(action, CalendarAction::AddIcs(..));
-        let connected_client = if let CalendarAction::ConnectMicrosoft(client) = action {
-            Some(client)
-        } else {
-            None
+        let (connected_client, connected_google) = match action {
+            CalendarAction::ConnectMicrosoft(client) => (Some(client), None),
+            CalendarAction::ConnectGoogle {
+                client_id,
+                client_secret,
+            } => (None, Some((client_id, client_secret))),
+            _ => (None, None),
         };
         let _ = slint::invoke_from_event_loop(move || {
             if sign_in_epoch != 0 && SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
@@ -1312,9 +1538,24 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                             ctrl.microsoft_account =
                                 lightcal::calendars::account::MicrosoftAccountState::Checking;
                         }
+                        if let Some((client, secret)) = connected_google {
+                            ctrl.prefs.google_client_id = client;
+                            ctrl.prefs.google_client_secret = secret;
+                            ctrl.persist();
+                            ctrl.google_connected = true;
+                            ctrl.google_needs_signin = false;
+                            ctrl.google_error.clear();
+                            ctrl.sign_in_cancelled = false;
+                        }
                         if let Some(prefix) = removed {
                             if prefix == "graph:" {
                                 ctrl.microsoft_account=lightcal::calendars::account::MicrosoftAccountState::Disconnected;
+                            }
+                            if prefix == "google:" {
+                                ctrl.google_connected = false;
+                                ctrl.google_needs_signin = false;
+                                ctrl.google_label.clear();
+                                ctrl.google_error.clear();
                             }
                             ctrl.prefs
                                 .selected_calendar_ids
@@ -1409,6 +1650,10 @@ fn main() {
         prefs.google_client_id = option_env!("LIGHTCAL_GOOGLE_CLIENT_ID")
             .unwrap_or("")
             .to_string();
+    }
+    if prefs.google_client_secret.is_empty() {
+        prefs.google_client_secret =
+            lightcal::preferences::local_env_value("LIGHTCAL_GOOGLE_CLIENT_SECRET");
     }
     if use_synthetic && prefs.selected_calendar_ids.is_empty() {
         prefs.selected_calendar_ids.insert("win-work".to_string());
@@ -1537,8 +1782,17 @@ fn main() {
         add_account_open: false,
         ics_dialog_open: false,
         sign_in_cancelled: false,
+        active_sign_in: ActiveSignIn::None,
+        held_microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
+        held_google_connected: false,
+        held_google_needs_signin: false,
+        held_google_label: String::new(),
+        held_google_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
+        google_label: String::new(),
+        google_error: String::new(),
+        ics_error: String::new(),
     }));
 
     ACTIVE_CONTROLLER.with(|c| {
@@ -1832,6 +2086,7 @@ fn main() {
             c.settings_tab = tab;
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
+                sync_window_geometry(&w, true);
             }
         });
     }
@@ -1843,6 +2098,8 @@ fn main() {
             c.settings_open = false;
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
+                sync_window_geometry(&w, false);
+                w.invoke_focus_calendar_keys();
             }
         });
     }
@@ -2374,6 +2631,7 @@ fn main() {
                 c.add_account_open = false;
                 c.ics_dialog_open = false;
                 c.sync_to_ui(w);
+                w.invoke_focus_calendar_keys();
             });
         });
     }
@@ -2386,22 +2644,78 @@ fn main() {
         });
     }
     {
+        let ctrl = Rc::clone(&ctrl);
         let weak = ui.as_weak();
         ui.on_choose_google_account(move || {
-            with_active_controller(&weak, |c, w| {
-                c.add_account_open = false;
-                if c.prefs.google_client_id.trim().is_empty() {
-                    c.connection_message = w.get_google_unavailable_text().to_string();
-                } else {
-                    c.connection_message = match c.prefs.locale() {
-                        LocaleCode::Ru => "Идентификатор Google есть, вход ещё не подключён.".into(),
-                        LocaleCode::Es => "El identificador de Google está presente; el inicio de sesión aún no está conectado.".into(),
-                        LocaleCode::Ja => "Google のクライアント ID はあります。サインインはまだ接続されていません。".into(),
-                        LocaleCode::En => "The Google client id is set. Sign-in is not connected yet.".into(),
+            let client = ctrl.borrow().prefs.google_client_id.clone();
+            let secret = ctrl.borrow().prefs.google_client_secret.clone();
+            if !lightcal::calendars::google::valid_client_id(&client)
+                || !lightcal::calendars::google::valid_client_secret(&secret)
+            {
+                with_active_controller(&weak, |c, w| {
+                    c.add_account_open = false;
+                    c.connection_message = if lightcal::calendars::google::valid_client_id(&client)
+                    {
+                        match c.prefs.locale() {
+                            LocaleCode::Ru => {
+                                "Секрет клиента Google не задан в этой сборке.".into()
+                            }
+                            LocaleCode::Es => {
+                                "El secreto de cliente de Google no está en esta compilación."
+                                    .into()
+                            }
+                            LocaleCode::Ja => {
+                                "このビルドに Google のクライアント シークレットがありません。"
+                                    .into()
+                            }
+                            LocaleCode::En => {
+                                "The Google client secret is not set in this build.".into()
+                            }
+                        }
+                    } else {
+                        w.get_google_unavailable_text().to_string()
                     };
+                    c.sync_to_ui(w);
+                });
+                return;
+            }
+            run_calendar_action(
+                weak.clone(),
+                CalendarAction::ConnectGoogle {
+                    client_id: client,
+                    client_secret: secret,
+                },
+                use_synthetic,
+            );
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        ui.on_disconnect_google(move || {
+            run_calendar_action(
+                weak.clone(),
+                CalendarAction::DisconnectGoogle,
+                use_synthetic,
+            );
+        });
+    }
+    {
+        let ctrl = Rc::clone(&ctrl);
+        let weak = ui.as_weak();
+        ui.on_retry_sign_in(move || {
+            let kind = ctrl.borrow().active_sign_in;
+            match kind {
+                ActiveSignIn::Google => {
+                    if let Some(window) = weak.upgrade() {
+                        window.invoke_choose_google_account();
+                    }
                 }
-                c.sync_to_ui(w);
-            });
+                _ => {
+                    if let Some(window) = weak.upgrade() {
+                        window.invoke_connect_microsoft();
+                    }
+                }
+            }
         });
     }
     {
@@ -2421,8 +2735,18 @@ fn main() {
             with_active_controller(&weak, |c, w| {
                 c.connection_busy = false;
                 c.sign_in_cancelled = true;
-                c.microsoft_account =
-                    lightcal::calendars::account::MicrosoftAccountState::Disconnected;
+                match c.active_sign_in {
+                    ActiveSignIn::Microsoft => {
+                        c.microsoft_account = c.held_microsoft.clone();
+                    }
+                    ActiveSignIn::Google => {
+                        c.google_connected = c.held_google_connected;
+                        c.google_needs_signin = c.held_google_needs_signin;
+                        c.google_label = c.held_google_label.clone();
+                        c.google_error = c.held_google_error.clone();
+                    }
+                    ActiveSignIn::None => {}
+                }
                 c.connection_message.clear();
                 c.sync_to_ui(w);
             });

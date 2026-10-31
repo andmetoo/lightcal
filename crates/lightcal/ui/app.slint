@@ -230,6 +230,8 @@ component SettingsDropdownOption inherits Rectangle {
             font-weight: root.active ? 600 : 500;
             color: root.dark-mode ? #EEEEEE : #202020;
             vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
         }
 
         if root.active : Text {
@@ -251,7 +253,7 @@ component SettingsMenu inherits Rectangle {
 
     horizontal-stretch: 0;
     width: 168px;
-    height: content.preferred-height;
+    height: min(196px, content.preferred-height);
     border-radius: 8px;
     background: root.dark-mode ? #2A2A2A : #FFFFFF;
     border-width: 1px;
@@ -438,23 +440,188 @@ component SettingsField inherits Rectangle {
 
     if root.text == "" && root.placeholder != "" : Text {
         x: 10px;
-        y: (parent.height - self.height) / 2;
+        y: 0px;
         width: parent.width - 20px;
+        height: parent.height;
         text: root.placeholder;
         font-size: 12px;
         color: root.dark-mode ? #606060 : #BBBBBB;
+        vertical-alignment: center;
         overflow: elide;
     }
 
     input := TextInput {
         x: 10px;
-        y: (parent.height - self.height) / 2;
+        y: 0px;
         width: parent.width - 20px;
+        height: parent.height;
         text <=> root.text;
         font-size: 12px;
         color: root.dark-mode ? #EEEEEE : #202020;
+        vertical-alignment: center;
         single-line: true;
         enabled: root.enabled;
+    }
+
+    public function focus-input() {
+        input.focus();
+    }
+}
+
+component AccountBlock inherits VerticalLayout {
+    in property <bool> dark-mode: false;
+    in property <string> title;
+    in property <string> status;
+    in property <string> badge;
+    in property <bool> badge-alert: false;
+    in property <[CalendarSourceItem]> sources;
+    in property <string> empty-text;
+    in property <string> remove-label;
+    in property <string> primary-label;
+    in property <bool> show-primary: false;
+    in property <string> secondary-label;
+    in property <bool> show-secondary: false;
+    in property <string> refresh-label;
+    in property <bool> show-refresh: false;
+    in property <bool> controls-enabled: true;
+    callback primary-clicked();
+    callback secondary-clicked();
+    callback refresh-clicked();
+    callback toggle-source(string);
+    callback remove-source(string);
+
+    spacing: 4px;
+
+    HorizontalLayout {
+        height: 36px;
+        spacing: 8px;
+        alignment: space-between;
+        VerticalLayout {
+            spacing: 2px;
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                font-size: 12.5px;
+                font-weight: 600;
+                color: root.dark-mode ? #EEEEEE : #202020;
+                overflow: elide;
+            }
+            if root.status != "" : Text {
+                text: root.status;
+                font-size: 10.5px;
+                font-weight: 400;
+                color: root.badge-alert
+                    ? (root.dark-mode ? #FF9DA1 : #BC333B)
+                    : (root.dark-mode ? #B4B4B4 : #646464);
+                overflow: elide;
+            }
+        }
+        if root.badge != "" : Rectangle {
+            height: 22px;
+            border-radius: 6px;
+            background: root.badge-alert ? #BC333B : (root.dark-mode ? #313131 : #E8E8E8);
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                alignment: center;
+                Text {
+                    text: root.badge;
+                    font-size: 10.5px;
+                    font-weight: 500;
+                    color: root.badge-alert ? #FFFFFF : (root.dark-mode ? #EEEEEE : #202020);
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    Rectangle { height: 1px; background: root.dark-mode ? #3A3A3A : #D9D9D9; }
+
+    if root.sources.length == 0 && root.empty-text != "" : Text {
+        text: root.empty-text;
+        font-size: 12px;
+        font-weight: 500;
+        color: root.dark-mode ? #EEEEEE : #202020;
+        wrap: word-wrap;
+    }
+    if root.sources.length > 0 : VerticalLayout {
+        spacing: 2px;
+        for src in root.sources : HorizontalLayout {
+            height: 22px;
+            spacing: 8px;
+            alignment: start;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                y: (parent.height - self.height) / 2;
+                background: src.checked ? src.swatch : (root.dark-mode ? #2A2A2A : #FFFFFF);
+                border-width: src.checked ? 0px : 1px;
+                border-color: root.dark-mode ? #606060 : #BBBBBB;
+                if src.checked : Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: "✓";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #FFFFFF;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    enabled: root.controls-enabled;
+                    clicked => { root.toggle-source(src.id); }
+                }
+            }
+            Text {
+                text: src.name;
+                font-size: 12px;
+                font-weight: 400;
+                color: root.dark-mode ? #EEEEEE : #202020;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+            if src.removable : TouchArea {
+                width: 48px;
+                height: 18px;
+                clicked => { root.remove-source(src.id); }
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.remove-label;
+                    font-size: 10px;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    if root.show-refresh || root.show-primary || root.show-secondary : HorizontalLayout {
+        height: 28px;
+        spacing: 8px;
+        alignment: end;
+        if root.show-refresh : SettingsButton {
+            label: root.refresh-label;
+            kind: "subtle";
+            dark-mode: root.dark-mode;
+            clicked => { root.refresh-clicked(); }
+        }
+        if root.show-primary : SettingsButton {
+            label: root.primary-label;
+            kind: "primary";
+            button-width: 112px;
+            dark-mode: root.dark-mode;
+            clicked => { root.primary-clicked(); }
+        }
+        if root.show-secondary : SettingsButton {
+            label: root.secondary-label;
+            dark-mode: root.dark-mode;
+            clicked => { root.secondary-clicked(); }
+        }
     }
 }
 
@@ -556,6 +723,17 @@ export component AppWindow inherits Window {
     in property <string> ics-stays-local-text: "Stays on this computer.";
     in property <string> subscribe-label: "Subscribe";
     in property <string> google-unavailable-text: "Google sign-in is not configured in this build.";
+    in property <string> google-status-text;
+    in property <string> ics-status-text;
+    in property <bool> google-connected: false;
+    in property <bool> google-needs-signin: false;
+    in property <string> disconnect-google-label: "Disconnect Google";
+    in property <string> sign-in-title: "Outlook";
+    in property <bool> add-account-enabled: true;
+    in property <[CalendarSourceItem]> outlook-sources: [];
+    in property <[CalendarSourceItem]> google-sources: [];
+    in property <[CalendarSourceItem]> ics-sources: [];
+    in property <[CalendarSourceItem]> windows-sources: [];
     in property <bool> can-connect-microsoft;
     in property <bool> can-disconnect-microsoft;
     in property <bool> can-refresh-calendars;
@@ -718,6 +896,8 @@ export component AppWindow inherits Window {
     callback choose-google-account();
     callback choose-ics-account();
     callback cancel-account-sign-in();
+    callback disconnect-google();
+    callback retry-sign-in();
     callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
@@ -729,9 +909,15 @@ export component AppWindow inherits Window {
     property <int> theme-index: root.current-theme-code == "light" ? 1
         : (root.current-theme-code == "dark" ? 2 : 0);
 
-    forward-focus: key-handler;
     key-handler := FocusScope {
         key-pressed(event) => {
+            if (root.ics-dialog-open || root.add-account-open) {
+                if (event.text == Key.Escape) {
+                    root.close-account-dialogs();
+                    return accept;
+                }
+                return reject;
+            }
             if (event.text == Key.Escape) {
                 if (root.settings-open) {
                     root.close-settings();
@@ -765,6 +951,12 @@ export component AppWindow inherits Window {
                 return accept;
             }
             return reject;
+        }
+    }
+
+    public function focus-calendar-keys() {
+        if (!root.ics-dialog-open && !root.add-account-open) {
+            key-handler.focus();
         }
     }
 
@@ -1396,8 +1588,10 @@ export component AppWindow inherits Window {
             }
 
             if root.first-day-dropdown-open : Rectangle {
-                x: 268px;
+                x: parent.width - 12px - 136px;
                 y: 46px;
+                width: 136px;
+                height: 72px;
                 SettingsMenu {
                     dark-mode: root.dark-mode;
                     width: 136px;
@@ -1440,11 +1634,11 @@ export component AppWindow inherits Window {
                 button-width: 132px;
                 label: root.add-calendar-account-label;
                 dark-mode: root.dark-mode;
-                enabled: root.can-connect-microsoft || !root.account-connected;
+                enabled: root.add-account-enabled;
                 clicked => { root.add-calendar-account(); }
             }
 
-            Rectangle {
+            account-card := Rectangle {
                 x: 16px;
                 y: 132px;
                 width: 416px;
@@ -1452,12 +1646,15 @@ export component AppWindow inherits Window {
                 border-radius: 9px;
                 background: root.dark-mode ? #222222 : #F0F0F0;
                 clip: true;
+                property <bool> outlook-visible: root.account-connected || root.account-needs-signin || root.outlook-sources.length > 0 || root.can-disconnect-microsoft;
+                property <bool> google-visible: root.google-connected || root.google-needs-signin || root.google-sources.length > 0 || root.google-status-text != "";
+                property <bool> any-account: outlook-visible || google-visible || root.ics-sources.length > 0 || root.windows-sources.length > 0;
 
                 if root.connection-busy : VerticalLayout {
                     padding: 16px;
                     spacing: 8px;
                     Text {
-                        text: root.outlook-section-text;
+                        text: root.sign-in-title;
                         font-size: 12.5px;
                         font-weight: 600;
                         color: root.dark-mode ? #EEEEEE : #202020;
@@ -1474,49 +1671,8 @@ export component AppWindow inherits Window {
                         clicked => { root.cancel-account-sign-in(); }
                     }
                 }
-                if root.sign-in-cancelled && !root.connection-busy : VerticalLayout {
-                    padding: 16px;
-                    spacing: 8px;
-                    Text {
-                        text: root.sign-in-cancelled-text;
-                        font-size: 12px;
-                        font-weight: 500;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                        wrap: word-wrap;
-                    }
-                    SettingsButton {
-                        label: root.try-again-label;
-                        kind: "primary";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.connect-microsoft(); }
-                    }
-                }
-                if root.calendars-is-empty && !root.calendars-access-denied && !root.account-connected && !root.account-needs-signin && !root.connection-busy && !root.sign-in-cancelled : VerticalLayout {
-                    padding: 16px;
-                    spacing: 8px;
-                    Text {
-                        text: root.calendars-empty-title-text;
-                        font-size: 12.5px;
-                        font-weight: 600;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                        wrap: word-wrap;
-                    }
-                    Text {
-                        text: root.calendars-empty-desc-text;
-                        font-size: 11px;
-                        font-weight: 400;
-                        color: root.dark-mode ? #B4B4B4 : #646464;
-                        wrap: word-wrap;
-                    }
-                    if root.connection-message != "" : Text {
-                        text: root.connection-message;
-                        font-size: 11px;
-                        color: root.dark-mode ? #FF9DA1 : #BC333B;
-                        wrap: word-wrap;
-                    }
-                }
 
-                if root.calendars-access-denied : VerticalLayout {
+                if root.calendars-access-denied && !root.connection-busy : VerticalLayout {
                     padding: 16px;
                     spacing: 8px;
                     Text {
@@ -1548,184 +1704,157 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                if (root.account-connected || root.account-needs-signin || !root.calendars-is-empty) && !root.calendars-access-denied && !root.connection-busy && !root.sign-in-cancelled : VerticalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    padding-top: 8px;
-                    padding-bottom: 8px;
-                    spacing: 4px;
+                if !root.connection-busy && !root.calendars-access-denied : ScrollView {
+                    width: parent.width;
+                    height: parent.height;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 10px;
 
-                    HorizontalLayout {
-                        height: 40px;
-                        spacing: 8px;
-                        alignment: space-between;
-
-                        VerticalLayout {
-                            spacing: 2px;
-                            alignment: center;
-                            horizontal-stretch: 1;
+                        if root.sign-in-cancelled : VerticalLayout {
+                            spacing: 8px;
                             Text {
-                                text: root.outlook-section-text;
-                                font-size: 12.5px;
-                                font-weight: 600;
+                                text: root.sign-in-cancelled-text;
+                                font-size: 12px;
+                                font-weight: 500;
                                 color: root.dark-mode ? #EEEEEE : #202020;
-                                overflow: elide;
+                                wrap: word-wrap;
                             }
-                            Text {
-                                text: root.account-status-text;
-                                font-size: 10.5px;
-                                font-weight: 400;
-                                color: root.dark-mode ? #B4B4B4 : #646464;
-                                overflow: elide;
-                            }
-                        }
-                        Rectangle {
-                            height: 22px;
-                            border-radius: 6px;
-                            background: root.account-needs-signin ? #BC333B : (root.dark-mode ? #313131 : #E8E8E8);
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                alignment: center;
-                                Text {
-                                    text: root.account-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
-                                    font-size: 10.5px;
-                                    font-weight: 500;
-                                    color: root.account-needs-signin ? #FFFFFF : (root.dark-mode ? #EEEEEE : #202020);
-                                    vertical-alignment: center;
-                                }
+                            SettingsButton {
+                                label: root.try-again-label;
+                                kind: "primary";
+                                dark-mode: root.dark-mode;
+                                clicked => { root.retry-sign-in(); }
                             }
                         }
-                    }
 
-                    Rectangle { height: 1px; background: root.dark-mode ? #3A3A3A : #D9D9D9; }
-
-                    if root.calendar-sources.length == 0 : Text {
-                        text: root.no-calendars-text;
-                        font-size: 12px;
-                        font-weight: 500;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                        wrap: word-wrap;
-                    }
-                    if root.calendar-sources.length > 0 : ScrollView {
-                        height: 72px;
-                        VerticalLayout {
-                            spacing: 2px;
-                            for src in root.calendar-sources : HorizontalLayout {
-                                height: 22px;
-                                spacing: 8px;
-                                alignment: start;
-
-                                Rectangle {
-                                    width: 16px;
-                                    height: 16px;
-                                    border-radius: 4px;
-                                    y: (parent.height - self.height) / 2;
-                                    background: src.checked ? src.swatch : (root.dark-mode ? #2A2A2A : #FFFFFF);
-                                    border-width: src.checked ? 0px : 1px;
-                                    border-color: root.dark-mode ? #606060 : #BBBBBB;
-
-                                    if src.checked : Text {
-                                        width: parent.width;
-                                        height: parent.height;
-                                        text: "✓";
-                                        font-size: 10px;
-                                        font-weight: 700;
-                                        color: #FFFFFF;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                    }
-                                    TouchArea {
-                                        enabled: !root.connection-busy && !root.provider-loading;
-                                        clicked => { root.toggle-calendar-source(src.id); }
-                                    }
-                                }
-                                Text {
-                                    text: src.name;
-                                    font-size: 12px;
-                                    font-weight: 400;
-                                    color: root.dark-mode ? #EEEEEE : #202020;
-                                    vertical-alignment: center;
-                                    horizontal-stretch: 1;
-                                    overflow: elide;
-                                }
-                                if src.removable : TouchArea {
-                                    width: 48px;
-                                    height: 18px;
-                                    clicked => { root.remove-calendar-source(src.id); }
-                                    Text {
-                                        width: parent.width;
-                                        height: parent.height;
-                                        text: root.remove-source-label;
-                                        font-size: 10px;
-                                        color: root.dark-mode ? #B4B4B4 : #646464;
-                                        horizontal-alignment: right;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                            }
+                        if root.connection-message != "" : Text {
+                            text: root.connection-message;
+                            font-size: 11px;
+                            color: root.dark-mode ? #FF9DA1 : #BC333B;
+                            wrap: word-wrap;
                         }
-                    }
 
-                    HorizontalLayout {
-                        height: 28px;
-                        spacing: 8px;
-                        alignment: space-between;
+                        if outlook-visible : AccountBlock {
+                            dark-mode: root.dark-mode;
+                            title: root.outlook-section-text;
+                            status: root.account-needs-signin ? root.events-stale-text : root.account-status-text;
+                            badge: root.account-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
+                            badge-alert: root.account-needs-signin;
+                            sources: root.outlook-sources;
+                            empty-text: root.no-calendars-text;
+                            remove-label: root.remove-source-label;
+                            primary-label: root.reconnect-label;
+                            show-primary: root.account-needs-signin;
+                            secondary-label: root.disconnect-microsoft-label;
+                            show-secondary: root.can-disconnect-microsoft && !root.account-needs-signin;
+                            refresh-label: root.refresh-button-text;
+                            show-refresh: root.can-refresh-calendars;
+                            controls-enabled: !root.provider-loading;
+                            primary-clicked => { root.connect-microsoft(); }
+                            secondary-clicked => { root.disconnect-microsoft(); }
+                            refresh-clicked => { root.refresh-calendars(); }
+                            toggle-source(id) => { root.toggle-calendar-source(id); }
+                            remove-source(id) => { root.remove-calendar-source(id); }
+                        }
+
+                        if google-visible : AccountBlock {
+                            dark-mode: root.dark-mode;
+                            title: root.google-account-label;
+                            status: root.google-status-text;
+                            badge: root.google-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
+                            badge-alert: root.google-needs-signin;
+                            sources: root.google-sources;
+                            empty-text: root.no-calendars-text;
+                            remove-label: root.remove-source-label;
+                            primary-label: root.reconnect-label;
+                            show-primary: root.google-needs-signin;
+                            secondary-label: root.disconnect-google-label;
+                            show-secondary: !root.google-needs-signin && (root.google-connected || root.google-sources.length > 0 || root.google-status-text != "");
+                            refresh-label: root.refresh-button-text;
+                            show-refresh: root.can-refresh-calendars && root.google-connected;
+                            controls-enabled: !root.provider-loading;
+                            primary-clicked => { root.choose-google-account(); }
+                            secondary-clicked => { root.disconnect-google(); }
+                            refresh-clicked => { root.refresh-calendars(); }
+                            toggle-source(id) => { root.toggle-calendar-source(id); }
+                            remove-source(id) => { root.remove-calendar-source(id); }
+                        }
+
+                        if root.ics-sources.length > 0 : AccountBlock {
+                            dark-mode: root.dark-mode;
+                            title: root.ics-section-text;
+                            status: root.ics-status-text;
+                            badge: root.ics-status-text == "" ? root.provider-readonly-tag-text : "";
+                            badge-alert: root.ics-status-text != "";
+                            sources: root.ics-sources;
+                            empty-text: "";
+                            remove-label: root.remove-source-label;
+                            refresh-label: root.refresh-button-text;
+                            show-refresh: root.can-refresh-calendars;
+                            controls-enabled: !root.provider-loading;
+                            refresh-clicked => { root.refresh-calendars(); }
+                            toggle-source(id) => { root.toggle-calendar-source(id); }
+                            remove-source(id) => { root.remove-calendar-source(id); }
+                        }
+
+                        if root.windows-sources.length > 0 : AccountBlock {
+                            dark-mode: root.dark-mode;
+                            title: root.legacy-windows-label;
+                            status: "";
+                            badge: "";
+                            sources: root.windows-sources;
+                            empty-text: "";
+                            remove-label: root.remove-source-label;
+                            refresh-label: root.refresh-button-text;
+                            show-refresh: root.can-refresh-calendars;
+                            controls-enabled: !root.provider-loading;
+                            refresh-clicked => { root.refresh-calendars(); }
+                            toggle-source(id) => { root.toggle-calendar-source(id); }
+                            remove-source(id) => { root.remove-calendar-source(id); }
+                        }
 
                         if root.legacy-windows-enabled : HorizontalLayout {
+                            height: 28px;
                             spacing: 8px;
-                            horizontal-stretch: 1;
-                            alignment: start;
+                            alignment: space-between;
                             Text {
                                 text: root.legacy-windows-label;
                                 font-size: 10.5px;
-                                font-weight: 400;
                                 color: root.dark-mode ? #B4B4B4 : #646464;
                                 vertical-alignment: center;
-                                overflow: elide;
                                 horizontal-stretch: 1;
+                                overflow: elide;
                             }
                             SwitchToggle {
-                                checked: root.legacy-windows-enabled;
+                                checked: true;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-legacy-windows(); }
                             }
                         }
-                        if !root.legacy-windows-enabled : Text {
-                            text: root.account-needs-signin ? root.events-stale-text : root.sync-status-text;
-                            font-size: 10.5px;
-                            font-weight: 400;
-                            color: root.account-needs-signin
-                                ? (root.dark-mode ? #FF9DA1 : #BC333B)
-                                : (root.dark-mode ? #B4B4B4 : #646464);
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                            overflow: elide;
-                        }
-                        if root.can-refresh-calendars : SettingsButton {
-                            label: root.refresh-button-text;
-                            kind: "subtle";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.refresh-calendars(); }
-                        }
-                        if root.account-needs-signin : SettingsButton {
-                            label: root.reconnect-label;
-                            kind: "primary";
-                            button-width: 112px;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.connect-microsoft(); }
-                        }
-                        if root.can-disconnect-microsoft && !root.account-needs-signin : SettingsButton {
-                            label: root.disconnect-microsoft-label;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.disconnect-microsoft(); }
+
+                        if !any-account && !root.sign-in-cancelled : VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: root.calendars-empty-title-text;
+                                font-size: 12.5px;
+                                font-weight: 600;
+                                color: root.dark-mode ? #EEEEEE : #202020;
+                                wrap: word-wrap;
+                            }
+                            Text {
+                                text: root.calendars-empty-desc-text;
+                                font-size: 11px;
+                                font-weight: 400;
+                                color: root.dark-mode ? #B4B4B4 : #646464;
+                                wrap: word-wrap;
+                            }
                         }
                     }
                 }
             }
 
-            // Empty / denied: still allow turning legacy Windows calendars off.
-            if (root.calendars-is-empty || root.calendars-access-denied) && root.legacy-windows-enabled : Rectangle {
+            if root.calendars-access-denied && root.legacy-windows-enabled : Rectangle {
                 x: 28px;
                 y: 268px;
                 width: 392px;
@@ -1941,36 +2070,39 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if root.language-dropdown-open : Rectangle {
-                x: 236px;
-                y: 46px;
-                SettingsMenu {
+        }
+
+        if root.settings-tab == 2 && root.language-dropdown-open : Rectangle {
+            x: 244px;
+            y: 108px;
+            width: 176px;
+            height: lang-menu.height;
+            lang-menu := SettingsMenu {
+                dark-mode: root.dark-mode;
+                width: 176px;
+                SettingsDropdownOption {
+                    label: root.lang-en-us-label;
+                    active: root.current-language-code == "en";
                     dark-mode: root.dark-mode;
-                    width: 168px;
-                    SettingsDropdownOption {
-                        label: root.lang-en-us-label;
-                        active: root.current-language-code == "en";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-language("en"); }
-                    }
-                    SettingsDropdownOption {
-                        label: root.lang-ru-label;
-                        active: root.current-language-code == "ru";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-language("ru"); }
-                    }
-                    SettingsDropdownOption {
-                        label: root.lang-es-label;
-                        active: root.current-language-code == "es";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-language("es"); }
-                    }
-                    SettingsDropdownOption {
-                        label: root.lang-ja-label;
-                        active: root.current-language-code == "ja";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-language("ja"); }
-                    }
+                    clicked => { root.select-language("en"); }
+                }
+                SettingsDropdownOption {
+                    label: root.lang-ru-label;
+                    active: root.current-language-code == "ru";
+                    dark-mode: root.dark-mode;
+                    clicked => { root.select-language("ru"); }
+                }
+                SettingsDropdownOption {
+                    label: root.lang-es-label;
+                    active: root.current-language-code == "es";
+                    dark-mode: root.dark-mode;
+                    clicked => { root.select-language("es"); }
+                }
+                SettingsDropdownOption {
+                    label: root.lang-ja-label;
+                    active: root.current-language-code == "ja";
+                    dark-mode: root.dark-mode;
+                    clicked => { root.select-language("ja"); }
                 }
             }
         }
@@ -2198,7 +2330,11 @@ export component AppWindow inherits Window {
             }
         }
 
-        if root.ics-dialog-open : Rectangle {
+        if root.ics-dialog-open : ics-dialog := FocusScope {
+            width: parent.width;
+            height: parent.height;
+
+            Rectangle {
             width: parent.width;
             height: parent.height;
             background: root.dark-mode ? #00000066 : #00000033;
@@ -2256,7 +2392,7 @@ export component AppWindow inherits Window {
                     placeholder: root.ics-name-placeholder;
                     dark-mode: root.dark-mode;
                 }
-                SettingsField {
+                url-field := SettingsField {
                     x: 16px;
                     y: 120px;
                     width: 368px;
@@ -2292,6 +2428,8 @@ export component AppWindow inherits Window {
                     clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
                 }
             }
+            }
+            init => { url-field.focus-input(); }
         }
 
         // Footer
@@ -2304,6 +2442,10 @@ export component AppWindow inherits Window {
         }
 
         if root.settings-tab != 3 : Rectangle {
+            x: 0px;
+            y: 320px;
+            width: parent.width;
+            height: 40px;
             Text {
                 x: 16px;
                 y: 328px;

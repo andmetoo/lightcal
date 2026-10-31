@@ -17,6 +17,10 @@ pub struct CalendarLoad {
     pub microsoft: MicrosoftAccountState,
     pub google_connected: bool,
     pub google_needs_signin: bool,
+    pub google_label: Option<String>,
+    pub google_error: String,
+    pub google_skipped: usize,
+    pub ics_error: String,
 }
 
 pub fn random_key() -> Result<String, String> {
@@ -43,6 +47,7 @@ pub fn query(
     dir: &Path,
     microsoft_client_id: &str,
     google_client_id: &str,
+    google_client_secret: &str,
     selected: &BTreeSet<String>,
     legacy_windows: bool,
 ) -> CalendarLoad {
@@ -80,19 +85,37 @@ pub fn query(
     }
     let mut google_connected = false;
     let mut google_needs_signin = false;
+    let mut google_label = None;
+    let mut google_error = String::new();
+    let mut google_skipped = 0;
     if credentials.google_refresh_token.is_some() {
-        match google::query(anchor, google_client_id, selected, &mut credentials, &store) {
+        match google::query(
+            anchor,
+            google_client_id,
+            google_client_secret,
+            selected,
+            &mut credentials,
+            &store,
+        ) {
             Ok(data) => {
                 google_needs_signin = data.needs_signin;
                 google_connected = !data.needs_signin;
+                google_label = data.label;
+                google_skipped = data.skipped;
                 append_provider(&mut snapshot, data.snapshot, &mut errors);
             }
             Err(e) => {
                 google_needs_signin = e.contains("sign in again");
-                errors.push(e);
+                if google_needs_signin {
+                    google_connected = false;
+                } else {
+                    google_error = e.clone();
+                    errors.push(e);
+                }
             }
         }
     }
+    let mut ics_errors = Vec::new();
     for feed in &credentials.ics {
         snapshot.sources.push(calendar_core::CalendarSource {
             id: feed.id.clone(),
@@ -103,7 +126,11 @@ pub fn query(
         if selected.contains(&feed.id) {
             match ics::fetch(feed, anchor) {
                 Ok(events) => snapshot.occurrences.extend(events),
-                Err(e) => errors.push(format!("{}: {e}", feed.name)),
+                Err(e) => {
+                    let message = format!("{}: {e}", feed.name);
+                    ics_errors.push(message.clone());
+                    errors.push(message);
+                }
             }
         }
     }
@@ -117,6 +144,10 @@ pub fn query(
         microsoft: account,
         google_connected,
         google_needs_signin,
+        google_label,
+        google_error,
+        google_skipped,
+        ics_error: ics_errors.join("\n"),
     }
 }
 
@@ -139,7 +170,8 @@ fn finish_status(snapshot: &mut ProviderSnapshot, errors: &[String]) {
     if snapshot.status == ProviderStatus::AccessDenied {
         return;
     }
-    snapshot.status = if !errors.is_empty() {
+    // A failure from one provider must not hide calendars another provider already loaded.
+    snapshot.status = if snapshot.sources.is_empty() && !errors.is_empty() {
         ProviderStatus::ProviderUnavailable(errors.join("\n"))
     } else if snapshot.sources.is_empty() {
         ProviderStatus::NoCalendars
@@ -155,6 +187,10 @@ fn failure(error: String) -> CalendarLoad {
         },
         google_connected: false,
         google_needs_signin: false,
+        google_label: None,
+        google_error: String::new(),
+        google_skipped: 0,
+        ics_error: String::new(),
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),
             sources: Vec::new(),
@@ -237,5 +273,21 @@ mod tests {
             snapshot.status,
             ProviderStatus::ProviderUnavailable("offline".into())
         );
+    }
+    #[test]
+    fn a_provider_error_keeps_calendars_already_loaded() {
+        let mut snapshot = empty(ProviderStatus::Available);
+        snapshot.sources.push(calendar_core::CalendarSource {
+            id: "graph:primary".into(),
+            name: "Calendar".into(),
+            account_label: "Outlook".into(),
+            color_hex: "#00796B".into(),
+        });
+        finish_status(
+            &mut snapshot,
+            &["Google calendar request failed (HTTP 500)".into()],
+        );
+        assert_eq!(snapshot.status, ProviderStatus::Available);
+        assert_eq!(snapshot.sources.len(), 1);
     }
 }
