@@ -340,7 +340,8 @@ const RU_STRINGS: UiStrings = UiStrings {
     refresh_button: "Обновить",
     calendars_empty_title: "Аккаунты ещё не подключены",
     calendars_denied_title: "Доступ к календарям отключён в параметрах конфиденциальности",
-    calendars_unavailable_desc: "Пока ничего не подключено. Добавьте Google, Outlook или ICS и выберите календари.",
+    calendars_unavailable_desc:
+        "Пока ничего не подключено. Добавьте Google, Outlook или ICS и выберите календари.",
     calendars_dot_note: "Точки событий показываются только для отмеченных календарей (до 3 точек).",
     about_subtitle: "Версия и ссылки.",
     about_license_line: "Лицензия GPL-3.0-only · Открытый исходный код",
@@ -459,7 +460,8 @@ const ES_STRINGS: UiStrings = UiStrings {
     refresh_button: "Actualizar",
     calendars_empty_title: "Aún no hay cuentas conectadas",
     calendars_denied_title: "El acceso al calendario no está disponible",
-    calendars_unavailable_desc: "Todavía no hay nada conectado. Añade Google, Outlook o un ICS y elige calendarios.",
+    calendars_unavailable_desc:
+        "Todavía no hay nada conectado. Añade Google, Outlook o un ICS y elige calendarios.",
     calendars_dot_note:
         "Solo los calendarios marcados muestran puntos de eventos (máx. 3 por día).",
     about_subtitle: "Versión y enlaces.",
