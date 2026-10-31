@@ -22,16 +22,17 @@ mail access, event editing, telemetry, or a UI framework change.
   sentences, and place controls close to labels. Disconnected providers belong
   in Add account, rather than permanently occupying large empty account cards.
 - Windows has a static application icon and a dynamic day-of-month tray badge.
-  The owner subsequently removed the date badge's cap and paper: the live icon
-  is just optically centered Onest numerals on transparency, with coral or
-  system-monochrome ink. Fit all dates at one font size per native icon size.
-  Read the Windows shell theme independently of the app theme for contrast.
-  Appearance offers color or monochrome numerals. Remove weekday/time tray modes
+  After the numeral-only experiment, the owner's actual-shell review restored
+  a calendar page with a slim header and contrasting date (see ADR 0010).
+  Fit all dates at one font size per native icon size. Read the Windows shell
+  theme independently of the app theme for contrast. Appearance offers color
+  or monochrome calendars. Remove weekday/time tray modes
   from the new design; do not suggest replacing the Windows system clock.
 - macOS retains the shared calendar and content hierarchy, with left-side window
-  controls, “Open at login,” macOS shortcut notation, a system-colored menu-bar
-  date label, and a separate static Dock icon. Offer date or weekday/date labels;
-  do not duplicate the system clock.
+  controls, “Open at login,” macOS shortcut notation and a separate static Dock
+  icon. The owner's later sizing review selects the same calendar badge in the
+  menu bar with Color/Mono choices, superseding date/weekday text labels.
+  Do not duplicate the system clock.
 - Google connects in the system browser. Present the read-only access boundary
   before sign-in. Distinguish disconnected, browser sign-in, cancellation,
   access refusal, connected, expired authorization, transport failure, no
@@ -48,8 +49,8 @@ icon sources, raster design exports and documentation. It does not implement
 Google OAuth or change the shipped application or installer. Provider work must
 still use the toolkit-independent core and isolated fixture tests.
 
-The subsequent [numeral-only Windows icon decision](0009-windows-date-numerals.md)
-also updates the native date renderer. It does not imply completion of the
+The subsequent [calendar status icon decision](0010-windows-calendar-tray-icon.md)
+also updates the native Windows renderer and macOS size specification. It does not imply completion of the
 other runtime UI or provider work described by these mockups.
 
 For implementation, request only the Google Calendar permissions needed to

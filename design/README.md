@@ -20,13 +20,17 @@ specimens use the updated palette.
   and private ICS are choices in Add account. Consent, cancellation, revoked
   access, offline data and empty selection have separate states.
 - Windows uses a static application icon and a live date badge in the tray.
-  Following the owner's screenshot review, the live date uses only numerals
-  on transparency: no paper, cap or outline. Color/monochrome controls select
-  the ink. The native renderer centers visible glyph bounds and uses one font
-  size for all dates at each shell size; shell contrast follows Windows rather
-  than the application's selected theme.
-  macOS uses platform window controls, login/shortcut terminology, a monochrome
-  menu-bar label and a separate Dock icon. Neither replaces the system clock.
+  Following the owner's actual-shell review, the live date restores a compact
+  calendar page, slim coral/monochrome header and contrasting Onest date.
+  The native renderer centers visible raster bounds and uses one font size for
+  all dates at each shell size; shell contrast follows Windows rather than the
+  application's selected theme. The isolated icon migration preserves the
+  owner's other edits. See [ADR 0010](../docs/decisions/0010-windows-calendar-tray-icon.md).
+  macOS uses platform window controls, login/shortcut terminology, the same
+  calendar badge in an AppKit-sized status item, and a separate Dock icon.
+  Both platforms offer Color / Mono. The Mac design specifies 18 pt artwork
+  in a representative 24 pt menu bar, with 1x/2x assets. The system owns the
+  actual button dimensions; neither platform replaces its system clock.
 - English, Russian, Spanish and Japanese examples retain user event titles.
 
 Typography: Windows uses the owner's selected Onest (Fontsource 5.3.1).
@@ -71,7 +75,10 @@ the whole earlier file, including the original pages.
 - [Japanese shortcut error](review/japanese-shortcut-error.png)
 - [Russian shortcut error](review/russian-shortcut-error.png)
 - [macOS shortcut error with vector key symbols](review/macos-shortcut-error.png)
-- [Native Windows date: calendar cap versus numeral-only](review/windows-date-numerals.png)
+- [Native Windows calendar tray icon, both styles and themes](review/windows-tray-calendar.png)
+- [Current Penpot calendar tray specimens](review/windows-tray-penpot.png)
+- [macOS shared status icon at native menu-bar proportions](review/macos-status-size.png)
+- [Historical numeral-only experiment](review/windows-date-numerals.png)
 - [Native Gray + Teal App, dark](review/native-gray-teal-app-dark.png)
 - [Native Gray + Teal App, light](review/native-gray-teal-app-light.png)
 - [Native Gray + Teal Calendar settings, dark](review/native-gray-teal-calendar-dark.png)
@@ -114,6 +121,6 @@ previous Inter version.
 These are design deliverables. Google OAuth, runtime UI alignment, real Windows
 DPI/shell checks and real macOS integration remain implementation/release work.
 No application performance measurement is claimed. The subsequent native
-[Windows date-icon followup](../docs/decisions/0009-windows-date-numerals.md)
-implements the numeral-only renderer and reads the shell theme. It does not
+[Windows tray-icon followup](../docs/decisions/0010-windows-calendar-tray-icon.md)
+implements the calendar-shaped date renderer and reads the shell theme. It does not
 change credentials, autostart, registry values or release packaging.

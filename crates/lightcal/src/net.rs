@@ -110,9 +110,7 @@ pub enum AuthenticationError {
 impl AuthenticationError {
     pub fn message(self) -> String {
         match self {
-            Self::SignInRequired => {
-                "Microsoft session expired or consent was revoked; sign in again".into()
-            }
+            Self::SignInRequired => "Sign-in expired or consent was revoked; sign in again".into(),
             Self::Failed(message) => message,
         }
     }
@@ -165,7 +163,7 @@ fn evaluate_authentication_response(
             return Err(AuthenticationError::SignInRequired);
         }
         return Err(AuthenticationError::Failed(format!(
-            "Microsoft authentication request failed (HTTP {status})"
+            "Authentication request failed (HTTP {status})"
         )));
     }
     Ok(payload)

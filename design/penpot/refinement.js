@@ -112,14 +112,10 @@ storage.refinement = {
     this.rect(p,name,x,y,w,22,fill,6);
     this.text(p,name+' label',label,x+6,y,w-12,22,10.5,500,ink,'center');
   },
+  // Load refinement-tray-calendar-helper.js before building dated specimens.
+  dateBadge: prior?.dateBadge,
   brand(p,x,y,size,date=null,mono=false,darkSurface=null) {
-    if(date!==null) {
-      const dark=darkSurface??(p.getPluginData('lightcal-theme')==='dark');
-      const ink=mono?(dark?'#EEEEEE':'#141416'):(dark?'#FF8A90':'#CF2835');
-      const numeral=this.text(p,'Live date numeral',date,x,y-size*.02,size,size,size*.74,700,ink,'center');
-      numeral.setPluginData('lightcal-date-icon','numerals-only-v1');
-      return numeral;
-    }
+    if(date!==null)return this.dateBadge(p,x,y,size,date,mono,darkSurface??(p.getPluginData('lightcal-theme')==='dark'));
     const edge=size<=24?1:Math.max(1,size/80),r=size*.22,cap=Math.round(size*.27);
     const body=this.rect(p,'App icon body',x,y,size,size,'#FFFFFF',r,'#BBBBBB',edge);
     body.setPluginData('lightcal-icon-optics','centered-v1');

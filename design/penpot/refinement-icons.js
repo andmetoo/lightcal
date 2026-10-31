@@ -10,7 +10,7 @@ for(const [j,theme] of ['light','dark'].entries()) {
   r.text(b,'Application icon description','A stable mark in Start, the taskbar and the Dock.\nFour simple tiles. One intentional accent.',204,200,390,56,13,400,t.secondary);
   r.brand(b,708,154,128,'31');
   r.text(b,'Live icon heading','Today, in the tray',872,158,500,28,18,600,t.ink);
-  r.text(b,'Live icon description','Only the date. More space for readable numerals.\nThe numeral changes at local midnight.',872,200,500,56,13,400,t.secondary);
+  r.text(b,'Live icon description','A compact calendar page with a clear date.\nA slim header keeps its identity at small sizes.',872,200,500,56,13,400,t.secondary);
   r.line(b,'Icon comparison divider',32,328,1376,t.line);
   r.text(b,'Small sizes heading','Drawn for the size you actually see',32,354,1376,28,18,600,t.ink);
   for(const [i,size] of [16,20,24,32,48,64].entries()) {
@@ -27,11 +27,13 @@ for(const [j,theme] of ['light','dark'].entries()) {
     r.text(b,'Date test '+day,String(day),32+i*92,680,56,20,11,400,t.secondary,'center');
   });
   r.text(b,'Menu bar heading','macOS menu bar',744,578,630,26,18,600,t.ink);
-  r.rect(b,'Date label sample',744,632,112,42,t.group,8);
-  r.text(b,'Date label','31',744,632,112,42,13,600,t.ink,'center');
-  r.rect(b,'Weekday date label sample',872,632,136,42,t.group,8);
-  r.text(b,'Weekday date label','Sat 31',872,632,136,42,13,600,t.ink,'center');
-  r.text(b,'Menu label guidance','System-colored text. No colored tile. No clock duplication.',744,692,630,24,12,400,t.secondary);
+  r.rect(b,'Date label sample',744,632,24,24,t.group,4);
+  r.dateBadge(b,747,635,18,'31',false,theme==='dark');
+  r.text(b,'Date label','Color',780,632,72,24,12,500,t.ink);
+  r.rect(b,'Weekday date label sample',872,632,24,24,t.group,4);
+  r.dateBadge(b,875,635,18,'31',true,theme==='dark');
+  r.text(b,'Weekday date label','Mono',908,632,80,24,12,500,t.ink);
+  r.text(b,'Menu label guidance','Same calendar silhouette. 18 pt artwork in a system-sized status item.',744,692,630,24,12,400,t.secondary);
   r.text(b,'Icon release note','Design specimens · Native DPI, Explorer and macOS shell checks remain release gates.',32,750,1376,22,11,400,t.secondary);
 }
 // Standalone export boards have transparent backgrounds and deliberate padding.

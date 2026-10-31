@@ -68,13 +68,9 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
       this.text(b,'Shortcut state','Not set',252,176,76,40,11,400,t.secondary);
       const key=this.button(b,'Record shortcut','Record…',336,182,84,t);setTarget(key,'shortcut');
     }
-    row(mac?'Menu bar label':'Tray icon',3);
-    if(mac) {
-      this.segmentFrame(b,'Menu label selection',268,222,152,2,t,1);
-      this.text(b,'Date only option label','31',268,222,76,28,11,500,t.ink,'center');
-      this.text(b,'Weekday and date option','Sat 31',344,222,76,28,11,600,t.ink,'center');
-    } else {
-      this.segmentFrame(b,'Tray palette selection',268,222,152,2,t);
+    row(mac?'Menu bar icon':'Tray icon',3);
+    {
+      this.segmentFrame(b,mac?'Menu label selection':'Tray palette selection',268,222,152,2,t);
       [false,true].forEach((mono,i)=>{
         const xx=268+i*76;this.brand(b,xx+6,228,16,'31',mono);this.text(b,mono?'Monochrome label':'Color label',mono?'Mono':'Color',xx+27,222,42,28,10.5,mono?400:600,t.ink);
       });

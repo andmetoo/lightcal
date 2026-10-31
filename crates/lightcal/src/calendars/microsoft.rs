@@ -21,7 +21,7 @@ const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/to
 const SCOPES: &str = "https://graph.microsoft.com/Calendars.Read offline_access";
 const CALLBACK_PATH: &str = "/lightcalendar/oauth/microsoft";
 
-fn callback_listener() -> Result<TcpListener, String> {
+fn callback_listener(port: u16) -> Result<TcpListener, String> {
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::STREAM,
@@ -49,7 +49,7 @@ fn callback_listener() -> Result<TcpListener, String> {
             return Err("Could not reserve an exclusive Windows sign-in socket".into());
         }
     }
-    let address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+    let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     socket
         .bind(&address.into())
         .map_err(|_| "Could not bind local sign-in callback")?;
@@ -78,14 +78,11 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
     if !valid_client_id(client_id) {
         return Err("Configure a Microsoft Entra Desktop app Client ID first (see provider setup documentation)".into());
     }
-    let listener = callback_listener()?;
-    let redirect = format!(
-        "http://localhost:{}{CALLBACK_PATH}",
-        listener
-            .local_addr()
-            .map_err(|_| "Could not configure sign-in port")?
-            .port()
-    );
+    let listener = callback_listener(80).map_err(|_| {
+        "Could not listen on port 80 for Microsoft sign-in. The redirect URI is http://localhost/lightcalendar/oauth/microsoft."
+            .to_string()
+    })?;
+    let redirect = format!("http://localhost{CALLBACK_PATH}");
     let verifier = random_key()?;
     let state = random_key()?;
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -450,7 +447,7 @@ mod tests {
             assert_eq!(redirect.path(), "/lightcalendar/oauth/microsoft");
             assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
             let state = params.get("state").unwrap().to_string();
-            let port = redirect.port().unwrap();
+            let port = redirect.port().unwrap_or(80);
             responder = Some(std::thread::spawn(move || {
                 let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
                 stream
@@ -523,7 +520,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_callback_socket_refuses_competing_reuse_bind() {
-        let listener = callback_listener().unwrap();
+        let listener = callback_listener(0).unwrap();
         let address = listener.local_addr().unwrap();
         assert!(address.ip().is_loopback());
         let competing = socket2::Socket::new(

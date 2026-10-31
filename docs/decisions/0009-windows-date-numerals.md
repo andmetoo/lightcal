@@ -2,6 +2,9 @@
 
 Date: 2026-10-31. Status: accepted from the owner's screenshot review in chat.
 
+Superseded by [ADR 0010](0010-windows-calendar-tray-icon.md) after the owner's
+review of the actual Windows tray. The following records the earlier experiment.
+
 The calendar cap used vertical space without adding information to a live day
 number. The owner requested just the numerals, with more even alignment.
 

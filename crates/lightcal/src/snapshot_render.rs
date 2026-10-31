@@ -78,6 +78,11 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         update_channel_dropdown_open: false,
         calendars_access_denied: false,
         calendars_is_empty: false,
+        add_account_open: false,
+        ics_dialog_open: false,
+        sign_in_cancelled: false,
+        google_connected: false,
+        google_needs_signin: false,
     };
 
     let helper = HeadlessPlatform {

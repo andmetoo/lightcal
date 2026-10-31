@@ -41,7 +41,7 @@ just build-installer
 cargo run -p lightcal --locked -- --render-snapshots target/snapshots
 ```
 
-Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env.local` for the public Microsoft client id and the update certificate pin.
+Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env` for the public client ids and the update certificate pin.
 
 ## Documentation
 

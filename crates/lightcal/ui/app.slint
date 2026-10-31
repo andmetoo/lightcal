@@ -369,6 +369,8 @@ component BrandMark inherits Rectangle {
 
 component SettingsRow inherits Rectangle {
     in property <string> title;
+    in property <string> subtitle: "";
+    in property <color> subtitle-color: #BC333B;
     in property <bool> dark-mode: false;
     in property <bool> show-divider: true;
     in property <color> title-color: #202020;
@@ -384,14 +386,24 @@ component SettingsRow inherits Rectangle {
         spacing: 12px;
         alignment: space-between;
 
-        Text {
-            text: root.title;
-            font-size: 12px;
-            font-weight: 500;
-            color: root.title-color;
-            vertical-alignment: center;
+        VerticalLayout {
+            alignment: center;
             horizontal-stretch: 1;
-            overflow: elide;
+            Text {
+                text: root.title;
+                font-size: 12px;
+                font-weight: 500;
+                color: root.title-color;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                font-size: 10.5px;
+                font-weight: 400;
+                color: root.subtitle-color;
+                overflow: elide;
+            }
         }
 
         HorizontalLayout {
@@ -521,6 +533,29 @@ export component AppWindow inherits Window {
     in property <bool> provider-loading;
     in property <string> account-status-text;
     in property <bool> account-connected;
+    in property <bool> account-needs-signin: false;
+    in property <bool> sign-in-cancelled: false;
+    in property <bool> add-account-open: false;
+    in property <bool> ics-dialog-open: false;
+    in property <string> add-account-title: "Add an account";
+    in property <string> add-account-intro: "Choose a read-only source.";
+    in property <string> google-account-label: "Google Calendar";
+    in property <string> google-account-desc: "Connect using your Google account.";
+    in property <string> outlook-account-desc: "Work, school, or a personal account.";
+    in property <string> ics-account-label: "Private ICS link";
+    in property <string> ics-account-desc: "Subscribe using a calendar address.";
+    in property <string> waiting-browser-text: "Waiting for browser…";
+    in property <string> cancel-sign-in-label: "Cancel";
+    in property <string> try-again-label: "Try again";
+    in property <string> sign-in-cancelled-text: "Sign-in cancelled. Your accounts are unchanged.";
+    in property <string> events-stale-text: "Events may be out of date.";
+    in property <string> reconnect-label: "Reconnect";
+    in property <string> no-calendars-text: "No calendars found for this account.";
+    in property <string> ics-dialog-title: "Add a calendar link";
+    in property <string> ics-privacy-text: "Anyone with the address can read this calendar.";
+    in property <string> ics-stays-local-text: "Stays on this computer.";
+    in property <string> subscribe-label: "Subscribe";
+    in property <string> google-unavailable-text: "Google sign-in is not configured in this build.";
     in property <bool> can-connect-microsoft;
     in property <bool> can-disconnect-microsoft;
     in property <bool> can-refresh-calendars;
@@ -581,7 +616,9 @@ export component AppWindow inherits Window {
     in property <string> shortcut-conflict-title: "Shortcut unavailable: Alt + Space is already registered by Raycast.";
     in property <string> shortcut-conflict-hint: "Press a new key combination (for example Alt + C) or click Reset.";
     in property <string> shortcut-reset-label: "Reset";
-    in property <string> shortcut-record-label: "Change";
+    in property <string> shortcut-record-label: "Record…";
+    in property <string> shortcut-change-label: "Change";
+    in property <string> shortcut-conflict-line: "Used by another app";
     in property <string> shortcut-clear-label: "Clear";
     in property <bool> shortcut-can-clear: false;
     in property <string> section-region-text: "Region";
@@ -676,6 +713,11 @@ export component AppWindow inherits Window {
     callback open-privacy-settings();
     callback retry-calendar-sync();
     callback add-calendar-account();
+    callback close-account-dialogs();
+    callback choose-outlook-account();
+    callback choose-google-account();
+    callback choose-ics-account();
+    callback cancel-account-sign-in();
     callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
@@ -889,7 +931,7 @@ export component AppWindow inherits Window {
                 for col-idx in [0, 1, 2, 3, 4, 5, 6] : cell-box := Rectangle {
                     property <int> cell-index: row-idx * 7 + col-idx;
                     property <DayCellData> cell: root.cells[self.cell-index];
-                    property <bool> today-in-month: self.cell.is-today && self.cell.in-month;
+                    property <bool> today-mark: self.cell.is-today;
 
                     x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 4px;
                     y: 0px;
@@ -899,28 +941,28 @@ export component AppWindow inherits Window {
                     accessible-role: button;
                     accessible-label: self.cell.accessible-label;
 
-                    background: self.today-in-month
+                    background: self.today-mark
                         ? #D73840
                         : (self.cell.is-selected
                             ? (root.dark-mode ? #3A3A3A : #E0E0E0)
                             : (cell-touch.has-hover && self.cell.in-month
                                 ? (root.dark-mode ? #2A2A2A : #F0F0F0)
                                 : transparent));
-                    border-width: (self.cell.is-selected && !self.today-in-month) ? 1.5px : 0px;
+                    border-width: (self.cell.is-selected && !self.today-mark) ? 1.5px : 0px;
                     border-color: root.dark-mode ? #7B7B7B : #838383;
 
                     Text {
                         width: parent.width;
-                        height: (cell-box.cell.dot-count > 0 && cell-box.cell.in-month && root.show-event-dots)
+                        height: (cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots)
                             ? 25px
                             : parent.height;
                         y: 1px;
                         text: cell-box.cell.day-number;
                         font-size: 14px;
-                        font-weight: ((cell-box.cell.is-today && cell-box.cell.in-month) || cell-box.cell.is-selected)
+                        font-weight: (cell-box.cell.is-today || cell-box.cell.is-selected)
                             ? 600
                             : 500;
-                        color: (cell-box.cell.is-today && cell-box.cell.in-month)
+                        color: cell-box.cell.is-today
                             ? #FFFFFF
                             : (!cell-box.cell.in-month
                                 ? (root.dark-mode ? #9B9B9B : #646464)
@@ -929,7 +971,7 @@ export component AppWindow inherits Window {
                         vertical-alignment: center;
                     }
 
-                    if cell-box.cell.dot-count > 0 && cell-box.cell.in-month && root.show-event-dots : HorizontalLayout {
+                    if cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots : HorizontalLayout {
                         x: 0px;
                         width: parent.width;
                         y: 26px;
@@ -941,19 +983,19 @@ export component AppWindow inherits Window {
                             width: 3px;
                             height: 3px;
                             border-radius: 1.5px;
-                            background: (cell-box.cell.is-today && cell-box.cell.in-month) ? #FFFFFF : cell-box.cell.dot1;
+                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot1;
                         }
                         if cell-box.cell.dot-count >= 2 : Rectangle {
                             width: 3px;
                             height: 3px;
                             border-radius: 1.5px;
-                            background: (cell-box.cell.is-today && cell-box.cell.in-month) ? #FFFFFF : cell-box.cell.dot2;
+                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot2;
                         }
                         if cell-box.cell.dot-count >= 3 : Rectangle {
                             width: 3px;
                             height: 3px;
                             border-radius: 1.5px;
-                            background: (cell-box.cell.is-today && cell-box.cell.in-month) ? #FFFFFF : cell-box.cell.dot3;
+                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot3;
                         }
                     }
 
@@ -1411,10 +1453,47 @@ export component AppWindow inherits Window {
                 background: root.dark-mode ? #222222 : #F0F0F0;
                 clip: true;
 
-                if root.calendars-is-empty && !root.calendars-access-denied : VerticalLayout {
+                if root.connection-busy : VerticalLayout {
                     padding: 16px;
                     spacing: 8px;
-
+                    Text {
+                        text: root.outlook-section-text;
+                        font-size: 12.5px;
+                        font-weight: 600;
+                        color: root.dark-mode ? #EEEEEE : #202020;
+                    }
+                    Text {
+                        text: root.waiting-browser-text;
+                        font-size: 11px;
+                        color: root.dark-mode ? #B4B4B4 : #646464;
+                        wrap: word-wrap;
+                    }
+                    SettingsButton {
+                        label: root.cancel-sign-in-label;
+                        dark-mode: root.dark-mode;
+                        clicked => { root.cancel-account-sign-in(); }
+                    }
+                }
+                if root.sign-in-cancelled && !root.connection-busy : VerticalLayout {
+                    padding: 16px;
+                    spacing: 8px;
+                    Text {
+                        text: root.sign-in-cancelled-text;
+                        font-size: 12px;
+                        font-weight: 500;
+                        color: root.dark-mode ? #EEEEEE : #202020;
+                        wrap: word-wrap;
+                    }
+                    SettingsButton {
+                        label: root.try-again-label;
+                        kind: "primary";
+                        dark-mode: root.dark-mode;
+                        clicked => { root.connect-microsoft(); }
+                    }
+                }
+                if root.calendars-is-empty && !root.calendars-access-denied && !root.account-connected && !root.account-needs-signin && !root.connection-busy && !root.sign-in-cancelled : VerticalLayout {
+                    padding: 16px;
+                    spacing: 8px;
                     Text {
                         text: root.calendars-empty-title-text;
                         font-size: 12.5px;
@@ -1429,33 +1508,11 @@ export component AppWindow inherits Window {
                         color: root.dark-mode ? #B4B4B4 : #646464;
                         wrap: word-wrap;
                     }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        SettingsButton {
-                            label: root.connect-microsoft-label;
-                            kind: "primary";
-                            enabled: root.can-connect-microsoft;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.connect-microsoft(); }
-                        }
-                        SettingsButton {
-                            label: root.add-ics-label;
-                            enabled: !root.connection-busy && root.ics-source-name != "" && root.ics-source-url != "";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
-                        }
-                    }
-                    SettingsField {
-                        text <=> root.ics-source-name;
-                        placeholder: root.ics-name-placeholder;
-                        dark-mode: root.dark-mode;
-                        enabled: !root.connection-busy && !root.provider-loading;
-                    }
-                    SettingsField {
-                        text <=> root.ics-source-url;
-                        placeholder: root.ics-url-placeholder;
-                        dark-mode: root.dark-mode;
-                        enabled: !root.connection-busy && !root.provider-loading;
+                    if root.connection-message != "" : Text {
+                        text: root.connection-message;
+                        font-size: 11px;
+                        color: root.dark-mode ? #FF9DA1 : #BC333B;
+                        wrap: word-wrap;
                     }
                 }
 
@@ -1491,7 +1548,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                if !root.calendars-is-empty && !root.calendars-access-denied : VerticalLayout {
+                if (root.account-connected || root.account-needs-signin || !root.calendars-is-empty) && !root.calendars-access-denied && !root.connection-busy && !root.sign-in-cancelled : VerticalLayout {
                     padding-left: 12px;
                     padding-right: 12px;
                     padding-top: 8px;
@@ -1522,18 +1579,35 @@ export component AppWindow inherits Window {
                                 overflow: elide;
                             }
                         }
-                        Text {
-                            text: root.account-connected ? root.provider-readonly-tag-text : root.connection-message;
-                            font-size: 10.5px;
-                            font-weight: 500;
-                            color: root.dark-mode ? #B4B4B4 : #646464;
-                            vertical-alignment: center;
+                        Rectangle {
+                            height: 22px;
+                            border-radius: 6px;
+                            background: root.account-needs-signin ? #BC333B : (root.dark-mode ? #313131 : #E8E8E8);
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                alignment: center;
+                                Text {
+                                    text: root.account-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
+                                    font-size: 10.5px;
+                                    font-weight: 500;
+                                    color: root.account-needs-signin ? #FFFFFF : (root.dark-mode ? #EEEEEE : #202020);
+                                    vertical-alignment: center;
+                                }
+                            }
                         }
                     }
 
                     Rectangle { height: 1px; background: root.dark-mode ? #3A3A3A : #D9D9D9; }
 
-                    ScrollView {
+                    if root.calendar-sources.length == 0 : Text {
+                        text: root.no-calendars-text;
+                        font-size: 12px;
+                        font-weight: 500;
+                        color: root.dark-mode ? #EEEEEE : #202020;
+                        wrap: word-wrap;
+                    }
+                    if root.calendar-sources.length > 0 : ScrollView {
                         height: 72px;
                         VerticalLayout {
                             spacing: 2px;
@@ -1618,10 +1692,12 @@ export component AppWindow inherits Window {
                             }
                         }
                         if !root.legacy-windows-enabled : Text {
-                            text: root.sync-status-text;
+                            text: root.account-needs-signin ? root.events-stale-text : root.sync-status-text;
                             font-size: 10.5px;
                             font-weight: 400;
-                            color: root.dark-mode ? #B4B4B4 : #646464;
+                            color: root.account-needs-signin
+                                ? (root.dark-mode ? #FF9DA1 : #BC333B)
+                                : (root.dark-mode ? #B4B4B4 : #646464);
                             vertical-alignment: center;
                             horizontal-stretch: 1;
                             overflow: elide;
@@ -1632,7 +1708,14 @@ export component AppWindow inherits Window {
                             dark-mode: root.dark-mode;
                             clicked => { root.refresh-calendars(); }
                         }
-                        if root.can-disconnect-microsoft : SettingsButton {
+                        if root.account-needs-signin : SettingsButton {
+                            label: root.reconnect-label;
+                            kind: "primary";
+                            button-width: 112px;
+                            dark-mode: root.dark-mode;
+                            clicked => { root.connect-microsoft(); }
+                        }
+                        if root.can-disconnect-microsoft && !root.account-needs-signin : SettingsButton {
                             label: root.disconnect-microsoft-label;
                             dark-mode: root.dark-mode;
                             clicked => { root.disconnect-microsoft(); }
@@ -1709,39 +1792,27 @@ export component AppWindow inherits Window {
 
                 SettingsRow {
                     title: root.label-shortcut-text;
+                    subtitle: root.shortcut-has-conflict ? root.shortcut-conflict-line : "";
+                    subtitle-color: root.dark-mode ? #FF9DA1 : #BC333B;
                     dark-mode: root.dark-mode;
                     title-color: root.dark-mode ? #EEEEEE : #202020;
                     Text {
-                        text: root.shortcut-has-conflict
-                            ? root.shortcut-conflict-hint
-                            : (root.global-shortcut-display == ""
-                                ? root.shortcut-unset-text
-                                : root.global-shortcut-display);
+                        text: root.global-shortcut-display == ""
+                            ? root.shortcut-unset-text
+                            : root.global-shortcut-display;
                         font-size: 11px;
-                        font-weight: 400;
-                        color: root.shortcut-has-conflict
-                            ? (root.dark-mode ? #FF9DA1 : #BC333B)
-                            : (root.dark-mode ? #B4B4B4 : #646464);
+                        font-weight: 500;
+                        color: root.dark-mode ? #EEEEEE : #202020;
                         vertical-alignment: center;
                         overflow: elide;
                     }
-                    if root.shortcut-has-conflict && root.shortcut-can-clear : SettingsButton {
-                        label: root.shortcut-clear-label;
-                        button-width: 72px;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.clear-shortcut(); }
-                    }
                     SettingsButton {
-                        label: root.shortcut-has-conflict ? root.shortcut-reset-label : root.shortcut-record-label;
+                        label: root.global-shortcut-display == "" || root.global-shortcut-display == root.shortcut-unset-text
+                            ? root.shortcut-record-label
+                            : root.shortcut-change-label;
                         button-width: 84px;
                         dark-mode: root.dark-mode;
-                        clicked => {
-                            if (root.shortcut-has-conflict) {
-                                root.reset-shortcut();
-                            } else {
-                                root.cycle-shortcut-preset();
-                            }
-                        }
+                        clicked => { root.cycle-shortcut-preset(); }
                     }
                 }
 
@@ -1843,17 +1914,29 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                SettingsRow {
-                    title: root.updates-heading-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    show-divider: false;
-                    SettingsButton {
-                        label: root.updates-check-button-text;
-                        button-width: 104px;
-                        dark-mode: root.dark-mode;
-                        enabled: !root.update-is-checking;
-                        clicked => { root.check-updates(); }
+                Rectangle {
+                    height: 40px;
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        alignment: space-between;
+                        Text {
+                            text: root.updates-heading-text;
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: root.dark-mode ? #EEEEEE : #202020;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                        Text {
+                            text: "›";
+                            font-size: 16px;
+                            color: root.dark-mode ? #B4B4B4 : #646464;
+                            vertical-alignment: center;
+                        }
+                    }
+                    TouchArea {
+                        clicked => { root.open-settings(3); }
                     }
                 }
             }
@@ -1955,9 +2038,11 @@ export component AppWindow inherits Window {
                     y: 34px;
                     width: 264px;
                     height: 18px;
-                    text: root.update-is-available
-                        ? root.update-ready-notes-text
-                        : root.install-status-text;
+                    text: root.update-is-checking
+                        ? ""
+                        : (root.update-is-available
+                            ? root.update-ready-notes-text
+                            : root.install-status-text);
                     font-size: 10.5px;
                     font-weight: 400;
                     color: root.dark-mode ? #B4B4B4 : #646464;
@@ -2017,6 +2102,194 @@ export component AppWindow inherits Window {
                 }
                 TouchArea {
                     clicked => { root.open-external-url(link.url); }
+                }
+            }
+        }
+
+        if root.add-account-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: root.dark-mode ? #00000066 : #00000033;
+            Rectangle {
+                x: 44px;
+                y: 80px;
+                width: 360px;
+                height: 236px;
+                border-radius: 12px;
+                border-width: 1px;
+                border-color: root.dark-mode ? #606060 : #BBBBBB;
+                background: root.dark-mode ? #111111 : #FFFFFF;
+                Text {
+                    x: 16px;
+                    y: 14px;
+                    width: 292px;
+                    height: 28px;
+                    text: root.add-account-title;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: root.dark-mode ? #EEEEEE : #202020;
+                    vertical-alignment: center;
+                }
+                Text {
+                    x: 16px;
+                    y: 46px;
+                    width: 328px;
+                    height: 20px;
+                    text: root.add-account-intro;
+                    font-size: 11px;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                }
+                Text {
+                    x: 320px;
+                    y: 12px;
+                    width: 28px;
+                    height: 28px;
+                    text: "×";
+                    font-size: 18px;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                TouchArea {
+                    x: 320px;
+                    y: 12px;
+                    width: 28px;
+                    height: 28px;
+                    clicked => { root.close-account-dialogs(); }
+                }
+                for choice[i] in [
+                    { title: root.google-account-label, desc: root.google-account-desc },
+                    { title: root.outlook-section-text, desc: root.outlook-account-desc },
+                    { title: root.ics-account-label, desc: root.ics-account-desc }
+                ] : Rectangle {
+                    x: 16px;
+                    y: 74px + i * 48px;
+                    width: 328px;
+                    height: 40px;
+                    border-radius: 7px;
+                    background: root.dark-mode ? #222222 : #F0F0F0;
+                    Text {
+                        x: 12px;
+                        y: 4px;
+                        width: 280px;
+                        height: 18px;
+                        text: choice.title;
+                        font-size: 12px;
+                        font-weight: 500;
+                        color: root.dark-mode ? #EEEEEE : #202020;
+                    }
+                    Text {
+                        x: 12px;
+                        y: 20px;
+                        width: 280px;
+                        height: 16px;
+                        text: choice.desc;
+                        font-size: 10.5px;
+                        color: root.dark-mode ? #B4B4B4 : #646464;
+                    }
+                    TouchArea {
+                        clicked => {
+                            if (i == 0) { root.choose-google-account(); }
+                            if (i == 1) { root.choose-outlook-account(); }
+                            if (i == 2) { root.choose-ics-account(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        if root.ics-dialog-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: root.dark-mode ? #00000066 : #00000033;
+            Rectangle {
+                x: 24px;
+                y: 72px;
+                width: 400px;
+                height: 220px;
+                border-radius: 12px;
+                border-width: 1px;
+                border-color: root.dark-mode ? #606060 : #BBBBBB;
+                background: root.dark-mode ? #111111 : #FFFFFF;
+                Text {
+                    x: 16px;
+                    y: 12px;
+                    width: 320px;
+                    height: 28px;
+                    text: root.ics-dialog-title;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: root.dark-mode ? #EEEEEE : #202020;
+                }
+                Text {
+                    x: 360px;
+                    y: 12px;
+                    width: 28px;
+                    height: 28px;
+                    text: "×";
+                    font-size: 18px;
+                    horizontal-alignment: center;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                }
+                TouchArea {
+                    x: 360px;
+                    y: 12px;
+                    width: 28px;
+                    height: 28px;
+                    clicked => { root.close-account-dialogs(); }
+                }
+                Text {
+                    x: 16px;
+                    y: 48px;
+                    width: 368px;
+                    height: 32px;
+                    text: root.ics-privacy-text;
+                    font-size: 11px;
+                    wrap: word-wrap;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                }
+                SettingsField {
+                    x: 16px;
+                    y: 84px;
+                    width: 368px;
+                    text <=> root.ics-source-name;
+                    placeholder: root.ics-name-placeholder;
+                    dark-mode: root.dark-mode;
+                }
+                SettingsField {
+                    x: 16px;
+                    y: 120px;
+                    width: 368px;
+                    text <=> root.ics-source-url;
+                    placeholder: root.ics-url-placeholder;
+                    dark-mode: root.dark-mode;
+                }
+                Text {
+                    x: 16px;
+                    y: 152px;
+                    width: 200px;
+                    height: 18px;
+                    text: root.ics-stays-local-text;
+                    font-size: 10.5px;
+                    color: root.dark-mode ? #B4B4B4 : #646464;
+                }
+                SettingsButton {
+                    x: 196px;
+                    y: 176px;
+                    button-width: 88px;
+                    label: root.cancel-sign-in-label;
+                    dark-mode: root.dark-mode;
+                    clicked => { root.close-account-dialogs(); }
+                }
+                SettingsButton {
+                    x: 292px;
+                    y: 176px;
+                    button-width: 92px;
+                    label: root.subscribe-label;
+                    kind: "primary";
+                    enabled: root.ics-source-name != "" && root.ics-source-url != "";
+                    dark-mode: root.dark-mode;
+                    clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
                 }
             }
         }

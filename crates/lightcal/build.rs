@@ -37,7 +37,7 @@ fn main() {
         "Invalid release version"
     );
     println!("cargo:rustc-env=LIGHTCAL_VERSION={release_version}");
-    let config_files = [root.join(".env.local"), root.join(".env")];
+    let config_files = [root.join(".env")];
     let contents: Vec<String> = config_files
         .iter()
         .map(|path| {
@@ -47,6 +47,7 @@ fn main() {
         .collect();
     for key in [
         "LIGHTCAL_MICROSOFT_CLIENT_ID",
+        "LIGHTCAL_GOOGLE_CLIENT_ID",
         "LIGHTCAL_UPDATE_CERT_SHA256",
     ] {
         println!("cargo:rerun-if-env-changed={key}");
