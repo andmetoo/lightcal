@@ -1,0 +1,74 @@
+{
+  "family": "Onest",
+  "selection": "Fontsource 5.3.x, pinned to 5.3.1",
+  "fontsource": {
+    "package": "@fontsource/onest",
+    "version": "5.3.1",
+    "url": "https://registry.npmjs.org/@fontsource/onest/-/onest-5.3.1.tgz",
+    "integrity": "sha512-2uA9HUzQHBB8H7T2R6inmrnqPofB6+svATHM/huIG640duJr4rm+uanmAIheTTlbZvRC0ujMtf2T4U4RX51oEQ==",
+    "metadata": {
+      "id": "onest",
+      "family": "Onest",
+      "subsets": [
+        "cyrillic",
+        "cyrillic-ext",
+        "latin",
+        "latin-ext",
+        "math",
+        "symbols",
+        "vietnamese"
+      ],
+      "weights": [
+        100,
+        200,
+        300,
+        400,
+        500,
+        600,
+        700,
+        800,
+        900
+      ],
+      "styles": [
+        "normal"
+      ],
+      "defSubset": "latin",
+      "variable": {
+        "wght": {
+          "default": "400",
+          "min": "100",
+          "max": "900",
+          "step": "1"
+        }
+      },
+      "lastModified": "2026-08-25",
+      "version": "v11",
+      "category": "sans-serif",
+      "license": {
+        "type": "OFL-1.1",
+        "url": "https://openfontlicense.org",
+        "attribution": "Copyright 2021 The Onest Project Authors (https://github.com/simpals/onest)"
+      },
+      "source": "https://github.com/google/fonts",
+      "type": "google"
+    }
+  },
+  "nativeSource": {
+    "version": "2.001",
+    "url": "https://github.com/simpals/onest/releases/download/2.001/onest-2.001.zip",
+    "sha256": "17b59e19c349e603b7d113a596b6d8e08427e97a7b5235668b69e9d8a06a4267",
+    "sourceCommit": "8739b1910618a15335e4cc48842052d0ee739ade"
+  },
+  "filesSha256": {
+    "OFL.txt": "071195d8806e226faeee60259c28ca67b458227af5195a73f5cfcab06e3003bc",
+    "Onest-Regular.ttf": "fb4adfa4cd56d1bd4b36df74f915b4cfd3482287c14a121fa384ce9bdf385b00",
+    "Onest-Medium.ttf": "ed31ddb7ca730c68c78c5f2b11b8ecb614d3fe8eab68d17ef6f0a163bc6933ad",
+    "Onest-SemiBold.ttf": "a2b3339cc901cbd63597df0b9319898c8f1071c30fa87013f1dac480797ce6fb",
+    "Onest-Bold.ttf": "f59dfd26f42eaa07bc19c92b3ef17173ab4bb8f21c500d2736a88088fd9a845e"
+  },
+  "penpot": {
+    "family": "Onest",
+    "fontId": "gfont-onest",
+    "binaryRevision": "not exposed by plugin API"
+  }
+}

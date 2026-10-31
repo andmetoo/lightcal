@@ -4,6 +4,7 @@ Planning baseline: October 29, 2026.
 
 | Document | Purpose |
 | --- | --- |
+| [Google Calendar and platform design](decisions/0008-google-calendar-and-platform-design.md) | Read-only Google scope, refined Windows design, and macOS adaptation |
 | [Windows installer](windows-installer.md) | NSIS setup, signing, CI, and isolated installer tests |
 | [NSIS distribution decision](decisions/0006-nsis-windows-distribution.md) | Owner-approved Windows installer replacing the retired package channel |
 | [Draft signing decision](decisions/0007-draft-release-signing.md) | Unsigned tag draft, Windows signtool upload, and explicit publication |

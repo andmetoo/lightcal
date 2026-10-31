@@ -1,75 +1,102 @@
-# Lightcal — 2026 Desktop Visual & UX Specification
+# Lightcal desktop design
 
-Lightcal is a native Rust + Slint desktop calendar for Windows (and future macOS) crafted in the visual tradition of **Linear Desktop**, **Raycast**, and **Notion Calendar (Cron)**.
+The current design is the October 31, 2026 refinement in the owner's connected
+`penpot_local` file **lightcalendar** (`c2d27051-3cd1-813e-8008-dd9b45707753`).
+Open **Overview** for the review entry point.
 
-## Core Design Principles
+## Current concept
 
-1. **Atmospheric Tonal Layering (Zero Plastic Navy, Zero GNOME-1 Gray Boxes)**
-   - **Light Mode ("Alabaster & Ink")**: Pure paper canvas (`#FFFFFF`) paired with warm stone secondary panels (`#F7F7F8`), whisper-soft weekend column bands (`#F8F8FA`), and `1px` `#ECECEF` structural hairlines.
-   - **Dark Mode ("Obsidian Graphite")**: Deep carbon-infused obsidian (`#101012`) paired with `#141417` elevated panels, `#151519` weekend column washes, `#1E1E22` tactile controls, and `1px` `#1F1F24` hairlines—eliminating generic blue-slate (`#0F172A`) plastic dark modes.
-   - **Frameless Window Architecture**: No retro 32px gray OS titlebars. Both Compact (`352 × 432`) and Expanded (`520 × 600`) windows use a unified `12px`-radius canvas with subtle frameless window controls (`—`, `×`) in Expanded and Settings views.
+- One 352 × 432 calendar, with larger dates, distinct today/selection states,
+  event dots and a compact agenda. Today is the only return-to-today action.
+- A fixed **448 × 360** settings panel with **Calendar / Accounts / App** tabs.
+  Theme is a segmented control. Rows are 40 px; repeated descriptions and large
+  theme previews are removed. About is a separate panel.
+- Accounts shows connected accounts and selected calendars. Google, Microsoft
+  and private ICS are choices in Add account. Consent, cancellation, revoked
+  access, offline data and empty selection have separate states.
+- Windows uses a static application icon and a live date badge in the tray.
+  macOS uses platform window controls, login/shortcut terminology, a monochrome
+  menu-bar label and a separate Dock icon. Neither replaces the system clock.
+- English, Russian, Spanish and Japanese examples retain user event titles.
 
-2. **90% Quiet Neutrality, 10% Intentional Accent**
-   - **Neutral Tactile Controls**: Header navigation buttons (`‹`, `[ ● Today ]`, `›`, `⚙`) and settings actions (`Check for updates`) use neutral monochrome control fills (`#FFFFFF` Light / `#1E1E22` Dark) with `1px` `#E2E2E6` / `#2C2C32` borders and primary ink text (`#141416` / `#F4F4F6`). The `Today` button features a `6px` **Coral-Vermilion (`#E5484D`)** indicator dot on the left—never green-on-green or mint-on-mint.
-   - **Distinct `Today (29)` vs `Selected (30)` States**:
-     - **Today (`Oct 29`)**: Solid **Coral-Vermilion (`#E5484D`)** rounded tile (`rx: 8px`) with crisp `#FFFFFF` Bold text and white event dots.
-     - **Selected (`Oct 30`)**: Soft **Linear Indigo (`#EEF0FF` Light / `#1D203A` Dark)** fill with a `1.5px` `#5E6AD2` inset border, Bold ink numeral, and semantic colored event dots.
-   - **Current Month Emphasis**: When viewing the active month (`October 2026`), the month title is accented with a `2px` `#5E6AD2` underline bar and a quiet `Current month` indicator (`6px` `#5E6AD2` dot + muted label). Both are omitted when browsing other months (`November 2026`).
+Typography: Windows uses the owner's selected Onest (Fontsource 5.3.1).
+The owner subsequently selected the system font/SF Pro for macOS. That
+[migration is prepared](fonts/macos-system.md) and requires the SF Pro faces
+to be added to the Penpot team; current macOS exports still show Onest.
 
-3. **Borderless Calendar Grid**
-   - Zero spreadsheet table gridlines between day cells.
-   - Non-working weekday columns (`Sa`, `Su`) are tinted with a continuous vertical rounded band (`#F8F8FA` Light / `#151519` Dark, `rx: 8px`).
-   - ISO week numbers (`W40`–`W45`) sit quietly in the left margin (`10px` `#A0A0AB` / `#52525B`).
+The owner rejected both the old sidebar layout and an initial 620 × 520 tabbed
+layout as too spacious. An independent UX review led to the three-tab concept;
+the two primary screens were reviewed again before migration.
 
-4. **Grouped Settings (`780 × 620`)**
-   - Related rows sit in a soft rounded group (`14px` radius, `#F4F4F6` light / `#18181C` dark) on the plain canvas. Dividers stay inside the group. Individual rows are not boxed.
-   - The sidebar keeps navigation for General, Appearance, Calendars, and About. The active item is an indigo wash (`#EEF0FF` / `#1D203A`) without a heavy border.
-   - Switches are `46 × 28` with a `22px` white knob and a soft shadow. Off state is a filled stone track (`#E4E4EA` / `#3A3A42`), not an empty outline.
-   - Selects, fields, and buttons are `36px` / `34px` tall with a `10px` radius. Selects open an in-flow menu under the control. A private ICS address stays visible while it is edited and is stored only on the computer.
+## Working file
 
-5. **Native OS Shell, Taskbar, Menu Bar, Dock & Dynamic Icon System (`06 · Shell, Dock & Icons`)**
-   - **App Icon Craft**: `rx: 23%` squircle in Alabaster (`#FFFFFF`) or Obsidian (`#18181C`) with a `30%` top **Coral-Vermilion (`#E5484D`)** header band and `1px` hairline seam.
-   - **Three Dynamic Live Modes**:
-     - **Mode A — Date Numeral Only (`29` / `OCT 29`)**: Crisp single-numeral badge (`16×16` to `128×128`) for system tray, menu bar, or dock.
-     - **Mode B — Weekday + Date (`THU 29` / `ЧТ 29`)**: Localized 2–3 letter weekday in the `#E5484D` coral header band + bold date numeral + optional semantic event dots (`#5E6AD2`, `#F59E0B`).
-     - **Mode C — Full System Clock Replacement (`22:01 · Thu, 29 Oct` / `22:01:45`)**: Replaces the native Windows 11 system tray clock or macOS menu bar clock completely, combining the `[29]` dynamic icon with live digital time and localized weekday/date in a single clickable status pill.
+| Page | Boards | Purpose |
+| --- | ---: | --- |
+| Windows settings | 8 | Three tabs and About, light/dark |
+| Windows calendar | 12 | Compact dates, empty days, taskbar/tray and menus |
+| Connections & states | 52 | Windows/macOS connection, shortcut and update states |
+| macOS | 18 | Compact calendar, settings, menu bar and Dock |
+| Icons & components | 11 | Icon sizes, day variants, shared controls and export boards |
+| Languages | 12 | Calendar, App settings and shortcut conflicts in four languages |
+| Overview | 1 | Presentation and prototype entry point |
 
----
+Original pages and intermediate layouts are preserved in Penpot's permanent
+version **Before refinement cleanup 2026-10-31**. They were removed from the
+working page list after the version was verified. Restoring that version restores
+the whole earlier file, including the original pages.
 
-## Color Token Reference
+## Sources and evidence
 
-| Token | Light Mode ("Alabaster & Ink") | Dark Mode ("Obsidian Graphite") | Role |
-| :--- | :--- | :--- | :--- |
-| `stage` | `#EAEAEF` | `#08080A` | Presentation backdrop mat |
-| `canvas` | `#FFFFFF` | `#101012` | Primary window surface |
-| `panel` | `#F7F7F8` | `#141417` | Settings sidebar & expanded agenda panel |
-| `weekendBand` | `#F8F8FA` | `#151519` | Continuous vertical `Sa`/`Su` column band |
-| `control` | `#FFFFFF` | `#1E1E22` | Buttons, dropdowns, active sidebar item |
-| `controlSubtle` | `#F2F2F5` | `#18181C` | Subtle pills, inactive weekday pills |
-| `borderWindow` | `#DFDFE4` | `#27272A` | `1px` outer window border |
-| `hairline` | `#ECECEF` | `#1F1F24` | `1px` structural section & row divider |
-| `borderControl` | `#E2E2E6` | `#2C2C32` | `1px` button & select border |
-| `ink` | `#141416` | `#F4F4F6` | Primary text & numerals |
-| `secondary` | `#64646C` | `#94949E` | Weekday headers, subtitles, secondary labels |
-| `muted` | `#A0A0AB` | `#52525B` | Week numbers (`W40`), shortcuts, metadata |
-| `outside` | `#C8C8D0` | `#3A3A42` | Adjacent-month overflow dates |
-| `todayAccent` | `#E5484D` | `#E5484D` | Coral-Vermilion `Today` tile, icon header & button dot |
-| `primaryAccent` | `#5E6AD2` | `#5E6AD2` | Linear Indigo selection ring, toggles, active bars |
-| `primarySoft` | `#EEF0FF` | `#1D203A` | Selected date fill & active highlight |
-| `dotWork` | `#5E6AD2` | `#6E7AE2` | Work calendar checkbox & event indicator |
-| `dotPersonal` | `#F59E0B` | `#FBBF24` | Personal calendar checkbox & event indicator |
-| `dotHoliday` | `#10B981` | `#34D399` | Holidays calendar checkbox & event indicator |
+- [Automation and verification](penpot/README.md)
+- [Machine-readable inventory and geometry report](penpot/refinement-manifest.json)
+- [Refined vector and PNG icon sources](../assets/icons/refined/README.md)
+- [Owner scope and implementation boundary](../docs/decisions/0008-google-calendar-and-platform-design.md)
+- [Windows Calendar settings](review/windows-calendar-settings.png)
+- [Windows Accounts](review/windows-accounts.png)
+- [Dark macOS App settings](review/macos-app-dark.png)
+- [Japanese App settings](review/japanese-app.png)
+- [Final compact calendar](review/windows-calendar.png)
+- [Review overview](review/overview.png)
+- [Final icon family](review/icon-family.png)
+- [Japanese shortcut error](review/japanese-shortcut-error.png)
+- [Russian shortcut error](review/russian-shortcut-error.png)
+- [macOS shortcut error with vector key symbols](review/macos-shortcut-error.png)
 
----
+The final geometry audit covers 7 pages and 114 top-level boards, with no duplicate
+board names or out-of-bounds descendants. The navigation prototype has 553 links
+and no unresolved destinations. Pixel review remains separate from geometry.
+Today text uses white on `#D73840` (calculated contrast 4.64:1); white primary
+button text uses `#5E63D6` (4.96:1). This is not a complete accessibility audit.
 
-## Penpot File Structure (`Новый файл 1` — 7 Pages, 39 Boards)
+## Final UI review
 
-- **`00 · Overview`**: 1 board (`2060 × 860`) — Side-by-side Light and Dark presentation stages showing Compact (`352 × 432`) and Expanded (`520 × 600`) windows.
-- **`01 · Calendar`**: 10 boards — Light & Dark Compact (`352 × 432`) and Expanded (`520 × 600`) for Current Month (`October 2026`) and Next Month (`November 2026`), plus Light & Dark Tray Menus (`240 × 216`).
-- **`02 · Settings`**: 8 boards (`780 × 620`) — Light & Dark for `General`, `Appearance`, `Calendars`, and `About`.
-- **`03 · States`**: 12 boards (`780 × 620`) — Light & Dark interactive & edge states (`Languages Dropdown Open`, `Shortcut Conflict`, `Calendars Access Denied`, `Calendars Empty`, `Checking Updates`, `Update Available`).
-- **`04 · Languages`**: 4 boards (`352 × 432`) — Localized Compact calendars in `English (en-US)`, `Русский (ru-RU)`, `Español (es-ES)`, and `日本語 (ja-JP)`.
-- **`05 · Design system`**: 1 board (`1640 × 660`) — Complete token swatches, Light & Dark header/grid primitives, and flat hairline settings controls.
-- **`06 · Shell, Dock & Icons`**: 3 boards (`1440 × 620`, `1440 × 620`, `1440 × 520`) — Windows 11 Taskbar & System Tray integration (Dark & Light), macOS Menu Bar & Floating Dock integration (Dark & Light), and the multi-resolution App Icon System (`128`, `64`, `32`, `16`) with 3 dynamic modes (`Date 29`, `Weekday THU 29 / ЧТ 29`, and `Clock Replacement 22:01 · Thu, 29 Oct`).
+An independent UI reviewer inspected the final 1× Windows, dark macOS, calendar
+and Russian/Japanese shortcut-error exports after the UX structure was settled.
+The final review passed without clipping or collisions in those specimens.
 
-See [`design/penpot/README.md`](./penpot/README.md) for reproducible Penpot generation scripts.
+- Use the owner's selected **Onest** family for Latin, Cyrillic and date
+  numerals, with explicit 400/500/600/700 weights. CJK strings use exact
+  Noto Sans JP. See [pinned fonts and attribution](fonts/onest/README.md) for
+  Fontsource 5.3.1, native version 2.001 and the Penpot revision limitation.
+  This review covers the Onest stage. The owner's later macOS SF Pro selection
+  requires a separate font import and visual review as recorded above.
+- Form fields and ordinary buttons are 28 px high, centered in 40 px rows.
+  Theme, tray palette and menu-bar labels share the same segmented control.
+  Weekdays remain independent toggles.
+- Today's selected tile keeps the coral fill. A keyboard-focus ring is shown
+  only in a focus state. Shared controls include hover, pressed, focus and
+  disabled specimens.
+- The master icon grid is centered below the cap. The 32 px drawing receives
+  a 1 px optical correction; the 16/24 px PNGs remain byte-identical.
+
+Permanent versions **Before final UI polish 2026-10-31** and
+**Lightcal final UI 2026-10-31** preserve the reviewed stages.
+
+The subsequent owner-selected Onest pass preserves the compact geometry and
+prototype destinations. **Before Onest typography 2026-10-31** preserves the
+previous Inter version.
+
+These are design deliverables. Google OAuth, runtime UI alignment, real Windows
+DPI/shell checks and real macOS integration remain implementation/release work.
+No application performance measurement is claimed. Rust/Slint, credentials,
+autostart, registry and release packaging are unchanged by this design pass.

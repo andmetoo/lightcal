@@ -1,5 +1,10 @@
 # Lightcal icon artwork
 
+The latest design pass is in [refined/](refined/README.md): original vector
+masters, optical 16/24/32 px drawings and transparent PNG exports. The existing
+runtime and packaging assets have not been replaced by this design-only change.
+The supplied artwork below remains preserved for provenance.
+
 The owner-selected artwork is in `better/`. Earlier icon candidates and their generator have been removed at the owner's request. The owner supplied these assets; retain their provenance and confirm redistribution rights before a public binary release.
 
 | Source | Purpose |
