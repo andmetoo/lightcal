@@ -9,8 +9,8 @@ storage.refinement = {
   boards: prior?.boards||[],
   targets: prior?.targets||{},
   settingsContent: prior?.settingsContent,
-  light: { canvas:'#FFFFFF', panel:'#F7F7F8', group:'#F6F6F8', line:'#E8E8EC', border:'#DDDDE3', ink:'#202025', secondary:'#666670', muted:'#73737D', outside:'#7C7C87', weekend:'#F4F4F7', accent:'#5E63D6', soft:'#EFEFFC', coral:'#E5484D', success:'#28774B', successSoft:'#EDF7F0', danger:'#BC333B', dangerSoft:'#FFF1F1', control:'#FFFFFF' },
-  dark: { canvas:'#17171A', panel:'#131316', group:'#202024', line:'#303036', border:'#404047', ink:'#F5F5F7', secondary:'#B0B0BA', muted:'#9B9BA7', outside:'#9999A5', weekend:'#202024', accent:'#A7AAFF', soft:'#2B2B49', coral:'#E5484D', success:'#8AD6A6', successSoft:'#1D3025', danger:'#FF9DA1', dangerSoft:'#392327', control:'#29292F' },
+  light: { canvas:'#FFFFFF', panel:'#F9F9F9', group:'#F0F0F0', line:'#D9D9D9', border:'#BBBBBB', ink:'#202020', secondary:'#646464', muted:'#646464', outside:'#6E6E6E', weekend:'#F0F0F0', accent:'#00796B', soft:'#E0E0E0', selectedBorder:'#838383', coral:'#E5484D', success:'#28774B', successSoft:'#EDF7F0', danger:'#BC333B', dangerSoft:'#FFF1F1', control:'#FFFFFF' },
+  dark: { canvas:'#111111', panel:'#191919', group:'#222222', line:'#3A3A3A', border:'#606060', ink:'#EEEEEE', secondary:'#B4B4B4', muted:'#9B9B9B', outside:'#9B9B9B', weekend:'#222222', accent:'#53B9AB', soft:'#3A3A3A', selectedBorder:'#7B7B7B', coral:'#E5484D', success:'#8AD6A6', successSoft:'#1D3025', danger:'#FF9DA1', dangerSoft:'#392327', control:'#2A2A2A' },
   async page(name) {
     let page = penpotUtils.getPageByName(name)||penpotUtils.getPages().map(p=>penpotUtils.getPageById(p.id)).find(p=>p.getPluginData('lightcal-page-key')===name);
     if (!page) { page=penpot.createPage(); page.name=name; page.setPluginData('lightcal-refinement',this.version); }
@@ -48,7 +48,7 @@ storage.refinement = {
       return Number(size)>=20?'SF Pro Display':'SF Pro Text';
     return 'Onest';
   },
-  text(p,name,value,x,y,w,h=20,size=13,weight=400,color='#202025',align='left') {
+  text(p,name,value,x,y,w,h=20,size=13,weight=400,color='#202020',align='left') {
     const s=penpot.createText(String(value));s.name=name;
     const family=this.fontFamily(p,value,size);
     const font=penpot.fonts.all.find(f=>f.name===family);
@@ -75,7 +75,7 @@ storage.refinement = {
     s.name=name;p.appendChild(s);penpotUtils.setParentXY(s,x,y);return s;
   },
   button(p,name,label,x,y,w,t,primary=false,h=28) {
-    const s=this.rect(p,name,x,y,w,h,primary?'#5E63D6':t.control,7,primary?null:t.border);
+    const s=this.rect(p,name,x,y,w,h,primary?'#00796B':t.control,7,primary?null:t.border);
     if(label)this.text(p,name+' label',label,x+8,y,w-16,h,12,500,primary?'#FFFFFF':t.ink,'center');return s;
   },
   select(p,name,label,x,y,w,t) {
@@ -92,39 +92,43 @@ storage.refinement = {
     return key;
   },
   segmentFrame(p,name,x,y,w,count,t,selected=0) {
-    const track=this.rect(p,name+' track',x,y,w,28,t===this.light?'#ECECF1':'#17171C',7);
+    const track=this.rect(p,name+' track',x,y,w,28,t===this.light?'#E8E8E8':'#191919',7);
     const slots=[];
     for(let i=0;i<count;i++) {
       const slotW=w/count,sx=x+i*slotW;
-      const hit=this.rect(p,name+' option '+i,sx+2,y+2,slotW-4,24,i===selected?t.soft:null,5,i===selected?t.accent:null);
+      const hit=this.rect(p,name+' option '+i,sx+2,y+2,slotW-4,24,i===selected?t.soft:null,5,i===selected?t.selectedBorder:null);
       hit.setPluginData('lightcal-role','exclusive-option');slots.push({x:sx,width:slotW,hit});
     }
     return {track,slots};
   },
   toggle(p,name,x,y,on,t) {
-    const s=this.rect(p,name,x,y,36,22,on?'#666BDD':(t===this.dark?'#56565F':'#BDBDC7'),11);
+    const s=this.rect(p,name,x,y,36,22,on?'#00796B':(t===this.dark?'#606060':'#BBBBBB'),11);
     this.rect(p,name+' thumb',x+(on?17:3),y+3,16,16,'#FFFFFF',8);return s;
   },
   badge(p,name,label,x,y,w,t,kind='neutral') {
-    const fill=kind==='success'?t.successSoft:kind==='danger'?t.dangerSoft:t.group;
-    const ink=kind==='success'?t.success:kind==='danger'?t.danger:t.secondary;
+    const alert=kind==='alert';
+    const fill=alert?'#BC333B':(t===this.dark?'#313131':'#E8E8E8');
+    const ink=alert?'#FFFFFF':t.ink;
     this.rect(p,name,x,y,w,22,fill,6);
     this.text(p,name+' label',label,x+6,y,w-12,22,10.5,500,ink,'center');
   },
-  brand(p,x,y,size,date=null,mono=false) {
+  brand(p,x,y,size,date=null,mono=false,darkSurface=null) {
+    if(date!==null) {
+      const dark=darkSurface??(p.getPluginData('lightcal-theme')==='dark');
+      const ink=mono?(dark?'#EEEEEE':'#141416'):(dark?'#FF8A90':'#CF2835');
+      const numeral=this.text(p,'Live date numeral',date,x,y-size*.02,size,size,size*.74,700,ink,'center');
+      numeral.setPluginData('lightcal-date-icon','numerals-only-v1');
+      return numeral;
+    }
     const edge=size<=24?1:Math.max(1,size/80),r=size*.22,cap=Math.round(size*.27);
-    const body=this.rect(p,date?'Live date icon body':'App icon body',x,y,size,size,'#FFFFFF',r,'#BCBCC5',edge);
+    const body=this.rect(p,'App icon body',x,y,size,size,'#FFFFFF',r,'#BBBBBB',edge);
     body.setPluginData('lightcal-icon-optics','centered-v1');
-    const head=this.rect(p,'Calendar cap',x,y,size,cap,mono?'#26262C':'#E5484D',0);
+    const head=this.rect(p,'Calendar cap',x,y,size,cap,mono?'#262626':'#E5484D',0);
     head.borderRadiusTopLeft=r;head.borderRadiusTopRight=r;
     // Lower corners are square: the cap ends at the seam, inside the body.
-    if(date!==null) {
-      this.text(p,'Live date numeral',date,x+size*.07,y+cap,size*.86,size-cap-size*.025,size*.61,700,'#202025','center');
-    } else {
-      const tile=size*.19,gap=size*.12,left=x+(size-tile*2-gap)/2;
-      const top=y+(size>32?cap+(size-cap-(tile*2+gap))/2:size>24?size*.42-1:size*.42);
-      for(let row=0;row<2;row++)for(let col=0;col<2;col++)this.rect(p,'Calendar day tile',left+col*(tile+gap),top+row*(tile+gap),tile,tile,row===1&&col===1?'#E5484D':'#34343C',size*.035);
-    }
+    const tile=size*.19,gap=size*.12,left=x+(size-tile*2-gap)/2;
+    const top=y+(size>32?cap+(size-cap-(tile*2+gap))/2:size>24?size*.42-1:size*.42);
+    for(let row=0;row<2;row++)for(let col=0;col<2;col++)this.rect(p,'Calendar day tile',left+col*(tile+gap),top+row*(tile+gap),tile,tile,row===1&&col===1?'#E5484D':'#313131',size*.035);
   },
   checkbox(p,name,x,y,checked,color,t) {
     const s=this.rect(p,name,x,y,16,16,checked?color:t.control,4,checked?null:t.border);
@@ -146,18 +150,18 @@ storage.refinement = {
     for(let c=5;c<7;c++)this.rect(b,'Tinted weekend column',gx+c*cw+2,84,38,242,t.weekend,8);
     this.text(b,'Week number heading','W',8,85,26,20,9.5,500,t.muted,'center');
     ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((wd,c)=>this.text(b,'Weekday '+wd,wd,gx+c*cw,85,cw,20,11,500,t.secondary,'center'));
-    const dots={1:['#5E63D6'],6:['#5E63D6','#BD6A16'],9:['#5E63D6'],12:['#28774B'],14:['#5E63D6'],16:['#BD6A16'],20:['#5E63D6'],22:['#5E63D6','#BD6A16'],27:['#5E63D6'],29:['#5E63D6'],30:['#5E63D6','#BD6A16','#28774B'],31:['#5E63D6','#BD6A16']};
+    const dots={1:['#00796B'],6:['#00796B','#BD6A16'],9:['#00796B'],12:['#28774B'],14:['#00796B'],16:['#BD6A16'],20:['#00796B'],22:['#00796B','#BD6A16'],27:['#00796B'],29:['#00796B'],30:['#00796B','#BD6A16','#28774B'],31:['#00796B','#BD6A16']};
     for(let r=0;r<6;r++) {
       this.text(b,'Week '+(next?44+r:40+r),String(next?44+r:40+r),8,gy+r*rh,26,32,9.5,400,t.muted,'center');
       for(let c=0;c<7;c++) {
         const index=r*7+c,raw=index-(next?6:3)+1,days=next?30:31,out=raw<1||raw>days,d=raw<1?(next?31:30)+raw:raw>days?raw-days:raw;
-        const isToday=!next&&!out&&d===31,isSelected=!out&&d===(next?12:selected),cx=gx+c*cw,cy=gy+r*rh;
-        const hit=this.rect(b,'Date '+(out?'adjacent month ':next?'November ':'October ')+d,cx+4,cy,34,32,isToday?'#D73840':isSelected?t.soft:null,8,isSelected&&!isToday?t.accent:null,isSelected?1.5:1);
+        const isToday=d===31&&(next?out&&raw<1:!out),isSelected=!out&&d===(next?12:selected),cx=gx+c*cw,cy=gy+r*rh;
+        const hit=this.rect(b,'Date '+(out?'adjacent month ':next?'November ':'October ')+d,cx+4,cy,34,32,isToday?'#D73840':isSelected?t.soft:null,8,isSelected&&!isToday?t.selectedBorder:null,isSelected?1.5:1);
         if(opts.keyboardFocus&&isSelected)this.rect(b,'Keyboard focus outline',cx+2,cy-2,38,36,null,10,t.accent,2);
-        this.text(b,'Day numeral '+d,d,cx,cy+1,cw,25,14,isToday||isSelected?600:500,isToday?'#FFFFFF':out?(t===this.light?'#73737D':t.outside):t.ink,'center');
+        this.text(b,'Day numeral '+d,d,cx,cy+1,cw,25,14,isToday||isSelected?600:500,isToday?'#FFFFFF':out?(t===this.light?'#646464':t.outside):t.ink,'center');
         if(!out&&!empty&&(next?[6,12,20].includes(d):dots[d])) {
-          const colors=next?['#5E63D6']:dots[d],start=cx+(cw-(colors.length*3+(colors.length-1)*3))/2;
-          colors.forEach((color,k)=>this.rect(b,'Event indicator',start+k*6,cy+26,3,3,isToday?'#FFFFFF':theme==='dark'?(color==='#5E63D6'?'#A7AAFF':color==='#BD6A16'?'#E9B870':'#8AD6A6'):color,1.5));
+          const colors=next?['#00796B']:dots[d],start=cx+(cw-(colors.length*3+(colors.length-1)*3))/2;
+          colors.forEach((color,k)=>this.rect(b,'Event indicator',start+k*6,cy+26,3,3,isToday?'#FFFFFF':theme==='dark'?(color==='#00796B'?'#53B9AB':color==='#BD6A16'?'#E9B870':'#8AD6A6'):color,1.5));
         }
         if(!next&&!out&&d===30)hit.setPluginData('lightcal-target',platform+'/'+theme+'/selected');
       }
@@ -169,7 +173,7 @@ storage.refinement = {
     if(empty) {
       this.text(b,'Empty day','Nothing planned. Enjoy your day.',20,381,312,24,12,400,t.secondary);
     }else {
-      const events=selected===30?[['10:00','Architecture sync','#5E63D6'],['14:30','Dentist appointment','#BD6A16']]:next?[['09:30','Roadmap review','#5E63D6'],['18:00','Dinner with Alex','#BD6A16']]:[['10:00','Coffee with Maya','#BD6A16'],['16:00','Weekend walk','#28774B']];
+      const events=selected===30?[['10:00','Architecture sync','#00796B'],['14:30','Dentist appointment','#BD6A16']]:next?[['09:30','Roadmap review','#00796B'],['18:00','Dinner with Alex','#BD6A16']]:[['10:00','Coffee with Maya','#BD6A16'],['16:00','Weekend walk','#28774B']];
       events.forEach(([time,title,color],i)=>{
         const ey=376+i*24;this.rect(b,'Event calendar color',20,ey+4,3,14,color,1.5);
         this.text(b,'Event time',time,32,ey,42,22,11,500,t.secondary);

@@ -323,7 +323,7 @@ pub fn query(
             .filter(|s| {
                 s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
             })
-            .unwrap_or("#5E6AD2");
+            .unwrap_or("#008573");
         result.sources.push(CalendarSource {
             id: id.clone(),
             name: calendar["name"].as_str().unwrap_or("Outlook").into(),

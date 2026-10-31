@@ -22,7 +22,11 @@ mail access, event editing, telemetry, or a UI framework change.
   sentences, and place controls close to labels. Disconnected providers belong
   in Add account, rather than permanently occupying large empty account cards.
 - Windows has a static application icon and a dynamic day-of-month tray badge.
-  Appearance offers color or monochrome caps. Remove weekday/time tray modes
+  The owner subsequently removed the date badge's cap and paper: the live icon
+  is just optically centered Onest numerals on transparency, with coral or
+  system-monochrome ink. Fit all dates at one font size per native icon size.
+  Read the Windows shell theme independently of the app theme for contrast.
+  Appearance offers color or monochrome numerals. Remove weekday/time tray modes
   from the new design; do not suggest replacing the Windows system clock.
 - macOS retains the shared calendar and content hierarchy, with left-side window
   controls, “Open at login,” macOS shortcut notation, a system-colored menu-bar
@@ -39,10 +43,14 @@ mail access, event editing, telemetry, or a UI framework change.
 
 ## Implementation boundary
 
-This change produces Penpot boards, an interactive review prototype, vector
+The original refinement produces Penpot boards, an interactive review prototype, vector
 icon sources, raster design exports and documentation. It does not implement
 Google OAuth or change the shipped application or installer. Provider work must
 still use the toolkit-independent core and isolated fixture tests.
+
+The subsequent [numeral-only Windows icon decision](0009-windows-date-numerals.md)
+also updates the native date renderer. It does not imply completion of the
+other runtime UI or provider work described by these mockups.
 
 For implementation, request only the Google Calendar permissions needed to
 enumerate calendars and read events. The initial target is
@@ -53,6 +61,10 @@ credential protection, revocation and Google's verification requirements remain
 implementation/release work, not a claim made by the mockups.
 
 ## Evidence and remaining validation
+
+The owner subsequently rejected violet throughout both themes. The accepted
+[Gray + Teal palette](../../design/palettes/README.md) supersedes the earlier
+indigo styling in both native controls and active Penpot specimens.
 
 The final independent UI review keeps the compact UX structure and standardizes
 exact Onest typography, explicit Noto Sans JP weights, 28 px form controls,

@@ -95,66 +95,66 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(&out_dir.join("02-compact-light.png"), 352, 432)?;
 
-    // 5. Settings — General (Dark & Light, 780×620)
+    // 5. Settings — Calendar tab (was Appearance; Dark & Light, 448×360)
     ctrl.prefs.set_locale(LocaleCode::En);
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.settings_open = true;
     ctrl.settings_tab = 0;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("05-settings-general-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("05-settings-calendar-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("05-settings-general-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("05-settings-calendar-light.png"), 448, 360)?;
 
-    // 6. Settings — Appearance (Dark & Light, 780×620)
+    // 6. Settings — Accounts (Dark & Light, 448×360)
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.settings_tab = 1;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("06-settings-appearance-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("06-settings-accounts-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("06-settings-appearance-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("06-settings-accounts-light.png"), 448, 360)?;
 
-    // 7. Settings — Calendars (Dark & Light, 780×620)
+    // 7. Settings — App (Dark & Light, 448×360)
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.settings_tab = 2;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("07-settings-calendars-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("07-settings-app-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("07-settings-calendars-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("07-settings-app-light.png"), 448, 360)?;
 
-    // 8. Settings — About (Dark & Light, 780×620)
+    // 8. Settings — About (Dark & Light, 448×360)
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.settings_tab = 3;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("08-settings-about-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("08-settings-about-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("08-settings-about-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("08-settings-about-light.png"), 448, 360)?;
 
-    // 9. Settings — General in Russian (Light, 780×620)
+    // 9. Settings — App in Russian (Light, 448×360)
     ctrl.prefs.set_locale(LocaleCode::Ru);
     ctrl.prefs.theme = ThemePreference::Light;
-    ctrl.settings_tab = 0;
+    ctrl.settings_tab = 2;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("09-settings-general-ru-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("09-settings-app-ru-light.png"), 448, 360)?;
 
-    // State 1: Languages Dropdown Open (Light & Dark)
+    // State 1: Languages Dropdown Open (Light & Dark) — App tab
     ctrl.prefs.set_locale(LocaleCode::En);
-    ctrl.settings_tab = 0;
+    ctrl.settings_tab = 2;
     ctrl.language_dropdown_open = true;
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-lang-open-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-lang-open-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-lang-open-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-lang-open-light.png"), 448, 360)?;
     ctrl.language_dropdown_open = false;
 
     // State 2: Shortcut Conflict (Light & Dark)
@@ -163,31 +163,31 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.conflicting_shortcut = Some("Alt + Space".to_string());
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-shortcut-conflict-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-shortcut-conflict-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-shortcut-conflict-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-shortcut-conflict-light.png"), 448, 360)?;
     ctrl.shortcut_error.clear();
     ctrl.conflicting_shortcut = None;
 
-    // State 3: Calendars Access Denied (Light & Dark)
-    ctrl.settings_tab = 2;
+    // State 3: Accounts Access Denied (Light & Dark)
+    ctrl.settings_tab = 1;
     ctrl.calendars_access_denied = true;
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(
         &out_dir.join("state-calendars-access-denied-dark.png"),
-        780,
-        620,
+        448,
+        360,
     )?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(
         &out_dir.join("state-calendars-access-denied-light.png"),
-        780,
-        620,
+        448,
+        360,
     )?;
     ctrl.calendars_access_denied = false;
 
@@ -195,11 +195,11 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.calendars_is_empty = true;
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-calendars-empty-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-calendars-empty-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-calendars-empty-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-calendars-empty-light.png"), 448, 360)?;
     ctrl.calendars_is_empty = false;
 
     // State 5: About Checking Updates (Light & Dark)
@@ -207,11 +207,11 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.update_state = UpdateCheckState::Checking;
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-about-checking-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-about-checking-dark.png"), 448, 360)?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("state-about-checking-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("state-about-checking-light.png"), 448, 360)?;
 
     // State 6: About Update Available (Light & Dark)
     ctrl.update_state = UpdateCheckState::UpdateAvailable {
@@ -223,45 +223,45 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(
         &out_dir.join("state-about-update-available-dark.png"),
-        780,
-        620,
+        448,
+        360,
     )?;
 
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(
         &out_dir.join("state-about-update-available-light.png"),
-        780,
-        620,
+        448,
+        360,
     )?;
     ctrl.install_status = "Automatic installation is unavailable: build with LIGHTCAL_UPDATE_CERT_SHA256 set to the SHA-256 fingerprint of your SimpleSign signing certificate".into();
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(
         &out_dir.join("state-about-install-status-light.png"),
-        780,
-        620,
+        448,
+        360,
     )?;
     ctrl.install_status.clear();
     ctrl.update_state = UpdateCheckState::Idle;
 
     // Localized Japanese Settings (Dark & Light)
     ctrl.prefs.set_locale(LocaleCode::Ja);
-    ctrl.settings_tab = 0;
+    ctrl.settings_tab = 2;
     ctrl.prefs.theme = ThemePreference::Dark;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("settings-general-ja-dark.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("settings-app-ja-dark.png"), 448, 360)?;
 
-    ctrl.settings_tab = 1;
+    ctrl.settings_tab = 0;
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("settings-appearance-ja-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("settings-calendar-ja-light.png"), 448, 360)?;
 
     // Localized Spanish Settings (Light)
     ctrl.prefs.set_locale(LocaleCode::Es);
-    ctrl.settings_tab = 0;
+    ctrl.settings_tab = 2;
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
-    helper.render_to_png(&out_dir.join("settings-general-es-light.png"), 780, 620)?;
+    helper.render_to_png(&out_dir.join("settings-app-es-light.png"), 448, 360)?;
 
     // 10..13. Rendered 64×64 Taskbar / Tray Icons
     let icon_colored_wk = render_squircle_icon_rgba_64(
@@ -330,7 +330,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-2".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(2),
             end_date_exclusive: nov(3),
             is_all_day: false,
@@ -340,7 +340,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-4".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(4),
             end_date_exclusive: nov(5),
             is_all_day: false,
@@ -360,7 +360,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-10".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(10),
             end_date_exclusive: nov(11),
             is_all_day: false,
@@ -380,7 +380,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-12-w".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(12),
             end_date_exclusive: nov(13),
             is_all_day: false,
@@ -400,7 +400,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-18".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(18),
             end_date_exclusive: nov(19),
             is_all_day: false,
@@ -410,7 +410,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-20".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(20),
             end_date_exclusive: nov(21),
             is_all_day: false,
@@ -440,7 +440,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         CalendarOccurrence {
             source_id: "win-work".to_string(),
             event_id: "nov-30".to_string(),
-            color_hex: "#5E6AD2".to_string(),
+            color_hex: "#008573".to_string(),
             start_date: nov(30),
             end_date_exclusive: LocalDate::new(2026, 12, 1).unwrap(),
             is_all_day: false,
@@ -585,32 +585,29 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     // Regression evidence: all three settings modes use the actual shell renderer.
     ctrl.prefs.set_locale(LocaleCode::Ru);
     ctrl.settings_open = true;
-    ctrl.settings_tab = 1;
+    ctrl.settings_tab = 0;
     ctrl.cal_state
         .update_today(LocalDate::new(2026, 10, 30).unwrap());
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         ctrl.prefs.theme = theme;
-        for mode in [
-            TrayIconMode::DateOnly,
-            TrayIconMode::WeekdayAndDate,
-            TrayIconMode::TimeAndDate,
-        ] {
-            ctrl.prefs.tray_icon_mode = mode;
-            ctrl.sync_to_ui(&ui);
-            helper.render_to_png(
-                &out_dir.join(format!(
-                    "19-appearance-{}-{}.png",
-                    theme.as_str(),
-                    mode.as_str()
-                )),
-                780,
-                620,
-            )?;
-        }
+        ctrl.prefs.tray_icon_monochrome = false;
+        ctrl.sync_to_ui(&ui);
+        helper.render_to_png(
+            &out_dir.join(format!("19-calendar-settings-{}.png", theme.as_str())),
+            448,
+            360,
+        )?;
+        ctrl.prefs.tray_icon_monochrome = true;
+        ctrl.sync_to_ui(&ui);
+        helper.render_to_png(
+            &out_dir.join(format!("19-calendar-settings-{}-mono.png", theme.as_str())),
+            448,
+            360,
+        )?;
     }
 
     ctrl.settings_open = true;
-    ctrl.settings_tab = 2;
+    ctrl.settings_tab = 1;
     let account_sources = ctrl.provider.sources.clone();
     ctrl.prefs.set_locale(LocaleCode::Ru);
     ctrl.prefs.microsoft_client_id = "00000000-0000-0000-0000-000000000000".into();
@@ -669,14 +666,14 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             );
             helper.render_to_png(
                 &out_dir.join(format!("20-account-{}-{name}.png", theme.as_str())),
-                780,
-                620,
+                448,
+                360,
             )?;
         }
     }
     // Permission recovery must coexist with readable calendars from other providers.
     ctrl.settings_open = true;
-    ctrl.settings_tab = 2;
+    ctrl.settings_tab = 1;
     ctrl.connection_busy = false;
     ctrl.provider_loading = false;
     ctrl.prefs.windows_calendars_enabled = true;
@@ -711,8 +708,8 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
                     theme.as_str(),
                     if partial { "partial" } else { "denied" }
                 )),
-                780,
-                620,
+                448,
+                360,
             )?;
         }
     }

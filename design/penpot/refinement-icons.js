@@ -4,21 +4,21 @@ await r.page('05 · Icons & components');
 for(const [j,theme] of ['light','dark'].entries()) {
   const t=r[theme],b=r.board(`Icon system · ${theme}`,0,j*864,1440,800,theme,16);
   r.text(b,'Icon system heading','A small icon with a clear identity',32,24,1376,44,28,600,t.ink);
-  r.text(b,'Icon system description','One calendar silhouette. Different drawings for different jobs.',32,82,1376,24,14,400,t.secondary);
+  r.text(b,'Icon system description','A recognizable app mark. A clear date in the tray.',32,82,1376,24,14,400,t.secondary);
   r.brand(b,40,154,128);
   r.text(b,'Application icon heading','Application',204,158,354,28,18,600,t.ink);
   r.text(b,'Application icon description','A stable mark in Start, the taskbar and the Dock.\nFour simple tiles. One intentional accent.',204,200,390,56,13,400,t.secondary);
   r.brand(b,708,154,128,'31');
   r.text(b,'Live icon heading','Today, in the tray',872,158,500,28,18,600,t.ink);
-  r.text(b,'Live icon description','A large date, a clean cap, no extra decoration.\nThe numeral changes at local midnight.',872,200,500,56,13,400,t.secondary);
+  r.text(b,'Live icon description','Only the date. More space for readable numerals.\nThe numeral changes at local midnight.',872,200,500,56,13,400,t.secondary);
   r.line(b,'Icon comparison divider',32,328,1376,t.line);
   r.text(b,'Small sizes heading','Drawn for the size you actually see',32,354,1376,28,18,600,t.ink);
   for(const [i,size] of [16,20,24,32,48,64].entries()) {
     const xx=32+i*232;
-    r.rect(b,'Light surface '+size,xx,408,104,100,'#F2F2F5',12);
-    r.rect(b,'Dark surface '+size,xx+112,408,104,100,'#252529',12);
-    r.brand(b,xx+(104-size)/2,408+(100-size)/2,size,'31');
-    r.brand(b,xx+112+(104-size)/2,408+(100-size)/2,size,'31',true);
+    r.rect(b,'Light surface '+size,xx,408,104,100,'#F0F0F0',12);
+    r.rect(b,'Dark surface '+size,xx+112,408,104,100,'#222222',12);
+    r.brand(b,xx+(104-size)/2,408+(100-size)/2,size,'31',false,false);
+    r.brand(b,xx+112+(104-size)/2,408+(100-size)/2,size,'31',true,true);
     r.text(b,'Size '+size,size+' px',xx,520,216,24,12,500,t.secondary,'center');
   }
   r.text(b,'Variants heading','Same form, even at the extremes',32,578,630,26,18,600,t.ink);

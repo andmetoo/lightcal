@@ -29,7 +29,7 @@ impl ProviderSnapshot {
                 id: "win-work".to_string(),
                 name: "Work".to_string(),
                 account_label: "Windows · Exchange".to_string(),
-                color_hex: "#5E6AD2".to_string(),
+                color_hex: "#008573".to_string(),
             },
             CalendarSource {
                 id: "win-personal".to_string(),
@@ -51,7 +51,7 @@ impl ProviderSnapshot {
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
                 event_id: "syn-1".to_string(),
-                color_hex: "#5E6AD2".to_string(),
+                color_hex: "#008573".to_string(),
                 start_date: d(2),
                 end_date_exclusive: d(2).add_days(1),
                 is_all_day: false,
@@ -71,7 +71,7 @@ impl ProviderSnapshot {
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
                 event_id: "syn-3".to_string(),
-                color_hex: "#5E6AD2".to_string(),
+                color_hex: "#008573".to_string(),
                 start_date: d(14),
                 end_date_exclusive: d(14).add_days(1),
                 is_all_day: false,
@@ -101,7 +101,7 @@ impl ProviderSnapshot {
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
                 event_id: "syn-6".to_string(),
-                color_hex: "#5E6AD2".to_string(),
+                color_hex: "#008573".to_string(),
                 start_date: anchor,
                 end_date_exclusive: anchor.add_days(2),
                 is_all_day: false,
@@ -259,8 +259,12 @@ mod tests {
             width: 1920,
             height: 1040,
         };
-        // 780x620 logical settings at 200% DPI exceeds a 1080p monitor's work height.
+        // Oversized logical window at high DPI must still clamp into the work area.
+        // Legacy 780×620 at 200% DPI used to exceed a 1080p work height; keep that
+        // stress case so anchoring stays valid if a larger panel returns.
         assert_eq!(area.anchor_above_tray(1560, 1240, 24), (336, 8));
+        // Current 448×360 settings at 200% DPI (896×720) fits a 1080p work area.
+        assert_eq!(area.anchor_above_tray(896, 720, 24), (1000, 296));
         let left_monitor = WorkArea {
             x: -1280,
             y: -900,

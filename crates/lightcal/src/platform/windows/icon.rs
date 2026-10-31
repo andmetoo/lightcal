@@ -1,34 +1,34 @@
-//! High-quality icon rendering using bundled Inter font and anti-aliased squircle.
-//! Matches Penpot `06 · Shell, Dock & Icons` specification.
+//! Native-size Onest date numerals on a transparent canvas.
+//! Application branding and legacy multi-line modes retain their calendar shape.
 
 use crate::preferences::TrayIconMode;
 use calendar_core::{LocalDate, Weekday};
 use fontdue::{Font, FontSettings};
 use std::sync::OnceLock;
 
-static INTER_FONT: OnceLock<Font> = OnceLock::new();
-static INTER_BOLD_FONT: OnceLock<Font> = OnceLock::new();
+static UI_FONT: OnceLock<Font> = OnceLock::new();
+static UI_BOLD_FONT: OnceLock<Font> = OnceLock::new();
 
 fn get_bold_font() -> &'static Font {
-    INTER_BOLD_FONT.get_or_init(|| {
+    UI_BOLD_FONT.get_or_init(|| {
         Font::from_bytes(
-            include_bytes!("../../../assets/fonts/Inter-Bold.ttf").as_slice(),
+            include_bytes!("../../../assets/fonts/Onest-Bold.ttf").as_slice(),
             FontSettings::default(),
         )
-        .expect("Failed to parse bundled Inter Bold font")
+        .expect("Failed to parse bundled Onest Bold font")
     })
 }
 
 pub fn get_font() -> &'static Font {
-    INTER_FONT.get_or_init(|| {
-        let bytes = include_bytes!("../../../assets/fonts/Inter.ttf");
+    UI_FONT.get_or_init(|| {
+        let bytes = include_bytes!("../../../assets/fonts/Onest-Regular.ttf");
         Font::from_bytes(bytes.as_slice(), FontSettings::default())
-            .expect("Failed to parse bundled Inter font")
+            .expect("Failed to parse bundled Onest font")
     })
 }
 
 /// Renders a 32×32 RGBA system tray icon supporting 3 modes (`DateOnly`, `WeekdayAndDate`, `TimeAndDate`)
-/// and both **Colored (`#E5484D` Coral)** and **Monochrome** styles.
+/// and both coral and system-monochrome styles. Date-only icons contain just ink.
 pub fn render_tray_icon_rgba(day_of_month: u8, dark_taskbar: bool) -> Vec<u8> {
     render_tray_icon_variant_rgba(
         TrayIconMode::DateOnly,
@@ -60,9 +60,113 @@ pub fn render_native_tray_icon(
     #[cfg(not(windows))]
     let size = 32;
     (
-        render_squircle_icon_generic(size as usize, mode, monochrome, day, weekday, time, dark),
+        render_squircle_icon_generic(
+            size as usize,
+            mode,
+            monochrome,
+            day,
+            weekday,
+            time,
+            taskbar_prefers_dark_mode(dark),
+        ),
         size,
     )
+}
+
+/// The shell's theme is independent of the selected application theme.
+pub fn taskbar_prefers_dark_mode(fallback: bool) -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Registry::{
+            RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD,
+        };
+        let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+            .encode_utf16()
+            .collect();
+        let name: Vec<u16> = "SystemUsesLightTheme\0".encode_utf16().collect();
+        let mut value: u32 = 0;
+        let mut length = std::mem::size_of::<u32>() as u32;
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                key.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_DWORD,
+                std::ptr::null_mut(),
+                (&mut value as *mut u32).cast(),
+                &mut length,
+            )
+        };
+        if result == 0 {
+            return value == 0;
+        }
+    }
+    fallback
+}
+
+fn render_date_numerals(size: usize, day: u8, monochrome: bool, dark: bool) -> Vec<u8> {
+    let mut pixels = vec![0; size * size * 4];
+    let font = get_bold_font();
+    let edge = (size as f32 / 16.0).max(1.0);
+    let available = (size as f32 - edge * 2.0).max(1.0);
+    // Fit the entire month at one size: date changes must not change cap height.
+    let em = 1024.0;
+    let mut widest = 1.0f32;
+    let mut tallest = 1.0f32;
+    for date in 1..=31 {
+        let mut advance = 0.0;
+        let mut left = f32::MAX;
+        let mut right = f32::MIN;
+        for character in date.to_string().chars() {
+            let metrics = font.metrics(character, em);
+            left = left.min(advance + metrics.xmin as f32);
+            right = right.max(advance + metrics.xmin as f32 + metrics.width as f32);
+            tallest = tallest.max(metrics.height as f32);
+            advance += metrics.advance_width;
+        }
+        widest = widest.max(right - left);
+    }
+    let mut font_size = em * (available / widest).min(available / tallest);
+    // Rasterization rounds each glyph independently. Recheck actual pixel
+    // metrics so wide dates such as 30 retain a transparent edge.
+    loop {
+        let fits = (1..=31).all(|date| {
+            let mut advance = 0.0;
+            let mut left = f32::MAX;
+            let mut right = f32::MIN;
+            let mut height = 0;
+            for character in date.to_string().chars() {
+                let metrics = font.metrics(character, font_size);
+                left = left.min(advance + metrics.xmin as f32);
+                right = right.max(advance + metrics.xmin as f32 + metrics.width as f32);
+                height = height.max(metrics.height);
+                advance += metrics.advance_width;
+            }
+            (right - left).ceil() <= available && height as f32 <= available
+        });
+        if fits || font_size <= 1.0 {
+            break;
+        }
+        font_size -= 0.125;
+    }
+    let ink = match (monochrome, dark) {
+        (true, false) => [20, 20, 22, 255],
+        (true, true) => [244, 244, 246, 255],
+        (false, false) => [207, 40, 53, 255],
+        (false, true) => [255, 138, 144, 255],
+    };
+    draw_text_centered(
+        &mut pixels,
+        size,
+        size,
+        font,
+        &day.clamp(1, 31).to_string(),
+        font_size,
+        size as f32 * 0.5,
+        size as f32 * 0.5,
+        ink,
+    );
+    pixels
 }
 
 /// Renders a 32×32 supersampled RGBA squircle icon by 2×2 box-filtering the 64×64 master buffer.
@@ -143,6 +247,9 @@ pub fn render_squircle_icon_generic(
     hour_min: (u8, u8),
     dark_taskbar: bool,
 ) -> Vec<u8> {
+    if mode == TrayIconMode::DateOnly && day_of_month != 0 {
+        return render_date_numerals(size, day_of_month, monochrome, dark_taskbar);
+    }
     let w = size;
     let h = size;
     let mut buf = vec![0u8; w * h * 4];
@@ -155,7 +262,7 @@ pub fn render_squircle_icon_generic(
         [255u8, 255, 255, 255] // #FFFFFF crisp light surface
     };
     let fg = if dark_page {
-        [244u8, 244, 246, 255] // #F4F4F6 primary ink
+        [244u8, 244, 246, 255] // #EEEEEE primary ink
     } else {
         [20u8, 20, 22, 255] // #141416 primary ink
     };
@@ -387,6 +494,8 @@ fn draw_text_centered(
     color: [u8; 4],
 ) {
     let mut total_advance = 0.0f32;
+    let mut ink_left = f32::MAX;
+    let mut ink_right = f32::MIN;
     let mut glyphs = Vec::with_capacity(text.len());
     let mut max_top = 0i32;
     let mut min_bottom = 0i32;
@@ -397,11 +506,16 @@ fn draw_text_centered(
         let bottom = metrics.ymin;
         max_top = max_top.max(top);
         min_bottom = min_bottom.min(bottom);
+        ink_left = ink_left.min(total_advance + metrics.xmin as f32);
+        ink_right = ink_right.max(total_advance + metrics.xmin as f32 + metrics.width as f32);
         glyphs.push((metrics, bitmap));
         total_advance += metrics.advance_width;
     }
 
-    let start_x = center_x - total_advance * 0.5;
+    if glyphs.is_empty() {
+        return;
+    }
+    let start_x = center_x - (ink_left + ink_right) * 0.5;
     // Align visual center of font glyphs with center_y
     let baseline_y = (center_y + (max_top + min_bottom) as f32 * 0.5).round() as i32;
 
@@ -589,6 +703,73 @@ fn append_chunk(out: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn date_only_icons_have_one_ink_and_no_calendar_background() {
+        for dark in [false, true] {
+            let rgba = render_squircle_icon_generic(
+                32,
+                TrayIconMode::DateOnly,
+                true,
+                31,
+                Weekday::Saturday,
+                (12, 0),
+                dark,
+            );
+            let pixels = rgba.as_chunks::<4>().0;
+            let ink: Vec<_> = pixels.iter().filter(|p| p[3] > 0).collect();
+            assert!(!ink.is_empty());
+            assert!(ink.iter().all(|p| p[..3] == ink[0][..3]));
+            assert!(pixels[..32].iter().all(|p| p[3] == 0));
+            assert!(pixels[31 * 32..].iter().all(|p| p[3] == 0));
+        }
+    }
+
+    #[test]
+    fn every_date_fits_and_centers_at_native_shell_sizes() {
+        for size in [16, 20, 24, 32, 48, 64] {
+            for day in 1..=31 {
+                let rgba = render_squircle_icon_generic(
+                    size,
+                    TrayIconMode::DateOnly,
+                    true,
+                    day,
+                    Weekday::Saturday,
+                    (12, 0),
+                    false,
+                );
+                let mut left = size;
+                let mut right = 0;
+                let mut top = size;
+                let mut bottom = 0;
+                for (i, _) in rgba
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| p[3] > 0)
+                {
+                    let (x, y) = (i % size, i / size);
+                    left = left.min(x);
+                    right = right.max(x);
+                    top = top.min(y);
+                    bottom = bottom.max(y);
+                }
+                assert!(
+                    left > 0 && top > 0 && right < size - 1 && bottom < size - 1,
+                    "date {day} clips at {size}px: {left},{top}..{right},{bottom}"
+                );
+                assert!(
+                    left.abs_diff(size - 1 - right) <= 1,
+                    "date {day} is horizontally off-center at {size}px"
+                );
+                assert!(
+                    top.abs_diff(size - 1 - bottom) <= 1,
+                    "date {day} is vertically off-center at {size}px"
+                );
+            }
+        }
+    }
 
     #[test]
     fn tray_icon_renders_valid_32x32_rgba_buffer() {

@@ -6,6 +6,11 @@ Open **Overview** for the review entry point.
 
 ## Current concept
 
+The current palette is [Gray + Teal](palettes/README.md): neutral surfaces and
+selection fills, Teal actions/focus markers, and Coral identity/Today. The
+owner rejected violet throughout both themes. Native UI and all active Penpot
+specimens use the updated palette.
+
 - One 352 × 432 calendar, with larger dates, distinct today/selection states,
   event dots and a compact agenda. Today is the only return-to-today action.
 - A fixed **448 × 360** settings panel with **Calendar / Accounts / App** tabs.
@@ -15,6 +20,11 @@ Open **Overview** for the review entry point.
   and private ICS are choices in Add account. Consent, cancellation, revoked
   access, offline data and empty selection have separate states.
 - Windows uses a static application icon and a live date badge in the tray.
+  Following the owner's screenshot review, the live date uses only numerals
+  on transparency: no paper, cap or outline. Color/monochrome controls select
+  the ink. The native renderer centers visible glyph bounds and uses one font
+  size for all dates at each shell size; shell contrast follows Windows rather
+  than the application's selected theme.
   macOS uses platform window controls, login/shortcut terminology, a monochrome
   menu-bar label and a separate Dock icon. Neither replaces the system clock.
 - English, Russian, Spanish and Japanese examples retain user event titles.
@@ -61,12 +71,16 @@ the whole earlier file, including the original pages.
 - [Japanese shortcut error](review/japanese-shortcut-error.png)
 - [Russian shortcut error](review/russian-shortcut-error.png)
 - [macOS shortcut error with vector key symbols](review/macos-shortcut-error.png)
+- [Native Windows date: calendar cap versus numeral-only](review/windows-date-numerals.png)
+- [Native Gray + Teal App, dark](review/native-gray-teal-app-dark.png)
+- [Native Gray + Teal App, light](review/native-gray-teal-app-light.png)
+- [Native Gray + Teal Calendar settings, dark](review/native-gray-teal-calendar-dark.png)
 
 The final geometry audit covers 7 pages and 114 top-level boards, with no duplicate
 board names or out-of-bounds descendants. The navigation prototype has 553 links
 and no unresolved destinations. Pixel review remains separate from geometry.
 Today text uses white on `#D73840` (calculated contrast 4.64:1); white primary
-button text uses `#5E63D6` (4.96:1). This is not a complete accessibility audit.
+button text uses `#00796B` (5.32:1). This is not a complete accessibility audit.
 
 ## Final UI review
 
@@ -87,7 +101,8 @@ The final review passed without clipping or collisions in those specimens.
   only in a focus state. Shared controls include hover, pressed, focus and
   disabled specimens.
 - The master icon grid is centered below the cap. The 32 px drawing receives
-  a 1 px optical correction; the 16/24 px PNGs remain byte-identical.
+  a 1 px optical correction; the 16/24 px geometry is preserved. The subsequent
+  Gray + Teal pass updates neutral ink colors in those PNGs.
 
 Permanent versions **Before final UI polish 2026-10-31** and
 **Lightcal final UI 2026-10-31** preserve the reviewed stages.
@@ -98,5 +113,7 @@ previous Inter version.
 
 These are design deliverables. Google OAuth, runtime UI alignment, real Windows
 DPI/shell checks and real macOS integration remain implementation/release work.
-No application performance measurement is claimed. Rust/Slint, credentials,
-autostart, registry and release packaging are unchanged by this design pass.
+No application performance measurement is claimed. The subsequent native
+[Windows date-icon followup](../docs/decisions/0009-windows-date-numerals.md)
+implements the numeral-only renderer and reads the shell theme. It does not
+change credentials, autostart, registry values or release packaging.

@@ -93,7 +93,7 @@ fn resolve_dark_mode(theme: ThemePreference) -> bool {
 
 fn target_logical_size(settings_open: bool) -> (f32, f32) {
     if settings_open {
-        (780.0, 620.0)
+        (448.0, 360.0)
     } else {
         (352.0, 432.0)
     }
@@ -274,7 +274,7 @@ impl AppController {
             self.cal_state.today.day,
             self.cal_state.today.weekday(),
             (now.hour() as u8, now.minute() as u8),
-            dark_mode,
+            lightcal::platform::windows::icon::taskbar_prefers_dark_mode(dark_mode),
         );
         let pixel_buf = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(&rgba64, 64, 64);
         ui.set_window_icon(Image::from_rgba8(pixel_buf));
@@ -381,16 +381,16 @@ impl AppController {
                     .iter()
                     .find(|s| s.id == occ.source_id)
                     .map(|s| s.name.as_str())
-                    .unwrap_or("Calendar");
+                    .unwrap_or(strings.agenda_calendar_fallback);
                 let time_display = if occ.time_label.is_empty() {
-                    "All day".to_string()
+                    strings.agenda_all_day.to_string()
                 } else {
                     occ.time_label.clone()
                 };
                 AgendaEventItem {
                     time_label: time_display.into(),
                     title: if occ.title.is_empty() {
-                        "Event".into()
+                        strings.agenda_event_fallback.into()
                     } else {
                         occ.title.into()
                     },
@@ -507,6 +507,8 @@ impl AppController {
             _ => "".into(),
         });
         ui.set_refresh_button_text(strings.refresh_button.into());
+        ui.set_updates_heading_text(strings.updates_heading.into());
+        ui.set_about_link_text(strings.tray_about.into());
         ui.set_updates_check_button_text(strings.updates_check_button.into());
         ui.set_updates_open_release_button_text(strings.updates_open_release_button.into());
         ui.set_current_language_code(locale.as_str().into());
@@ -541,14 +543,14 @@ impl AppController {
         ui.set_desc_update_channel_text(strings.desc_update_channel.into());
         ui.set_label_license_source_text(strings.label_license_source.into());
         ui.set_desc_license_source_text(strings.desc_license_source.into());
-        ui.set_app_version_line_text(
-            format!(
-                "Lightcal {} · Rust + Slint · {}",
-                lightcal::version::VERSION,
-                std::env::consts::ARCH
-            )
-            .into(),
+        ui.set_app_version_line_text(lightcal::version::VERSION.into());
+        ui.set_about_version_text(
+            lightcal::i18n::about_version_line(locale, lightcal::version::VERSION).into(),
         );
+        ui.set_app_name_text(strings.app_name.into());
+        ui.set_provider_readonly_tag_text(strings.provider_readonly_tag.into());
+        ui.set_shortcut_unset_text(strings.shortcut_unset.into());
+        ui.set_license_short_text(strings.license_short.into());
         ui.set_shortcut_conflict_title(strings.shortcut_conflict_title.into());
         ui.set_shortcut_conflict_hint(strings.shortcut_conflict_hint.into());
         ui.set_shortcut_reset_label(strings.shortcut_reset_button.into());
@@ -1501,7 +1503,7 @@ fn main() {
                 } else if id == settings_id {
                     with_active_controller(&ui_w, |c, w| {
                         c.settings_open = true;
-                        c.settings_tab = 0;
+                        c.settings_tab = 2; // App tab (language, startup, shortcut)
                         c.sync_to_ui(w);
                         show_application_window(w);
                         bring_to_foreground();
@@ -1901,6 +1903,17 @@ fn main() {
     {
         let weak = ui.as_weak();
         ui.on_remove_calendar_source(move |id| {
+            // Legacy Windows store sources have no per-calendar delete in the dense UI.
+            // Treat remove as turning the preference off so users are never stuck.
+            if id.as_str().starts_with("win:") {
+                with_active_controller(&weak, |c, w| {
+                    c.prefs.windows_calendars_enabled = false;
+                    c.persist();
+                    c.sync_to_ui(w);
+                });
+                request_visible_calendars(weak.clone(), use_synthetic);
+                return;
+            }
             run_calendar_action(
                 weak.clone(),
                 CalendarAction::Remove(id.to_string()),
@@ -2189,8 +2202,7 @@ mod tests {
     #[test]
     fn target_logical_size_matches_compact_and_settings_specs() {
         assert_eq!(target_logical_size(false), (352.0, 432.0));
-        assert_eq!(target_logical_size(true), (780.0, 620.0));
-        assert_eq!(target_logical_size(true), (780.0, 620.0));
+        assert_eq!(target_logical_size(true), (448.0, 360.0));
     }
 
     #[test]

@@ -63,6 +63,10 @@ if (operation === 'run' || operation === 'report') {
     code = 'if(storage.refinement)storage.refinement.batch=null;\n' + code;
   }
   if (argument.endsWith('refinement-states.js')) code = `storage.refinement.statePlatform = '${platform}';\n` + code;
+  if (argument.endsWith('refinement-palette.js')) {
+    const palette = JSON.parse(await readFile(new URL('../palettes/gray-teal.json', import.meta.url), 'utf8'));
+    code = 'storage.refinement.palette = ' + JSON.stringify(palette) + ';\n' + code;
+  }
   args = { code };
 } else if (operation === 'eval') {
   name = 'execute_code';
