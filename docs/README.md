@@ -6,13 +6,13 @@ Planning baseline: October 29, 2026.
 | --- | --- |
 | [Windows installer](windows-installer.md) | NSIS setup, signing, CI, and isolated installer tests |
 | [NSIS distribution decision](decisions/0006-nsis-windows-distribution.md) | Owner-approved Windows installer replacing the retired package channel |
-| [Draft signing decision](decisions/0007-draft-release-signing.md) | Unsigned tag draft, Windows SimpleSign upload, and explicit publication |
+| [Draft signing decision](decisions/0007-draft-release-signing.md) | Unsigned tag draft, Windows signtool upload, and explicit publication |
 | [Taskbar presence decision](decisions/0005-taskbar-calendar-presence.md) | Persistent taskbar activation and calendar thumbnails |
 | [Compact view and account settings decision](decisions/0004-compact-view-and-account-settings.md) | Compact-only calendar and verified account controls |
 | [Product](product.md) | Scope, approved choices, and window behavior |
 | [Required features](features.md) | Owner-required settings, Windows calendars, event dots, updates, and About |
 | [Direct providers and updates decision](decisions/0002-direct-calendars-and-updates.md) | Owner-approved Microsoft Graph, private ICS, and signed automatic installation |
-| [Provider and update setup](provider-setup.md) | Microsoft registration, root local configuration, ICS, and SimpleSign certificate setup |
+| [Provider and update setup](provider-setup.md) | Microsoft registration, root local configuration, ICS, and SimplySign certificate setup |
 | [UI framework decision](decisions/0001-ui-framework.md) | Accepted Slint choice, alternatives, evidence, and validation gate |
 | [Architecture](architecture.md) | Rust boundaries and platform integration |
 | [Roadmap](roadmap.md) | Ordered milestones and acceptance criteria |

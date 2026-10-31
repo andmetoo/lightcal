@@ -4,15 +4,15 @@
  *
  * Commands (via Bun or `just`):
  *   bun run scripts/release.ts build    # Build optimized release binary, stage to target/dist/, write SHA-256
- *   bun run scripts/release.ts sign     # Sign binary via SimpleSign Desktop, verify signature, update SHA-256
- *   bun run scripts/release.ts verify   # Verify Authenticode signature & update SHA-256 after SimpleSign Desktop
- *   bun run scripts/release.ts release  # Full pipeline: build -> stage -> SimpleSign Desktop -> checksum
- *   bun run scripts/release.ts sign-draft      # Download the tag draft, sign on Windows, upload signed files
- *   bun run scripts/release.ts publish-release # Publish that draft after the signed assets are attached
+ *   bun run scripts/release.ts sign     # Sign with signtool while SimplySign Desktop is signed in
+ *   bun run scripts/release.ts verify   # Verify Authenticode signature and update SHA-256
+ *   bun run scripts/release.ts release  # Full pipeline: build -> stage -> signtool -> checksum
+ *   bun run scripts/release.ts sign-draft vX.Y.Z      # Download that draft, sign on Windows, upload signed files
+ *   bun run scripts/release.ts publish-release vX.Y.Z # Publish that draft after the signed assets are attached
  *
- * Optional environment variables:
- *   SIMPLESIGN_PATH  - Path to SimpleSign Desktop executable (auto-detected if installed in standard paths)
- *   SIMPLESIGN_ARGS  - Extra CLI flags for SimpleSign Desktop (default passes the target binary path)
+ * Signing uses scripts/sign-windows.ps1. Set SIGN_CERT_SHA1 (thumbprint, not a secret) in
+ * .env.local. SimplySign Desktop must be signed in so that certificate is in the user store.
+ * SIGNTOOL overrides the signtool.exe path.
  */
 
 import { createHash } from "node:crypto";
@@ -30,8 +30,6 @@ import {
   UNSIGNED_EXE,
   assertChecksum,
   assertFilesExist,
-  assertPublishCheckout,
-  assertSignDraftCheckout,
   assertUnsignedDraft,
   assertWindowsExecutable,
   deleteAssetArgs,
@@ -48,6 +46,11 @@ import {
 } from "./release-draft.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
+
+for (const name of [".env.local", ".env"]) {
+  const path = join(ROOT, name);
+  if (existsSync(path)) process.loadEnvFile(path);
+}
 
 function stableSemver(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -94,36 +97,10 @@ function runCmd(cmd: string[], cwd = ROOT, allowFailure = false): number {
   return proc.exitCode ?? 0;
 }
 
-function findSimpleSignDesktop(): string | null {
-  if (process.env.SIMPLESIGN_PATH && existsSync(process.env.SIMPLESIGN_PATH)) {
-    return process.env.SIMPLESIGN_PATH;
-  }
-
-  const localAppData = process.env.LOCALAPPDATA || "";
-  const programFiles = process.env.ProgramFiles || "C:\\Program Files";
-  const userProfile = process.env.USERPROFILE || "";
-
-  const candidates = [
-    join(localAppData, "Programs", "SimpleSign Desktop", "SimpleSign Desktop.exe"),
-    join(localAppData, "Programs", "simplesign-desktop", "SimpleSign Desktop.exe"),
-    join(localAppData, "SimpleSignDesktop", "SimpleSign Desktop.exe"),
-    join(programFiles, "SimpleSign Desktop", "SimpleSign Desktop.exe"),
-    join(userProfile, "Desktop", "SimpleSign Desktop.exe"),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  const which = Bun.which("simplesign-desktop") || Bun.which("simplesign");
-  return which ?? null;
-}
-
 function findSignTool(): string | null {
-  if (process.env.SIGNTOOL_PATH && existsSync(process.env.SIGNTOOL_PATH)) {
-    return process.env.SIGNTOOL_PATH;
+  const configured = process.env.SIGNTOOL || process.env.SIGNTOOL_PATH;
+  if (configured && existsSync(configured)) {
+    return configured;
   }
   const kitsRoot = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
   if (existsSync(kitsRoot)) {
@@ -168,7 +145,10 @@ function writeChecksums(targetPath = DIST_BIN): void {
   console.log(`SHA-256:       ${sha256}`);
 }
 
-function signWithSimpleSign(target = DIST_BIN): void {
+function signWithSigntool(target = DIST_BIN): void {
+  if (process.platform !== "win32") {
+    throw new Error("signtool can sign only on the maintainer's Windows PC. Run `just sign-draft` there.");
+  }
   if (!existsSync(target) && target !== DIST_BIN) throw new Error(`Missing signing target: ${target}`);
   if (!existsSync(target)) {
     if (existsSync(RELEASE_BIN)) {
@@ -179,17 +159,8 @@ function signWithSimpleSign(target = DIST_BIN): void {
     }
   }
 
-  const simpleSignExe = findSimpleSignDesktop();
-  const extraArgs = process.env.SIMPLESIGN_ARGS
-    ? process.env.SIMPLESIGN_ARGS.split(/\s+/).filter(Boolean)
-    : [];
-
-  if (simpleSignExe) {
-    console.log(`=== Launching SimpleSign Desktop for ${target} ===`);
-    runCmd([simpleSignExe, ...extraArgs, target]);
-  } else {
-    throw new Error(`SimpleSign Desktop was not found. Sign ${target} manually, then run 'just verify-release' and 'just package-release'.`);
-  }
+  console.log(`=== Signing ${target} with signtool ===`);
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-File", target]);
 }
 
 function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN): void {
@@ -266,37 +237,12 @@ function signInstaller(): void {
   runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", "scripts/package-nsis.ps1", "-SkipBuild", "-RequireSigned", "-BinaryPath", DIST_BIN]);
   const version = releaseVersion();
   const setup = join(ROOT, "target", "nsis", `lightcal-${version}-windows-x64-setup.exe`);
-  signWithSimpleSign(setup);
+  signWithSigntool(setup);
   verifySignature(setup);
 }
 
 function textOf(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes).trim();
-}
-
-function gitText(args: string[], allowFailure = false): string | null {
-  const proc = Bun.spawnSync(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
-  if (proc.exitCode !== 0) {
-    if (allowFailure) return null;
-    const detail = textOf(proc.stderr);
-    throw new Error(detail || `git ${args.join(" ")} failed`);
-  }
-  return textOf(proc.stdout);
-}
-
-function exactGitTag(): string | null {
-  return gitText(["describe", "--tags", "--exact-match"], true);
-}
-
-function fetchTag(tag: string): void {
-  const fetched = Bun.spawnSync(["git", "fetch", "--quiet", "origin", "tag", tag, "--force"], {
-    cwd: ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (fetched.exitCode !== 0) {
-    console.log(`Could not fetch ${tag} from origin; using the local tag.`);
-  }
 }
 
 function ensureGh(): void {
@@ -339,28 +285,18 @@ function loadRelease(tag: string) {
 }
 
 function draftVersion(): string {
-  return versionFromCheckout(process.argv[3], exactGitTag());
+  return versionFromCheckout(process.argv[3]);
 }
 
 function signDraft(): void {
   if (process.platform !== "win32") {
     throw new Error(
-      "SimpleSign Desktop can sign only on the maintainer's Windows PC. Run `just sign-draft` there.",
+      "Signing runs only on the maintainer's Windows PC, with SimplySign Desktop signed in. Run `just sign-draft vX.Y.Z` there.",
     );
   }
   const version = draftVersion();
   const tag = tagForVersion(version);
-  fetchTag(tag);
-  const tagCommit = gitText(["rev-parse", "--verify", `${tag}^{commit}`]);
-  const head = gitText(["rev-parse", "HEAD"]);
-  const dirty = gitText(["status", "--porcelain", "--untracked-files=no"]) ?? "";
-  assertSignDraftCheckout({
-    platform: process.platform,
-    head: head ?? "",
-    tagCommit: tagCommit ?? "",
-    dirty,
-    tag,
-  });
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-Check"]);
   ensureGh();
   const view = loadRelease(tag);
   assertUnsignedDraft(view, tag);
@@ -388,9 +324,17 @@ function signDraft(): void {
   assertWindowsExecutable(bytes);
 
   mkdirSync(DIST_DIR, { recursive: true });
-  copyFileSync(exePath, DIST_BIN);
+  try {
+    copyFileSync(exePath, DIST_BIN);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EBUSY" || code === "EPERM") {
+      throw new Error(`${DIST_BIN} is in use. Close Lightcal, then run just sign-draft ${tag} again.`);
+    }
+    throw error;
+  }
   process.env.LIGHTCAL_RELEASE_VERSION = version;
-  signWithSimpleSign(DIST_BIN);
+  signWithSigntool(DIST_BIN);
   verifySignature(DIST_BIN);
   packagePortableArchive();
   signInstaller();
@@ -399,25 +343,21 @@ function signDraft(): void {
   assertFilesExist(uploads, existsSync);
   console.log(`=== Uploading signed files to draft ${tag} ===`);
   if (ghInherit(uploadArgs(tag, uploads)) !== 0) {
-    throw new Error(`Upload to draft ${tag} failed. Re-run just sign-draft after SimpleSign finishes.`);
+    throw new Error(`Upload to draft ${tag} failed. Re-run just sign-draft ${tag} after signing finishes.`);
   }
-  console.log("Uploaded. The release stays a draft. Publish it with: just publish-release");
+  console.log(`Uploaded. The release stays a draft. Publish it with: just publish-release ${tag}`);
 }
 
 function publishDraft(): void {
   const version = draftVersion();
   const tag = tagForVersion(version);
-  fetchTag(tag);
-  const tagCommit = gitText(["rev-parse", "--verify", `${tag}^{commit}`]);
-  const head = gitText(["rev-parse", "HEAD"]);
-  assertPublishCheckout({ head: head ?? "", tagCommit: tagCommit ?? "", tag });
   ensureGh();
   const view = loadRelease(tag);
   assertUnsignedDraft(view, tag);
   const missing = missingSignedAssets(view!, version);
   if (missing.length > 0) {
     throw new Error(
-      `Draft ${tag} is missing signed files: ${missing.join(", ")}. On Windows, run just sign-draft.`,
+      `Draft ${tag} is missing signed files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`,
     );
   }
   for (const name of unsignedAssetsPresent(view!, tag)) {
@@ -454,7 +394,7 @@ switch (action) {
     writeChecksums(DIST_BIN);
     break;
   case "sign":
-    signWithSimpleSign();
+    signWithSigntool();
     verifySignature();
     break;
   case "verify":
@@ -471,7 +411,7 @@ switch (action) {
     break;
   case "release":
     buildRelease();
-    signWithSimpleSign();
+    signWithSigntool();
     verifySignature();
     packagePortableArchive();
     signInstaller();

@@ -23,29 +23,27 @@ The existing trusted updater continues to require a signed release asset named e
 
 ## Signing
 
-`just release` builds and signs `target/dist/lightcal.exe` with SimpleSign Desktop, verifies it, creates the portable ZIP and NSIS setup from that signed payload, then signs and verifies the setup. `just sign-installer` packages an already signed staged application and signs the resulting setup. The signed route fails if the application or setup cannot pass Authenticode validation; it never labels an unsigned review build as signed.
+`just release` builds and signs `target/dist/lightcal.exe` with `signtool`, verifies it, creates the portable ZIP and NSIS setup from that signed payload, then signs and verifies the setup. `just sign-installer` packages an already signed staged application and signs the resulting setup. The signed route fails if the application or setup cannot pass Authenticode validation; it never labels an unsigned review build as signed.
 
-Set `SIMPLESIGN_PATH` in the shell to the exact signer executable. Keys and certificate-service credentials remain in the signer, outside this repository. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
+Signing uses `scripts/sign-windows.ps1`: `signtool sign /sha1` with the `SIGN_CERT_SHA1` thumbprint from `.env.local`, and a Certum timestamp (`http://time.certum.pl`). Certum SimplySign Desktop must already be signed in, so the certificate is in the current-user store. The script does not launch SimplySign. Keys stay in that tool. Set `SIGNTOOL` only when `signtool.exe` is neither on `PATH` nor in the Windows SDK. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
 
 ## Sign a draft release from Windows
 
-SimpleSign Desktop can sign only on the maintainer's Windows PC. A stable tag does not publish a release. It opens a GitHub **draft** that holds the unsigned CI build. The maintainer downloads that draft, signs it locally, and uploads the signed files back to the same draft.
+`signtool` can sign only on the maintainer's Windows PC, and only while Certum SimplySign Desktop is signed in. A stable tag does not publish a release. It opens a GitHub **draft** that holds the unsigned CI build. The maintainer downloads that draft, signs it locally, and uploads the signed files back to the same draft.
 
-On that PC, with [GitHub CLI](https://cli.github.com) signed in (`gh auth login`):
+On that PC, from `main`, with [GitHub CLI](https://cli.github.com) signed in (`gh auth login`):
 
 ```powershell
-git fetch origin tag vX.Y.Z
-git switch --detach vX.Y.Z
-just sign-draft
+just sign-draft vX.Y.Z
 ```
 
-`just sign-draft` checks that HEAD is that tag and the tree is clean. It downloads `lightcal-unsigned.exe`, checks its SHA-256, and refuses a file that is not a Windows executable. It then signs `target/dist/lightcal.exe` with SimpleSign Desktop, verifies Authenticode, writes the portable ZIP, builds the NSIS setup from that signed application, signs the setup, and uploads:
+`just sign-draft vX.Y.Z` checks that `SIGN_CERT_SHA1` is in the current-user store. It does not check out the tag. It downloads `lightcal-unsigned.exe` from that draft, checks its SHA-256, and refuses a file that is not a Windows executable. It then signs `target/dist/lightcal.exe` with `signtool`, verifies Authenticode, writes the portable ZIP, builds the NSIS setup from that signed application, signs the setup, and uploads:
 
 - `lightcal.exe` and `lightcal.exe.sha256` (the updater asset; this name is never used for the unsigned draft file)
 - `lightcal-vX.Y.Z-windows-x64.zip` and its SHA-256 file
 - `lightcal-X.Y.Z-windows-x64-setup.exe` and its SHA-256 file
 
-The release stays a draft. A signing window that returns without a valid signature fails the command. Signing does not recompile: the certificate pin is the `LIGHTCAL_UPDATE_CERT_SHA256` repository variable from the tagged CI build. Changing the pin needs a new tag. `just publish-release`, from the same tag, deletes the unsigned draft files and marks the release public. Run it only when that signed `lightcal.exe` should become the stable download. The updater ignores drafts and installs only a published asset named exactly `lightcal.exe`.
+The release stays a draft. A signing window that returns without a valid signature fails the command. Signing does not recompile: the certificate pin is the `LIGHTCAL_UPDATE_CERT_SHA256` repository variable from the tagged CI build. Changing the pin needs a new tag. `just publish-release vX.Y.Z` deletes the unsigned draft files and marks the release public. Run it only when that signed `lightcal.exe` should become the stable download. The updater ignores drafts and installs only a published asset named exactly `lightcal.exe`.
 
 ## CI, draft releases, and validation
 

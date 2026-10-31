@@ -47,17 +47,17 @@ probe-calendars:
 build-release:
     bun run scripts/release.ts build
 
-# Sign target/dist/lightcal.exe via SimpleSign Desktop and update SHA-256 via Bun
+# Sign target/dist/lightcal.exe with signtool while SimplySign Desktop is signed in
 sign-release:
     bun run scripts/release.ts sign
 
-# Download the tag draft, sign it on Windows, and upload the signed files
-sign-draft:
-    bun run scripts/release.ts sign-draft
+# Download draft vX.Y.Z, sign it on Windows, and upload the signed files
+sign-draft version:
+    bun run scripts/release.ts sign-draft {{version}}
 
-# Publish the draft after the signed executable, archive, and setup are attached
-publish-release:
-    bun run scripts/release.ts publish-release
+# Publish draft vX.Y.Z after the signed executable, archive, and setup are attached
+publish-release version:
+    bun run scripts/release.ts publish-release {{version}}
 
 # Verify Authenticode signature on target/dist/lightcal.exe and refresh SHA-256 checksum
 verify-release:

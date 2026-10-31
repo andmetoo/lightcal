@@ -5,8 +5,6 @@ import {
   UNSIGNED_EXE,
   assertChecksum,
   assertFilesExist,
-  assertPublishCheckout,
-  assertSignDraftCheckout,
   assertUnsignedDraft,
   assertWindowsExecutable,
   deleteAssetArgs,
@@ -43,56 +41,15 @@ describe("draft signing names", () => {
   test("rejects an unstable version", () => {
     expect(requireStableVersion("v0.2.0")).toBe("0.2.0");
     expect(() => requireStableVersion("v0.2.0-rc.1")).toThrow(/stable version/);
-    expect(() => versionFromCheckout(undefined, null)).toThrow(/git switch --detach/);
+    expect(versionFromCheckout("v0.2.3")).toBe("0.2.3");
+    expect(() => versionFromCheckout(undefined)).toThrow(/just sign-draft vX\.Y\.Z/);
   });
 });
 
 describe("draft guards", () => {
-  test("signs only a clean Windows checkout of the tag", () => {
-    expect(() =>
-      assertSignDraftCheckout({
-        platform: "linux",
-        head: "abc",
-        tagCommit: "abc",
-        dirty: "",
-        tag: "v0.2.0",
-      }),
-    ).toThrow(/Windows PC/);
-    expect(() =>
-      assertSignDraftCheckout({
-        platform: "win32",
-        head: "aaaaaaaa",
-        tagCommit: "bbbbbbbb",
-        dirty: "",
-        tag: "v0.2.0",
-      }),
-    ).toThrow(/git switch --detach v0.2.0/);
-    expect(() =>
-      assertSignDraftCheckout({
-        platform: "win32",
-        head: "abc",
-        tagCommit: "abc",
-        dirty: " M packaging/nsis/lightcal.nsi",
-        tag: "v0.2.0",
-      }),
-    ).toThrow(/Uncommitted changes/);
-    expect(() =>
-      assertSignDraftCheckout({
-        platform: "win32",
-        head: "abc",
-        tagCommit: "abc",
-        dirty: "",
-        tag: "v0.2.0",
-      }),
-    ).not.toThrow();
-  });
-
   test("refuses to publish a missing or already public release", () => {
     expect(() => assertUnsignedDraft(null, "v0.2.0")).toThrow(/unsigned draft/);
     expect(() => assertUnsignedDraft({ isDraft: false, assets: [] }, "v0.2.0")).toThrow(/already published/);
-    expect(() => assertPublishCheckout({ head: "aaa", tagCommit: "bbb", tag: "v0.2.0" })).toThrow(
-      /git switch --detach v0.2.0/,
-    );
   });
 
   test("publishes only after every signed asset is attached", () => {

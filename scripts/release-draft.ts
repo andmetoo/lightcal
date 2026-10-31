@@ -1,9 +1,9 @@
 /**
  * Plan the Windows draft-release signing flow.
  *
- * CI opens an unsigned GitHub draft. SimpleSign Desktop can sign only on the
- * maintainer's PC, so `just sign-draft` downloads that draft executable, and
- * `just publish-release` is the explicit step that makes the release public.
+ * CI opens an unsigned GitHub draft. signtool can sign only on the maintainer's
+ * PC while SimplySign Desktop is signed in. `just sign-draft vX.Y.Z` downloads that
+ * draft, and `just publish-release vX.Y.Z` is the explicit step that makes it public.
  */
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -24,12 +24,11 @@ export function requireStableVersion(raw: string | undefined): string {
   return match[1];
 }
 
-export function versionFromCheckout(explicit: string | undefined, exactTag: string | null): string {
-  if (explicit?.trim()) return requireStableVersion(explicit);
-  if (!exactTag?.trim()) {
-    throw new Error("Check out the release tag first: git switch --detach vX.Y.Z");
+export function versionFromCheckout(explicit: string | undefined): string {
+  if (!explicit?.trim()) {
+    throw new Error("Pass the draft version: just sign-draft vX.Y.Z");
   }
-  return requireStableVersion(exactTag);
+  return requireStableVersion(explicit);
 }
 
 export function tagForVersion(version: string): string {
@@ -79,34 +78,6 @@ export function assertFilesExist(paths: string[], exists: (path: string) => bool
   const missing = paths.filter((path) => !exists(path));
   if (missing.length > 0) {
     throw new Error(`Missing signed file: ${missing.join(", ")}`);
-  }
-}
-
-export function assertSignDraftCheckout(input: {
-  platform: string;
-  head: string;
-  tagCommit: string;
-  dirty: string;
-  tag: string;
-}): void {
-  if (input.platform !== "win32") {
-    throw new Error(
-      "SimpleSign Desktop can sign only on the maintainer's Windows PC. Run `just sign-draft` there.",
-    );
-  }
-  if (input.head !== input.tagCommit) {
-    throw new Error(
-      `HEAD ${input.head.slice(0, 7)} is not ${input.tag} (${input.tagCommit.slice(0, 7)}). Run: git switch --detach ${input.tag}`,
-    );
-  }
-  if (input.dirty.trim()) {
-    throw new Error(`Uncommitted changes: the installer is packaged from ${input.tag} as it is.\n${input.dirty.trim()}`);
-  }
-}
-
-export function assertPublishCheckout(input: { head: string; tagCommit: string; tag: string }): void {
-  if (input.head !== input.tagCommit) {
-    throw new Error(`HEAD is not ${input.tag}. Run: git switch --detach ${input.tag}`);
   }
 }
 
@@ -215,7 +186,7 @@ export function publishedReleaseNotes(version: string): string {
   return [
     `Lightcal ${tag}.`,
     "",
-    "Signed on the maintainer's Windows PC with SimpleSign Desktop. Signing keys stay in that tool.",
+    "Signed on the maintainer's Windows PC with signtool while Certum SimplySign Desktop is signed in. Signing keys stay in that tool.",
     "Automatic installation uses the asset named exactly lightcal.exe.",
     `NSIS setup: lightcal-${version}-windows-x64-setup.exe.`,
     `Portable archive: lightcal-${tag}-windows-x64.zip.`,
