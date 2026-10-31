@@ -2,6 +2,10 @@
 
 Date: 2026-10-30. Status: accepted by the owner in chat.
 
+Update, 2026-10-31: [ADR 0008](0008-google-calendar-and-platform-design.md) supersedes
+the Google deferral below with planned read-only Google Calendar OAuth. The
+Google provider is not implemented by the design change.
+
 The owner approved private ICS subscriptions, direct Microsoft Graph calendar access for Outlook/Microsoft 365, and automatic update installation. Google integration is deferred by the owner's latest instruction. This supersedes the earlier Windows-only provider restriction and manual-install-only release scope. Windows calendar access is retained as an optional legacy source, not the default.
 
 Microsoft authentication uses the system browser, a loopback redirect, PKCE S256, random state, and delegated Calendars.Read plus offline_access scopes. Public desktop client configuration belongs to the owner's Microsoft Entra app registration. No client secret is used. Refresh tokens and private ICS URLs must be protected with Windows DPAPI rather than ordinary preference JSON. Never log tokens, authorization codes, feed URLs, or event bodies. Disconnect removes local credentials; no remote calendar/account modification is permitted.

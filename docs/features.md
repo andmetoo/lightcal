@@ -1,6 +1,6 @@
 # Required features
 
-Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph and private ICS are approved, Google sign-in is deferred, and signed automatic update installation is approved. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter.
+Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph, private ICS, and signed automatic update installation are approved. The 2026-10-31 owner request in [ADR 0008](decisions/0008-google-calendar-and-platform-design.md) approves planned read-only Google Calendar OAuth and platform-specific design; Google integration is designed but not implemented. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter.
 
 | Feature | Expected behavior and acceptance |
 | --- | --- |
@@ -31,7 +31,7 @@ These identify an API family to investigate; they do not establish compatibility
 
 ## UI and release implications
 
-Settings cover Appearance, General, Calendars, and About. General contains startup, shortcut, and language controls. Appearance includes weekday visibility, gray-weekday selection, theme, and week numbering. Calendars shows permission/provider state and checked sources. About contains update checking and the requested links.
+The October 31 design in [ADR 0008](decisions/0008-google-calendar-and-platform-design.md) replaces the large settings layout with a fixed 448 × 360 panel: Calendar contains theme, week start, shaded weekdays, week numbers and event dots; Accounts contains connections and selected calendars; App contains language, startup, shortcut, tray/menu-bar appearance and manual update checking. About is a separate panel for version, updates, license and links. The shipped UI has not yet been aligned to this design. The same decision removes the Current month chip and underline in favor of a single Today action and a plain date label, superseding the earlier emphasis requirement above.
 
 All four languages are first-release requirements. English is the source catalog; use stable message keys, complete translated sentences and locale-aware pluralization/date formatting instead of concatenated fragments. Japanese requires working system font fallback without bundled proprietary fonts or downloaded font assets. Layout, focus, screen-reader text, event counts, update/error messages, and tray/menu labels must be checked in each language. Language changes must preserve selected dates, calendar sources, shortcut, timezone, and weekday preferences.
 

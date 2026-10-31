@@ -1,0 +1,933 @@
+{
+  "pages": 7,
+  "boards": 114,
+  "duplicates": [],
+  "violations": [],
+  "typography": {
+    "fonts": {
+      "Onest": 2861,
+      "Noto Sans JP": 45
+    },
+    "weights": {
+      "400": 847,
+      "500": 1643,
+      "600": 352,
+      "700": 64
+    },
+    "violations": []
+  },
+  "inventory": [
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ea4177feb",
+      "name": "Windows · App · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ecff41943",
+      "name": "Windows · Calendar settings · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ed1620132",
+      "name": "Windows · Accounts · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ed296181c",
+      "name": "Windows · About · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ed3db7c4a",
+      "name": "Windows · App · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ed557fbd2",
+      "name": "Windows · Calendar settings · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4ed885e67e",
+      "name": "Windows · Accounts · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows settings",
+      "pageId": "8e0f042e-1f80-8028-8008-df4ea3fe9cc5",
+      "id": "8e0f042e-1f80-8028-8008-df4edaf49ad9",
+      "name": "Windows · About · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4edf9af018",
+      "name": "Windows · Calendar · October · 31 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4ee1825365",
+      "name": "Windows · Calendar · October · 30 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4ee4f69791",
+      "name": "Windows · Calendar · November · 12 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4ee99fac38",
+      "name": "Windows · Empty day · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4eefba2bab",
+      "name": "Windows · Taskbar and tray · light",
+      "width": 940,
+      "height": 560
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4ef20b22af",
+      "name": "Windows · Calendar · October · 31 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4efb8ed45b",
+      "name": "Windows · Calendar · October · 30 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4f07603f29",
+      "name": "Windows · Calendar · November · 12 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4f14d2aaef",
+      "name": "Windows · Empty day · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df4f2417dfed",
+      "name": "Windows · Taskbar and tray · dark",
+      "width": 940,
+      "height": 560
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df5492d666b7",
+      "name": "Windows · Tray menu · light",
+      "width": 240,
+      "height": 188
+    },
+    {
+      "page": "Windows calendar",
+      "pageId": "8e0f042e-1f80-8028-8008-df4edf946ab6",
+      "id": "8e0f042e-1f80-8028-8008-df5493111c3f",
+      "name": "Windows · Tray menu · dark",
+      "width": 240,
+      "height": 188
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df50214d5e71",
+      "name": "Windows · Accounts · disconnected · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5021e2bd81",
+      "name": "Windows · Accounts · disconnected · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5022a1d659",
+      "name": "Windows · Accounts · signing-in · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5023a2dcfc",
+      "name": "Windows · Accounts · signing-in · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5024e2c86f",
+      "name": "Windows · Accounts · cancelled · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df50265c9e53",
+      "name": "Windows · Accounts · denied · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df502811e0de",
+      "name": "Windows · Accounts · expired · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df502a5182b3",
+      "name": "Windows · Accounts · expired · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df502ce26f16",
+      "name": "Windows · Accounts · offline · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df502fd31ea4",
+      "name": "Windows · Accounts · offline · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df503322eff4",
+      "name": "Windows · Accounts · no-selection · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5036dc639f",
+      "name": "Windows · Accounts · no-selection · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df503ac5a57f",
+      "name": "Windows · Accounts · no-calendars · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df503ec4e24d",
+      "name": "Windows · App · language · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5043951fcd",
+      "name": "Windows · App · conflict · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df50483baa79",
+      "name": "Windows · About · checking · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df504d08d032",
+      "name": "Windows · About · update-available · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5052245d37",
+      "name": "Windows · About · update-offline · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df505797660d",
+      "name": "Windows · Accounts · add · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5060789c21",
+      "name": "Windows · Accounts · add · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df506a82a751",
+      "name": "Windows · Accounts · ics · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5074c3a3df",
+      "name": "Windows · Accounts · ics · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53d9b66df2",
+      "name": "macOS · Accounts · disconnected · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53dae98596",
+      "name": "macOS · Accounts · disconnected · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53dc541ccd",
+      "name": "macOS · Accounts · signing-in · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53ddf3bb42",
+      "name": "macOS · Accounts · signing-in · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53e3fd0ad7",
+      "name": "macOS · Accounts · cancelled · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53e55434fd",
+      "name": "macOS · Accounts · denied · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53e6cb2e91",
+      "name": "macOS · Accounts · expired · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df53e8e6e546",
+      "name": "macOS · Accounts · expired · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5415476be1",
+      "name": "macOS · Accounts · offline · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5416e01f2e",
+      "name": "macOS · Accounts · offline · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5418b1eb9e",
+      "name": "macOS · Accounts · no-selection · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df541abadf5d",
+      "name": "macOS · Accounts · no-selection · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df542156f6f5",
+      "name": "macOS · Accounts · no-calendars · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5422ec21aa",
+      "name": "macOS · App · language · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5425060c49",
+      "name": "macOS · App · conflict · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df542715e963",
+      "name": "macOS · About · checking · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df542db2a259",
+      "name": "macOS · About · update-available · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df542f572ae3",
+      "name": "macOS · About · update-offline · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df5431275323",
+      "name": "macOS · Accounts · add · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df54346d5275",
+      "name": "macOS · Accounts · add · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df543d27b564",
+      "name": "macOS · Accounts · ics · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df543fcf38c6",
+      "name": "macOS · Accounts · ics · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58be2e3fed",
+      "name": "Windows · Accounts · outlook · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58c004862d",
+      "name": "Windows · Accounts · outlook · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58c1f81b9a",
+      "name": "Windows · Accounts · outlook-signing · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58c430ef17",
+      "name": "Windows · Accounts · outlook-signing · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58d5fa0aa9",
+      "name": "macOS · Accounts · outlook · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58d7a7553e",
+      "name": "macOS · Accounts · outlook · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58d98c0d96",
+      "name": "macOS · Accounts · outlook-signing · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Connections & states",
+      "pageId": "8e0f042e-1f80-8028-8008-df5021394c73",
+      "id": "8e0f042e-1f80-8028-8008-df58db94cfee",
+      "name": "macOS · Accounts · outlook-signing · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50bc882f99",
+      "name": "macOS · Calendar · October · 31 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50beac0774",
+      "name": "macOS · Calendar · October · 30 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50c3359a9a",
+      "name": "macOS · Menu bar and Dock · light",
+      "width": 940,
+      "height": 560
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50cfa1829d",
+      "name": "macOS · App · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50d0a797cc",
+      "name": "macOS · Calendar settings · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50d2ddc956",
+      "name": "macOS · Accounts · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50d4d2bace",
+      "name": "macOS · About · default · light",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50dac67093",
+      "name": "macOS · Calendar · October · 31 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50df406bba",
+      "name": "macOS · Calendar · October · 30 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df50e5fdfc56",
+      "name": "macOS · Menu bar and Dock · dark",
+      "width": 940,
+      "height": 560
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df511d932334",
+      "name": "macOS · App · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df511eeaf2b3",
+      "name": "macOS · Calendar settings · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df5121d83fe2",
+      "name": "macOS · Accounts · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df512489d316",
+      "name": "macOS · About · default · dark",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df5493a21ee7",
+      "name": "macOS · Calendar · November · 12 · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df54979866cc",
+      "name": "macOS · Empty day · light",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df549dcfdc71",
+      "name": "macOS · Calendar · November · 12 · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "macOS",
+      "pageId": "8e0f042e-1f80-8028-8008-df50bc72bfef",
+      "id": "8e0f042e-1f80-8028-8008-df54a63e2bab",
+      "name": "macOS · Empty day · dark",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50e9351a69",
+      "name": "Icon system · light",
+      "width": 1440,
+      "height": 800
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50eab9a62d",
+      "name": "Icon system · dark",
+      "width": 1440,
+      "height": 800
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ed312e79",
+      "name": "App icon export · 16",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ed5a65fb",
+      "name": "App icon export · 24",
+      "width": 24,
+      "height": 24
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ed848641",
+      "name": "App icon export · 32",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50edadf47c",
+      "name": "App icon export · 64",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50edd7e497",
+      "name": "App icon export · 128",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ee01c645",
+      "name": "App icon export · 256",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ee2bda39",
+      "name": "App icon export · 512",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df50ee5a6954",
+      "name": "App icon export · 1024",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "page": "Icons & components",
+      "pageId": "8e0f042e-1f80-8028-8008-df50e928ac74",
+      "id": "8e0f042e-1f80-8028-8008-df550501c42b",
+      "name": "Shared controls · Light and dark",
+      "width": 1280,
+      "height": 620
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df5387b94be7",
+      "name": "Language · en · calendar",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df538a4a8d59",
+      "name": "Language · en · settings",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df538b966039",
+      "name": "Language · ru · calendar",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df53909e9d0b",
+      "name": "Language · ru · settings",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df53a81eaa4b",
+      "name": "Language · es · calendar",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df53aba1b117",
+      "name": "Language · es · settings",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df53ad77a951",
+      "name": "Language · ja · calendar",
+      "width": 352,
+      "height": 432
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df53b3f4ddca",
+      "name": "Language · ja · settings",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df5f88d046d5",
+      "name": "Language · en · shortcut conflict",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df5f93bf6729",
+      "name": "Language · ru · shortcut conflict",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df5fa2164358",
+      "name": "Language · es · shortcut conflict",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Languages",
+      "pageId": "8e0f042e-1f80-8028-8008-df5387a9b223",
+      "id": "8e0f042e-1f80-8028-8008-df5fade76b6a",
+      "name": "Language · ja · shortcut conflict",
+      "width": 448,
+      "height": 360
+    },
+    {
+      "page": "Overview",
+      "pageId": "8e0f042e-1f80-8028-8008-df5532fb3421",
+      "id": "8e0f042e-1f80-8028-8008-df5533023f9c",
+      "name": "Lightcal · Start here",
+      "width": 1152,
+      "height": 704
+    }
+  ]
+}
