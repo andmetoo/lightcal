@@ -23,6 +23,10 @@ pub struct Credentials {
     #[serde(default)]
     pub microsoft_client_id: Option<String>,
     #[serde(default)]
+    pub google_refresh_token: Option<String>,
+    #[serde(default)]
+    pub google_client_id: Option<String>,
+    #[serde(default)]
     pub ics: Vec<IcsSubscription>,
 }
 

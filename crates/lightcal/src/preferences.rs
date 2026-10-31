@@ -123,6 +123,12 @@ fn default_microsoft_client_id() -> String {
         .to_string()
 }
 
+fn default_google_client_id() -> String {
+    option_env!("LIGHTCAL_GOOGLE_CLIENT_ID")
+        .unwrap_or("")
+        .to_string()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Preferences {
     pub schema_version: u32,
@@ -150,6 +156,8 @@ pub struct Preferences {
     pub update_channel: String,
     #[serde(skip, default = "default_microsoft_client_id")]
     pub microsoft_client_id: String,
+    #[serde(skip, default = "default_google_client_id")]
+    pub google_client_id: String,
     #[serde(default)]
     pub windows_calendars_enabled: bool,
     #[serde(default)]
@@ -180,6 +188,7 @@ impl Default for Preferences {
             auto_check_updates: false,
             update_channel: "stable".to_string(),
             microsoft_client_id: default_microsoft_client_id(),
+            google_client_id: default_google_client_id(),
             windows_calendars_enabled: false,
             auto_install_updates: false,
         }

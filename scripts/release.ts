@@ -11,7 +11,7 @@
  *   bun run scripts/release.ts publish-release vX.Y.Z # Publish that draft after the signed assets are attached
  *
  * Signing uses scripts/sign-windows.ps1. Set SIGN_CERT_SHA1 (thumbprint, not a secret) in
- * .env.local. SimplySign Desktop must be signed in so that certificate is in the user store.
+ * .env. SimplySign Desktop must be signed in so that certificate is in the user store.
  * SIGNTOOL overrides the signtool.exe path.
  */
 
@@ -47,7 +47,7 @@ import {
 
 const ROOT = resolve(import.meta.dir, "..");
 
-for (const name of [".env.local", ".env"]) {
+for (const name of [".env"]) {
   const path = join(ROOT, name);
   if (existsSync(path)) process.loadEnvFile(path);
 }

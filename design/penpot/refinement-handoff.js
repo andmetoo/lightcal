@@ -32,12 +32,12 @@ if(includes(2)) {
     r.button(b,theme+' primary button','Primary action',ox+204,128,156,t,true);
     r.select(b,theme+' select','Monday',ox+376,128,228,t);
     r.toggle(b,theme+' switch on',ox+32,198,true,t);r.toggle(b,theme+' switch off',ox+92,198,false,t);
-    r.checkbox(b,theme+' checkbox checked',ox+168,201,true,'#5E63D6',t);r.checkbox(b,theme+' checkbox unchecked',ox+208,201,false,'#5E63D6',t);
+    r.checkbox(b,theme+' checkbox checked',ox+168,201,true,'#00796B',t);r.checkbox(b,theme+' checkbox unchecked',ox+208,201,false,'#00796B',t);
     r.badge(b,theme+' read-only status','Read-only',ox+280,198,106,t,'success');r.badge(b,theme+' reconnect status','Reconnect',ox+402,198,106,t,'danger');
     ['Default','Hover','Pressed','Focus','Disabled'].forEach((label,i)=>{
       const xx=ox+32+i*116,dark=theme==='dark';
       if(label==='Focus')r.rect(b,theme+' keyboard focus',xx-2,264,108,32,null,9,t.accent,2);
-      const fill=label==='Hover'?(dark?'#333339':'#F0F0F5'):label==='Pressed'?(dark?'#3B3B44':'#E5E5ED'):label==='Disabled'?t.group:t.control;
+      const fill=label==='Hover'?(dark?'#313131':'#F0F0F0'):label==='Pressed'?(dark?'#3A3A3A':'#E0E0E0'):label==='Disabled'?t.group:t.control;
       r.rect(b,theme+' state '+label,xx,266,104,28,fill,7,label==='Disabled'?t.line:t.border);
       r.text(b,theme+' state '+label+' label',label,xx+8,266,88,28,11,500,label==='Disabled'?t.muted:t.ink,'center');
     });

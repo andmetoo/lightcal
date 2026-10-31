@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 128 128" fill="none">
   <title>Lightcal application icon</title>
   <desc>A paper calendar with a coral cap and four clear date tiles.</desc>
-  <rect x="8" y="8" width="112" height="112" rx="24" fill="#FFFFFF" stroke="#BCBCC5" stroke-width="1.4"/>
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="#FFFFFF" stroke="#BBBBBB" stroke-width="1.4"/>
   <path d="M32 8H96C109.255 8 120 18.745 120 32V38H8V32C8 18.745 18.745 8 32 8Z" fill="#E5484D"/>
-  <rect x="36" y="51" width="21" height="21" rx="4" fill="#34343C"/>
-  <rect x="71" y="51" width="21" height="21" rx="4" fill="#34343C"/>
-  <rect x="36" y="86" width="21" height="21" rx="4" fill="#34343C"/>
+  <rect x="36" y="51" width="21" height="21" rx="4" fill="#313131"/>
+  <rect x="71" y="51" width="21" height="21" rx="4" fill="#313131"/>
+  <rect x="36" y="86" width="21" height="21" rx="4" fill="#313131"/>
   <rect x="71" y="86" width="21" height="21" rx="4" fill="#E5484D"/>
 </svg>

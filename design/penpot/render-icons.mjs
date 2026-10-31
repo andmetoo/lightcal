@@ -21,17 +21,17 @@ for(const size of [16,24,32,48,64,128,256,512,1024]) {
   if([16,24].includes(size)&&before)preserved.push({size,unchanged:createHash('sha256').update(before).digest('hex')===createHash('sha256').update(png).digest('hex')});
 }
 const embed=s=>'data:image/svg+xml;base64,'+Buffer.from(s).toString('base64');
-let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="540" viewBox="0 0 1100 540"><rect width="1100" height="540" rx="20" fill="#F6F6F8"/><text x="36" y="48" font-family="Onest" font-size="22" font-weight="600" fill="#202025">Lightcal · final icon family</text>';
+let svg='<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="540" viewBox="0 0 1100 540"><rect width="1100" height="540" rx="20" fill="#F0F0F0"/><text x="36" y="48" font-family="Onest" font-size="22" font-weight="600" fill="#202020">Lightcal · final icon family</text>';
 svg+=`<image href="${embed(master)}" x="30" y="88" width="240" height="240"/>`;
 for(const [i,size]of [16,24,32,48,64].entries()) {
   const source=size<=32?await readFile(resolve(root,`assets/icons/refined/lightcal-${size}.svg`),'utf8'):master,x=300+i*150;
-  for(const [j,bg]of ['#FFFFFF','#252529'].entries()) {
+  for(const [j,bg]of ['#FFFFFF','#222222'].entries()) {
     const y=110+j*134;
     svg+=`<rect x="${x}" y="${y}" width="128" height="110" rx="12" fill="${bg}"/><image href="${embed(source)}" x="${x+(128-size)/2}" y="${y+(110-size)/2}" width="${size}" height="${size}"/>`;
   }
-  svg+=`<text x="${x+64}" y="398" text-anchor="middle" font-family="Onest" font-size="14" fill="#666670">${size} px</text>`;
+  svg+=`<text x="${x+64}" y="398" text-anchor="middle" font-family="Onest" font-size="14" fill="#646464">${size} px</text>`;
 }
-svg+='<text x="38" y="470" font-family="Onest" font-size="16" fill="#666670">Centered master · pixel-aligned small drawings · transparent PNG exports</text></svg>';
+svg+='<text x="38" y="470" font-family="Onest" font-size="16" fill="#646464">Centered master · pixel-aligned small drawings · transparent PNG exports</text></svg>';
 const fontFiles=['Regular','Medium','SemiBold','Bold'].map(style=>resolve(root,`design/fonts/onest/Onest-${style}.ttf`));
 const image=new Resvg(svg,{font:{fontFiles,loadSystemFonts:false}}).render().asPng();
 await writeFile(resolve(review,'icon-family.png'),image);

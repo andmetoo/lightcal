@@ -25,7 +25,7 @@ Ship English (`en`) as the default regardless of the OS language, with optional 
 
 ## Tray and taskbar entry points
 
-Both entry points open the same 352 by 432 logical-pixel compact calendar. Settings use a 780 by 620 layout. Removing the expanded agenda does not remove the normal taskbar button.
+Both entry points open the same 352 by 432 logical-pixel compact calendar. Settings use a 448 by 360 layout. Removing the expanded agenda does not remove the normal taskbar button.
 
 - Tray clicks and the global shortcut restore the calendar, or minimize it when the calendar is already open. Taskbar activation restores the existing native window.
 - Escape and Close minimize the window while preserving its taskbar button. Focus loss does not hide or destroy the window, including when Explorer opens the taskbar context menu.

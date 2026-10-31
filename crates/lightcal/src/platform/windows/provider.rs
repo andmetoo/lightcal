@@ -100,7 +100,7 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
             let color_hex = cal
                 .DisplayColor()
                 .map(|c| format!("#{:02X}{:02X}{:02X}", c.R, c.G, c.B))
-                .unwrap_or_else(|_| "#5E6AD2".to_string());
+                .unwrap_or_else(|_| "#008573".to_string());
             sources.push(CalendarSource {
                 id,
                 name,
@@ -170,7 +170,7 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                     .iter()
                     .find(|s| s.id == source_id)
                     .map(|s| s.color_hex.clone())
-                    .unwrap_or_else(|| "#5E6AD2".to_string());
+                    .unwrap_or_else(|| "#008573".to_string());
                 let title = appt
                     .Subject()
                     .map(|h| h.to_string_lossy())

@@ -4,7 +4,7 @@ A compact calendar for Windows. Open the month from the tray or the taskbar, wit
 
 ![Lightcal calendar, light theme](docs/images/calendar-light.png)
 
-The calendar is 352 by 432 logical pixels. Settings use a separate 780 by 620 window. English is the default, with Russian, Spanish, and Japanese included.
+The calendar is 352 by 432 logical pixels. Settings use a separate 448 by 360 window. English is the default, with Russian, Spanish, and Japanese included.
 
 ![Lightcal calendar, dark theme](docs/images/calendar-dark.png)
 
@@ -41,7 +41,7 @@ just build-installer
 cargo run -p lightcal --locked -- --render-snapshots target/snapshots
 ```
 
-Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env.local` for the public Microsoft client id and the update certificate pin.
+Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env` for the public client ids and the update certificate pin.
 
 ## Documentation
 

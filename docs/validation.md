@@ -41,7 +41,7 @@ Current checks: `python scripts/check_docs.py` (Python 3.9 or newer), `cargo fmt
 
 ## Review regression checks
 
-- Window geometry reuses the shared work-area clamp. Tests include the 780 by 620 settings layout at 200% DPI on a 1920 by 1040 work area, oversized windows in both axes, and negative monitor origins. An oversized layout is anchored safely rather than causing invalid clamp bounds; this does not claim that its entire content fits a smaller screen.
+- Window geometry reuses the shared work-area clamp. Tests include the current 448 by 360 settings layout at 200% DPI on a 1920 by 1040 work area, a legacy oversized stress case, oversized windows in both axes, and negative monitor origins. An oversized layout is anchored safely rather than causing invalid clamp bounds; this does not claim that its entire content fits a smaller screen.
 - A process-owned offscreen native Windows window tests visibility, taskbar-style minimization, restoration, and hidden state. Tray and shortcut toggles read native state rather than a controller visibility flag. Dismissal minimizes the existing window and preserves its HWND for Explorer and DWM.
 - Fixture snapshots preserve `AccessDenied` through provider aggregation and retain other providers' sources and events. Headless settings renders cover denied-only and mixed readable/denied sources in both themes; permission-recovery controls and readable calendar selection must coexist.
 - The macOS CI job runs `calendar-core` and `lightcal` library tests, then `scripts/package-dmg.sh` release-builds an unsigned disk image and uploads it. A successful image is not a launch, menu-bar, Dock, signing, notarization, or calendar-provider result.

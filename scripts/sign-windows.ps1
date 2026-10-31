@@ -6,7 +6,7 @@
 param([string]$File, [switch]$Check)
 $ErrorActionPreference = 'Stop'
 
-if (-not $env:SIGN_CERT_SHA1) { throw 'SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env.local.' }
+if (-not $env:SIGN_CERT_SHA1) { throw 'SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env.' }
 $thumbprint = ($env:SIGN_CERT_SHA1 -replace '\s', '').ToUpperInvariant()
 
 $signtool = $env:SIGNTOOL

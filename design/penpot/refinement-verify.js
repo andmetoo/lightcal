@@ -1,10 +1,12 @@
 // Read-only geometry and text-box QA; pixel inspection is a separate gate.
 const pages=penpotUtils.getPages().map(p=>penpotUtils.getPageById(p.id)).filter(p=>p.getPluginData('lightcal-refinement')==='2026-10-31');
 const violations=[],duplicates=[],inventory=[];
-const typography={fonts:{},weights:{},violations:[]};
+const sfProPending=['SF Pro Text','SF Pro Display'].some(name=>!penpot.fonts.all.some(f=>f.name===name));
+const typography={fonts:{},weights:{},violations:[],pending:sfProPending?['macOS SF Pro team-font import and migration']:[]};
 for(const page of pages) {
   for(const text of penpotUtils.findShapes(s=>s.type==='text',page.root)) {
-    const expected=storage.refinement.fontFamily(text.parent,text.characters,text.fontSize);
+    const desired=storage.refinement.fontFamily(text.parent,text.characters,text.fontSize);
+    const expected=sfProPending&&desired.startsWith('SF Pro ')?'Onest':desired;
     const family=text.fontFamily,weight=text.fontWeight;
     typography.fonts[family]=(typography.fonts[family]||0)+1;
     typography.weights[weight]=(typography.weights[weight]||0)+1;

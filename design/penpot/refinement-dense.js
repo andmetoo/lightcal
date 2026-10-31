@@ -16,7 +16,8 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
   if(!about) {
     [['Calendar','Appearance','calendars'],['Accounts','Calendars','accounts'],['App','General','settings']].forEach(([label,target,icon],i)=>{
       const xx=12+i*144,active=tab===label,hit=this.rect(b,'Navigate to '+target,xx,42,136,32,active?t.soft:null,7);
-      this.glyph(b,label+' navigation icon',xx+26,51,icon,active?t.accent:t.secondary,14);
+      this.glyph(b,label+' navigation icon',xx+26,51,icon,active?t.ink:t.secondary,14);
+      if(active)this.rect(b,'Active tab marker',xx+56,71,24,2,t.accent,1);
       this.text(b,target+' navigation label',label,xx+48,42,82,32,12,active?600:400,active?t.ink:t.secondary);
       hit.setPluginData('lightcal-target',platform+'/'+theme+'/'+target);
     });
@@ -45,10 +46,10 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
       this.text(b,label+' theme label',label,xx,102,68,28,11,active?600:400,t.ink,'center');
     });
     row('Week starts on',1);this.select(b,'Choose first weekday','Monday',284,142,136,t);
-    row('Shade weekdays',2);
+    row('Shade days',2);
     ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach((day,i)=>{
-      const xx=220+i*29,on=i>=5;this.rect(b,'Shade weekday '+(i+1),xx,182,26,28,on?t.soft:t.control,6,on?t.accent:t.border);
-      this.text(b,'Shade weekday label '+(i+1),day,xx,182,26,28,10.5,on?600:400,on?t.accent:t.secondary,'center');
+      const xx=220+i*29,on=i>=5;this.rect(b,'Shade weekday '+(i+1),xx,182,26,28,on?t.soft:t.control,6,on?t.selectedBorder:t.border);
+      this.text(b,'Shade weekday label '+(i+1),day,xx,182,26,28,10.5,on?600:400,on?t.ink:t.secondary,'center');
     });
     row('Week numbers',3);this.toggle(b,'Show week numbers',384,225,true,t);
     row('Event dots',4);this.toggle(b,'Show event dots',384,265,true,t);
@@ -60,24 +61,21 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
     row('Keyboard shortcut',2,'Optional. Opens or hides the calendar; conflicts preserve the previous binding.');
     if(shortcutConflict) {
       this.text(b,'Shortcut conflict','Used by another app',28,201,184,14,10.5,400,t.danger);
-      const key=this.button(b,'Record shortcut',mac?'':'Win + Shift + C',252,182,168,t);setTarget(key,'shortcut');
-      if(mac)this.shortcutSymbols(b,'Record shortcut',252,182,168,t);
+      if(mac)this.shortcutSymbols(b,'Current shortcut',216,176,112,t);
+      else this.text(b,'Shortcut value','Win + Shift + C',216,176,112,40,11,500,t.ink,'right');
+      const key=this.button(b,'Record shortcut','Change',336,182,84,t);setTarget(key,'shortcut');
     } else {
       this.text(b,'Shortcut state','Not set',252,176,76,40,11,400,t.secondary);
       const key=this.button(b,'Record shortcut','Record…',336,182,84,t);setTarget(key,'shortcut');
     }
-    row(mac?'Menu bar label':'Tray icon',3);
-    if(mac) {
-      this.segmentFrame(b,'Menu label selection',268,222,152,2,t,1);
-      this.text(b,'Date only option label','31',268,222,76,28,11,500,t.ink,'center');
-      this.text(b,'Weekday and date option','Sat 31',344,222,76,28,11,600,t.ink,'center');
-    } else {
-      this.segmentFrame(b,'Tray palette selection',268,222,152,2,t);
+    row(mac?'Menu bar icon':'Tray icon',3);
+    {
+      this.segmentFrame(b,mac?'Menu label selection':'Tray palette selection',268,222,152,2,t);
       [false,true].forEach((mono,i)=>{
         const xx=268+i*76;this.brand(b,xx+6,228,16,'31',mono);this.text(b,mono?'Monochrome label':'Color label',mono?'Mono':'Color',xx+27,222,42,28,10.5,mono?400:600,t.ink);
       });
     }
-    row('Updates',4);const update=this.button(b,'Check for updates','Check now',316,262,104,t);setTarget(update,'checking');footer();
+    row('Updates',4);const updates=b.children.find(s=>s.name==='Updates');if(updates)setTarget(updates,'About');footer();
     if(state==='language') {
       this.rect(b,'Language menu',252,138,168,154,t.control,8,t.border);
       ['English','Русский','Español','日本語'].forEach((name,i)=>{
@@ -90,27 +88,32 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
     const add=this.button(b,'Add calendar','+ Add account',300,92,132,t);setTarget(add,'add');
     this.rect(b,'Account panel',16,132,416,168,t.group,9);
     const outlook=state.startsWith('outlook'),waiting=state==='signing-in'||state==='outlook-signing';
-    this.text(b,'Account provider',outlook?'Microsoft Outlook':'Google Calendar',28,138,240,22,12.5,600,t.ink);
     const signing=['disconnected','signing-in','cancelled','denied','outlook','outlook-signing'].includes(state);
-    this.text(b,'Example account',signing?'Read-only calendar access':'alex@example.com',28,160,280,18,10.5,400,t.secondary);
-    this.badge(b,'Account state',state==='expired'?'Reconnect':state==='offline'?'Offline':'Read-only',316,141,104,t,state==='expired'?'danger':'neutral');
-    this.line(b,'Account header divider',28,186,392,t.line);
-    if(signing) {
-      this.text(b,'Connection explanation',waiting?'Finish signing in in your browser.':state==='cancelled'?'Sign-in cancelled. Your accounts are unchanged.':state==='denied'?'Calendar access was not granted.':'Read your calendars and events in Lightcal.',28,196,392,22,11,400,t.secondary);
-      this.text(b,'Permission limit','No creating, editing, or deleting events.',28,222,392,20,11,400,t.secondary);
-      const connect=this.button(b,'Connect account',waiting?'Waiting for browser…':state==='cancelled'||state==='denied'?'Try again':outlook?'Continue with Microsoft':'Continue with Google',28,258,190,t,!waiting);
-      if(!waiting)setTarget(connect,outlook?'outlook-signing':'signing-in');
+    const preAccount=state==='disconnected'||state==='outlook';
+    if(preAccount) {
+      this.text(b,'Account provider','No accounts yet.',28,150,360,24,12.5,600,t.ink);
+      this.text(b,'Connection explanation','Add an account to show events.',28,182,392,22,11,400,t.secondary);
+    } else {
+      this.text(b,'Account provider',outlook?'Microsoft Outlook':'Google Calendar',28,138,240,22,12.5,600,t.ink);
+    }
+    this.text(b,'Example account',preAccount?'':signing?'Read-only calendar access':'alex@example.com',28,160,280,18,10.5,400,t.secondary);
+    if(!preAccount)this.badge(b,'Account state',state==='expired'?'Reconnect':state==='offline'?'Offline':'Read-only',316,141,104,t,state==='expired'?'alert':'neutral');
+    if(!preAccount)this.line(b,'Account header divider',28,186,392,t.line);
+    if(signing && !preAccount) {
+      this.text(b,'Connection explanation',waiting?'Waiting for browser…':state==='cancelled'?'Sign-in cancelled. Your accounts are unchanged.':state==='denied'?'Calendar access was not granted.':'Read your calendars and events in Lightcal.',28,196,392,22,11,400,t.secondary);
+      if(!waiting)this.text(b,'Permission limit','No creating, editing, or deleting events.',28,222,392,20,11,400,t.secondary);
+      if(!waiting){const connect=this.button(b,'Connect account',state==='cancelled'||state==='denied'?'Try again':outlook?'Continue with Microsoft':'Continue with Google',28,258,190,t,true);setTarget(connect,outlook?'outlook-signing':'signing-in');}
       if(waiting){const cancel=this.button(b,'Cancel account sign-in','Cancel',328,258,92,t);setTarget(cancel,outlook?'Calendars':'cancelled');}
     } else if(state==='no-calendars') {
       this.text(b,'No calendars found','No calendars found for this account.',28,206,392,24,12,500,t.ink);
       this.text(b,'No calendars advice','Try another account or refresh the list.',28,234,392,20,11,400,t.secondary);this.button(b,'Refresh calendars','Refresh',316,260,104,t);
     } else {
       ['Personal','Work','Public holidays'].forEach((name,i)=>{
-        const yy=194+i*25;this.checkbox(b,'Show '+name,28,yy+3,state!=='no-selection',['#A45E18','#5E63D6','#28774B'][i],t);this.text(b,name+' calendar',name,52,yy,348,22,12,400,t.ink);
+        const yy=194+i*25;this.checkbox(b,'Show '+name,28,yy+3,state!=='no-selection',['#A45E18','#00796B','#28774B'][i],t);this.text(b,name+' calendar',name,52,yy,348,22,12,400,t.ink);
       });
-      const status=state==='expired'?'Sign in again to refresh events.':state==='offline'?'Saved events · Updated 10:42':state==='no-selection'?'Select calendars to show their events.':'Updated just now';
+      const status=state==='expired'?'Events may be out of date.':state==='offline'?'Saved events · Updated 10:42':state==='no-selection'?'Select calendars to show their events.':'Updated just now';
       this.text(b,'Sync status',status,28,274,284,18,10.5,400,state==='expired'?t.danger:t.secondary);
-      const manage=this.button(b,'Account action',state==='expired'?'Sign in':'Manage',328,268,92,t);setTarget(manage,state==='expired'?'signing-in':'manage');
+      const manage=this.button(b,'Account action',state==='expired'?'Reconnect':'Manage',328,268,92,t,state==='expired');setTarget(manage,state==='expired'?'signing-in':'manage');
     }
     footer();
     if(state==='manage') {
@@ -123,7 +126,7 @@ r.settingsContent=function(section,theme,x,y,platform='Windows',state='default')
     this.rect(b,'Update check',16,132,416,64,t.group,9);
     const checking=state==='checking',available=state==='update-available',offline=state==='update-offline';
     this.text(b,'Update status',checking?'Checking for updates…':available?'Version 0.2.3 available':offline?'Couldn’t check for updates':'You’re up to date',28,140,264,24,12,500,t.ink);
-    this.text(b,'Update detail',offline?'Check your connection and try again.':available?'See what’s new on GitHub.':'Updates are checked when you ask.',28,166,264,18,10.5,400,t.secondary);
+    if(!checking)this.text(b,'Update detail',offline?'Check your connection and try again.':available?'See what’s new on GitHub.':'Updates are checked when you ask.',28,166,264,18,10.5,400,t.secondary);
     const check=this.button(b,'Check for updates',checking?'Checking…':available?'View release':'Check now',316,150,104,t,available);if(!checking)setTarget(check,'checking');
     [['GitHub repository','Source code and issues'],['koona.app','Lightcal on the web'],['GPL-3.0-only','License and third-party notices']].forEach(([title,desc],i)=>{
       const yy=208+i*36;this.text(b,title,title,28,yy,192,30,12,500,t.ink);this.text(b,title+' description',desc,220,yy,180,30,10.5,400,t.secondary,'right');this.glyph(b,title+' link',410,yy+8,'external',t.secondary,14);

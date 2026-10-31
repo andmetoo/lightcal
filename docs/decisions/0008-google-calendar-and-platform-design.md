@@ -22,12 +22,17 @@ mail access, event editing, telemetry, or a UI framework change.
   sentences, and place controls close to labels. Disconnected providers belong
   in Add account, rather than permanently occupying large empty account cards.
 - Windows has a static application icon and a dynamic day-of-month tray badge.
-  Appearance offers color or monochrome caps. Remove weekday/time tray modes
+  After the numeral-only experiment, the owner's actual-shell review restored
+  a calendar page with a slim header and contrasting date (see ADR 0010).
+  Fit all dates at one font size per native icon size. Read the Windows shell
+  theme independently of the app theme for contrast. Appearance offers color
+  or monochrome calendars. Remove weekday/time tray modes
   from the new design; do not suggest replacing the Windows system clock.
 - macOS retains the shared calendar and content hierarchy, with left-side window
-  controls, “Open at login,” macOS shortcut notation, a system-colored menu-bar
-  date label, and a separate static Dock icon. Offer date or weekday/date labels;
-  do not duplicate the system clock.
+  controls, “Open at login,” macOS shortcut notation and a separate static Dock
+  icon. The owner's later sizing review selects the same calendar badge in the
+  menu bar with Color/Mono choices, superseding date/weekday text labels.
+  Do not duplicate the system clock.
 - Google connects in the system browser. Present the read-only access boundary
   before sign-in. Distinguish disconnected, browser sign-in, cancellation,
   access refusal, connected, expired authorization, transport failure, no
@@ -39,10 +44,14 @@ mail access, event editing, telemetry, or a UI framework change.
 
 ## Implementation boundary
 
-This change produces Penpot boards, an interactive review prototype, vector
+The original refinement produces Penpot boards, an interactive review prototype, vector
 icon sources, raster design exports and documentation. It does not implement
 Google OAuth or change the shipped application or installer. Provider work must
 still use the toolkit-independent core and isolated fixture tests.
+
+The subsequent [calendar status icon decision](0010-windows-calendar-tray-icon.md)
+also updates the native Windows renderer and macOS size specification. It does not imply completion of the
+other runtime UI or provider work described by these mockups.
 
 For implementation, request only the Google Calendar permissions needed to
 enumerate calendars and read events. The initial target is
@@ -53,6 +62,10 @@ credential protection, revocation and Google's verification requirements remain
 implementation/release work, not a claim made by the mockups.
 
 ## Evidence and remaining validation
+
+The owner subsequently rejected violet throughout both themes. The accepted
+[Gray + Teal palette](../../design/palettes/README.md) supersedes the earlier
+indigo styling in both native controls and active Penpot specimens.
 
 The final independent UI review keeps the compact UX structure and standardizes
 exact Onest typography, explicit Noto Sans JP weights, 28 px form controls,

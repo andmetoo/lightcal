@@ -1,5 +1,6 @@
 //! Direct read-only providers; toolkit-independent inputs/outputs.
 pub mod account;
+pub mod google;
 pub mod ics;
 pub mod microsoft;
 use crate::{
@@ -14,6 +15,8 @@ use std::{collections::BTreeSet, path::Path};
 pub struct CalendarLoad {
     pub snapshot: ProviderSnapshot,
     pub microsoft: MicrosoftAccountState,
+    pub google_connected: bool,
+    pub google_needs_signin: bool,
 }
 
 pub fn random_key() -> Result<String, String> {
@@ -38,7 +41,8 @@ pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
 pub fn query(
     anchor: LocalDate,
     dir: &Path,
-    client_id: &str,
+    microsoft_client_id: &str,
+    google_client_id: &str,
     selected: &BTreeSet<String>,
     legacy_windows: bool,
 ) -> CalendarLoad {
@@ -64,16 +68,29 @@ pub fn query(
         };
         match microsoft::query(
             anchor,
-            client_id,
+            microsoft_client_id,
             selected,
             &mut credentials,
             &store,
             &mut account,
         ) {
-            Ok(data) => {
-                append_provider(&mut snapshot, data, &mut errors);
-            }
+            Ok(data) => append_provider(&mut snapshot, data, &mut errors),
             Err(e) => errors.push(e),
+        }
+    }
+    let mut google_connected = false;
+    let mut google_needs_signin = false;
+    if credentials.google_refresh_token.is_some() {
+        match google::query(anchor, google_client_id, selected, &mut credentials, &store) {
+            Ok(data) => {
+                google_needs_signin = data.needs_signin;
+                google_connected = !data.needs_signin;
+                append_provider(&mut snapshot, data.snapshot, &mut errors);
+            }
+            Err(e) => {
+                google_needs_signin = e.contains("sign in again");
+                errors.push(e);
+            }
         }
     }
     for feed in &credentials.ics {
@@ -98,6 +115,8 @@ pub fn query(
     CalendarLoad {
         snapshot,
         microsoft: account,
+        google_connected,
+        google_needs_signin,
     }
 }
 
@@ -134,6 +153,8 @@ fn failure(error: String) -> CalendarLoad {
         microsoft: MicrosoftAccountState::Unavailable {
             saved_credentials: false,
         },
+        google_connected: false,
+        google_needs_signin: false,
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),
             sources: Vec::new(),

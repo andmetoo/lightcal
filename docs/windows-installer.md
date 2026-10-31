@@ -25,7 +25,7 @@ The existing trusted updater continues to require a signed release asset named e
 
 `just release` builds and signs `target/dist/lightcal.exe` with `signtool`, verifies it, creates the portable ZIP and NSIS setup from that signed payload, then signs and verifies the setup. `just sign-installer` packages an already signed staged application and signs the resulting setup. The signed route fails if the application or setup cannot pass Authenticode validation; it never labels an unsigned review build as signed.
 
-Signing uses `scripts/sign-windows.ps1`: `signtool sign /sha1` with the `SIGN_CERT_SHA1` thumbprint from `.env.local`, and a Certum timestamp (`http://time.certum.pl`). Certum SimplySign Desktop must already be signed in, so the certificate is in the current-user store. The script does not launch SimplySign. Keys stay in that tool. Set `SIGNTOOL` only when `signtool.exe` is neither on `PATH` nor in the Windows SDK. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
+Signing uses `scripts/sign-windows.ps1`: `signtool sign /sha1` with the `SIGN_CERT_SHA1` thumbprint from `.env`, and a Certum timestamp (`http://time.certum.pl`). Certum SimplySign Desktop must already be signed in, so the certificate is in the current-user store. The script does not launch SimplySign. Keys stay in that tool. Set `SIGNTOOL` only when `signtool.exe` is neither on `PATH` nor in the Windows SDK. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
 
 ## Sign a draft release from Windows
 
