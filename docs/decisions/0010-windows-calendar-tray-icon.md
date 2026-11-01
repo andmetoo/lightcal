@@ -30,6 +30,11 @@ smaller date. The rest of the owner's completed design must be preserved.
   unrelated shapes. It does not rebuild boards or run palette migrations.
 
 The native renderer is `crates/lightcal/src/platform/windows/icon.rs`.
+Since ADR 0011 it draws the coral tile and the Mono outline, and the numeral
+comes from Segoe UI Variable (`wght` 700, `opsz` 10.5) read from
+`%WINDIR%\Fonts` at runtime, falling back to Segoe UI Bold and then to built-in
+stroke digits. Onest is no longer used by the renderer. The sizing rules above
+still apply; see the implementation note in ADR 0011.
 For Penpot, load `refinement-tray-calendar-helper.js`, then run
 `refinement-tray-calendar.js`. The helper only defines the artwork function in
 memory. Apply the sizing followup with `refinement-status-size.js`.

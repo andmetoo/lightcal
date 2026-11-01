@@ -1839,6 +1839,21 @@ fn main() {
         .expect("Could not write application icon");
         return;
     }
+    if args.get(1).map(String::as_str) == Some("--export-icon-review") {
+        let dir = args
+            .get(2)
+            .map(Path::new)
+            .expect("Provide an output directory");
+        let written = lightcal::platform::windows::icon::export_review_set(dir)
+            .expect("Could not write icon review images");
+        println!(
+            "Wrote {} icon review images to {} (numerals: {})",
+            written.len(),
+            dir.display(),
+            lightcal::platform::windows::icon::numeral_font_source()
+        );
+        return;
+    }
     if args.get(1).map(String::as_str) == Some("--apply-update") {
         if let Some(path) = args.get(2).map(Path::new) {
             if let Err(error) = lightcal::installer::apply(path) {
