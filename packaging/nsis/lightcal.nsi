@@ -101,9 +101,16 @@ SectionEnd
 
 ; Runs last. An in-place upgrade keeps the same exe path, so Explorer and
 ; taskbar pins would keep showing the previous version's cached icon.
-; SHCNE_ASSOCCHANGED (0x08000000) asks the shell to flush its icon cache.
+; SHCNE_UPDATEITEM (0x2000) with SHCNF_PATHW|SHCNF_FLUSH (0x1005) redraws each
+; item; SHCNE_ASSOCCHANGED (0x08000000) then asks the shell to flush its
+; icon cache. SHCNF_FLUSH waits until the shell has handled each event.
 Section "-Refresh shell icons"
-  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+  System::Call 'shell32::SHChangeNotify(i 0x2000, i 0x1005, w "$INSTDIR\lightcal.exe", p 0)'
+  System::Call 'shell32::SHChangeNotify(i 0x2000, i 0x1005, w "$SMPROGRAMS\Lightcal\Lightcal.lnk", p 0)'
+  ${If} ${FileExists} "$DESKTOP\Lightcal.lnk"
+    System::Call 'shell32::SHChangeNotify(i 0x2000, i 0x1005, w "$DESKTOP\Lightcal.lnk", p 0)'
+  ${EndIf}
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x1000, p 0, p 0)'
 SectionEnd
 !endif
 
