@@ -2480,7 +2480,7 @@ fn main() {
         });
     });
     #[cfg(windows)]
-    let (tray_icon, open_item_id, today_item_id, settings_item_id, quit_item_id) = {
+    let (tray_icon, open_item_id, today_item_id, settings_item_id, sponsor_item_id, quit_item_id) = {
         let now = chrono::Local::now();
         let dark_mode = resolve_dark_mode(prefs.theme);
         let (rgba, icon_size) = render_native_tray_icon(
@@ -2495,14 +2495,17 @@ fn main() {
         let open_item = muda::MenuItem::new("Open Lightcal", true, None);
         let today_item = muda::MenuItem::new("Today", true, None);
         let settings_item = muda::MenuItem::new("Settings…", true, None);
+        let sponsor_item = muda::MenuItem::new("♥ Sponsor Lightcal", true, None);
         let quit_item = muda::MenuItem::new("Exit", true, None);
         let open_id = open_item.id().clone();
         let today_id = today_item.id().clone();
         let settings_id = settings_item.id().clone();
+        let sponsor_id = sponsor_item.id().clone();
         let quit_id = quit_item.id().clone();
         let _ = menu.append(&open_item);
         let _ = menu.append(&today_item);
         let _ = menu.append(&settings_item);
+        let _ = menu.append(&sponsor_item);
         let _ = menu.append(&muda::PredefinedMenuItem::separator());
         let _ = menu.append(&quit_item);
         let initial_tip = format!(
@@ -2521,7 +2524,7 @@ fn main() {
                     .build()
                     .ok()
             });
-        (tray, open_id, today_id, settings_id, quit_id)
+        (tray, open_id, today_id, settings_id, sponsor_id, quit_id)
     };
 
     let ctrl = Rc::new(RefCell::new(AppController {
@@ -2689,6 +2692,7 @@ fn main() {
         let open_id = open_item_id.clone();
         let today_id = today_item_id.clone();
         let settings_id = settings_item_id.clone();
+        let sponsor_id = sponsor_item_id.clone();
         let quit_id = quit_item_id.clone();
 
         muda::MenuEvent::set_event_handler(Some(move |ev: muda::MenuEvent| {
@@ -2697,6 +2701,7 @@ fn main() {
             let open_id = open_id.clone();
             let today_id = today_id.clone();
             let settings_id = settings_id.clone();
+            let sponsor_id = sponsor_id.clone();
             let quit_id = quit_id.clone();
 
             let _ = slint::invoke_from_event_loop(move || {
@@ -2724,6 +2729,9 @@ fn main() {
                         show_application_window(w);
                         bring_to_foreground();
                     });
+                } else if id == sponsor_id {
+                    // Opens only the allowlisted GitHub Sponsors page in the browser.
+                    open_browser_link(lightcal::updater::SPONSOR_URL);
                 } else if id == quit_id {
                     let _ = slint::quit_event_loop();
                 }

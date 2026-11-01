@@ -19,15 +19,16 @@ body{margin:0}
 .k{margin-left:auto;font-size:12px;color:var(--ink2)}
 </style>
 </helmet>
-<div class="{{rootCls}}" role="menu" aria-label="Lightcal" style="width: 240px; height: 148px; box-sizing: border-box; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif">
+<div class="{{rootCls}}" role="menu" aria-label="Lightcal" style="width: 240px; height: 180px; box-sizing: border-box; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif">
   <button class="it" role="menuitem" style="font-weight: 600"><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>Open Lightcal<span class="k">Ctrl+Alt+K</span></button>
   <button class="it" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"></rect><path d="M3 9.5h18"></path><rect x="7.5" y="12.5" width="4" height="4" rx="1" fill="currentColor" stroke="none"></rect></svg>Go to today</button>
   <button class="it" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>Settings…</button>
+  <button class="it" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 L4.6 13.8 A5 5 0 0 1 12 6.6 A5 5 0 0 1 19.4 13.8 Z" fill="#D73840" stroke="#D73840" stroke-width="1.5" stroke-linejoin="round"></path></svg>Sponsor Lightcal</button>
   <div style="height: 1px; background: var(--line); margin: 4px 6px"></div>
   <button class="it" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v8"></path><path d="M6.4 6.6a8 8 0 1 0 11.2 0"></path></svg>Quit Lightcal</button>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":240,"height":148}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":240,"height":180}}'>
 class Component extends DCLogic {
   renderVals() {
     return { rootCls: "mn" + ((this.props.theme || "light") === "dark" ? " dark" : "") };

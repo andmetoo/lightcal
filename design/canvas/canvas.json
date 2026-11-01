@@ -2,24 +2,157 @@
   "v": 3,
   "attachments": {},
   "boards": {
-    "Main.dc.html": {"h": 432, "is_interactive": true, "radius": 8, "title": "Calendar · light · today", "w": 352, "x": 0, "y": 0, "page": "windows"},
-    "CalendarDetail.dc.html": {"h": 432, "is_interactive": true, "radius": 8, "title": "Calendar · light · event details", "w": 352, "x": 432, "y": 0, "page": "windows"},
-    "CalendarDark.dc.html": {"h": 432, "is_interactive": true, "radius": 8, "title": "Calendar · dark · empty day", "w": 352, "x": 864, "y": 0, "page": "windows"},
-    "SettingsCalendar.dc.html": {"h": 360, "is_interactive": true, "radius": 8, "title": "Settings · Calendar · light", "w": 448, "x": 1296, "y": 0, "page": "windows"},
-    "SettingsAccounts.dc.html": {"h": 360, "is_interactive": true, "radius": 8, "title": "Settings · Accounts · light", "w": 448, "x": 1824, "y": 0, "page": "windows"},
-    "SettingsApp.dc.html": {"h": 360, "is_interactive": true, "radius": 8, "title": "Settings · App · dark", "w": 448, "x": 2352, "y": 0, "page": "windows"},
-    "WinAbout.dc.html": {"h": 360, "is_interactive": true, "radius": 8, "title": "About · light", "w": 448, "x": 2880, "y": 0, "page": "windows"},
-    "WinTaskbar.dc.html": {"h": 380, "radius": 12, "title": "Taskbar and tray · 150 %", "w": 940, "x": 0, "y": 552, "page": "windows"},
-    "WinTrayMenu.dc.html": {"h": 148, "radius": 8, "title": "Tray menu · light", "w": 240, "x": 1020, "y": 552, "page": "windows"},
-    "Icons.dc.html": {"h": 760, "radius": 12, "title": "Icon system", "w": 1200, "x": 0, "y": 0, "page": "icons"},
-    "States.dc.html": {"h": 940, "radius": 12, "title": "Accounts, shortcut and update states", "w": 1504, "x": 0, "y": 0, "page": "states"},
-    "Languages.dc.html": {"h": 500, "radius": 12, "title": "Russian, Spanish, Japanese", "w": 1504, "x": 0, "y": 0, "page": "languages"}
+    "Main.dc.html": {
+      "h": 432,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Calendar · light · today",
+      "w": 352,
+      "x": 0,
+      "y": 0,
+      "page": "windows"
+    },
+    "CalendarDetail.dc.html": {
+      "h": 432,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Calendar · light · event details",
+      "w": 352,
+      "x": 432,
+      "y": 0,
+      "page": "windows"
+    },
+    "CalendarDark.dc.html": {
+      "h": 432,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Calendar · dark · empty day",
+      "w": 352,
+      "x": 864,
+      "y": 0,
+      "page": "windows"
+    },
+    "SettingsCalendar.dc.html": {
+      "h": 360,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Settings · Calendar · light",
+      "w": 448,
+      "x": 1296,
+      "y": 0,
+      "page": "windows"
+    },
+    "SettingsAccounts.dc.html": {
+      "h": 360,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Settings · Accounts · light",
+      "w": 448,
+      "x": 1824,
+      "y": 0,
+      "page": "windows"
+    },
+    "SettingsApp.dc.html": {
+      "h": 360,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Settings · App · dark",
+      "w": 448,
+      "x": 2352,
+      "y": 0,
+      "page": "windows"
+    },
+    "WinAbout.dc.html": {
+      "h": 360,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "About · light",
+      "w": 448,
+      "x": 2880,
+      "y": 0,
+      "page": "windows"
+    },
+    "WinTaskbar.dc.html": {
+      "h": 380,
+      "radius": 12,
+      "title": "Taskbar and tray · 150 %",
+      "w": 940,
+      "x": 0,
+      "y": 552,
+      "page": "windows"
+    },
+    "WinTrayMenu.dc.html": {
+      "h": 180,
+      "radius": 8,
+      "title": "Tray menu · light",
+      "w": 240,
+      "x": 1020,
+      "y": 552,
+      "page": "windows"
+    },
+    "Icons.dc.html": {
+      "h": 760,
+      "radius": 12,
+      "title": "Icon system",
+      "w": 1200,
+      "x": 0,
+      "y": 0,
+      "page": "icons"
+    },
+    "States.dc.html": {
+      "h": 940,
+      "radius": 12,
+      "title": "Accounts, shortcut and update states",
+      "w": 1504,
+      "x": 0,
+      "y": 0,
+      "page": "states"
+    },
+    "Languages.dc.html": {
+      "h": 500,
+      "radius": 12,
+      "title": "Russian, Spanish, Japanese",
+      "w": 1504,
+      "x": 0,
+      "y": 0,
+      "page": "languages"
+    }
   },
-  "createdOnFiles": {"at": "2026-11-01T12:00:00Z", "v": 1},
+  "createdOnFiles": {
+    "at": "2026-11-01T12:00:00Z",
+    "v": 1
+  },
   "designSystems": [],
-  "launch": {"view": "canvas", "page": "windows"},
-  "pages": [{"id": "windows", "name": "Windows"}, {"id": "states", "name": "States"}, {"id": "icons", "name": "Icons"}, {"id": "languages", "name": "Languages"}],
-  "noteOrder": ["title", "changes", "slint", "title-icons", "title-states", "title-languages"],
+  "launch": {
+    "view": "canvas",
+    "page": "windows"
+  },
+  "pages": [
+    {
+      "id": "windows",
+      "name": "Windows"
+    },
+    {
+      "id": "states",
+      "name": "States"
+    },
+    {
+      "id": "icons",
+      "name": "Icons"
+    },
+    {
+      "id": "languages",
+      "name": "Languages"
+    }
+  ],
+  "noteOrder": [
+    "title",
+    "changes",
+    "slint",
+    "title-icons",
+    "title-states",
+    "title-languages"
+  ],
   "notes": {
     "changes": {
       "fill": "teal",
@@ -39,11 +172,56 @@
       "y": 552,
       "page": "windows"
     },
-    "title": {"kind": "title1", "maxW": 3328, "text": "Lightcal refresh — Windows", "w": 240, "x": 0, "y": -300, "page": "windows"},
-    "title-icons": {"kind": "title1", "maxW": 1200, "text": "Icons", "w": 240, "x": 0, "y": -300, "page": "icons"},
-    "title-states": {"kind": "title1", "maxW": 1504, "text": "States", "w": 240, "x": 0, "y": -300, "page": "states"},
-    "title-languages": {"kind": "title1", "maxW": 1504, "text": "Languages", "w": 240, "x": 0, "y": -300, "page": "languages"}
+    "title": {
+      "kind": "title1",
+      "maxW": 3328,
+      "text": "Lightcal refresh — Windows",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "windows"
+    },
+    "title-icons": {
+      "kind": "title1",
+      "maxW": 1200,
+      "text": "Icons",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "icons"
+    },
+    "title-states": {
+      "kind": "title1",
+      "maxW": 1504,
+      "text": "States",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "states"
+    },
+    "title-languages": {
+      "kind": "title1",
+      "maxW": 1504,
+      "text": "Languages",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "languages"
+    }
   },
-  "order": ["Main.dc.html", "CalendarDetail.dc.html", "CalendarDark.dc.html", "SettingsCalendar.dc.html", "SettingsAccounts.dc.html", "SettingsApp.dc.html", "WinAbout.dc.html", "WinTaskbar.dc.html", "WinTrayMenu.dc.html", "Icons.dc.html", "States.dc.html", "Languages.dc.html"],
+  "order": [
+    "Main.dc.html",
+    "CalendarDetail.dc.html",
+    "CalendarDark.dc.html",
+    "SettingsCalendar.dc.html",
+    "SettingsAccounts.dc.html",
+    "SettingsApp.dc.html",
+    "WinAbout.dc.html",
+    "WinTaskbar.dc.html",
+    "WinTrayMenu.dc.html",
+    "Icons.dc.html",
+    "States.dc.html",
+    "Languages.dc.html"
+  ],
   "title": "Lightcal Refresh"
 }
