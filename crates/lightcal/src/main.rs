@@ -586,6 +586,7 @@ impl AppController {
         ui.set_auto_install_label(labels[9].into());
         ui.set_legacy_windows_enabled(self.prefs.windows_calendars_enabled);
         ui.set_auto_install_updates(self.prefs.auto_install_updates);
+        ui.set_install_busy(self.install_busy);
         ui.set_install_status_text(self.install_status.clone().into());
         ui.set_connection_busy(self.connection_busy);
         ui.set_connection_message(self.connection_message.clone().into());

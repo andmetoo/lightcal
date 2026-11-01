@@ -60,7 +60,7 @@ Sources refresh when selected, on month navigation and manually, plus every 15 m
 
 ## Enable signed update installation with SimplySign
 
-Update checking and installation have separate switches on About, reachable from App → Updates. Both automatic settings are off by default, and saved enabled settings can be disabled there. Enabling automatic installation also enables startup/daily checking. Scroll within About to reach its source, website and license links. A manual **Install and restart** action is available when a stable update is found. Publication is not automatic.
+Update checking and installation have separate switches on About, reachable from App → Updates. Both automatic settings are off by default, and saved enabled settings can be disabled there. Enabling automatic installation also enables startup/daily checking. Scroll within About to reach release notes, source, website and license links. A manual **Install and restart** action is available when a stable update is found; builds without a configured signer offer **Download** instead. Installation progress and errors appear in the update card, and installation cannot be submitted twice while busy. Publication is not automatic.
 
 1. Sign in to Certum SimplySign Desktop. Put the code-signing certificate's SHA-1 thumbprint in `SIGN_CERT_SHA1` in `.env`. Build with `just build-release`, then sign `target/dist/lightcal.exe` with `just sign-release`. That runs `signtool`. Keep signing keys in SimplySign.
 2. Run `just certificate-info`. It first requires a valid Authenticode signature, then prints the public certificate's **SHA-256** fingerprint. A Windows certificate UI may label a SHA-1 value as a thumbprint: that is not the 64-hex-character value required here.

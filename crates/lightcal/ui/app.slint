@@ -762,6 +762,7 @@ export component AppWindow inherits Window {
     in property <string> auto-install-label;
     in property <bool> auto-install-updates;
     in property <bool> package-managed-updates;
+    in property <bool> install-busy: false;
     in property <string> install-status-text;
     in property <string> refresh-button-text: "Refresh";
     in property <string> updates-heading-text: "Updates";
@@ -2128,14 +2129,14 @@ export component AppWindow inherits Window {
                     spacing: 8px;
 
                     Rectangle {
-                        height: 64px;
+                        height: max(64px, update-note.y + update-note.preferred-height + 10px);
                         border-radius: 9px;
                         background: root.dark-mode ? #222222 : #F0F0F0;
 
                         Text {
                             x: 12px;
                             y: 8px;
-                            width: 264px;
+                            width: root.update-is-available ? 220px : 264px;
                             height: 24px;
                             text: root.update-is-checking
                                 ? root.checking-updates-label
@@ -2148,30 +2149,33 @@ export component AppWindow inherits Window {
                             overflow: elide;
                             vertical-alignment: center;
                         }
-                        Text {
+                        update-note := Text {
                             x: 12px;
                             y: 34px;
-                            width: 264px;
-                            height: 18px;
+                            width: root.update-is-available ? 220px : 264px;
+                            height: self.preferred-height;
                             text: root.update-is-checking
                                 ? ""
-                                : (root.update-is-available
-                                    ? root.update-ready-notes-text
-                                    : root.install-status-text);
+                                : (root.install-status-text != ""
+                                    ? root.install-status-text
+                                    : (root.update-is-available ? root.update-ready-notes-text : ""));
                             font-size: 10.5px;
                             font-weight: 400;
-                            color: root.dark-mode ? #B4B4B4 : #646464;
-                            overflow: elide;
+                            color: root.install-status-text != "" && !root.install-busy
+                                ? (root.dark-mode ? #FF9DA1 : #BC333B)
+                                : (root.dark-mode ? #B4B4B4 : #646464);
+                            wrap: word-wrap;
                             vertical-alignment: center;
                         }
 
                         if root.update-is-available : SettingsButton {
-                            x: 300px;
+                            x: 244px;
                             y: 18px;
-                            button-width: 104px;
-                            label: root.release-notes-button-text;
+                            button-width: 160px;
+                            label: root.install-update-label;
+                            enabled: !root.install-busy && !root.package-managed-updates;
                             dark-mode: root.dark-mode;
-                            clicked => { root.open-external-url("https://github.com/andmetoo/lightcal/releases"); }
+                            clicked => { root.install-update(); }
                         }
                         if !root.update-is-available && !root.update-is-checking : SettingsButton {
                             x: 300px;
@@ -2215,6 +2219,7 @@ export component AppWindow inherits Window {
 
                     // Link rows remain available by scrolling within the fixed About panel.
                     for link[link-idx] in [
+                        { title: root.release-notes-button-text, url: "https://github.com/andmetoo/lightcal/releases" },
                         { title: root.github-button-text, url: "https://github.com/andmetoo/lightcal" },
                         { title: root.koona-button-text, url: "https://koona.app" },
                         { title: root.license-short-text, url: "https://github.com/andmetoo/lightcal/blob/main/LICENSE" }

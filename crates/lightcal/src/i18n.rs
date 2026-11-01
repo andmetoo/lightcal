@@ -269,7 +269,7 @@ const EN_STRINGS: UiStrings = UiStrings {
     checking_updates_label: "Checking updates…",
     update_available_badge: "Update available",
     update_ready_title: "A newer version is available",
-    update_ready_notes: "Open the release page to review it. You choose when to install.",
+    update_ready_notes: "Verifies the signed update before installing and restarting.",
     download_release_button: "Download",
     manual_update_notes:
         "This build cannot install updates by itself. Download the newer release from GitHub.",
@@ -388,8 +388,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     checking_updates_label: "Проверка обновлений…",
     update_available_badge: "Доступно обновление",
     update_ready_title: "Доступна новая версия",
-    update_ready_notes:
-        "Откройте страницу релиза, чтобы посмотреть изменения. Установка только по вашему выбору.",
+    update_ready_notes: "Проверяет подпись обновления перед установкой и перезапуском.",
     download_release_button: "Скачать",
     manual_update_notes:
         "Эта сборка не устанавливает обновления сама. Скачайте новую версию на GitHub.",
@@ -508,8 +507,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     checking_updates_label: "Buscando actualizaciones…",
     update_available_badge: "Actualización disponible",
     update_ready_title: "Hay una versión más reciente",
-    update_ready_notes:
-        "Abra la página de la versión para revisarla. Usted decide cuándo instalar.",
+    update_ready_notes: "Verifica la actualización firmada antes de instalar y reiniciar.",
     download_release_button: "Descargar",
     manual_update_notes:
         "Esta compilación no instala actualizaciones sola. Descarga la versión nueva en GitHub.",
@@ -628,7 +626,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     update_available_badge: "アップデートがあります",
     update_ready_title: "新しいバージョンがあります",
     update_ready_notes:
-        "リリースページで内容を確認できます。インストールするタイミングは自分で選べます。",
+        "署名済みの更新を検証してインストールし、再起動します。",
     download_release_button: "ダウンロード",
     manual_update_notes:
         "このビルドは更新を自分ではインストールできません。新しい版は GitHub からダウンロードしてください。",

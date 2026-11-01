@@ -249,6 +249,67 @@ fn expired_google_account_restores_saved_reconnect_configuration() {
 }
 
 #[test]
+fn about_offers_manual_updates_without_running_an_installer() {
+    let platform = HeadlessPlatform::new();
+    let renderer = HeadlessPlatform {
+        window: platform.window.clone(),
+    };
+    slint::platform::set_platform(Box::new(platform)).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-manual-update-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_tab = 3;
+    ctrl.update_state = UpdateCheckState::UpdateAvailable {
+        current_version: "0.2.2".into(),
+        latest_version: "9.9.9".into(),
+        release_url: "https://github.com/andmetoo/lightcal/releases/tag/v9.9.9".into(),
+    };
+    let installed = Rc::new(Cell::new(false));
+    let observed = installed.clone();
+    ui.on_install_update(move || observed.set(true));
+    ui.show().unwrap();
+    for locale in LocaleCode::ALL {
+        ctrl.prefs.set_locale(locale);
+        ctrl.sync_to_ui(&ui);
+        renderer
+            .render_to_png(
+                &dir.join(format!("manual-update-{}.png", locale.as_str())),
+                448,
+                360,
+            )
+            .unwrap();
+        installed.set(false);
+        click(&ui, 340.0, 164.0);
+        assert!(
+            installed.get(),
+            "Manual Download/Install is reachable in {}",
+            locale.as_str()
+        );
+    }
+    ctrl.install_busy = true;
+    ctrl.sync_to_ui(&ui);
+    renderer
+        .render_to_png(&dir.join("install-busy.png"), 448, 360)
+        .unwrap();
+    installed.set(false);
+    click(&ui, 340.0, 164.0);
+    assert!(
+        !installed.get(),
+        "A running update cannot be submitted twice"
+    );
+    ctrl.install_busy = false;
+    ctrl.install_status = "Update verification failed: the signer does not match the configured certificate. The existing installation was not replaced.".into();
+    ctrl.sync_to_ui(&ui);
+    renderer
+        .render_to_png(&dir.join("install-error.png"), 448, 360)
+        .unwrap();
+    println!("Manual-update snapshots: {}", dir.display());
+}
+
+#[test]
 fn settings_recovery_controls_remain_reachable() {
     let platform = HeadlessPlatform::new();
     let renderer = HeadlessPlatform {
