@@ -48,6 +48,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     let shortcut_mgr = ShortcutManager::new();
 
     let ui = AppWindow::new().expect("Failed to create headless AppWindow");
+    crate::apply_system_font(&ui);
     ui.show().expect("Failed to show headless AppWindow");
 
     let mut ctrl = AppController {
