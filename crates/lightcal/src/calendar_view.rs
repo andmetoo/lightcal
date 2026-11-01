@@ -33,6 +33,9 @@ pub(crate) struct AgendaUiState {
     pub(crate) copy_generation: u64,
     /// Fixed local wall-clock time ([`local_minutes`]) for tests and snapshots.
     pub(crate) now_override: Option<i64>,
+    /// Event keys in the order last rendered; row indexes from Slint resolve against these,
+    /// so a background refresh cannot redirect a click to a different event.
+    pub(crate) rendered: RefCell<Vec<EventKey>>,
 }
 
 impl AppController {
@@ -48,18 +51,20 @@ impl AppController {
     }
 
     fn agenda_key(&self, index: i32) -> Option<(EventKey, CalendarOccurrence)> {
+        let key = self
+            .agenda
+            .rendered
+            .borrow()
+            .get(usize::try_from(index).ok()?)?
+            .clone();
+        if key.date != self.cal_state.selected_date {
+            return None;
+        }
         let event = self
             .day_agenda()
             .into_iter()
-            .nth(usize::try_from(index).ok()?)?;
-        Some((
-            EventKey {
-                date: self.cal_state.selected_date,
-                source_id: event.source_id.clone(),
-                event_id: event.event_id.clone(),
-            },
-            event,
-        ))
+            .find(|event| event.source_id == key.source_id && event.event_id == key.event_id)?;
+        Some((key, event))
     }
 
     /// Expands the event at `index`, or collapses it when it is already open.
@@ -220,12 +225,14 @@ impl AppController {
         let mut chips = Vec::new();
         let mut timed = Vec::new();
         let mut expanded_chip = None;
+        let mut rendered = Vec::with_capacity(events.len());
         for (index, (event, timing)) in events.iter().zip(timings).enumerate() {
             let key = EventKey {
                 date: selected,
                 source_id: event.source_id.clone(),
                 event_id: event.event_id.clone(),
             };
+            rendered.push(key.clone());
             let item = AgendaEventItem {
                 index: index as i32,
                 time_label: time_range(locale, event).into(),
@@ -274,6 +281,7 @@ impl AppController {
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
         ui.set_agenda_events(ModelRc::new(VecModel::from(timed)));
+        *self.agenda.rendered.borrow_mut() = rendered;
         ui.set_agenda_empty(events.is_empty());
         ui.set_agenda_empty_text(format_event_count(locale, 0).into());
         let next = events

@@ -3,6 +3,14 @@
 //! and read-only WinRT calendar provider.
 
 pub mod clipboard;
+
+/// `%WINDIR%\Fonts` (falling back to `%SystemRoot%\Fonts`), where Windows keeps system fonts.
+pub fn system_fonts_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("WINDIR")
+        .or_else(|| std::env::var_os("SystemRoot"))
+        .map(|windows| std::path::PathBuf::from(windows).join("Fonts"))
+}
+
 pub mod icon;
 pub mod provider;
 pub mod shell;

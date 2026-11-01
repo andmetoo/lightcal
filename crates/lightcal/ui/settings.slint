@@ -971,6 +971,8 @@ export component SettingsView inherits Rectangle {
     callback toggle-auto-check-updates();
     callback toggle-auto-install-updates();
     callback open-external-url(string);
+    // GitHub Sponsors: monthly page, or the one-time page when `one-time` is true.
+    callback open-sponsor(bool);
     callback close-account-dialogs();
     callback choose-outlook-account();
     callback choose-ics-account();
@@ -2006,13 +2008,13 @@ export component SettingsView inherits Rectangle {
                         title: "♥ " + root.copy.sponsor-monthly-title;
                         desc: root.copy.sponsor-monthly-desc;
                         divider: true;
-                        clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
+                        clicked => { root.open-sponsor(false); }
                     }
                     LinkRow {
                         title: "♥ " + root.copy.sponsor-once-title;
                         desc: root.copy.sponsor-once-desc;
                         divider: true;
-                        clicked => { root.open-external-url("https://github.com/sponsors/andmetoo?frequency=one-time"); }
+                        clicked => { root.open-sponsor(true); }
                     }
                 }
 
@@ -2066,7 +2068,7 @@ export component SettingsView inherits Rectangle {
             x: parent.width - 16px - version-text.width - 8px - self.width;
             y: (parent.height - self.height) / 2;
             label: root.copy.sponsor-label;
-            clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
+            clicked => { root.open-sponsor(false); }
         }
         version-text := Text {
             x: parent.width - 16px - self.width;
@@ -2095,7 +2097,7 @@ export component SettingsView inherits Rectangle {
             x: parent.width - 12px - self.width;
             y: (parent.height - self.height) / 2;
             label: root.copy.sponsor-label;
-            clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
+            clicked => { root.open-sponsor(false); }
         }
     }
 }

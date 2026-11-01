@@ -692,6 +692,14 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
 
 #[test]
 fn recorded_keys_become_registrable_shortcuts() {
+    // Backspace, Tab and Enter share codes with Ctrl+H/I/J/M and are never recorded as letters.
+    for named in ["\u{8}", "\t", "\n", "\r"] {
+        assert_eq!(
+            shortcut_from_key(named, true, false, false, false),
+            None,
+            "{named:?}"
+        );
+    }
     assert_eq!(
         shortcut_from_key("k", true, true, false, false).as_deref(),
         Some("Ctrl + Alt + K")
@@ -712,4 +720,43 @@ fn recorded_keys_become_registrable_shortcuts() {
         ics_name_from_address("https://user@calendar.example.com:443/private/basic.ics"),
         "calendar.example.com"
     );
+}
+
+#[test]
+fn agenda_actions_use_the_row_that_was_rendered() {
+    let platform = HeadlessPlatform::new();
+    slint::platform::set_platform(Box::new(platform)).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-agenda-race-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.provider = crate::snapshot_render::canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    ctrl.sync_to_ui(&ui);
+    let walk = (0..ui.get_agenda_events().row_count())
+        .map(|row| ui.get_agenda_events().row_data(row).unwrap())
+        .find(|row| row.title == "Weekend walk")
+        .expect("the sample day has the walk");
+
+    // A background refresh removes an earlier event before the UI re-syncs.
+    ctrl.provider
+        .occurrences
+        .retain(|event| event.title != "Coffee with Maya");
+    ctrl.toggle_agenda_event(walk.index);
+    ctrl.sync_to_ui(&ui);
+    let expanded: Vec<_> = (0..ui.get_agenda_events().row_count())
+        .map(|row| ui.get_agenda_events().row_data(row).unwrap())
+        .filter(|row| row.expanded)
+        .map(|row| row.title.to_string())
+        .collect();
+    assert_eq!(expanded, ["Weekend walk"]);
+    let _ = std::fs::remove_dir_all(&dir);
 }

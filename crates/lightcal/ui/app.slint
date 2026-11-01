@@ -29,19 +29,16 @@ export component AppWindow inherits Window {
     out property <string> month-title: root.month-view.title;
     in property <bool> is-current-month: true;
     in property <string> current-month-badge: "Current month";
-    in property <string> today-date-line: "Thursday, 29 October";
     in property <string> today-button-label: "Today";
     in property <string> week-header-label: "W";
     in property <bool> show-week-numbers: true;
     in property <bool> show-weekday-header: true;
     in property <[string]> weekday-headers: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-    in property <[bool]> gray-columns: [false, false, false, false, false, true, true];
     in property <[string]> iso-weeks: ["40", "41", "42", "43", "44", "45"];
     out property <[DayCellData]> cells: root.month-view.cells;
     in property <string> selected-date-line: "Friday, 30 October";
     in property <string> selected-event-summary: "2 events";
     in property <string> active-calendars-label: "2 calendars";
-    in property <[AgendaEventItem]> selected-day-events: [];
     in property <string> back-to-calendar-text: "← Back to Calendar";
     in property <string> compact-summary-header: "";
     in property <string> sync-status-text: "Synced · 3 calendars active";
@@ -293,7 +290,6 @@ export component AppWindow inherits Window {
     callback toggle-show-weekday();
     callback toggle-show-week-numbers();
     callback toggle-start-with-windows();
-    callback cycle-shortcut-preset();
     callback clear-shortcut();
     callback toggle-calendar-source(string);
     callback refresh-calendars();
@@ -306,6 +302,7 @@ export component AppWindow inherits Window {
     callback toggle-auto-install-updates();
     callback check-updates();
     callback open-external-url(string);
+    callback open-sponsor(bool);
     callback dismiss-compact();
     callback toggle-language-dropdown();
     callback toggle-theme-dropdown();
@@ -328,7 +325,6 @@ export component AppWindow inherits Window {
     callback disconnect-google();
     callback retry-sign-in();
     callback dismiss-startup-warning();
-    callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
     height: root.settings-open ? 360px : 432px;
@@ -544,6 +540,7 @@ export component AppWindow inherits Window {
         toggle-auto-check-updates() => { root.toggle-auto-check-updates(); }
         toggle-auto-install-updates() => { root.toggle-auto-install-updates(); }
         open-external-url(arg0) => { root.open-external-url(arg0); }
+        open-sponsor(one-time) => { root.open-sponsor(one-time); }
         close-account-dialogs() => { root.close-account-dialogs(); }
         choose-outlook-account() => { root.choose-outlook-account(); }
         choose-ics-account() => { root.choose-ics-account(); }

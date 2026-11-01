@@ -54,10 +54,8 @@ pub(crate) fn apply_system_font(ui: &AppWindow) {
 
 #[cfg(windows)]
 fn segoe_ui_variable_installed() -> bool {
-    let windows_dir = env::var_os("WINDIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| "C:\\Windows".into());
-    windows_dir.join("Fonts").join("SegUIVar.ttf").is_file()
+    lightcal::platform::windows::system_fonts_dir()
+        .is_some_and(|fonts| fonts.join("SegUIVar.ttf").is_file())
 }
 
 /// Off Windows the named family is absent and Slint uses its sans-serif fallback.
@@ -159,6 +157,9 @@ fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool)
         format!("F{}", index + 1)
     } else if first == ' ' {
         "Space".to_string()
+    } else if matches!(first, '\u{8}' | '\t' | '\n' | '\r') {
+        // Backspace, Tab and Enter share codes with Ctrl+H/I/J/M; never guess a letter.
+        return None;
     } else if ('\u{1}'..='\u{1a}').contains(&first) {
         // Ctrl+letter can arrive as an ASCII control character.
         char::from(b'A' + (first as u8) - 1).to_string()
@@ -546,9 +547,6 @@ impl AppController {
 
         ui.set_is_current_month(grid.is_current_month);
         ui.set_current_month_badge(strings.current_month_badge.into());
-        ui.set_today_date_line(
-            format_date_line(locale, self.cal_state.today, self.prefs.show_weekday).into(),
-        );
         ui.set_today_button_label(strings.today_button.into());
         ui.set_week_header_label(strings.week_col_header.into());
         ui.set_show_week_numbers(self.prefs.show_week_numbers);
@@ -560,9 +558,6 @@ impl AppController {
             .map(|&d| SharedString::from(weekday_short(locale, d)))
             .collect();
         ui.set_weekday_headers(ModelRc::new(VecModel::from(wd_headers)));
-
-        let gray_cols: Vec<bool> = grid.gray_columns.to_vec();
-        ui.set_gray_columns(ModelRc::new(VecModel::from(gray_cols)));
 
         let iso_wks: Vec<SharedString> = grid
             .iso_weeks
@@ -1617,16 +1612,33 @@ fn apply_window_chrome(ui: &AppWindow) {
     #[cfg(windows)]
     {
         use lightcal::platform::windows::{find_lightcal_hwnd, mica_requested, WindowChrome};
-        let hwnd = find_lightcal_hwnd();
-        if !hwnd.is_null() {
-            let chrome = WindowChrome {
-                dark_mode: ui.get_dark_mode(),
-                mica: mica_requested(),
-            };
-            unsafe {
-                lightcal::platform::windows::apply_window_chrome(hwnd, chrome);
-            }
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        thread_local! {
+            /// Last window handle and the (dark, mica) state applied to it.
+            static APPLIED: std::cell::Cell<(isize, Option<(bool, bool)>)> =
+                const { std::cell::Cell::new((0, None)) };
         }
+        let (cached, applied) = APPLIED.with(|slot| slot.get());
+        let mut hwnd = cached as windows_sys::Win32::Foundation::HWND;
+        // SAFETY: IsWindow only checks whether the handle still names a window.
+        if hwnd.is_null() || unsafe { IsWindow(hwnd) } == 0 {
+            hwnd = find_lightcal_hwnd();
+        }
+        if hwnd.is_null() {
+            return;
+        }
+        let state = (ui.get_dark_mode(), mica_requested());
+        if hwnd as isize == cached && applied == Some(state) {
+            return;
+        }
+        let chrome = WindowChrome {
+            dark_mode: state.0,
+            mica: state.1,
+        };
+        unsafe {
+            lightcal::platform::windows::apply_window_chrome(hwnd, chrome);
+        }
+        APPLIED.with(|slot| slot.set((hwnd as isize, Some(state))));
     }
     #[cfg(not(windows))]
     let _ = ui;
@@ -3106,22 +3118,6 @@ fn main() {
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
-        ui.on_cycle_shortcut_preset(move || {
-            let mut c = ctrl.borrow_mut();
-            let candidate = match c.prefs.global_shortcut.as_deref() {
-                None => "Alt + Shift + C",
-                Some("Alt + Shift + C") => "Ctrl + Alt + C", // Demonstrates conflict rollback!
-                _ => "Ctrl + Shift + L",
-            };
-            apply_shortcut(&mut c, candidate);
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
         ui.on_record_shortcut(move |text, control, alt, shift, meta| {
             let mut c = ctrl.borrow_mut();
             if let Some(candidate) = shortcut_from_key(text.as_str(), control, alt, shift, meta) {
@@ -3315,6 +3311,13 @@ fn main() {
     {
         ui.on_open_external_url(move |url| {
             open_browser_link(url.as_str());
+        });
+        ui.on_open_sponsor(|one_time| {
+            open_browser_link(if one_time {
+                lightcal::updater::SPONSOR_ONCE_URL
+            } else {
+                lightcal::updater::SPONSOR_URL
+            });
         });
     }
     {
@@ -3651,14 +3654,6 @@ fn main() {
                 c.sync_to_ui(w);
             });
             replay_pending_reload(weak.clone());
-        });
-    }
-    {
-        let ui_weak = ui.as_weak();
-        ui.on_minimize_window(move || {
-            if let Some(w) = ui_weak.upgrade() {
-                hide_application_window(&w);
-            }
         });
     }
 

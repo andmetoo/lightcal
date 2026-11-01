@@ -65,8 +65,7 @@ fn system_glyphs() -> Option<&'static SystemGlyphs> {
 }
 
 fn load_system_glyphs() -> Option<SystemGlyphs> {
-    let windows = std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot"))?;
-    let fonts = Path::new(&windows).join("Fonts");
+    let fonts = super::system_fonts_dir()?;
     SYSTEM_FONTS.iter().find_map(|(file, source, settings)| {
         let data = std::fs::read(fonts.join(file)).ok()?;
         extract_glyphs(&data, settings, source)
@@ -1393,7 +1392,9 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn segoe_is_read_from_the_windows_fonts_folder() {
-        let fonts = Path::new(&std::env::var_os("WINDIR").unwrap_or_default()).join("Fonts");
+        let Some(fonts) = super::super::system_fonts_dir() else {
+            return;
+        };
         if fonts.join("SegUIVar.ttf").exists() || fonts.join("segoeuib.ttf").exists() {
             assert!(numeral_font_source().starts_with("Segoe UI"));
         }

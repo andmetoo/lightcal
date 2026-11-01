@@ -15,16 +15,10 @@ pub fn copy_text(text: &str) -> Result<(), String> {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let bytes = wide.len() * std::mem::size_of::<u16>();
     unsafe {
-        // Another process may hold the clipboard briefly; retry a few times.
-        let mut opened = false;
-        for _ in 0..5 {
-            if OpenClipboard(std::ptr::null_mut()) != 0 {
-                opened = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        if !opened {
+        // Lightcal's own window owns the data: with a NULL owner, EmptyClipboard leaves no
+        // owner and SetClipboardData may fail. One attempt; never sleep on the UI thread.
+        let owner = super::shell::find_lightcal_hwnd();
+        if OpenClipboard(owner) == 0 {
             return Err("The clipboard is busy".into());
         }
         let result = (|| {
