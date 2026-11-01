@@ -750,6 +750,7 @@ export component AppWindow inherits Window {
     in property <bool> can-disconnect-microsoft;
     in property <bool> can-refresh-calendars;
     in property <string> connection-message;
+    in property <string> startup-warning: "";
     in property <string> connect-microsoft-label;
     in property <string> disconnect-microsoft-label;
     in property <string> ics-name-placeholder;
@@ -911,6 +912,7 @@ export component AppWindow inherits Window {
     callback cancel-account-sign-in();
     callback disconnect-google();
     callback retry-sign-in();
+    callback dismiss-startup-warning();
     callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
@@ -1473,6 +1475,43 @@ export component AppWindow inherits Window {
                 width: 416px;
                 height: 1px;
                 background: root.dark-mode ? #3A3A3A : #D9D9D9;
+            }
+        }
+
+        // Preferences recovery warning, shown on the General tab until dismissed.
+        if root.settings-tab == 2 && root.startup-warning != "" : Rectangle {
+            x: 16px;
+            y: 76px;
+            width: 416px;
+            height: 18px;
+
+            Text {
+                x: 0px;
+                width: parent.width - 24px;
+                height: parent.height;
+                text: root.startup-warning;
+                font-size: 11px;
+                overflow: elide;
+                vertical-alignment: center;
+                color: root.dark-mode ? #FF9DA1 : #BC333B;
+            }
+
+            Rectangle {
+                x: parent.width - 20px;
+                width: 20px;
+                height: parent.height;
+                Text {
+                    text: "×";
+                    font-size: 14px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    color: root.dark-mode ? #FF9DA1 : #BC333B;
+                }
+                TouchArea {
+                    accessible-role: button;
+                    accessible-label: "Dismiss";
+                    clicked => { root.dismiss-startup-warning(); }
+                }
             }
         }
 
