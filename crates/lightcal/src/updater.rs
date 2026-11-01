@@ -204,10 +204,6 @@ pub fn is_verified_github_url(url: &str) -> bool {
         && (parsed.path() == PATH || parsed.path().starts_with(&format!("{PATH}/")))
 }
 
-/// Exact macOS Privacy & Security pane for calendar access. Not a general URL scheme.
-pub const MACOS_CALENDAR_PRIVACY_URL: &str =
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars";
-
 pub fn is_allowed_external_link(url: &str) -> bool {
     if let Ok(uri) = url::Url::parse(url) {
         if uri.scheme() == "https"
@@ -226,7 +222,6 @@ pub fn is_allowed_external_link(url: &str) -> bool {
         || url == "https://koona.app"
         || url == "ms-settings:privacy-calendar"
         || url == "ms-settings:emailandaccounts"
-        || url == MACOS_CALENDAR_PRIVACY_URL
         || is_verified_github_url(url)
 }
 
@@ -340,11 +335,7 @@ mod tests {
         ));
         assert!(is_allowed_external_link("ms-settings:privacy-calendar"));
         assert!(is_allowed_external_link("ms-settings:emailandaccounts"));
-        assert!(is_allowed_external_link(MACOS_CALENDAR_PRIVACY_URL));
         assert!(!is_allowed_external_link("ms-settings:windowsupdate"));
-        assert!(!is_allowed_external_link(
-            "x-apple.systempreferences:com.apple.preference.security"
-        ));
         assert!(!is_allowed_external_link("https://malicious.site"));
         assert!(!is_allowed_external_link("cmd.exe"));
     }

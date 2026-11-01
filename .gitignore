@@ -47,6 +47,6 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Design-tool scratch (fonts prepared from Apple downloads, bun installs)
+# Design-tool scratch (bun installs)
 node_modules/
 design/**/scratch/

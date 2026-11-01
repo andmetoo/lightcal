@@ -95,6 +95,3 @@ prepare-nsis:
 test-installer:
     pwsh -NoLogo -NoProfile -File scripts/test-nsis.ps1
 
-# Build an unsigned macOS review disk image; macOS only, no signing
-package-dmg:
-    ./scripts/package-dmg.sh

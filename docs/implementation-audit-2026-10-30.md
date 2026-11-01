@@ -63,7 +63,7 @@ Remaining release gates:
 5. Verify GitHub success/no-release/rate-limit/timeout/offline behavior end to end on an unrestricted network. Unit fixtures cover response evaluation; transport failures are currently reported generically as offline. The Preview update-channel UI has no separate prerelease implementation.
 6. Sign using the owner's installed tool/certificate and verify the resulting executable and archive. No signing credentials were accessed and no genuine signed artifact is claimed. Review complete dependency attribution and matching source availability before GPL distribution.
 7. Run the new Actions workflow after the owner authorizes pushing. Remote CI cannot validate unpushed changes. GitHub release publication remains an owner action.
-8. Complete ADR 0001's release-build CPU/private bytes/working set/activation measurements and actual shell acceptance matrix. Earlier prose about platform support is not measurement evidence. macOS launch/menu-bar validation remains open; no framework change was made.
+8. Complete ADR 0001's release-build CPU/private bytes/working set/activation measurements and actual shell acceptance matrix. Earlier prose about platform support is not measurement evidence. No framework change was made.
 9. Verify the advertised Rust 1.80 minimum against the locked dependency graph. This review built with Rust 1.99.1, so it does not establish that minimum-version compatibility.
 
 Primary references: [AppointmentManager.RequestStoreAsync](https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.appointments.appointmentmanager.requeststoreasync), [native Windows HTTP client bindings](https://microsoft.github.io/windows-docs-rs/doc/windows/Web/Http/struct.HttpClient.html).

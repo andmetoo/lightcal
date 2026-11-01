@@ -689,41 +689,13 @@ pub struct StartupCopy {
     pub error: &'static str,
 }
 
-/// Startup-row copy. macOS uses login-item wording; other targets use the catalog.
+/// Startup-row copy from the locale catalog.
 pub fn startup_copy(locale: LocaleCode) -> StartupCopy {
-    #[cfg(target_os = "macos")]
-    {
-        match locale {
-            LocaleCode::En => StartupCopy {
-                label: "Launch at login",
-                description: "Start Lightcal quietly in the menu bar when you sign in",
-                error: "Could not update the login item.",
-            },
-            LocaleCode::Ru => StartupCopy {
-                label: "Запускать при входе",
-                description: "Открывать в строке меню при входе в систему.",
-                error: "Не удалось изменить объект входа.",
-            },
-            LocaleCode::Es => StartupCopy {
-                label: "Abrir al iniciar sesión",
-                description: "Iniciar en la barra de menús al entrar en la cuenta.",
-                error: "No se pudo cambiar el ítem de inicio.",
-            },
-            LocaleCode::Ja => StartupCopy {
-                label: "ログイン時に起動",
-                description: "サインイン時にメニューバーへ静かに起動します。",
-                error: "ログイン項目を変更できませんでした。",
-            },
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let strings = catalog(locale);
-        StartupCopy {
-            label: strings.label_startup,
-            description: strings.desc_startup,
-            error: strings.startup_error,
-        }
+    let strings = catalog(locale);
+    StartupCopy {
+        label: strings.label_startup,
+        description: strings.desc_startup,
+        error: strings.startup_error,
     }
 }
 

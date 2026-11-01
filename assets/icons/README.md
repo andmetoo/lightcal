@@ -21,7 +21,7 @@ PNG files from 16 through 1024 px include alpha transparency. The SVG and PNG ar
 
 ## Visual validation
 
-The supplied PNG dimensions/alpha and ICO structure were checked. Small raster variants were inspected on light/dark surfaces. This does not verify actual Windows shell rendering or macOS packaging.
+The supplied PNG dimensions/alpha and ICO structure were checked. Small raster variants were inspected on light/dark surfaces. This does not verify actual Windows shell rendering.
 
 The application design is maintained on the design canvas. See [design notes](../../design/README.md).
 
@@ -31,4 +31,4 @@ The application design is maintained on the design canvas. See [design notes](..
 - Tray: prepare a genuinely monochrome version with theme-appropriate foreground color before integration. Dynamic day-of-month rendering remains a separate app feature.
 - Never upscale a small PNG to make a larger icon; render from the vector masters.
 
-Primary platform guidance reviewed on 2026-10-29: [Microsoft icon resources](https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons) and [Apple app icon design and vector layers](https://developer.apple.com/design/human-interface-guidelines/app-icons/).
+Primary platform guidance reviewed on 2026-10-29: [Microsoft icon resources](https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons).

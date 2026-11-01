@@ -49,7 +49,7 @@ Lightcal has no telemetry and no account of its own. It contacts the network onl
 
 ## Platforms
 
-Windows is the supported platform. CI also compiles and tests the portable calendar logic on Linux and builds an unsigned macOS disk image for review; macOS is not a supported release yet.
+Lightcal is Windows only. CI also compiles and tests the portable calendar logic on Linux.
 
 ## Documentation
 

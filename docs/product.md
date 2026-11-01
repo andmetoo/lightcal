@@ -10,14 +10,14 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 - One compact calendar, opened from the tray or pinned taskbar app; a separate settings layout. The owner removed the expanded agenda view on October 30, 2026; see [ADR 0004](decisions/0004-compact-view-and-account-settings.md).
 - Taskbar means a normal user-pinned application icon. It does not mean replacing the system clock or embedding a custom toolbar in Explorer.
 - GPL-3.0. This repository uses the precise identifier `GPL-3.0-only`.
-- Windows only. macOS support was dropped on November 1, 2026; see [ADR 0011](decisions/0011-windows-only-design-refresh.md).
+- Windows only; see [ADR 0011](decisions/0011-windows-only-design-refresh.md).
 - All documentation is in English. Changes are reviewed through PRs; protected branches require owner approval.
 - The owner's design canvas is the design tool. Its board sources and review evidence are mirrored in `design/`; see [the design notes](../design/README.md).
 - Slint is accepted. The additional owner-required features and acceptance criteria are tracked in [Required features](features.md), including Windows calendar selection, event dots, startup, shortcut, update checking, and About links.
 
 ## Proposed first release
 
-Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 and older Windows compatibility require separate validation. macOS is not a target. An unsigned macOS review disk image is still built by CI until a separate change removes it.
+Target Windows 11 x64 on a Microsoft-supported release at release time. ARM64 and older Windows compatibility require separate validation.
 
 The first release includes a Gregorian month grid, selected date, today highlight, weekday/date display, previous/next month, current-month emphasis, return to today, configurable first weekday and gray weekdays, light/dark/system theme, optional ISO week numbers, keyboard navigation, tray menu, and explicit Quit. It also includes opt-in startup, an optional global shortcut, manual update checking, selection of Windows-exposed calendars, event dots, and About links. The tray icon should display the day of month if legibility testing succeeds; its tooltip includes the full local date and weekday.
 

@@ -18,10 +18,9 @@ expensive for a one-person project.
 
 ## Decision
 
-- **Windows only.** Lightcal targets Windows. macOS designs, menu-bar specimens
-  and the SF Pro font plan are removed. The existing macOS adapter, unsigned
-  disk-image script and CI job remain until a separate code change removes
-  them; nothing new is added for macOS.
+- **Windows only.** Lightcal targets Windows. All macOS code, designs, the
+  disk-image script, its CI job and `just` recipe, and macOS passages in the
+  documentation are removed.
 - **Design source.** The design now lives on the owner's design canvas
   **Lightcal Refresh**. Its board sources are mirrored in
   [design/canvas](../../design/canvas/). Each board has a light/dark switch, so
@@ -77,5 +76,4 @@ expensive for a one-person project.
   on `#D73840` (4.64:1), not on the band.
 - Event "Open" links must be built from provider data, opened only on user
   action, and never fetched in the background.
-- AGENTS.md, the product plan and the roadmap no longer promise a macOS port.
-  Removing macOS code, the disk-image script and its CI job is a separate change.
+- AGENTS.md, the product plan and the roadmap no longer mention a macOS port.

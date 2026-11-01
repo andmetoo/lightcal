@@ -10,7 +10,7 @@ Install Rust (the repository pins the stable channel in `rust-toolchain.toml`), 
 just check
 ```
 
-`just check` runs the documentation check, the release-script tests, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. Windows-only code sits behind `cfg`, so the same gate runs on Linux and macOS.
+`just check` runs the documentation check, the release-script tests, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. Windows-only code sits behind `cfg`, so the same gate runs on Linux.
 
 Tests that write preferences must use a temporary `LIGHTCAL_DATA_DIR`. Never touch real autostart, registry, or profile data from an automated test.
 

@@ -4,22 +4,22 @@ Date: 2026-10-29
 
 Status: **Accepted by the owner on 2026-10-29: Slint selected.** Platform integration and performance validation remain required before full UI implementation. No framework benchmark has been run.
 
-Note (2026-11-01): macOS is no longer a target; see [ADR 0011](0011-windows-only-design-refresh.md). The macOS path below is historical.
+Note (2026-11-01): Lightcal targets Windows only; see [ADR 0011](0011-windows-only-design-refresh.md).
 
 ## Requirements
 
-Windows tray and taskbar entry points, a visually polished small calendar, low idle CPU and memory, Rust, no browser container, and a realistic macOS path.
+Windows tray and taskbar entry points, a visually polished small calendar, low idle CPU and memory, Rust, and no browser container.
 
-Here, native execution means a compiled desktop application without a webview. Native controls means actual Win32/WinUI or AppKit widgets. These are different requirements. The owner explicitly requires the former; whether toolkit-drawn widgets satisfy the desired appearance is checked in design review.
+Here, native execution means a compiled desktop application without a webview. Native controls means actual Win32/WinUI widgets. These are different requirements. The owner explicitly requires the former; whether toolkit-drawn widgets satisfy the desired appearance is checked in design review.
 
 ## Comparison
 
-| Option | Rendering and OS controls | Windows / macOS path | Fit for Lightcal |
+| Option | Rendering and OS controls | Windows path | Fit for Lightcal |
 | --- | --- | --- | --- |
 | Slint | Compiled declarative UI; toolkit-drawn widgets; software and GPU renderer choices | Shared UI through its desktop backend; shell integration still platform-specific | Recommended: small custom calendar and event-driven UI, subject to measured footprint and licensing review |
 | Iced | Rust UI with custom widgets; GPU and software renderer options | Shared cross-platform windowing; separate tray integration | Primary fallback: permissive MIT license and Rust-only view code; same platform prototype still required |
 | egui / eframe | Immediate-mode custom UI, not OS controls | Native desktop integration on both platforms | Good prototype/tool UI; more custom visual work for this product. Reactive repainting can sleep at idle; immediate mode does not inherently mean continuous polling |
-| Direct Windows APIs + AppKit bindings | Real platform controls and/or native drawing, chosen separately per OS | Shared Rust date/settings core, separate Windows and macOS views | Best alternative if actual OS controls become mandatory; higher duplicated UI and accessibility work |
+| Direct Windows APIs | Real platform controls and/or native drawing | Shared Rust date/settings core, Win32/WinUI views | Best alternative if actual OS controls become mandatory; higher duplicated UI and accessibility work |
 | Tauri | System webview with Rust backend | Cross-platform | Excluded by the no-web-container requirement |
 
 The ranking is an engineering judgment for this product, not measured proof that one toolkit is smaller or faster. None of the shared UI choices provides the entire tray/taskbar behavior automatically.
@@ -34,13 +34,13 @@ Lightcal's chosen GPL-3.0-only license makes Slint's GPLv3 route the intended de
 
 ## Validation gate
 
-Time-box the initial prototype to 2-3 implementation days. Demonstrate tray show/hide, focus loss, correct taskbar identity and pinned-shortcut reactivation, one process, high-DPI placement, keyboard operation, and no idle render loop. Measure using [the validation protocol](../validation.md). Build and launch a basic macOS view and menu-bar entry on real macOS before platform APIs become deeply embedded.
+Time-box the initial prototype to 2-3 implementation days. Demonstrate tray show/hide, focus loss, correct taskbar identity and pinned-shortcut reactivation, one process, high-DPI placement, keyboard operation, and no idle render loop. Measure using [the validation protocol](../validation.md).
 
 If tray integration or accessibility blocks the prototype, or resource targets fail after one bounded tuning pass, document the evidence and propose revisiting this decision with the owner. Do not switch frameworks without owner approval. Record prototype results in this ADR.
 
 ## Prototype platform results
 
-Review note (2026-10-30): the statements below describe implemented paths and earlier prototype observations. They do not establish that the complete validation gate passed. The [implementation audit](../implementation-audit-2026-10-30.md) records the current evidence and open gates; resource measurements, full shell/accessibility checks, and macOS validation remain outstanding.
+Review note (2026-10-30): the statements below describe implemented paths and earlier prototype observations. They do not establish that the complete validation gate passed. The [implementation audit](../implementation-audit-2026-10-30.md) records the current evidence and open gates; resource measurements and full shell/accessibility checks remain outstanding.
 
 Validated on Windows 11 (October 2026):
 
@@ -59,6 +59,5 @@ Official sources reviewed on 2026-10-29; recheck against the pinned release duri
 - [egui: native appearance, repaint behavior, and licensing](https://github.com/emilk/egui)
 - [tray-icon platform and event-loop requirements](https://docs.rs/tray-icon/latest/tray_icon/)
 - [Microsoft Rust bindings for Windows](https://github.com/microsoft/windows-rs)
-- [Rust Objective-C and AppKit bindings](https://github.com/madsmtm/objc2)
 - [Microsoft taskbar APIs](https://learn.microsoft.com/en-us/windows/win32/shell/taskbar)
 - [Microsoft notification-area APIs](https://learn.microsoft.com/en-us/windows/win32/shell/notification-area)

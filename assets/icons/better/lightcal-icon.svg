@@ -25,7 +25,7 @@
       <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="#38BDF8" flood-opacity="0.45"/>
     </filter>
 
-    <!-- Outer Shadow for macOS/Windows Icon Elevation -->
+    <!-- Outer Shadow for Windows Icon Elevation -->
     <filter id="cardShadow" x="-10%" y="-8%" width="120%" height="122%">
       <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#020617" flood-opacity="0.55"/>
     </filter>

@@ -1,6 +1,5 @@
-//! Platform boundary definitions for Windows (primary) and macOS (future port path).
+//! Platform boundary definitions. Lightcal targets Windows only.
 
-pub mod macos;
 pub mod windows;
 
 use calendar_core::{CalendarOccurrence, CalendarSource, LocalDate};

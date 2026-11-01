@@ -8,7 +8,7 @@ Documentation baseline: October 29, 2026; updated for the public repository on N
 | [Gray + Teal palette](../design/palettes/README.md) | Owner-selected neutral surfaces, Teal actions, and removal of violet |
 | [Calendar status icon](decisions/0010-windows-calendar-tray-icon.md) | Calendar-page tray icon and native raster checks; artwork superseded by ADR 0011 |
 | [Windows date numerals](decisions/0009-windows-date-numerals.md) | Historical numeral-only experiment, superseded by ADR 0010 |
-| [Google Calendar and platform design](decisions/0008-google-calendar-and-platform-design.md) | Read-only Google scope; its design and macOS parts are superseded by ADR 0011 |
+| [Google Calendar and platform design](decisions/0008-google-calendar-and-platform-design.md) | Read-only Google scope; its design is superseded by ADR 0011 |
 | [Windows installer](windows-installer.md) | NSIS setup, signing, CI, and isolated installer tests |
 | [NSIS distribution decision](decisions/0006-nsis-windows-distribution.md) | Owner-approved Windows installer replacing the retired package channel |
 | [Release signing decision](decisions/0007-draft-release-signing.md) | Cloud build, local signing for any release status, and explicit publication |

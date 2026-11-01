@@ -15,7 +15,6 @@ crates/
     ui/             # Slint views, selected in ADR 0001
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
-      macos/        # Menu bar and activation behavior, added during probe
 design/             # Design canvas sources, archived Penpot file, review evidence
 ```
 
@@ -27,7 +26,7 @@ Application state contains displayed month, selected date, today, preferences, a
 
 Windows-specific work includes stable application identity and shortcut association, visible-window styles for taskbar/Alt-Tab behavior, per-monitor DPI awareness, tray rectangle lookup, focus and activation, and Explorer restart recovery. A single-instance mechanism must be per-user, accept only bounded activation messages, and reject arbitrary commands or file paths. Its exact implementation is selected in the prototype.
 
-Route tray callbacks into the existing event loop. Create platform UI objects on the threads required by their APIs; macOS UI/menu-bar work belongs on the main thread. Never block the UI thread waiting for another process or performing disk writes.
+Route tray callbacks into the existing event loop. Create platform UI objects on the threads required by their APIs. Never block the UI thread waiting for another process or performing disk writes.
 
 ## Time and power
 
@@ -56,13 +55,3 @@ Represent event occurrences with source ID, event ID, calendar color, timezone-a
 Store gray-weekday selection as a weekday set; retain a separate first-weekday preference. A platform shortcut adapter registers only an explicitly configured combination and posts activation into the existing GUI loop. Startup registration and shortcut binding need rollback/error behavior; preferences must not claim registration succeeded when it failed.
 
 The update checker is a separate bounded HTTPS request to GitHub release metadata, invoked manually. Compare stable semantic versions, exclude drafts/prereleases, preserve OS TLS validation, and handle timeout/rate-limit/offline states. Accept release-page links only from the expected repository on github.com; a response must never become an arbitrary executable or shell command. No background polling, binary installation, or restart is introduced. Document GitHub's receipt of normal connection metadata in the release privacy statement.
-
-## macOS adapter (being removed)
-
-macOS was dropped by [ADR 0011](decisions/0011-windows-only-design-refresh.md). The notes below describe code that remains until a separate removal change.
-
-Reuse date logic, preference schema, and the selected view where practical. Replace tray semantics with a menu-bar status item and review Dock activation separately. Windows taskbar behavior is not a portable abstraction. Signing and notarization are a later distribution gate.
-
-The `macOS application build` check runs the portable tests on `macos-latest`, then `scripts/package-dmg.sh` release-builds `lightcal` and packages an unsigned disk image. The workflow uploads that image as `lightcal-macos-<arch>-unsigned` and keeps it for 14 days. Preferences for that binary use `~/Library/Application Support/Lightcal`. Allowed links open with the system `open` command, and the calendar privacy action targets the macOS Privacy pane. Login-item copy on that binary does not mention Windows.
-
-The review bundle uses the provisional identifier `app.koona.lightcal`. Its Info.plist names macOS 11 as a minimum so Launch Services can read the bundle. Neither value is a frozen release identity or a tested support matrix. The script does not sign, notarize, or staple the image, and the workflow does not publish a GitHub release. Gatekeeper blocks the application until it is opened explicitly. A green job is not a launch, menu-bar, Dock, accessibility, or calendar-provider result.
