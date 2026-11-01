@@ -24,8 +24,29 @@ rustc-ice-*.txt
 #.idea/
 
 # Python caches from development-only design tooling
-design/__pycache__/
+__pycache__/
+*.pyc
 
 # Owner-specific build configuration. Never put account tokens in these files.
 .env
-.env.local
+.env.*
+!.env.example
+
+# Signing material and installer scratch output. Never commit these.
+*.pfx
+*.p12
+*.snk
+*.cer
+*.key
+dist/
+
+# Local agent/IDE state and worktrees
+.claude/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Design-tool scratch (fonts prepared from Apple downloads, bun installs)
+node_modules/
+design/**/scratch/

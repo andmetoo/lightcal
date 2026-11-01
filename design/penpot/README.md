@@ -33,15 +33,18 @@ See [the design specification](../README.md) for the final concept and review ev
 | [local-client.mjs](local-client.mjs) | Small client for the configured MCP server; no stored credential |
 | [render-icons.mjs](render-icons.mjs) | Reproducible SVG-to-PNG assets and icon review sheet |
 
-`design.js`, `pages.js`, `verify.js` and `manifest.json` are historical generation
-sources for the earlier 39-board design. They do not describe the current UI.
+The generation scripts for the earlier 39-board design were removed before the
+public release; they remain in Git history and do not describe the current UI.
+
+These scripts are maintainer tooling for the Penpot file. They are not needed to
+build or run the application, and the Penpot file itself is the editable source.
 
 ## Connection and execution
 
-The preferred connection is the configured Penpot MCP tool. If the host has not
-exposed that tool, `local-client.mjs` reads `PENPOT_MCP_URL`, or the owner's
-`mcp_servers.penpot_local.url` from the local Codex configuration. It does not
-print that URL. Never copy a credential into source, documentation or logs.
+The preferred connection is the configured Penpot MCP tool (see `.cursor/mcp.json`
+and `PENPOT_MCP_USER_TOKEN` in `.env.example`). Otherwise `local-client.mjs` reads
+the endpoint from the `PENPOT_MCP_URL` environment variable. It does not print
+that URL. Never copy a credential into source, documentation or logs.
 
 Open the file in Penpot and connect its MCP plugin before running scripts.
 Read the MCP high-level overview and relevant API documentation before editing.

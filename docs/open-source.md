@@ -26,7 +26,7 @@ Use original icons and layouts. Record third-party fonts, icons, snippets, and d
 
 ### Third-party notices and bundled assets
 
-- **Inter Font**: `crates/lightcal/assets/fonts/Inter.ttf` is licensed under the SIL Open Font License, Version 1.1 (Copyright 2016-2024 The Inter Project Authors, Rasmus Andersson). License text is preserved in `crates/lightcal/assets/fonts/OFL.txt`. Used for high-quality dynamic tray icon and application icon rasterization.
+The complete, current list of bundled fonts (Onest, Inter), the NSIS runtime, Radix Colors, and the Cargo dependencies is in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Both bundled font families are under the SIL Open Font License 1.1, with license texts beside the font files. Regenerate the crate table from `Cargo.lock` before each binary release; no automated license check runs in CI yet.
 
 Commit `Cargo.lock` for reproducible application dependencies. Pin the Rust toolchain at implementation setup and pin CI actions to reviewed commit SHAs. Add dependency advisories/license checks when dependencies exist; do not claim a clean audit for an empty manifest set.
 
@@ -36,7 +36,7 @@ Commit `Cargo.lock` for reproducible application dependencies. Pin the Rust tool
 2. Review all dependency licenses and produce third-party notices from the locked dependency set.
 3. Provide corresponding source and necessary build instructions with each GPL binary release. Preserve exact source revisions and any modifications to bundled dependencies.
 4. Decide signing/installer approach, key custody, and recovery with the owner. Never commit signing keys, certificates, tokens, or passwords.
-5. Publish a privacy statement matching actual behavior: manual update checks contact GitHub; About links open GitHub/koona.app in the browser on user action; read-only calendar access uses the Windows provider. No telemetry is planned. Document exactly which permissions and connection metadata are involved.
+5. Publish a privacy statement matching actual behavior: manual update checks contact GitHub; About links open GitHub/koona.app in the browser on user action; read-only calendar access uses the Windows provider, Microsoft Graph, Google Calendar, or a private ICS URL the user adds. No telemetry is planned. Document exactly which permissions and connection metadata are involved.
 6. Build from a reviewed source revision, test on a clean machine, attach checksums and validation evidence, and obtain owner permission to publish.
 
 Automatic update installation, funding infrastructure, and additional contributor bureaucracy are deferred until needed. Manual update checking is required scope.
