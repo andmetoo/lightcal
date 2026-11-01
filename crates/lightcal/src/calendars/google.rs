@@ -241,8 +241,9 @@ pub fn query(
     }
     let refresh = credentials
         .google_refresh_token
-        .as_deref()
+        .clone()
         .ok_or("Connect Google first")?;
+    let refresh = refresh.as_str();
     let response = crate::net::post_form_detailed(
         TOKEN_URL,
         &[
@@ -258,7 +259,13 @@ pub fn query(
         .ok_or("Google returned no calendar access token")?;
     if let Some(rotated) = response["refresh_token"].as_str() {
         credentials.google_refresh_token = Some(rotated.to_string());
-        store.save(credentials)?;
+        // Lock only for this local write; skipped if the account was disconnected meanwhile.
+        crate::secure_store::save_rotated_token(
+            store,
+            crate::secure_store::RefreshProvider::Google,
+            refresh,
+            rotated,
+        )?;
     }
     let calendars = pages(
         "https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=100",

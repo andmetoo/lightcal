@@ -263,6 +263,7 @@ pub fn query(
     credentials: &mut Credentials,
     store: &SecureStore,
     account: &mut MicrosoftAccountState,
+    locale: crate::preferences::LocaleCode,
 ) -> Result<ProviderSnapshot, String> {
     let configured_client = credentials.microsoft_client_id.clone();
     let client_id = configured_client.as_deref().unwrap_or(client_id);
@@ -271,8 +272,9 @@ pub fn query(
     }
     let refresh = credentials
         .microsoft_refresh_token
-        .as_deref()
+        .clone()
         .ok_or("Connect Microsoft first")?;
+    let refresh = refresh.as_str();
     let response = crate::net::post_form_detailed(
         TOKEN_URL,
         &[
@@ -293,7 +295,13 @@ pub fn query(
         .ok_or("Microsoft returned no calendar access token")?;
     if let Some(rotated) = response["refresh_token"].as_str() {
         credentials.microsoft_refresh_token = Some(rotated.to_string());
-        store.save(credentials)?;
+        // Lock only for this local write; skipped if the account was disconnected meanwhile.
+        crate::secure_store::save_rotated_token(
+            store,
+            crate::secure_store::RefreshProvider::Microsoft,
+            refresh,
+            rotated,
+        )?;
     }
     *account = MicrosoftAccountState::Connected { label: None };
     let calendars = graph_pages(
@@ -361,7 +369,7 @@ pub fn query(
         let name = calendar["name"].as_str().unwrap_or("Outlook");
         let skipped = merge_calendar(&mut result, &mut errors, outcome, name, &id, color, hard)?;
         if skipped > 0 {
-            errors.push(format!("{name}: {skipped} events could not be read"));
+            errors.push(super::skipped_events_note(locale, name, skipped));
         }
     }
     if !errors.is_empty() {
