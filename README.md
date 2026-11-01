@@ -1,59 +1,69 @@
+![Lightcal, a small calendar for the Windows tray](assets/readme/banner.png)
+
 # Lightcal
 
-A compact calendar for Windows. Open the month from the tray or the taskbar, without a browser and without a required account.
+Lightcal 1.0.0 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
 
-![Lightcal calendar, light theme](docs/images/calendar-light.png)
+## Highlights
 
-The calendar is 352 by 432 logical pixels. Settings use a separate 448 by 360 window. English is the default, with Russian, Spanish, and Japanese included.
+- **Month at a glance.** Open the 42-day month from the tray or the taskbar. Move by month, jump back with **Today**, or use the keyboard. Week numbers and shaded weekend columns are optional.
+- **Event dots and agenda.** Up to three dots per day in calendar colors. The agenda lists all-day events, time ranges, **Now** and the time to the next event. Click an event for its duration, location and calendar, with **Copy** and, for Google and Outlook, **Open** in the web calendar.
+- **Your calendars, read-only.** Google Calendar, Outlook (Microsoft Graph), private HTTPS ICS links and, optionally, calendars exposed by Windows. Choose which calendars to show. Lightcal never changes an event.
+- **Tray date icon.** The tray shows today's date in Lightcal's coral tile or a mono outline, with weekday or time variants. It does not replace the Windows clock.
+- **Four languages.** English, Russian, Spanish and Japanese, switched without a restart.
+- **Light and dark.** Follows Windows or stays on the theme you choose.
+- **Opt-in extras.** A global shortcut and start with Windows are off until you turn them on.
+- **Updates on request.** **Check for updates** compares your version with the latest GitHub release only when you ask.
 
-![Lightcal calendar, dark theme](docs/images/calendar-dark.png)
+## Screenshots
 
-![Lightcal on Windows](docs/images/windows-calendar.png)
+| Today, light | Today, dark |
+| :---: | :---: |
+| ![Lightcal calendar on Sunday 1 November with four events, light theme](docs/images/calendar-light.png) | ![The same calendar in the dark theme](docs/images/calendar-dark.png) |
+| **Event details** | **Accounts** |
+| ![An expanded event with time, duration, location, calendar, Copy and Open](docs/images/event-details.png) | ![Settings, Accounts tab with a connected Google Calendar and selected calendars](docs/images/settings-accounts.png) |
 
-The Windows capture is the running application on 31 October 2026. The theme renders above are the same window, drawn by the app with sample events.
+![About Lightcal, version 1.0.0, with the update check and project links](docs/images/about.png)
 
-## Download
+These are headless renders of the real Slint UI (`--render-snapshots`) with sample events; no account was used.
 
-Windows builds are published on [GitHub Releases](https://github.com/andmetoo/lightcal/releases). A stable tag `vX.Y.Z` is the version shown in About and in the Windows file properties. Untagged builds keep the Cargo workspace version.
+## Install
 
-Pushing a stable tag attaches the unsigned Windows build to its GitHub release, creating a draft if needed. Existing draft, prerelease, and public releases are supported. The maintainer runs `just sign-draft vX.Y.Z` on Windows with Certum SimplySign Desktop signed in; it replaces the files with signed builds and preserves release visibility. `just publish-release vX.Y.Z` verifies the attached signatures before explicitly publishing/promoting the release. Signed in-place installation needs a build-configured certificate pin and a valid signed `lightcal.exe`; an unsigned build is never installed in place. Without the pin, **Download** opens the newer release page. See [Windows release instructions](docs/windows-installer.md) and [provider and signing setup](docs/provider-setup.md).
+Download Lightcal from [GitHub Releases](https://github.com/andmetoo/lightcal/releases). Each release has:
 
-## Features
+- `lightcal-X.Y.Z-windows-x64-setup.exe`, a per-user installer that needs no administrator rights;
+- `lightcal-vX.Y.Z-windows-x64.zip`, a portable copy;
+- `lightcal.exe`, the application the updater uses.
 
-- Month navigation, Today, and keyboard movement on the 42-day grid.
-- Tray icon modes for the date, weekday and date, or time and date. The icon is Lightcal's; it does not replace the Windows clock.
-- Optional read-only Outlook (Microsoft Graph) and private HTTPS ICS calendars. Event dots are capped at three per day.
-- Startup and a global shortcut stay off until you turn them on.
+Every file has a SHA-256 checksum next to it. Releases are Authenticode-signed on the maintainer's PC, and the signatures are verified before a release is published. CI artifacts are unsigned until then. See [Windows installer](docs/windows-installer.md) for what Setup installs, how signing works and how in-place updates are restricted to signed builds.
 
-## Build
+## Build from source
 
-Rust, [Bun](https://bun.sh) and a current [just](https://github.com/casey/just) (tested with 1.59; script recipes need a recent release) are required.
+You need Rust (stable), [Bun](https://bun.sh) and a current [just](https://github.com/casey/just).
 
 ```powershell
-just check
-just release build
-just installer
+just check            # docs, script tests, rustfmt, Clippy and tests
+just run              # run Lightcal
+just run-demo         # run with sample events only
+just release build    # locked release build
+just installer        # NSIS setup in target/nsis
 ```
 
-`just run-demo` needs a display and uses sample events. Headless renders do not use the network:
+Headless renders need no display and make no network requests:
 
 ```powershell
 cargo run -p lightcal --locked -- --render-snapshots target/snapshots
 ```
 
-Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env` for the public client ids and the update certificate pin.
+Copy [.env.example](.env.example) to the ignored `.env` for the public client ids and the update certificate pin. Signing and publishing are described in [Windows installer](docs/windows-installer.md) and [provider setup](docs/provider-setup.md). The README banner is drawn by `bun scripts/render-banner.ts`.
 
 ## Privacy
 
-Lightcal has no telemetry and no account of its own. It contacts the network only when you act: a manual update check reaches GitHub, an Outlook or Google calendar you connect reaches Microsoft or Google with read-only access, and a private ICS URL you add is fetched from that host. Tokens are kept in the Windows protected store. See [required features](docs/features.md) and [provider setup](docs/provider-setup.md).
-
-## Platforms
-
-Lightcal is Windows only. CI also compiles and tests the portable calendar logic on Linux.
+Lightcal is read-only and has no telemetry. It goes online only when you act: a calendar you connect is read from Google, Microsoft or the ICS host, and an update check reaches GitHub. Sign-in tokens stay in the Windows protected store. See [required features](docs/features.md).
 
 ## Documentation
 
-[Documentation index](docs/README.md) · [Required features](docs/features.md) · [Contributing](CONTRIBUTING.md)
+[Documentation index](docs/README.md) · [Required features](docs/features.md) · [Provider setup](docs/provider-setup.md) · [Windows installer](docs/windows-installer.md) · [Design](design/README.md) · [Contributing](CONTRIBUTING.md)
 
 ## Support
 
