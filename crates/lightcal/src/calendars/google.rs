@@ -363,25 +363,33 @@ fn collect_events(
 }
 
 fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
-    let mut next = Some(raw.to_string());
-    let mut items = Vec::new();
-    for _ in 0..20 {
-        let Some(current) = next.take() else {
-            return Ok(items);
-        };
-        let url = crate::net::https_url(&current)?;
+    collect_pages(raw, |current| {
+        let url = crate::net::https_url(current)?;
         if url.host_str() != Some("www.googleapis.com") || url.port().is_some() {
             return Err("Rejected an unexpected Google Calendar address".into());
         }
-        let (status, bytes) = crate::net::get(&current, Some(token), 8 * 1024 * 1024)?;
+        let (status, bytes) = crate::net::get(current, Some(token), 8 * 1024 * 1024)?;
         if status == 401 {
             return Err("Sign-in expired or consent was revoked; sign in again".into());
         }
         if status != 200 {
             return Err(format!("Google calendar request failed (HTTP {status})"));
         }
-        let page: Value =
-            serde_json::from_slice(&bytes).map_err(|_| "Invalid Google calendar response")?;
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid Google calendar response".into())
+    })
+}
+
+fn collect_pages(
+    raw: &str,
+    mut fetch: impl FnMut(&str) -> Result<Value, String>,
+) -> Result<Vec<Value>, String> {
+    let mut next = Some(raw.to_string());
+    let mut items = Vec::new();
+    for _ in 0..20 {
+        let Some(current) = next.take() else {
+            return Ok(items);
+        };
+        let page = fetch(&current)?;
         let list = page["items"].as_array().cloned().unwrap_or_default();
         items.extend(list);
         if items.len() > 20_000 {
@@ -390,6 +398,9 @@ fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
         next = page["nextPageToken"]
             .as_str()
             .map(|token| with_page_token(&current, token));
+        if next.is_none() {
+            return Ok(items);
+        }
     }
     Err("Google calendar pagination exceeded the supported limit".into())
 }
@@ -492,6 +503,30 @@ mod tests {
         assert!(second.contains("pageToken=b"));
         assert!(second.contains("maxResults=100"));
         assert!(!second.contains("pageToken=a"));
+    }
+
+    #[test]
+    fn pagination_accepts_a_complete_twentieth_page_and_rejects_more() {
+        for complete in [true, false] {
+            let mut fetched = 0;
+            let result = collect_pages("https://www.googleapis.com/calendar/v3/test", |_| {
+                fetched += 1;
+                let mut page = serde_json::json!({"items": [{"id": fetched}]});
+                if fetched < 20 || !complete {
+                    page["nextPageToken"] = serde_json::json!(fetched.to_string());
+                }
+                Ok(page)
+            });
+            assert_eq!(fetched, 20);
+            if complete {
+                assert_eq!(result.unwrap().len(), 20);
+            } else {
+                assert_eq!(
+                    result.unwrap_err(),
+                    "Google calendar pagination exceeded the supported limit"
+                );
+            }
+        }
     }
 
     #[test]
