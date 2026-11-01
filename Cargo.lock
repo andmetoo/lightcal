@@ -2387,7 +2387,7 @@ dependencies = [
  "calendar-core",
  "chrono",
  "chrono-tz",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "ical",
  "muda 0.20.0",
  "rrule",
