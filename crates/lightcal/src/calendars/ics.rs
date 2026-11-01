@@ -9,7 +9,21 @@ use std::{collections::BTreeMap, io::BufReader};
 
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
-pub fn fetch(feed: &IcsSubscription, anchor: LocalDate) -> Result<Vec<CalendarOccurrence>, String> {
+/// Readable occurrences plus how many feed components could not be read.
+#[derive(Debug, Default, PartialEq)]
+pub struct Parsed {
+    pub occurrences: Vec<CalendarOccurrence>,
+    pub skipped: usize,
+}
+
+impl Parsed {
+    /// A short note for the UI error list; `None` when the feed was fully readable.
+    pub fn note(&self, name: &str) -> Option<String> {
+        (self.skipped > 0).then(|| format!("{name}: {} events could not be read", self.skipped))
+    }
+}
+
+pub fn fetch(feed: &IcsSubscription, anchor: LocalDate) -> Result<Parsed, String> {
     let (status, bytes) = crate::net::get(&feed.url, None, MAX_BYTES)?;
     if status != 200 {
         return Err(format!(
@@ -134,11 +148,11 @@ pub fn parse(
     feed: &IcsSubscription,
     anchor: LocalDate,
     display_zone: Tz,
-) -> Result<Vec<CalendarOccurrence>, String> {
+) -> Result<Parsed, String> {
     if text.len() > MAX_BYTES as usize {
         return Err("Calendar exceeds the 8 MiB limit".into());
     }
-    let text = text.strip_prefix('﻿').unwrap_or(text);
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut parser = ical::IcalParser::new(BufReader::new(text.as_bytes()));
     let calendar = parser
         .next()
@@ -165,9 +179,11 @@ pub fn parse(
     };
     let (from, to) = range(anchor);
     let mut groups: BTreeMap<String, Vec<IcalEvent>> = BTreeMap::new();
+    let mut skipped = 0usize;
     for event in calendar.events {
         // An event without a UID cannot be identified; skip it instead of failing the feed.
         let Some(uid) = value(&event, "UID").map(str::to_string) else {
+            skipped += 1;
             continue;
         };
         groups.entry(uid).or_default().push(event);
@@ -179,18 +195,25 @@ pub fn parse(
     };
     let mut output = Vec::new();
     for (uid, events) in groups {
+        // RANGE=THISANDFUTURE/THISANDPRIOR overrides are unsupported. Showing the master alone
+        // would emit instances the override replaces, so drop the whole UID group instead.
+        if events.iter().any(|event| {
+            property(event, "RECURRENCE-ID").is_some_and(|id| param(id, "RANGE").is_some())
+        }) {
+            skipped += events.len();
+            continue;
+        }
         let mut overrides: BTreeMap<i64, &IcalEvent> = BTreeMap::new();
         for event in &events {
             let Some(id) = property(event, "RECURRENCE-ID") else {
                 continue;
             };
-            if param(id, "RANGE").is_some() {
-                continue;
-            }
             let Some(raw) = id.value.as_deref() else {
+                skipped += 1;
                 continue;
             };
             let Ok((date, _)) = stamp(id, raw, floating) else {
+                skipped += 1;
                 continue;
             };
             let key = date.timestamp();
@@ -207,23 +230,29 @@ pub fn parse(
             .max_by_key(|e| sequence(e));
         if let Some(master) = master {
             if value(master, "STATUS") != Some("CANCELLED") {
-                if let Ok((starts, length, all_day)) = instances(master, floating, from, to) {
-                    for start in starts {
-                        if !overrides.contains_key(&start.timestamp()) {
-                            let _ = emit(
-                                &mut output,
-                                feed,
-                                &uid,
-                                master,
-                                start,
-                                length,
-                                all_day,
-                                display_zone,
-                                from,
-                                to,
-                            );
+                match instances(master, floating, from, to) {
+                    Ok((starts, length, all_day)) => {
+                        let mut failed = false;
+                        for start in starts {
+                            if !overrides.contains_key(&start.timestamp()) {
+                                failed |= emit(
+                                    &mut output,
+                                    feed,
+                                    &uid,
+                                    master,
+                                    start,
+                                    length,
+                                    all_day,
+                                    display_zone,
+                                    from,
+                                    to,
+                                )
+                                .is_err();
+                            }
                         }
+                        skipped += usize::from(failed);
                     }
+                    Err(_) => skipped += 1,
                 }
             }
         }
@@ -232,10 +261,12 @@ pub fn parse(
                 continue;
             }
             let Ok((starts, length, all_day)) = instances(event, floating, from, to) else {
+                skipped += 1;
                 continue;
             };
+            let mut failed = false;
             for start in starts {
-                let _ = emit(
+                failed |= emit(
                     &mut output,
                     feed,
                     &uid,
@@ -246,14 +277,19 @@ pub fn parse(
                     display_zone,
                     from,
                     to,
-                );
+                )
+                .is_err();
             }
+            skipped += usize::from(failed);
         }
         if output.len() > 20_000 {
             return Err("Calendar expansion exceeds the supported event limit".into());
         }
     }
-    Ok(output)
+    Ok(Parsed {
+        occurrences: output,
+        skipped,
+    })
 }
 
 fn instances(
@@ -427,6 +463,7 @@ mod tests {
             Tz::UTC,
         )
         .unwrap()
+        .occurrences
     }
     #[test]
     fn folded_text_escaped_summary_and_exclusive_all_day_end() {
@@ -474,7 +511,7 @@ mod tests {
             LocalDate::new(2026, 10, 31).unwrap()
         );
     }
-    fn parse_raw(body: &str) -> Result<Vec<CalendarOccurrence>, String> {
+    fn parse_raw(body: &str) -> Result<Parsed, String> {
         parse(
             body,
             &feed(),
@@ -508,12 +545,35 @@ mod tests {
     #[test]
     fn leading_bom_is_ignored() {
         let body = "\u{feff}BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nSUMMARY:Bom\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        assert_eq!(parse_raw(body).unwrap().len(), 1);
+        assert_eq!(parse_raw(body).unwrap().occurrences.len(), 1);
     }
     #[test]
     fn highest_sequence_override_wins_regardless_of_order() {
         let events = parse_events("BEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nRRULE:FREQ=DAILY;COUNT=1\r\nSUMMARY:Master\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a\r\nRECURRENCE-ID:20261030T090000Z\r\nSEQUENCE:5\r\nDTSTART:20261030T100000Z\r\nSUMMARY:New\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a\r\nRECURRENCE-ID:20261030T090000Z\r\nSEQUENCE:2\r\nDTSTART:20261030T110000Z\r\nSUMMARY:Old\r\nEND:VEVENT\r\n");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].title, "New");
+    }
+    #[test]
+    fn range_override_drops_the_whole_uid_group_and_is_counted() {
+        let body = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:r\r\nDTSTART:20261030T090000Z\r\nRRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Master\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:r\r\nRECURRENCE-ID;RANGE=THISANDFUTURE:20261031T090000Z\r\nDTSTART:20261031T100000Z\r\nSUMMARY:Later\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:20261030T090000Z\r\nSUMMARY:Good\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let parsed = parse_raw(body).unwrap();
+        assert_eq!(parsed.occurrences.len(), 1);
+        assert_eq!(parsed.occurrences[0].title, "Good");
+        assert_eq!(parsed.skipped, 2);
+        assert_eq!(
+            parsed.note("Work").unwrap(),
+            "Work: 2 events could not be read"
+        );
+    }
+    #[test]
+    fn healthy_feed_reports_no_skipped_note() {
+        let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
+        assert_eq!(parsed.skipped, 0);
+        assert!(parsed.note("Work").is_none());
+    }
+    #[test]
+    fn unreadable_events_are_counted() {
+        let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261030T090000Z\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:d\r\nDTSTART:20261030T090000Z\r\nDURATION:garbage\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
+        assert_eq!(parsed.skipped, 2);
     }
 }
