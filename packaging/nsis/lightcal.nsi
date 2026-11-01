@@ -98,6 +98,13 @@ SectionEnd
 Section /o "Desktop shortcut" DesktopShortcut
   CreateShortcut "$DESKTOP\Lightcal.lnk" "$INSTDIR\lightcal.exe"
 SectionEnd
+
+; Runs last. An in-place upgrade keeps the same exe path, so Explorer and
+; taskbar pins would keep showing the previous version's cached icon.
+; SHCNE_ASSOCCHANGED (0x08000000) asks the shell to flush its icon cache.
+Section "-Refresh shell icons"
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+SectionEnd
 !endif
 
 Function un.onInit
