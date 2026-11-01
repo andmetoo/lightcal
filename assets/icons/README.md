@@ -3,8 +3,11 @@
 The current icon design is in [canvas/](canvas/): the coral app tile and the
 live tray date in Color and Mono, from
 [ADR 0011](../../docs/decisions/0011-windows-only-design-refresh.md). They are
-original vector masters; runtime and installer assets have not been replaced
-yet. The earlier Penpot `refined/` set was removed. The supplied artwork below
+original vector masters. The native renderer in
+`crates/lightcal/src/platform/windows/icon.rs` reproduces them at exact pixel
+sizes; it generates `crates/lightcal/assets/lightcal.ico` (16 to 256 px) with
+`cargo run -p lightcal -- --export-app-icon <path>` and review sheets with
+`--export-icon-review <dir>`. The earlier Penpot `refined/` set was removed. The supplied artwork below
 remains preserved for provenance.
 
 The owner-selected artwork is in `better/`. Earlier icon candidates and their generator have been removed at the owner's request. The owner supplied these assets; retain their provenance and confirm redistribution rights before a public binary release.

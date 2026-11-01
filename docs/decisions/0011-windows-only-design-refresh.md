@@ -52,6 +52,19 @@ expensive for a one-person project.
   bold white numeral. Mono is an outline in the taskbar's ink and follows the
   Windows shell theme. Vector masters are in
   [assets/icons/canvas](../../assets/icons/canvas/).
+  *Implementation:* `platform/windows/icon.rs` renders every tray raster
+  (16/20/24/32/40/48/64 px) at its exact size. The tile fills the raster with
+  a 6/32 corner radius and a 6/32 band snapped to whole pixels; Mono uses a
+  2/32 outline (at least 1 px) in `#1A1A1A` on a light shell and white on a
+  dark one. The numeral is Segoe UI Variable Bold (Text optical size) from
+  `%WINDIR%\Fonts`, falling back to Segoe UI Bold and then built-in stroke
+  digits; only the needed outlines stay in memory. Digits are about 0.4 of the
+  raster tall, with one size for all 31 dates at each raster (ADR 0010; the
+  canvas's 19/18 split is not used), sit on a whole-pixel baseline centred
+  below the band, and shrink only if the widest date would cross the margin.
+  The application icon and `crates/lightcal/assets/lightcal.ico` come from the
+  same renderer (`--export-app-icon`); `--export-icon-review <dir>` writes
+  review sheets. The window/taskbar icon stays the dated tile (ADR 0010).
 - **Typography.** Segoe UI Variable replaces Onest: Text for UI copy and the
   tray numeral, Display for large headings, with Segoe UI as the Windows 10
   fallback and Yu Gothic UI supplied by Windows for Japanese. It matches the
