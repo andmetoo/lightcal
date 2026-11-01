@@ -489,15 +489,6 @@ pub fn resolve_data_dir() -> PathBuf {
             return PathBuf::from(appdata).join("Lightcal");
         }
     }
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(home) = env::var("HOME") {
-            return PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("Lightcal");
-        }
-    }
     env::temp_dir().join("lightcal-data")
 }
 

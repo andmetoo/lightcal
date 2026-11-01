@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>About Lightcal</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit}
+.st{--page:#F3F3F3;--card:#FFFFFF;--cardline:#E8E8E8;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--hover:#F0F0F0;--accent:#00796B}
+.st.dark{--page:#191919;--card:#222222;--cardline:#2A2A2A;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2E2E2E;--ctrl:#2A2A2A;--ctrlline:#333333;--ctrlbottom:#3F3F3F;--hover:#2A2A2A;--accent:#53B9AB}
+.cap{width:46px;height:32px;border:0;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.cap.x:hover{background:#C42B1C;color:#FFFFFF}
+.card{background:var(--card);border:1px solid var(--cardline);border-radius:8px}
+.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;gap:6px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box}
+.btn:hover{background:var(--hover)}
+.lk{position:relative;height:40px;padding:0 12px;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;border-radius:6px}
+.lk:hover{background:var(--hover)}
+.lk+.lk::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.lk .d{margin-left:auto;font-size:12px;color:var(--ink2)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lnk{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:4px;padding:2px 4px;margin-left:-4px}
+.lnk:hover{color:var(--ink);background:var(--hover)}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="width: 448px; height: 360px; box-sizing: border-box; background: var(--page); color: var(--ink); font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 32px; display: flex; align-items: center; flex-shrink: 0">
+    <div style="flex-grow: 1; display: flex; align-items: center; gap: 8px; padding-left: 12px">
+      <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+      <span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">About Lightcal</span>
+    </div>
+    <button class="cap x" aria-label="Close"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+  </div>
+  <div style="flex-grow: 1; min-height: 0; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box">
+    <div style="display: flex; align-items: center; gap: 14px; padding: 4px 4px 2px">
+      <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+      <div>
+        <div style="font: 600 20px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.3px">Lightcal</div>
+        <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); margin-top: 2px">Version 0.3.0 · A small calendar for the tray</div>
+      </div>
+    </div>
+    <div class="card" style="height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; box-sizing: border-box">
+      <div>
+        <div style="display: flex; align-items: center; gap: 6px; font: 500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>You’re up to date</div>
+        <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); margin-top: 2px">Lightcal checks only when you ask.</div>
+      </div>
+      <button class="btn">Check now</button>
+    </div>
+    <div class="card" style="padding: 0 4px">
+      <a class="lk" href="https://github.com/andmetoo/lightcal">GitHub repository<span class="d">Source code and issues</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink2)"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+      <a class="lk" href="https://koona.app">koona.app<span class="d">Lightcal on the web</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink2)"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+      <a class="lk" href="#license">GPL-3.0-only<span class="d">License and third-party notices</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink2)"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+    </div>
+  </div>
+  <div style="height: 36px; display: flex; align-items: center; padding: 0 16px; border-top: 1px solid var(--cardline); flex-shrink: 0">
+    <a class="lnk" href="SettingsApp.dc.html">‹ Back to settings</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":448,"height":360}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { rootCls: "st" + ((this.props.theme || "light") === "dark" ? " dark" : "") };
+  }
+}
+</script>
+</body>
+</html>

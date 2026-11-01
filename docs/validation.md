@@ -37,7 +37,7 @@ Hidden mode must not repaint continuously, run a busy timer, or poll the tray. C
 
 Pure Rust unit tests cover date arithmetic and state transitions. Integration tests use a temporary `LIGHTCAL_DATA_DIR`. OS shell and accessibility behavior need real desktop smoke checks; a headless successful build is insufficient. Add regression tests for concrete defects, not snapshots duplicating the implementation.
 
-Current checks: `python scripts/check_docs.py` (Python 3.9 or newer), `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. The documentation check validates local file targets and whitespace, not external URLs, heading anchors, or YAML semantics.
+Current checks: `bun scripts/check-docs.ts`, `bun test scripts`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. The documentation check validates local file targets and whitespace, not external URLs, heading anchors, or YAML semantics.
 
 ## Review regression checks
 
@@ -51,5 +51,4 @@ Current checks: `python scripts/check_docs.py` (Python 3.9 or newer), `cargo fmt
 - A process-owned offscreen native Windows window tests visibility, taskbar-style minimization, restoration, and hidden state. Tray and shortcut toggles read native state rather than a controller visibility flag. Dismissal minimizes the existing window and preserves its HWND for Explorer and DWM.
 - Fixture snapshots preserve `AccessDenied` through provider aggregation and retain other providers' sources and events. Headless settings renders cover denied-only and mixed readable/denied sources in both themes; permission-recovery controls and readable calendar selection must coexist.
 - A long preferences recovery warning wraps on the App tab (up to four lines) and pushes the settings card down; the card shrinks and scrolls instead of overlapping the footer. `warning-app-en-dark/light.png` and `warning-app-ja-dark.png` from `--render-snapshots` cover it. A calendar load that exceeds the 90 second watchdog unlocks the UI with a localized message but stays valid, so a late result is still applied unless a newer request has started.
-- The macOS CI job runs `calendar-core` and `lightcal` library tests, then `scripts/package-dmg.sh` release-builds an unsigned disk image and uploads it. A successful image is not a launch, menu-bar, Dock, signing, notarization, or calendar-provider result.
 - `pwsh -NoProfile -File scripts/test-nsis.ps1` exercises the installer and uninstaller with all real-profile operations compiled out, verifying the payload hash and preservation of unrelated files.

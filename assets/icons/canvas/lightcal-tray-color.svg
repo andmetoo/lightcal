@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"/>
+  <path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"/>
+  <!-- One-digit dates use font-size 19; two-digit dates use 18. -->
+  <text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text>
+</svg>

@@ -1,9 +1,13 @@
-# ADR 0008: Read-only Google Calendar and platform-specific design
+# ADR 0008: Read-only Google Calendar and the October design
 
 Date: 2026-10-31. Status: accepted scope from the owner's design request in chat.
+The design and icon artwork are superseded by
+[ADR 0011](0011-windows-only-design-refresh.md) (2026-11-01). Linked Penpot
+scripts and exports were removed; the Penpot file is archived in
+[design/archive](../../design/archive/).
 
-The owner requested a final design pass in `penpot_local`, Windows first and
-macOS second, a clearer application icon, and future Google Calendar access
+The owner requested a final design pass in `penpot_local`, a clearer
+application icon, and future Google Calendar access
 through OAuth with read-only permissions. This supersedes the Google deferral
 in [ADR 0002](0002-direct-calendars-and-updates.md). It does not authorize Gmail
 mail access, event editing, telemetry, or a UI framework change.
@@ -28,11 +32,6 @@ mail access, event editing, telemetry, or a UI framework change.
   theme independently of the app theme for contrast. Appearance offers color
   or monochrome calendars. Remove weekday/time tray modes
   from the new design; do not suggest replacing the Windows system clock.
-- macOS retains the shared calendar and content hierarchy, with left-side window
-  controls, “Open at login,” macOS shortcut notation and a separate static Dock
-  icon. The owner's later sizing review selects the same calendar badge in the
-  menu bar with Color/Mono choices, superseding date/weekday text labels.
-  Do not duplicate the system clock.
 - Google connects in the system browser. Present the read-only access boundary
   before sign-in. Distinguish disconnected, browser sign-in, cancellation,
   access refusal, connected, expired authorization, transport failure, no
@@ -52,7 +51,7 @@ loads selected calendars. Provider work must
 still use the toolkit-independent core and isolated fixture tests.
 
 The subsequent [calendar status icon decision](0010-windows-calendar-tray-icon.md)
-also updates the native Windows renderer and macOS size specification. It does not imply completion of the
+also updates the native Windows renderer. It does not imply completion of the
 other runtime UI or provider work described by these mockups.
 
 For implementation, request only the Google Calendar permissions needed to
@@ -81,21 +80,14 @@ to 5.3.1 and prepares native Onest 2.001 font files with OFL attribution;
 and font versions from Penpot's unreported hosted binary revision. This is a
 design-font decision; the shipped Slint UI remains a separate implementation.
 
-For macOS the owner then requested a separate system font/SF Pro. Use SF Pro
-Text below 20 px and SF Pro Display at larger design sizes. Native runtime work
-should use the platform system font, without redistributing Apple's font files.
-[The prepared migration](../../design/fonts/macos-system.md) records the
-required Penpot font import; it is not yet an applied or reviewed SF Pro claim.
-
 The owner screenshots inform small-size icon legibility and removal of
 irrelevant Windows controls. Penpot exports are inspected at their actual
 logical dimensions, with geometry and text-bound checks. Exported icon assets
-are examined on light and dark surfaces. Real Windows DPI/shell rendering and
-real macOS/AppKit behavior remain separate release gates; no resource use or
+are examined on light and dark surfaces. Real Windows DPI/shell rendering remains
+a separate release gate; no resource use or
 platform validation result is inferred from a design export.
 
 Primary references reviewed on 2026-10-31:
 
 - [Google Calendar scopes](https://developers.google.com/workspace/calendar/api/auth)
 - [Windows notification area and icon sizes](https://learn.microsoft.com/en-us/windows/win32/shell/notification-area)
-- [Apple menu bar guidance](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar)

@@ -26,14 +26,13 @@ Acceptance:
 3. Normal close hides to tray; Quit exits. Tray recovery after Explorer restart works or a blocking issue is recorded before full UI implementation.
 4. Mixed-DPI positioning, first keyboard navigation, and Narrator discoverability are demonstrated.
 5. Release-build metrics are recorded using [validation](validation.md); pass targets or obtain an explicit adjustment backed by measurements.
-6. A macOS launch/menu-bar probe is recorded; unavailable hardware is an open gate, never a claimed pass.
-7. A separate Windows calendar probe demonstrates read-only enumeration and occurrence queries for the intended packaging model, or records a blocker for owner review before package/distribution decisions.
+6. A separate Windows calendar probe demonstrates read-only enumeration and occurrence queries for the intended packaging model, or records a blocker for owner review before package/distribution decisions.
 
 Gate: record passing integration/performance evidence in ADR 0001 before building the full UI; bring blockers to the owner if the accepted decision needs revision.
 
 ## 2. Approve the visual design (about 1 day)
 
-Use Penpot through MCP for the redesigned compact view and settings (expanded-view designs are historical). Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
+Superseded on 2026-11-01: the design now lives on the owner's design canvas ([ADR 0011](decisions/0011-windows-only-design-refresh.md)). Historically: use Penpot through MCP for the redesigned compact view and settings (expanded-view designs are historical). Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
 
 Acceptance:
 
@@ -82,7 +81,3 @@ Acceptance:
 3. Record signature/SmartScreen status honestly; an unsigned preview is clearly labeled if the owner approves distributing one.
 4. Complete functional, accessibility, and performance evidence is attached to the release candidate.
 5. Owner approves the release before any public binary upload or tag publication.
-
-## 6. macOS product port (after the Windows baseline)
-
-Complete menu-bar activation, appearance, preferences location, accessibility, packaging, signing, and notarization on macOS. Re-run Windows checks throughout. Select macOS versions/architectures from actual testing and publish a separate support matrix. An unsigned review disk image may already be attached to pull requests. Signing, notarization, and a published macOS download remain later gates, and the image does not show that the application launches.

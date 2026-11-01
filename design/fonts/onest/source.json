@@ -65,10 +65,5 @@
     "Onest-Medium.ttf": "ed31ddb7ca730c68c78c5f2b11b8ecb614d3fe8eab68d17ef6f0a163bc6933ad",
     "Onest-SemiBold.ttf": "a2b3339cc901cbd63597df0b9319898c8f1071c30fa87013f1dac480797ce6fb",
     "Onest-Bold.ttf": "f59dfd26f42eaa07bc19c92b3ef17173ab4bb8f21c500d2736a88088fd9a845e"
-  },
-  "penpot": {
-    "family": "Onest",
-    "fontId": "gfont-onest",
-    "binaryRevision": "not exposed by plugin API"
   }
 }

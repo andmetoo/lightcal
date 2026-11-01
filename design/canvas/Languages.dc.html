@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal settings in Russian, Spanish and Japanese</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.st{--page:#F3F3F3;--card:#FFFFFF;--cardline:#E8E8E8;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--track:#EBEBEB;--thumb:#FFFFFF;--accent:#00796B;--toggleoff:#838383;--key:#F0F0F0}
+.st.dark{--page:#191919;--card:#222222;--cardline:#2A2A2A;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2E2E2E;--ctrl:#2A2A2A;--ctrlline:#333333;--ctrlbottom:#3F3F3F;--track:#161616;--thumb:#3A3A3A;--accent:#53B9AB;--toggleoff:#7B7B7B;--key:#363636}
+.win{width:448px;height:360px;box-sizing:border-box;background:var(--page);color:var(--ink);font-family:'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;display:flex;flex-direction:column;overflow:hidden;border-radius:8px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.10)}
+.tab{position:relative;height:40px;padding:0 12px;display:inline-flex;align-items:center;font:500 13px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;color:var(--ink2)}
+.tab.on{color:var(--ink)}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:3px;width:16px;height:3px;margin-left:-8px;border-radius:1.5px;background:var(--accent)}
+.card{background:var(--card);border:1px solid var(--cardline);border-radius:8px}
+.r{position:relative;height:40px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;font:400 13px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;color:var(--ink)}
+.r+.r::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.r>span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:inline-flex;padding:2px;gap:2px;border-radius:8px;background:var(--track);flex-shrink:0}
+.seg span{height:24px;min-width:24px;padding:0 9px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font:500 12px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;color:var(--ink2);box-sizing:border-box}
+.seg.days span{padding:0;width:26px}
+.seg span.on{background:var(--thumb);color:var(--ink);box-shadow:0 0 0 1px var(--ctrlline),0 1px 2px rgba(0,0,0,.08)}
+.dd{height:28px;min-width:128px;padding:0 8px 0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;justify-content:space-between;gap:8px;font:400 13px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;color:var(--ink);box-sizing:border-box;flex-shrink:0}
+.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;font:500 13px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif;color:var(--ink);box-sizing:border-box;white-space:nowrap}
+.kbd{height:20px;min-width:20px;padding:0 6px;border-radius:4px;background:var(--key);box-shadow:inset 0 -1px 0 var(--ctrlbottom);display:inline-flex;align-items:center;justify-content:center;font:600 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink)}
+.tg{position:relative;width:40px;height:20px;border-radius:10px;border:1px solid var(--toggleoff);box-sizing:border-box;flex-shrink:0}
+.tg i{position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:6px;background:var(--toggleoff)}
+.tg.on{background:#00796B;border-color:#00796B}
+.tg.on i{top:2px;left:21px;width:14px;height:14px;border-radius:7px;background:#FFFFFF}
+.cap2{font:600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020}
+.cap3{font:400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;margin-top:2px}
+</style>
+</helmet>
+<div style="width: 1504px; height: 500px; box-sizing: border-box; padding: 40px; background: #FAFAFA; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px; align-content: start">
+  <sc-for list="{{wins}}" as="w" hint-placeholder-count="3">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div><div class="cap2">{{w.name}}</div><div class="cap3">{{w.desc}}</div></div>
+      <div class="{{w.cls}}" lang="{{w.lang}}">
+        <div class="win">
+          <div style="height: 32px; display: flex; align-items: center; gap: 8px; padding-left: 12px; flex-shrink: 0">
+            <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+            <span style="flex-grow: 1; font: 400 12px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif; color: var(--ink2)">{{w.title}}</span>
+            <span style="width: 46px; display: flex; justify-content: center; color: var(--ink2)"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></span>
+          </div>
+          <div style="height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--cardline); flex-shrink: 0">
+            <sc-for list="{{w.tabs}}" as="t" hint-placeholder-count="3"><span class="{{t.cls}}">{{t.label}}</span></sc-for>
+          </div>
+          <div style="flex-grow: 1; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box">
+            <sc-for list="{{w.cards}}" as="c" hint-placeholder-count="2">
+              <div class="card">
+                <sc-for list="{{c.rows}}" as="r" hint-placeholder-count="3">
+                  <div class="r">
+                    <span>{{r.label}}</span>
+                    <sc-if value="{{r.isDd}}" hint-placeholder-val="{{false}}"><span class="dd">{{r.value}}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="color: var(--ink2)"><path d="m6 9 6 6 6-6"></path></svg></span></sc-if>
+                    <sc-if value="{{r.isTg}}" hint-placeholder-val="{{false}}"><span class="{{r.tgCls}}"><i></i></span></sc-if>
+                    <sc-if value="{{r.isSeg}}" hint-placeholder-val="{{false}}"><span class="{{r.segCls}}"><sc-for list="{{r.opts}}" as="o" hint-placeholder-count="3"><span class="{{o.cls}}">{{o.label}}</span></sc-for></span></sc-if>
+                    <sc-if value="{{r.isKbd}}" hint-placeholder-val="{{false}}"><span class="btn" style="padding: 0 6px; gap: 4px"><span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">K</span></span></sc-if>
+                    <sc-if value="{{r.isUpd}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0"><span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif; color: var(--ink2); white-space: nowrap">{{r.value}}</span><span class="btn">{{r.btn}}</span></span></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div style="height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--cardline); flex-shrink: 0; font: 500 12px 'Segoe UI Variable Text','Segoe UI','Yu Gothic UI',sans-serif; color: var(--ink2)">
+            <span>{{w.footL}}</span><span style="font-weight: 400; color: var(--ink3)">{{w.footR}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1504,"height":500}}'>
+function row(label, kind, extra) {
+  var r = { label: label, isDd: kind === "dd", isTg: kind === "tg", isSeg: kind === "seg" || kind === "days", isKbd: kind === "kbd", isUpd: kind === "upd",
+    segCls: kind === "days" ? "seg days" : "seg", tgCls: "tg", value: "", btn: "", opts: [] };
+  for (var k in extra) r[k] = extra[k];
+  return r;
+}
+function opts(list, on) { return list.map(function (l, i) { return { label: l, cls: on.indexOf(i) >= 0 ? "on" : "" }; }); }
+function tabs(list, on) { return list.map(function (l, i) { return { label: l, cls: i === on ? "tab on" : "tab" }; }); }
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      wins: [
+        {
+          name: "Русский · App", desc: "Longest labels. Rows truncate with an ellipsis, never wrap into controls.", cls: "st", lang: "ru",
+          title: "Настройки Lightcal", tabs: tabs(["Календарь", "Аккаунты", "Приложение"], 2),
+          cards: [
+            { rows: [row("Язык", "dd", { value: "Русский" }), row("Запускать с Windows", "tg", { tgCls: "tg on" }), row("Быстрый вызов", "kbd")] },
+            { rows: [row("Значок в трее", "seg", { opts: opts(["Цвет", "Моно"], [0]) }), row("Обновления", "upd", { value: "Последняя версия", btn: "Проверить" })] }
+          ],
+          footL: "О Lightcal", footR: "Версия 0.3.0"
+        },
+        {
+          name: "Español · Calendar", desc: "Weekday letters follow the locale: L M X J V S D.", cls: "st", lang: "es",
+          title: "Ajustes de Lightcal", tabs: tabs(["Calendario", "Cuentas", "Aplicación"], 0),
+          cards: [
+            { rows: [row("Tema", "seg", { opts: opts(["Sistema", "Claro", "Oscuro"], [0]) })] },
+            { rows: [row("La semana empieza el", "dd", { value: "lunes" }), row("Días sombreados", "days", { opts: opts(["L", "M", "X", "J", "V", "S", "D"], [5, 6]) }), row("Números de semana", "tg", { tgCls: "tg on" }), row("Puntos de eventos", "tg", { tgCls: "tg on" })] }
+          ],
+          footL: "Acerca de Lightcal", footR: "Versión 0.3.0"
+        },
+        {
+          name: "日本語 · App · dark", desc: "Noto Sans JP fallback, same row height.", cls: "st dark", lang: "ja",
+          title: "Lightcal の設定", tabs: tabs(["カレンダー", "アカウント", "アプリ"], 2),
+          cards: [
+            { rows: [row("言語", "dd", { value: "日本語" }), row("Windows の起動時に開く", "tg"), row("呼び出しショートカット", "kbd")] },
+            { rows: [row("トレイアイコン", "seg", { opts: opts(["カラー", "モノクロ"], [0]) }), row("アップデート", "upd", { value: "最新です", btn: "今すぐ確認" })] }
+          ],
+          footL: "Lightcal について", footR: "バージョン 0.3.0"
+        }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

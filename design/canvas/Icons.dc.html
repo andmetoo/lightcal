@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal icon system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.h2{font:600 15px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020;margin:0 0 12px}
+.cap{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;text-align:center}
+.t{font:600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020;letter-spacing:-0.2px}
+.p{font:400 13px/1.5 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;margin-top:6px}
+.chip{width:88px;height:72px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.chip.l{background:#F3F3F3;color:#1A1A1A}
+.chip.d{background:#202020;color:#FFFFFF}
+</style>
+</helmet>
+<div style="width: 1200px; height: 760px; box-sizing: border-box; padding: 36px 40px; background: #FFFFFF; font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; gap: 28px">
+  <div>
+    <div style="font: 600 28px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: #202020; letter-spacing: -0.5px">One shape, everywhere</div>
+    <div class="p" style="margin-top: 4px">The coral page with a darker band. It marks Today in the grid, the app in Start, and the date in the tray.</div>
+  </div>
+  <div style="display: flex; gap: 40px; align-items: center">
+    <div style="display: flex; gap: 20px; align-items: center; flex: 1">
+      <svg width="128" height="128" viewBox="0 0 64 64" role="img" aria-label="Lightcal app icon"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+      <div><div class="t">App icon</div><div class="p">Start, taskbar, installer, About.<br>Four days, one of them today. Never changes.</div></div>
+    </div>
+    <div style="display: flex; gap: 20px; align-items: center; flex: 1">
+      <svg width="128" height="128" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing 1"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="19" font-weight="700" fill="#FFFFFF">1</text></svg>
+      <div><div class="t">Live date · Color</div><div class="p">The tray icon is today’s tile.<br>Coral reads on light and dark taskbars alike.</div></div>
+    </div>
+    <div style="display: flex; gap: 20px; align-items: center; flex: 1">
+      <div style="width: 128px; height: 128px; border-radius: 20px; background: #202020; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="88" height="88" viewBox="0 0 32 32" role="img" aria-label="Mono tray icon showing 1"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="19" font-weight="700" fill="currentColor">1</text></svg></div>
+      <div><div class="t">Live date · Mono</div><div class="p">Outline page in the taskbar’s ink.<br>Follows Windows light or dark, not the app theme.</div></div>
+    </div>
+  </div>
+  <div style="height: 1px; background: #F0F0F0"></div>
+  <div style="display: flex; gap: 56px">
+    <div>
+      <div class="h2">App icon at real size</div>
+      <div style="display: flex; gap: 10px">
+        <sc-for list="{{appSizes}}" as="s" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div class="chip l"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg></div>
+            <div class="cap">{{s.label}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div>
+      <div class="h2">Tray date at real size, light and dark taskbar</div>
+      <div style="display: flex; gap: 10px">
+        <sc-for list="{{traySizes}}" as="s" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; gap: 4px">
+              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
+              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
+            </div>
+            <div class="cap">{{s.label}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <div style="display: flex; gap: 56px">
+    <div>
+      <div class="h2">Every date fits</div>
+      <div style="display: flex; gap: 14px; align-items: flex-end">
+        <sc-for list="{{dates}}" as="n" hint-placeholder-count="5">
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center">
+            <svg width="48" height="48" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing {{n.n}}"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
+            <svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
+          </div>
+        </sc-for>
+      </div>
+      <div class="p" style="font-size: 12px; margin-top: 10px">Two-digit dates drop to 18/32 of the tile; one font size per tray size.</div>
+    </div>
+    <div>
+      <div class="h2">Mono follows the taskbar</div>
+      <div style="display: flex; gap: 10px">
+        <sc-for list="{{monoSizes}}" as="s" hint-placeholder-count="2">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; gap: 4px">
+              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
+              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
+            </div>
+            <div class="cap">{{s.label}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <div class="p" style="font-size: 12px; margin-top: auto">Vector specimens. The native tray renderer still needs pixel checks at 100 %, 125 %, 150 % and 200 % on real Windows taskbars before release.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      appSizes: [16, 24, 32, 48].map(function (p) { return { px: p, label: p + " px" }; }),
+      traySizes: [16, 20, 24, 32].map(function (p) { return { px: p, label: p + " px · " + ({16: "100 %", 20: "125 %", 24: "150 %", 32: "200 %"})[p] }; }),
+      monoSizes: [16, 24].map(function (p) { return { px: p, label: p + " px" }; }),
+      dates: ["1", "8", "11", "28", "31"].map(function (n) { return { n: n, fs: n.length > 1 ? 18 : 19 }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

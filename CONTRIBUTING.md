@@ -1,6 +1,6 @@
 # Contributing to Lightcal
 
-Lightcal is a small Rust and Slint calendar for Windows, with a macOS build kept compiling. Start with the [documentation index](docs/README.md) and [required features](docs/features.md). Discuss substantial scope or architecture changes in an issue before implementing them.
+Lightcal is a small Rust and Slint calendar for Windows. Start with the [documentation index](docs/README.md) and [required features](docs/features.md). Discuss substantial scope or architecture changes in an issue before implementing them.
 
 ## Set up
 
@@ -10,7 +10,7 @@ Install Rust (the repository pins the stable channel in `rust-toolchain.toml`), 
 just check
 ```
 
-`just check` runs the documentation check, the release-script tests, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. Windows-only code sits behind `cfg`, so the same gate runs on Linux and macOS.
+`just check` runs the Markdown link check, the release-script tests, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. Windows-only code sits behind `cfg`, so the same gate runs on Linux.
 
 Tests that write preferences must use a temporary `LIGHTCAL_DATA_DIR`. Never touch real autostart, registry, or profile data from an automated test.
 
@@ -40,6 +40,6 @@ Calendar access is read-only. Telemetry, other event providers, and automatic up
 
 By contributing, you agree to license your contributions under GPL-3.0-only. Retain third-party notices and identify the origin and license of imported material in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Do not include credentials, signing material, private profile data, proprietary fonts, or assets without redistribution rights.
 
-The UI design lives in a Penpot file; [design/README.md](design/README.md) explains how the repository relates to it. The Penpot scripts are optional maintainer tooling.
+The UI design lives on the owner's design canvas; [design/README.md](design/README.md) explains how the mirrored sources in `design/canvas/` relate to it.
 
 Follow the [community rules](CODE_OF_CONDUCT.md). Report security issues through [SECURITY.md](SECURITY.md).

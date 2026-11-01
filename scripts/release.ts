@@ -1,31 +1,15 @@
 #!/usr/bin/env bun
 /**
- * Lightcal release build, SimpleSign Desktop signing workflow, and SHA-256 checksum runner.
+ * Lightcal release tooling: build, sign with SimplySign Desktop, package and publish.
  *
- * Commands (via Bun or `just`):
- *   bun run scripts/release.ts build    # Build optimized release binary, stage to target/dist/, write SHA-256
- *   bun run scripts/release.ts sign     # Sign with signtool while SimplySign Desktop is signed in
- *   bun run scripts/release.ts verify   # Verify Authenticode signature and update SHA-256
- *   bun run scripts/release.ts release  # Full pipeline: build -> stage -> signtool -> checksum
- *   bun run scripts/release.ts sign-draft vX.Y.Z      # Download that release, sign on Windows, upload signed files
- *   bun run scripts/release.ts publish-release vX.Y.Z # Publish that draft after the signed assets are attached
+ *   bun run scripts/release.ts build | sign | verify | certificate-info | package | sign-installer | release
+ *   bun run scripts/release.ts sign-draft vX.Y.Z       # sign a CI build and upload it to its release
+ *   bun run scripts/release.ts publish-release vX.Y.Z  # verify the signed assets, then publish
  *
- * Signing uses scripts/sign-windows.ps1. Set SIGN_CERT_SHA1 (thumbprint, not a secret) in
- * .env. SimplySign Desktop must be signed in so that certificate is in the user store.
- * SIGNTOOL overrides the signtool.exe path.
+ * Signing uses scripts/sign-windows.ps1 with SIGN_CERT_SHA1 (a thumbprint, not a secret)
+ * from .env; SimplySign Desktop must be signed in. SIGNTOOL overrides the signtool path.
  */
-
-import { createHash } from "node:crypto";
-import {
-  copyFileSync,
-  existsSync,
-  mkdtempSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import {
   assertChecksum,
@@ -34,300 +18,270 @@ import {
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
-  missingSignedAssets,
   matchingBuildRuns,
-  thumbprintMatches,
+  missingSignedAssets,
   parseReleaseView,
+  parseStableVersion,
   publishedReleaseNotes,
   publishedReleaseTitle,
+  sha256Hex,
   signedUploadPaths,
   signingAsset,
   tagForVersion,
+  thumbprintMatches,
   unsignedAssetsPresent,
   uploadArgs,
-  versionFromCheckout,
   verifyReleaseFiles,
+  versionFromCheckout,
 } from "./release-draft.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-
-for (const name of [".env"]) {
-  const path = join(ROOT, name);
-  if (existsSync(path)) process.loadEnvFile(path);
-}
-
-function stableSemver(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const match = raw.trim().match(/^v?([0-9]+\.[0-9]+\.[0-9]+)$/);
-  return match ? match[1] : null;
-}
-
-function releaseVersion(): string {
-  const explicit = stableSemver(process.env.LIGHTCAL_RELEASE_VERSION);
-  if (explicit) return explicit;
-  if (process.env.GITHUB_REF_TYPE === "tag") {
-    const tagged = stableSemver(process.env.GITHUB_REF_NAME);
-    if (tagged) return tagged;
-  }
-  const described = Bun.spawnSync(["git", "describe", "--tags", "--exact-match"], {
-    cwd: ROOT,
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  if (described.exitCode === 0) {
-    const tagged = stableSemver(new TextDecoder().decode(described.stdout));
-    if (tagged) return tagged;
-  }
-  const manifest = readFileSync(join(ROOT, "Cargo.toml"), "utf8");
-  const version = manifest.match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1];
-  if (!version) throw new Error("Workspace version is missing or invalid");
-  return version;
-}
+const SCRIPTS = join(ROOT, "scripts");
 const BIN_NAME = process.platform === "win32" ? "lightcal.exe" : "lightcal";
 const RELEASE_BIN = join(ROOT, "target", "release", BIN_NAME);
 const DIST_DIR = join(ROOT, "target", "dist");
 const DIST_BIN = join(DIST_DIR, BIN_NAME);
 
-function runCmd(cmd: string[], cwd = ROOT, allowFailure = false): number {
+if (existsSync(join(ROOT, ".env"))) process.loadEnvFile(join(ROOT, ".env"));
+
+// --- process helpers --------------------------------------------------------
+
+const pwsh = (...args: string[]) => ["pwsh", "-NoLogo", "-NoProfile", ...args];
+const psQuote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
+/** Runs a command with inherited output; throws `failure` (or a generic message) on a non-zero exit. */
+function run(cmd: string[], failure?: string): void {
   console.log(`> ${cmd.join(" ")}`);
-  const proc = Bun.spawnSync(cmd, {
-    cwd,
-    env: process.env,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  if (proc.exitCode !== 0 && !allowFailure) {
-    process.exit(proc.exitCode ?? 1);
-  }
-  return proc.exitCode ?? 0;
+  const { exitCode } = Bun.spawnSync(cmd, { cwd: ROOT, stdout: "inherit", stderr: "inherit" });
+  if (exitCode !== 0) throw new Error(failure ?? `${basename(cmd[0])} exited with code ${exitCode}`);
 }
 
-function findSignTool(): string | null {
-  const configured = process.env.SIGNTOOL || process.env.SIGNTOOL_PATH;
-  if (configured && existsSync(configured)) {
-    return configured;
-  }
-  const kitsRoot = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
-  if (existsSync(kitsRoot)) {
-    const versions = readdirSync(kitsRoot)
-      .filter((d) => d.startsWith("10."))
-      .sort()
-      .reverse();
-    for (const ver of versions) {
-      const candidate = join(kitsRoot, ver, "x64", "signtool.exe");
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-  }
-  return Bun.which("signtool") ?? null;
+/** Runs a command and returns its trimmed stdout; stderr becomes the error message. */
+function output(cmd: string[]): string {
+  const proc = Bun.spawnSync(cmd, { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  if (proc.exitCode !== 0) throw new Error(proc.stderr.toString().trim() || `${cmd.join(" ")} failed`);
+  return proc.stdout.toString().trim();
 }
 
-function buildRelease(): void {
-  console.log("=== Building Lightcal release binary ===");
-  runCmd(["cargo", "build", "--release", "--workspace", "--locked"]);
-  if (!existsSync(RELEASE_BIN)) {
-    throw new Error(`Expected release binary not found at ${RELEASE_BIN}`);
+const gh = (...args: string[]) => output(["gh", ...args]);
+const ghRun = (args: string[], failure: string) => run(["gh", ...args], failure);
+
+function ensureGh(): void {
+  let signedIn: boolean;
+  try {
+    signedIn = Bun.spawnSync(["gh", "auth", "status"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" }).exitCode === 0;
+  } catch {
+    throw new Error("gh is not installed. Install GitHub CLI (https://cli.github.com) and run gh auth login.");
   }
+  if (!signedIn) throw new Error("gh is not signed in. Run gh auth login, then repeat this command.");
+}
+
+function requireWindows(message: string): void {
+  if (process.platform !== "win32") throw new Error(message);
+}
+
+// --- build, sign, verify, package ------------------------------------------
+
+let resolvedVersion: string | undefined;
+
+/** Resolves once per process; sign-draft sets LIGHTCAL_RELEASE_VERSION before the first call. */
+function releaseVersion(): string {
+  resolvedVersion ??= resolveReleaseVersion();
+  return resolvedVersion;
+}
+
+function resolveReleaseVersion(): string {
+  const sources = [
+    () => process.env.LIGHTCAL_RELEASE_VERSION,
+    () => (process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined),
+    () => {
+      const described = Bun.spawnSync(["git", "describe", "--tags", "--exact-match"], { cwd: ROOT, stderr: "ignore" });
+      return described.exitCode === 0 ? described.stdout.toString() : undefined;
+    },
+    () => readFileSync(join(ROOT, "Cargo.toml"), "utf8").match(/^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"/m)?.[1],
+  ];
+  for (const source of sources) {
+    const version = parseStableVersion(source());
+    if (version) return version;
+  }
+  throw new Error("Workspace version is missing or invalid");
+}
+
+function stageReleaseBinary(): void {
+  if (!existsSync(RELEASE_BIN)) throw new Error(`Expected release binary not found at ${RELEASE_BIN}`);
   mkdirSync(DIST_DIR, { recursive: true });
   copyFileSync(RELEASE_BIN, DIST_BIN);
 }
 
-function writeChecksums(targetPath = DIST_BIN): void {
-  mkdirSync(DIST_DIR, { recursive: true });
-  if (!existsSync(targetPath) && existsSync(RELEASE_BIN)) {
-    copyFileSync(RELEASE_BIN, DIST_BIN);
-  }
-  const bytes = readFileSync(targetPath);
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  const sizeMiB = (statSync(targetPath).size / (1024 * 1024)).toFixed(2);
-
-  const checksumLine = `${sha256}  ${basename(targetPath)}\n`;
-  writeFileSync(`${targetPath}.sha256`, checksumLine, "utf8");
-
-  console.log(`Staged binary: ${targetPath}`);
-  console.log(`Payload size:  ${sizeMiB} MiB (${bytes.byteLength} bytes)`);
-  console.log(`SHA-256:       ${sha256}`);
+function buildRelease(): void {
+  console.log("=== Building Lightcal release binary ===");
+  run(["cargo", "build", "--release", "--workspace", "--locked"]);
+  stageReleaseBinary();
 }
 
-function signWithSigntool(target = DIST_BIN): void {
-  if (process.platform !== "win32") {
-    throw new Error("signtool can sign only on the maintainer's Windows PC. Run `just sign-draft` there.");
+/** Writes `<file>.sha256` in `sha256sum` format and prints size and hash. */
+function writeChecksum(path: string): void {
+  const bytes = readFileSync(path);
+  const hash = sha256Hex(bytes);
+  writeFileSync(`${path}.sha256`, `${hash}  ${basename(path)}\n`, "utf8");
+  console.log(`${path}\n  ${(bytes.byteLength / 1048576).toFixed(2)} MiB (${bytes.byteLength} bytes), SHA-256 ${hash}`);
+}
+
+function sign(target = DIST_BIN): void {
+  requireWindows("signtool can sign only on the maintainer's Windows PC. Run `just sign-draft` there.");
+  if (target === DIST_BIN && !existsSync(DIST_BIN)) {
+    if (existsSync(RELEASE_BIN)) stageReleaseBinary();
+    else buildRelease();
   }
-  if (!existsSync(target) && target !== DIST_BIN) throw new Error(`Missing signing target: ${target}`);
-  if (!existsSync(target)) {
-    if (existsSync(RELEASE_BIN)) {
-      mkdirSync(DIST_DIR, { recursive: true });
-      copyFileSync(RELEASE_BIN, DIST_BIN);
-    } else {
-      buildRelease();
+  if (!existsSync(target)) throw new Error(`Missing signing target: ${target}`);
+  console.log(`=== Signing ${target} with signtool ===`);
+  run(pwsh("-File", join(SCRIPTS, "sign-windows.ps1"), "-File", target));
+}
+
+/** signtool from SIGNTOOL/SIGNTOOL_PATH, the newest Windows 10/11 SDK, or PATH. */
+function findSignTool(): string | null {
+  const configured = process.env.SIGNTOOL || process.env.SIGNTOOL_PATH;
+  if (configured && existsSync(configured)) return configured;
+  const kits = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
+  if (existsSync(kits)) {
+    const parts = (name: string) => name.split(".").map(Number);
+    const versions = readdirSync(kits).filter((name) => /^10(\.\d+)+$/.test(name)).sort((a, b) => {
+      const [x, y] = [parts(a), parts(b)];
+      for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0);
+      return 0;
+    });
+    for (const version of versions) {
+      const candidate = join(kits, version, "x64", "signtool.exe");
+      if (existsSync(candidate)) return candidate;
     }
   }
-
-  console.log(`=== Signing ${target} with signtool ===`);
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-File", target]);
+  return Bun.which("signtool");
 }
 
-function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requirePin = false): void {
-  if (requirePin && !process.env.SIGN_CERT_SHA1?.trim()) {
+type Signature = { status: string; message: string; thumbprint: string | null; subject: string | null };
+
+/**
+ * Requires a valid Authenticode signature: `signtool verify /pa` when the SDK is present, and
+ * PowerShell's Get-AuthenticodeSignature always. With SIGN_CERT_SHA1 set, the signer must match it.
+ * `writeSum` refreshes the local `.sha256`; publication passes false to leave downloaded files untouched.
+ */
+function verify(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requirePin = false, writeSum = true): void {
+  const pin = process.env.SIGN_CERT_SHA1?.trim();
+  if (requirePin && !pin) {
     throw new Error("SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env so publication can verify the signer.");
   }
-  if (!existsSync(target)) {
-    console.error(`Error: No binary found at ${target}. Run 'just build-release' first.`);
-    process.exit(1);
-  }
+  if (!existsSync(target)) throw new Error(`No binary found at ${target}. Run 'just release build' first.`);
+  console.log(`=== Verifying Authenticode signature on ${target} ===`);
   const signtool = findSignTool();
-  if (signtool) {
-    console.log(`=== Verifying Authenticode signature on ${target} ===`);
-    runCmd([signtool, "verify", "/pa", "/v", target]);
-  } else {
-    console.log("=== Checking Authenticode signature via PowerShell Get-AuthenticodeSignature ===");
-    runCmd([
-      "pwsh",
-      "-NoLogo",
-      "-NoProfile",
-      "-Command",
-      `$sig = Get-AuthenticodeSignature -LiteralPath '${target.replaceAll("'", "''")}'; Format-List -InputObject $sig; if ($sig.Status -ne 'Valid') { exit 1 }`,
-    ]);
+  if (signtool) run([signtool, "verify", "/pa", "/v", target], `signtool rejected the signature of ${target}.`);
+  // One compact JSON object on the last stdout line, so warnings or unusual subjects cannot shift fields.
+  const lines = output(pwsh("-Command",
+    `$sig = Get-AuthenticodeSignature -LiteralPath ${psQuote(target)}; ` +
+    `[ordered]@{ status = "$($sig.Status)"; message = $sig.StatusMessage; ` +
+    `thumbprint = $sig.SignerCertificate.Thumbprint; subject = $sig.SignerCertificate.Subject } | ConvertTo-Json -Compress`,
+  )).split(/\r?\n/);
+  const signature = JSON.parse(lines[lines.length - 1]) as Signature;
+  if (signature.status !== "Valid") throw new Error(`Signature of ${target} is ${signature.status}: ${signature.message}`);
+  if (pin && !thumbprintMatches(pin, signature.thumbprint ?? "")) {
+    throw new Error(`Signer certificate of ${target} does not match SIGN_CERT_SHA1.`);
   }
-  if (process.env.SIGN_CERT_SHA1?.trim()) {
-    const result = Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-Command",
-      `$sig=Get-AuthenticodeSignature -LiteralPath '${target.replaceAll("'", "''")}'; if ($sig.SignerCertificate) { $sig.SignerCertificate.Thumbprint }`,
-    ], { stdout: "pipe", stderr: "inherit" });
-    const actual = result.stdout.toString().trim();
-    if (result.exitCode !== 0 || !thumbprintMatches(process.env.SIGN_CERT_SHA1, actual)) {
-      throw new Error(`Signer certificate of ${target} does not match SIGN_CERT_SHA1.`);
-    }
-  }
-  writeChecksums(target);
+  console.log(`Valid signature by ${signature.subject} (${signature.thumbprint})`);
+  if (writeSum) writeChecksum(target);
 }
 
 function showCertificateFingerprint(): void {
-  verifySignature();
-  const escaped = DIST_BIN.replaceAll("'", "''");
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-Command",
-    `$sig=Get-AuthenticodeSignature -LiteralPath '${escaped}'; $sha=[Security.Cryptography.SHA256]::Create(); [BitConverter]::ToString($sha.ComputeHash($sig.SignerCertificate.RawData)).Replace('-','')`,
-  ]);
+  const target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN;
+  verify(target);
+  run(pwsh("-Command",
+    `$sig = Get-AuthenticodeSignature -LiteralPath ${psQuote(target)}; ` +
+    `[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($sig.SignerCertificate.RawData))`,
+  ));
 }
 
 function packagePortableArchive(): void {
-  if (!existsSync(DIST_BIN)) {
-    buildRelease();
-  }
-  writeChecksums(DIST_BIN);
+  if (!existsSync(DIST_BIN)) buildRelease();
+  writeChecksum(DIST_BIN);
 
-  const version = releaseVersion();
-  const pkgDirName = `lightcal-v${version}-windows-x64`;
-  const pkgStageDir = join(DIST_DIR, pkgDirName);
-  mkdirSync(pkgStageDir, { recursive: true });
-
-  copyFileSync(DIST_BIN, join(pkgStageDir, BIN_NAME));
-  copyFileSync(`${DIST_BIN}.sha256`, join(pkgStageDir, `${BIN_NAME}.sha256`));
-  for (const docFile of ["LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"]) {
-    const src = join(ROOT, docFile);
-    if (existsSync(src)) {
-      copyFileSync(src, join(pkgStageDir, docFile));
-    }
+  const name = `lightcal-v${releaseVersion()}-windows-x64`;
+  const stage = join(DIST_DIR, name);
+  mkdirSync(stage, { recursive: true });
+  for (const file of [DIST_BIN, `${DIST_BIN}.sha256`]) copyFileSync(file, join(stage, basename(file)));
+  for (const doc of ["LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"]) {
+    if (existsSync(join(ROOT, doc))) copyFileSync(join(ROOT, doc), join(stage, doc));
   }
 
-  const zipPath = join(DIST_DIR, `${pkgDirName}.zip`);
+  const zip = join(DIST_DIR, `${name}.zip`);
   if (process.platform === "win32") {
-    runCmd([
-      "pwsh",
-      "-NoLogo",
-      "-NoProfile",
-      "-Command",
-      `Compress-Archive -Path '${pkgStageDir.replaceAll("'", "''")}\\*' -DestinationPath '${zipPath.replaceAll("'", "''")}' -Force`,
-    ]);
+    run(pwsh("-Command", `Compress-Archive -Path ${psQuote(`${stage}\\*`)} -DestinationPath ${psQuote(zip)} -Force`));
   }
-  if (existsSync(zipPath)) {
-    const zipBytes = readFileSync(zipPath);
-    const zipSha = createHash("sha256").update(zipBytes).digest("hex");
-    writeFileSync(`${zipPath}.sha256`, `${zipSha}  ${pkgDirName}.zip\n`, "utf8");
-    console.log(`Portable archive: ${zipPath}`);
-    console.log(`Archive SHA-256:  ${zipSha}`);
-  }
+  if (existsSync(zip)) writeChecksum(zip);
 }
 
 function signInstaller(): void {
-  verifySignature(DIST_BIN);
+  verify(DIST_BIN);
   const version = releaseVersion();
-  runCmd([
-    "pwsh",
-    "-NoLogo",
-    "-NoProfile",
-    "-File",
-    "scripts/package-nsis.ps1",
-    "-SkipBuild",
-    "-RequireSigned",
-    "-BinaryPath",
-    DIST_BIN,
-    "-Version",
-    version,
-  ]);
+  run(pwsh("-File", join(SCRIPTS, "package-nsis.ps1"), "-SkipBuild", "-RequireSigned", "-BinaryPath", DIST_BIN, "-Version", version));
   const setup = join(ROOT, "target", "nsis", `lightcal-${version}-windows-x64-setup.exe`);
-  signWithSigntool(setup);
-  verifySignature(setup);
+  sign(setup);
+  verify(setup);
 }
 
-function textOf(bytes: Uint8Array): string {
-  return new TextDecoder().decode(bytes).trim();
+function assertExecutableVersion(path: string, version: string): void {
+  run(pwsh("-Command",
+    `$actual = [Diagnostics.FileVersionInfo]::GetVersionInfo(${psQuote(path)}).ProductVersion; ` +
+    `if ($actual -ne '${version}') { throw "Payload ProductVersion $actual differs from release version ${version}" }`,
+  ));
 }
 
-function ensureGh(): void {
-  const version = Bun.spawnSync(["gh", "--version"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
-  if (version.exitCode !== 0) {
-    throw new Error("gh is not installed. Install GitHub CLI (https://cli.github.com) and run gh auth login.");
-  }
-  const auth = Bun.spawnSync(["gh", "auth", "status"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
-  if (auth.exitCode !== 0) {
-    throw new Error("gh is not signed in. Run gh auth login, then repeat this command.");
-  }
-}
-
-function ghJson(args: string[]): string {
-  const proc = Bun.spawnSync(["gh", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
-  if (proc.exitCode !== 0) {
-    throw new Error(textOf(proc.stderr) || `gh ${args.join(" ")} failed`);
-  }
-  return textOf(proc.stdout);
-}
-
-function ghInherit(args: string[]): number {
-  console.log(`> gh ${args.join(" ")}`);
-  const proc = Bun.spawnSync(["gh", ...args], {
-    cwd: ROOT,
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  return proc.exitCode ?? 1;
-}
+// --- GitHub draft signing and publication -----------------------------------
 
 function loadRelease(tag: string) {
   try {
-    return parseReleaseView(ghJson(["release", "view", tag, "--json", "isDraft,assets,url"]));
+    return parseReleaseView(gh("release", "view", tag, "--json", "isDraft,assets,url"));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/release not found/i.test(message)) return null;
+    if (/release not found/i.test(String(error))) return null;
     throw error;
   }
 }
 
-function draftVersion(): string {
-  return versionFromCheckout(process.argv[3]);
+function releaseDownloadDirectory(tag: string): string {
+  const parent = join(ROOT, "target", "release-sign", tag);
+  mkdirSync(parent, { recursive: true });
+  return mkdtempSync(join(parent, "download-"));
+}
+
+/** Downloads the executable to sign: the release asset if present, else the matching CI artifact. */
+function downloadSigningInput(view: ReturnType<typeof loadRelease>, tag: string, dir: string): string {
+  let asset: string | undefined;
+  try { asset = view ? signingAsset(view) : undefined; } catch { /* fall back to the CI artifact */ }
+  if (asset) {
+    ghRun(["release", "download", tag, "--dir", dir, "--pattern", asset, "--pattern", `${asset}.sha256`],
+      `Could not download ${asset} from release ${tag}.`);
+    return asset;
+  }
+  const artifact = "lightcal-windows-x64-unsigned";
+  const commit = gh("api", `repos/{owner}/{repo}/commits/${tag}`, "--jq", ".sha");
+  const runs = JSON.parse(gh("run", "list", "--workflow", "windows-build.yml", "--branch", tag,
+    "--event", "push", "--limit", "30", "--json", "databaseId,headSha,status,event"));
+  for (const build of matchingBuildRuns(runs, commit)) {
+    const { artifacts } = JSON.parse(gh("api", `repos/{owner}/{repo}/actions/runs/${build.databaseId}/artifacts`));
+    if (!artifacts.some((item: { name: string; expired: boolean }) => item.name === artifact && !item.expired)) continue;
+    console.log(`Release has no application asset. Downloading CI build ${build.databaseId} for ${tag} (${commit}).`);
+    ghRun(["run", "download", String(build.databaseId), "--name", artifact, "--dir", dir],
+      `Could not download build ${build.databaseId}.`);
+    return signingAsset({ isDraft: true, assets: readdirSync(dir).map((name) => ({ name })) });
+  }
+  throw new Error(`No completed Windows build artifact for ${tag} (${commit}). Wait for the build in GitHub Actions. ` +
+    `To rebuild an existing tag: gh workflow run windows-build.yml --ref main -f release_tag=${tag}`);
 }
 
 function signDraft(): void {
-  if (process.platform !== "win32") {
-    throw new Error(
-      "Signing runs only on the maintainer's Windows PC, with SimplySign Desktop signed in. Run `just sign-draft vX.Y.Z` there.",
-    );
-  }
-  const version = draftVersion();
+  requireWindows("Signing runs only on the maintainer's Windows PC, with SimplySign Desktop signed in. Run `just sign-draft vX.Y.Z` there.");
+  const version = versionFromCheckout(process.argv[3]);
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-Check"]);
+  run(pwsh("-File", join(SCRIPTS, "sign-windows.ps1"), "-Check"));
 
   const dir = releaseDownloadDirectory(tag);
   const asset = downloadSigningInput(view, tag, dir);
@@ -342,165 +296,84 @@ function signDraft(): void {
     copyFileSync(exePath, DIST_BIN);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === "EBUSY" || code === "EPERM") {
-      throw new Error(`${DIST_BIN} is in use. Close Lightcal, then run just sign-draft ${tag} again.`);
-    }
+    if (code === "EBUSY" || code === "EPERM") throw new Error(`${DIST_BIN} is in use. Close Lightcal, then run just sign-draft ${tag} again.`);
     throw error;
   }
   process.env.LIGHTCAL_RELEASE_VERSION = version;
-  signWithSigntool(DIST_BIN);
-  verifySignature(DIST_BIN);
+  sign(DIST_BIN);
+  verify(DIST_BIN);
   packagePortableArchive();
   signInstaller();
 
   const uploads = signedUploadPaths(ROOT, version);
   assertFilesExist(uploads, existsSync);
-  // Only an explicit publish-release command changes visibility.
+  // Only an explicit publish-release changes visibility.
   if (!loadRelease(tag)) {
-    if (ghInherit(["release", "create", tag, "--verify-tag", "--draft", "--title", publishedReleaseTitle(version), "--notes", "Signed Windows build. Awaiting explicit publication."]) !== 0) {
-      throw new Error(`Could not create draft ${tag}; signed files remain in target/dist and target/nsis.`);
-    }
+    ghRun(["release", "create", tag, "--verify-tag", "--draft", "--title", publishedReleaseTitle(version),
+      "--notes", "Signed Windows build. Awaiting explicit publication."],
+      `Could not create draft ${tag}; signed files remain in target/dist and target/nsis.`);
   }
   console.log(`=== Uploading signed files to release ${tag} ===`);
-  if (ghInherit(uploadArgs(tag, uploads)) !== 0) {
-    throw new Error(`Upload to release ${tag} failed. Re-run just sign-draft ${tag} after signing finishes.`);
-  }
+  ghRun(uploadArgs(tag, uploads), `Upload to release ${tag} failed. Re-run just sign-draft ${tag} after signing finishes.`);
   console.log(`Uploaded. Release visibility is unchanged. To publish/promote it: just publish-release ${tag}`);
 }
 
-function downloadSigningInput(view: ReturnType<typeof loadRelease>, tag: string, dir: string): string {
-  if (view) {
-    let asset: string | undefined;
-    try { asset = signingAsset(view); } catch { /* Try the matching CI artifact below. */ }
-    if (asset) {
-      const downloaded = ghInherit([
-        "release", "download", tag, "--dir", dir,
-        "--pattern", asset, "--pattern", `${asset}.sha256`,
-      ]);
-      if (downloaded !== 0) throw new Error(`Could not download ${asset} from release ${tag}.`);
-      return asset;
-    }
-  }
-  const commit = ghJson(["api", `repos/{owner}/{repo}/commits/${tag}`, "--jq", ".sha"]);
-  const runs = JSON.parse(ghJson(["run", "list", "--workflow", "windows-build.yml", "--branch", tag,
-    "--event", "push", "--limit", "30", "--json", "databaseId,headSha,status,event"]));
-  for (const run of matchingBuildRuns(runs, commit)) {
-    const artifacts = JSON.parse(ghJson(["api", `repos/{owner}/{repo}/actions/runs/${run.databaseId}/artifacts`]));
-    if (!artifacts.artifacts.some((artifact: { name: string; expired: boolean }) => artifact.name === "lightcal-windows-x64-unsigned" && !artifact.expired)) continue;
-    console.log(`Release has no application asset. Downloading CI build ${run.databaseId} for ${tag} (${commit}).`);
-    if (ghInherit(["run", "download", String(run.databaseId), "--name", "lightcal-windows-x64-unsigned", "--dir", dir]) !== 0) {
-      throw new Error(`Could not download build ${run.databaseId}.`);
-    }
-    return signingAsset({ isDraft: true, assets: readdirSync(dir).map((name) => ({ name })) });
-  }
-  throw new Error(`No completed Windows build artifact for ${tag} (${commit}). Wait for the build in GitHub Actions. To rebuild an existing tag: gh workflow run windows-build.yml --ref main -f release_tag=${tag}`);
-}
-
-function releaseDownloadDirectory(tag: string): string {
-  const parent = join(ROOT, "target", "release-sign", tag);
-  mkdirSync(parent, { recursive: true });
-  return mkdtempSync(join(parent, "download-"));
-}
-
-function assertExecutableVersion(path: string, version: string): void {
-  const escaped = path.replaceAll("'", "''");
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-Command",
-    `$actual = [Diagnostics.FileVersionInfo]::GetVersionInfo('${escaped}').ProductVersion; if ($actual -ne '${version}') { throw "Payload ProductVersion $actual differs from release version ${version}" }`,
-  ]);
-}
-
-function verifyPortablePayload(archive: string, executable: string): void {
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "verify-portable.ps1"),
-    "-Archive", archive, "-Executable", executable,
-  ]);
-}
-
 function publishDraft(): void {
-  if (process.platform !== "win32") throw new Error("Publish from Windows so Authenticode can be verified before publication.");
-  const version = draftVersion();
+  requireWindows("Publish from Windows so Authenticode can be verified before publication.");
+  const version = versionFromCheckout(process.argv[3]);
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
   assertReleaseExists(view, tag);
   const missing = missingSignedAssets(view, version);
-  if (missing.length > 0) {
-    throw new Error(
-      `Release ${tag} is missing files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`,
-    );
-  }
+  if (missing.length > 0) throw new Error(`Release ${tag} is missing files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`);
+
   const downloaded = releaseDownloadDirectory(tag);
   const names = signedUploadPaths(ROOT, version).map((path) => basename(path));
-  if (ghInherit(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])]) !== 0) {
-    throw new Error(`Could not download release ${tag} for signature verification.`);
-  }
-  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verifySignature(path, true), verifyPortablePayload);
+  ghRun(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])],
+    `Could not download release ${tag} for signature verification.`);
+  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false), (archive, executable) =>
+    run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable)));
   assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
   assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);
+
   for (const name of unsignedAssetsPresent(view, tag)) {
     console.log(`Removing unsigned draft file ${name}`);
-    if (ghInherit(deleteAssetArgs(tag, name)) !== 0) {
-      throw new Error(`Could not remove unsigned file ${name} from ${tag}.`);
-    }
+    ghRun(deleteAssetArgs(tag, name), `Could not remove unsigned file ${name} from ${tag}.`);
   }
   const notesDir = join(ROOT, "target", "draft-sign");
   mkdirSync(notesDir, { recursive: true });
   const notesPath = join(notesDir, "published-notes.md");
   writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
   console.log(`=== Publishing ${tag} ===`);
-  if (ghInherit(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath)) !== 0) {
-    throw new Error(`Could not publish ${tag}. Check the release state in GitHub before retrying.`);
-  }
+  ghRun(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath),
+    `Could not publish ${tag}. Check the release state in GitHub before retrying.`);
   console.log(`Published ${tag}.`);
 }
 
-function runDraftCommand(action: "sign-draft" | "publish-release"): void {
-  try {
-    if (action === "sign-draft") signDraft();
-    else publishDraft();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  }
-}
+// --- entry point -------------------------------------------------------------
+
+const commands: Record<string, () => void> = {
+  build: () => { buildRelease(); writeChecksum(DIST_BIN); },
+  sign: () => { sign(); verify(); },
+  verify: () => verify(),
+  "certificate-info": showCertificateFingerprint,
+  package: packagePortableArchive,
+  "sign-installer": signInstaller,
+  release: () => { buildRelease(); sign(); verify(); packagePortableArchive(); signInstaller(); },
+  "sign-draft": signDraft,
+  "publish-release": publishDraft,
+};
 
 const action = (process.argv[2] || "release").toLowerCase();
-switch (action) {
-  case "build":
-    buildRelease();
-    writeChecksums(DIST_BIN);
-    break;
-  case "sign":
-    signWithSigntool();
-    verifySignature();
-    break;
-  case "verify":
-    verifySignature();
-    break;
-  case "certificate-info":
-    showCertificateFingerprint();
-    break;
-  case "package":
-    packagePortableArchive();
-    break;
-  case "sign-installer":
-    signInstaller();
-    break;
-  case "release":
-    buildRelease();
-    signWithSigntool();
-    verifySignature();
-    packagePortableArchive();
-    signInstaller();
-    break;
-  case "sign-draft":
-    runDraftCommand("sign-draft");
-    break;
-  case "publish-release":
-    runDraftCommand("publish-release");
-    break;
-  default:
-    console.error(
-      `Unknown command '${action}'. Expected: build | sign | verify | certificate-info | package | sign-installer | release | sign-draft | publish-release`
-    );
-    process.exit(1);
+const command = commands[action];
+if (!command) {
+  console.error(`Unknown command '${action}'. Expected: ${Object.keys(commands).join(" | ")}`);
+  process.exit(1);
+}
+try {
+  command();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
 }

@@ -27,12 +27,12 @@ Pushing a stable tag attaches the unsigned Windows build to its GitHub release, 
 
 ## Build
 
-Rust and [just](https://github.com/casey/just) are required.
+Rust, [Bun](https://bun.sh) and a current [just](https://github.com/casey/just) (tested with 1.59; script recipes need a recent release) are required.
 
 ```powershell
 just check
-just build-release
-just build-installer
+just release build
+just installer
 ```
 
 `just run-demo` needs a display and uses sample events. Headless renders do not use the network:
@@ -49,7 +49,7 @@ Lightcal has no telemetry and no account of its own. It contacts the network onl
 
 ## Platforms
 
-Windows is the supported platform. CI also compiles and tests the portable calendar logic on Linux and builds an unsigned macOS disk image for review; macOS is not a supported release yet.
+Lightcal is Windows only. CI also compiles and tests the portable calendar logic on Linux.
 
 ## Documentation
 

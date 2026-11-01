@@ -38,8 +38,6 @@ use slint::{
 use std::cell::RefCell;
 use std::env;
 use std::path::Path;
-#[cfg(target_os = "macos")]
-use std::process::Command;
 use std::rc::Rc;
 
 slint::include_modules!();
@@ -1153,33 +1151,26 @@ fn ctrl_release_url(ui_weak: &slint::Weak<AppWindow>) -> String {
 
 fn open_browser_link(url: &str) {
     if is_allowed_external_link(url) {
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         open_allowed_browser_link(url);
     }
 }
 
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(windows)]
 fn open_allowed_browser_link(url: &str) {
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::UI::Shell::ShellExecuteW;
-        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        let wide_url: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
-        let wide_open: Vec<u16> = "open\0".encode_utf16().collect();
-        unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                wide_open.as_ptr(),
-                wide_url.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                SW_SHOWNORMAL,
-            );
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = Command::new("open").arg(url).spawn();
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let wide_url: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide_open: Vec<u16> = "open\0".encode_utf16().collect();
+    unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            wide_open.as_ptr(),
+            wide_url.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        );
     }
 }
 
@@ -2864,9 +2855,6 @@ fn main() {
     }
     {
         ui.on_open_privacy_settings(move || {
-            #[cfg(target_os = "macos")]
-            open_browser_link(lightcal::updater::MACOS_CALENDAR_PRIVACY_URL);
-            #[cfg(not(target_os = "macos"))]
             open_browser_link("ms-settings:privacy-calendar");
         });
     }
