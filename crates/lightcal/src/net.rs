@@ -40,7 +40,7 @@ pub fn download_release_asset(raw: &str) -> Result<Vec<u8>, String> {
         .build()
         .into();
     let mut response = client
-        .get(raw)
+        .get(uri.as_str())
         .header("User-Agent", "Lightcal updater")
         .call()
         .map_err(|_| "Update download failed or timed out")?;

@@ -31,8 +31,21 @@ pub fn ensure_portable_update_allowed(managed: bool) -> Result<(), String> {
     }
 }
 
+/// Comma-separated list of accepted, normalized certificate fingerprints.
 pub fn certificate_pin() -> Result<String, String> {
-    normalize_pin(option_env!("LIGHTCAL_UPDATE_CERT_SHA256").unwrap_or(""))
+    parse_pins(option_env!("LIGHTCAL_UPDATE_CERT_SHA256").unwrap_or("")).map(|pins| pins.join(","))
+}
+
+/// Parses one or more comma-separated SHA-256 fingerprints; any malformed entry fails closed.
+fn parse_pins(raw: &str) -> Result<Vec<String>, String> {
+    let pins = raw
+        .split(',')
+        .map(normalize_pin)
+        .collect::<Result<Vec<_>, _>>()?;
+    if pins.is_empty() {
+        return normalize_pin("").map(|p| vec![p]);
+    }
+    Ok(pins)
 }
 
 /// Signed in-place installation is only offered when this build has a certificate pin.
@@ -42,7 +55,7 @@ pub fn automatic_install_configured() -> bool {
 fn normalize_pin(raw: &str) -> Result<String, String> {
     let pin = raw.replace([' ', ':'], "").to_ascii_uppercase();
     if pin.len() != 64 || !pin.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err("Automatic installation is unavailable: build with LIGHTCAL_UPDATE_CERT_SHA256 set to the SHA-256 fingerprint of your SimpleSign signing certificate".into());
+        return Err("Automatic installation is unavailable: build with LIGHTCAL_UPDATE_CERT_SHA256 set to the SHA-256 fingerprint(s) of your signing certificate (comma-separated). After a certificate renewal, users may need to download the installer manually".into());
     }
     Ok(pin)
 }
@@ -142,7 +155,7 @@ fn validate_version(version: &str) -> Result<(), String> {
 fn verify_signed_file(file: &Path, version: &str, pin: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     // Arguments travel via process environment, never through interpolated PowerShell code.
-    let script = r#"$ErrorActionPreference='Stop'; $sig=Get-AuthenticodeSignature -LiteralPath $env:LIGHTCAL_VERIFY_FILE; if($sig.Status -ne 'Valid' -or $null -eq $sig.SignerCertificate){exit 11}; $sha=[Security.Cryptography.SHA256]::Create(); $pin=[BitConverter]::ToString($sha.ComputeHash($sig.SignerCertificate.RawData)).Replace('-',''); if($pin -ne $env:LIGHTCAL_VERIFY_PIN){exit 12}; $v=[Diagnostics.FileVersionInfo]::GetVersionInfo($env:LIGHTCAL_VERIFY_FILE).ProductVersion; if($v -ne $env:LIGHTCAL_VERIFY_VERSION){exit 13}"#;
+    let script = r#"$ErrorActionPreference='Stop'; $sig=Get-AuthenticodeSignature -LiteralPath $env:LIGHTCAL_VERIFY_FILE; if($sig.Status -ne 'Valid' -or $null -eq $sig.SignerCertificate){exit 11}; $sha=[Security.Cryptography.SHA256]::Create(); $pin=[BitConverter]::ToString($sha.ComputeHash($sig.SignerCertificate.RawData)).Replace('-',''); if(@($env:LIGHTCAL_VERIFY_PIN.Split(',')) -notcontains $pin){exit 12}; $v=[Diagnostics.FileVersionInfo]::GetVersionInfo($env:LIGHTCAL_VERIFY_FILE).ProductVersion; if($v -ne $env:LIGHTCAL_VERIFY_VERSION){exit 13}"#;
     let powershell = std::env::var_os("SystemRoot")
         .map(PathBuf::from)
         .ok_or("Windows system directory is unavailable")?
@@ -202,9 +215,11 @@ pub fn launch_helper(plan_path: &Path) -> Result<(), String> {
         .arg(plan_path)
         .spawn()
         .map_err(|_| "Could not start updater helper")?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    // The helper's PowerShell verification alone may take up to 30 s.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
+    let ready = plan_path.with_extension("ready");
     loop {
-        if plan_path.with_extension("ready").exists() {
+        if ready.exists() {
             return Ok(());
         }
         if child
@@ -215,6 +230,10 @@ pub fn launch_helper(plan_path: &Path) -> Result<(), String> {
             return Err("Updater helper rejected the plan before installation; the current application remains running".into());
         }
         if std::time::Instant::now() >= deadline {
+            // A late helper must not install silently after we reported failure.
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = std::fs::remove_file(&ready);
             return Err(
                 "Updater helper did not become ready; the current application remains running"
                     .into(),
@@ -428,6 +447,28 @@ mod tests {
             assert!(normalize_pin(pin).is_err());
         }
         assert_eq!(normalize_pin(&"ab".repeat(32)).unwrap(), "AB".repeat(32));
+    }
+    #[test]
+    fn pin_lists_accept_several_fingerprints_and_fail_closed() {
+        let (a, b) = ("ab".repeat(32), "cd".repeat(32));
+        assert_eq!(parse_pins(&a).unwrap(), vec!["AB".repeat(32)]);
+        assert_eq!(
+            parse_pins(&format!("{a},{b}")).unwrap(),
+            vec!["AB".repeat(32), "CD".repeat(32)]
+        );
+        assert_eq!(parse_pins(&format!("{a} , {b}")).unwrap().len(), 2);
+        for bad in [
+            String::new(),
+            ",".into(),
+            format!("{a},"),
+            format!("{a},DEADBEEF"),
+            format!(",{a}"),
+        ] {
+            assert!(parse_pins(&bad).is_err(), "{bad}");
+        }
+    }
+    #[test]
+    fn version_checks_fail_closed() {
         assert!(validate_version(crate::version::VERSION).is_err());
         assert!(validate_version("0.0.0").is_err());
         assert!(validate_version("999.0.0-beta").is_err());
