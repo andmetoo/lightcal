@@ -1,0 +1,41 @@
+// Data structures shared between the Rust controller and the Slint views.
+
+export struct DayCellData {
+    day-number: string,
+    in-month: bool,
+    is-today: bool,
+    is-selected: bool,
+    is-gray-weekday: bool,
+    dot-count: int,
+    dot1: color,
+    dot2: color,
+    dot3: color,
+    accessible-label: string,
+}
+
+export struct MonthViewData {
+    title: string,
+    cells: [DayCellData],
+}
+
+export struct CalendarSourceItem {
+    id: string,
+    name: string,
+    account: string,
+    swatch: color,
+    checked: bool,
+    removable: bool,
+}
+
+export struct WeekdayChipItem {
+    index: int,
+    label: string,
+    active: bool,
+}
+
+export struct AgendaEventItem {
+    time-label: string,
+    title: string,
+    calendar-name: string,
+    swatch: color,
+}
