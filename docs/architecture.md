@@ -19,6 +19,7 @@ crates/
       types.slint     # Structs exchanged with Rust
       calendar.slint  # CalendarView, the compact popup
       settings.slint  # SettingsView with the About page
+    src/calendar_view.rs # Formats the popup header, shaded bands and agenda for Slint
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
 design/             # Design canvas sources, archived Penpot file, review evidence
@@ -26,7 +27,7 @@ design/             # Design canvas sources, archived Penpot file, review eviden
 
 `AppWindow` keeps the whole Rust API and forwards data and callbacks to the view components. `AppWindow.dark-mode` is an alias of `Theme.dark`, so every module reads design tokens from `Theme` instead of taking a dark-mode input. Text uses the Windows system font Segoe UI Variable through `Theme.font-family`; nothing is bundled for the UI.
 
-Start with these two crates. Split platform crates only when dependencies or ownership justify it. Keep OS calls and toolkit types out of `calendar-core`. The core accepts an explicit current date and first-weekday preference, allowing deterministic tests without changing the real system clock.
+Start with these two crates. Split platform crates only when dependencies or ownership justify it. Keep OS calls and toolkit types out of `calendar-core`. The core accepts an explicit current date and first-weekday preference, allowing deterministic tests without changing the real system clock. Occurrences carry local wall-clock start and end minutes, an optional location and an optional provider web link; the core orders a day's agenda and classifies it as past, now or next against an explicit current time.
 
 ## State and lifecycle
 

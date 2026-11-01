@@ -2,6 +2,7 @@
 //! single-instance activation, startup registry adapter, global shortcut binding,
 //! and read-only WinRT calendar provider.
 
+pub mod clipboard;
 pub mod icon;
 pub mod provider;
 pub mod shell;

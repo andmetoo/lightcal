@@ -6,10 +6,10 @@
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem } from "types.slint";
+import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
 
 export { Theme }
-export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem }
+export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
@@ -45,6 +45,32 @@ export component AppWindow inherits Window {
     in property <string> back-to-calendar-text: "← Back to Calendar";
     in property <string> compact-summary-header: "";
     in property <string> sync-status-text: "Synced · 3 calendars active";
+    // Calendar popup refresh (ADR 0011): header, shaded bands and agenda.
+    in property <string> month-name-text: "November";
+    in property <string> year-text: "2026";
+    in property <bool> year-first: false;
+    in property <bool> today-hidden: false;
+    in property <string> prev-month-label: "Previous month";
+    in property <string> next-month-label: "Next month";
+    in property <[ShadedBand]> shaded-bands: [];
+    in-out property <bool> calendar-keyboard-nav: false;
+    in property <string> agenda-title: "";
+    in property <string> agenda-count: "";
+    in property <[AgendaChipRow]> agenda-chip-rows: [];
+    in property <AgendaEventItem> agenda-expanded-chip;
+    in property <bool> agenda-has-expanded-chip: false;
+    in property <[AgendaEventItem]> agenda-events: [];
+    in property <bool> agenda-empty: false;
+    in property <string> agenda-empty-text: "No events";
+    in property <string> agenda-next-text: "";
+    in property <string> agenda-now-label: "Now";
+    in property <string> agenda-copy-label: "Copy";
+    in property <string> agenda-copied-label: "Copied";
+    in property <string> agenda-open-label: "Open";
+    callback toggle-agenda-event(int);
+    callback copy-agenda-event(int);
+    callback open-agenda-event(int);
+    callback go-next-event();
 
     // Settings Localized Strings & State
     in property <string> settings-title-text: "Settings";
@@ -319,18 +345,22 @@ export component AppWindow inherits Window {
                 return accept;
             }
             if (event.text == Key.LeftArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(-1);
                 return accept;
             }
             if (event.text == Key.RightArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(1);
                 return accept;
             }
             if (event.text == Key.UpArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(-7);
                 return accept;
             }
             if (event.text == Key.DownArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(7);
                 return accept;
             }
@@ -356,27 +386,43 @@ export component AppWindow inherits Window {
     if !root.settings-open : CalendarView {
         width: 100%;
         height: 100%;
-        month-title: root.month-title;
-        today-date-line: root.today-date-line;
+        month-name: root.month-name-text;
+        year-text: root.year-text;
+        year-first: root.year-first;
         today-button-label: root.today-button-label;
+        today-hidden: root.today-hidden;
+        prev-label: root.prev-month-label;
+        next-label: root.next-month-label;
+        settings-label: root.settings-title-text;
         show-week-numbers: root.show-week-numbers;
-        gray-columns: root.gray-columns;
-        show-weekday-header: root.show-weekday-header;
-        week-header-label: root.week-header-label;
+        shaded-bands: root.shaded-bands;
         weekday-headers: root.weekday-headers;
         iso-weeks: root.iso-weeks;
         cells: root.cells;
         show-event-dots: root.show-event-dots;
-        selected-date-line: root.selected-date-line;
-        selected-event-summary: root.selected-event-summary;
-        selected-day-events: root.selected-day-events;
-        active-calendars-label: root.active-calendars-label;
-        nav-calendars-text: root.nav-calendars-text;
+        keyboard-nav: root.calendar-keyboard-nav;
+        agenda-title: root.agenda-title;
+        agenda-count: root.agenda-count;
+        chip-rows: root.agenda-chip-rows;
+        expanded-chip: root.agenda-expanded-chip;
+        has-expanded-chip: root.agenda-has-expanded-chip;
+        agenda-events: root.agenda-events;
+        agenda-empty: root.agenda-empty;
+        empty-text: root.agenda-empty-text;
+        next-event-text: root.agenda-next-text;
+        now-label: root.agenda-now-label;
+        copy-label: root.agenda-copy-label;
+        copied-label: root.agenda-copied-label;
+        open-label: root.agenda-open-label;
         prev-month() => { root.prev-month(); }
         next-month() => { root.next-month(); }
         open-settings(arg0) => { root.open-settings(arg0); }
-        return-to-today() => { root.return-to-today(); }
-        select-cell(arg0) => { root.select-cell(arg0); }
+        return-to-today() => { root.calendar-keyboard-nav = false; root.return-to-today(); }
+        select-cell(arg0) => { root.calendar-keyboard-nav = false; root.select-cell(arg0); }
+        toggle-event(arg0) => { root.toggle-agenda-event(arg0); }
+        copy-event(arg0) => { root.copy-agenda-event(arg0); }
+        open-event(arg0) => { root.open-agenda-event(arg0); }
+        go-next-event() => { root.calendar-keyboard-nav = false; root.go-next-event(); }
     }
 
     // ==================== SETTINGS VIEW (448×360) ====================

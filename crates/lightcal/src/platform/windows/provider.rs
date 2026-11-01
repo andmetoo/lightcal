@@ -241,6 +241,11 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                     (end_excl, time)
                 };
 
+                let start_minutes = (!is_all_day)
+                    .then(|| crate::calendars::wall_minutes(local_dt.naive_local()))
+                    .flatten();
+                let end_minutes = start_minutes.map(|start| start + duration_secs / 60);
+
                 let event_id = appt
                     .LocalId()
                     .map(|h| h.to_string_lossy())
@@ -255,6 +260,12 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                     is_all_day,
                     title,
                     time_label,
+                    start_minutes,
+                    end_minutes,
+                    location: crate::calendars::optional_text(
+                        appt.Location().map(|h| h.to_string_lossy()).ok().as_deref(),
+                    ),
+                    web_link: None,
                 });
             }
         }
