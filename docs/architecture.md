@@ -18,7 +18,7 @@ crates/
       controls.slint  # Shared controls (switch, segmented, select, buttons, rows)
       types.slint     # Structs exchanged with Rust
       calendar.slint  # CalendarView, the compact popup
-      settings.slint  # SettingsView with the About page
+      settings.slint  # SettingsView: Calendar, Accounts (states), App, About
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
 design/             # Design canvas sources, archived Penpot file, review evidence
