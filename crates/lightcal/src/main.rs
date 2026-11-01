@@ -92,6 +92,9 @@ pub(crate) struct AppController {
     pub(crate) settings_tab: i32,
     #[cfg(windows)]
     pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
+    /// Tray menu items, relabeled when the language changes.
+    #[cfg(windows)]
+    pub(crate) tray_menu: TrayMenuItems,
     pub(crate) language_dropdown_open: bool,
     pub(crate) theme_dropdown_open: bool,
     pub(crate) first_day_dropdown_open: bool,
@@ -1159,6 +1162,8 @@ impl AppController {
             );
             let _ = tray.set_tooltip(Some(&tip));
         }
+        #[cfg(windows)]
+        self.tray_menu.relabel(locale);
 
         #[cfg(windows)]
         invalidate_taskbar_preview();
@@ -1668,6 +1673,47 @@ fn open_allowed_browser_link(url: &str) {
             std::ptr::null(),
             SW_SHOWNORMAL,
         );
+    }
+}
+
+/// Handles to the tray context-menu items, so a language change can relabel them.
+#[cfg(windows)]
+pub(crate) struct TrayMenuItems {
+    open: muda::MenuItem,
+    today: muda::MenuItem,
+    settings: muda::MenuItem,
+    sponsor: muda::MenuItem,
+    exit: muda::MenuItem,
+    /// Locale the labels currently show; relabeling is skipped while it matches.
+    locale: std::cell::Cell<LocaleCode>,
+}
+
+#[cfg(windows)]
+impl TrayMenuItems {
+    /// Items labeled for `locale`, not yet attached to a menu (tests and headless renders).
+    pub(crate) fn new(locale: LocaleCode) -> Self {
+        let labels = lightcal::i18n::tray_menu_copy(locale);
+        Self {
+            open: muda::MenuItem::new(labels.open, true, None),
+            today: muda::MenuItem::new(labels.today, true, None),
+            settings: muda::MenuItem::new(labels.settings, true, None),
+            sponsor: muda::MenuItem::new(labels.sponsor, true, None),
+            exit: muda::MenuItem::new(labels.exit, true, None),
+            locale: std::cell::Cell::new(locale),
+        }
+    }
+
+    fn relabel(&self, locale: LocaleCode) {
+        if self.locale.get() == locale {
+            return;
+        }
+        let labels = lightcal::i18n::tray_menu_copy(locale);
+        self.open.set_text(labels.open);
+        self.today.set_text(labels.today);
+        self.settings.set_text(labels.settings);
+        self.sponsor.set_text(labels.sponsor);
+        self.exit.set_text(labels.exit);
+        self.locale.set(locale);
     }
 }
 
@@ -2480,7 +2526,15 @@ fn main() {
         });
     });
     #[cfg(windows)]
-    let (tray_icon, open_item_id, today_item_id, settings_item_id, sponsor_item_id, quit_item_id) = {
+    let (
+        tray_icon,
+        tray_menu,
+        open_item_id,
+        today_item_id,
+        settings_item_id,
+        sponsor_item_id,
+        quit_item_id,
+    ) = {
         let now = chrono::Local::now();
         let dark_mode = resolve_dark_mode(prefs.theme);
         let (rgba, icon_size) = render_native_tray_icon(
@@ -2492,11 +2546,12 @@ fn main() {
             dark_mode,
         );
         let menu = muda::Menu::new();
-        let open_item = muda::MenuItem::new("Open Lightcal", true, None);
-        let today_item = muda::MenuItem::new("Today", true, None);
-        let settings_item = muda::MenuItem::new("Settings…", true, None);
-        let sponsor_item = muda::MenuItem::new("♥ Sponsor Lightcal", true, None);
-        let quit_item = muda::MenuItem::new("Exit", true, None);
+        let labels = lightcal::i18n::tray_menu_copy(prefs.locale());
+        let open_item = muda::MenuItem::new(labels.open, true, None);
+        let today_item = muda::MenuItem::new(labels.today, true, None);
+        let settings_item = muda::MenuItem::new(labels.settings, true, None);
+        let sponsor_item = muda::MenuItem::new(labels.sponsor, true, None);
+        let quit_item = muda::MenuItem::new(labels.exit, true, None);
         let open_id = open_item.id().clone();
         let today_id = today_item.id().clone();
         let settings_id = settings_item.id().clone();
@@ -2524,7 +2579,23 @@ fn main() {
                     .build()
                     .ok()
             });
-        (tray, open_id, today_id, settings_id, sponsor_id, quit_id)
+        let items = TrayMenuItems {
+            open: open_item.clone(),
+            today: today_item.clone(),
+            settings: settings_item.clone(),
+            sponsor: sponsor_item.clone(),
+            exit: quit_item.clone(),
+            locale: std::cell::Cell::new(prefs.locale()),
+        };
+        (
+            tray,
+            items,
+            open_id,
+            today_id,
+            settings_id,
+            sponsor_id,
+            quit_id,
+        )
     };
 
     let ctrl = Rc::new(RefCell::new(AppController {
@@ -2551,6 +2622,8 @@ fn main() {
         settings_tab: 0,
         #[cfg(windows)]
         tray_icon,
+        #[cfg(windows)]
+        tray_menu,
         language_dropdown_open: false,
         theme_dropdown_open: false,
         first_day_dropdown_open: false,

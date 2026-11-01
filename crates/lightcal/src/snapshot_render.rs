@@ -75,6 +75,8 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         settings_tab: 0,
         #[cfg(windows)]
         tray_icon: None,
+        #[cfg(windows)]
+        tray_menu: crate::TrayMenuItems::new(LocaleCode::En),
         language_dropdown_open: false,
         theme_dropdown_open: false,
         first_day_dropdown_open: false,

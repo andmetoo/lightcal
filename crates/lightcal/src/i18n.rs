@@ -1071,6 +1071,48 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
     }
 }
 
+/// Tray context-menu labels.
+pub struct TrayMenuCopy {
+    pub open: &'static str,
+    pub today: &'static str,
+    pub settings: &'static str,
+    pub sponsor: &'static str,
+    pub exit: &'static str,
+}
+
+pub fn tray_menu_copy(locale: LocaleCode) -> &'static TrayMenuCopy {
+    match locale {
+        LocaleCode::En => &TrayMenuCopy {
+            open: "Open Lightcal",
+            today: "Today",
+            settings: "Settings…",
+            sponsor: "♥ Sponsor Lightcal",
+            exit: "Exit",
+        },
+        LocaleCode::Ru => &TrayMenuCopy {
+            open: "Открыть Lightcal",
+            today: "Сегодня",
+            settings: "Настройки…",
+            sponsor: "♥ Поддержать Lightcal",
+            exit: "Выход",
+        },
+        LocaleCode::Es => &TrayMenuCopy {
+            open: "Abrir Lightcal",
+            today: "Hoy",
+            settings: "Ajustes…",
+            sponsor: "♥ Patrocinar Lightcal",
+            exit: "Salir",
+        },
+        LocaleCode::Ja => &TrayMenuCopy {
+            open: "Lightcal を開く",
+            today: "今日",
+            settings: "設定…",
+            sponsor: "♥ Lightcal を支援",
+            exit: "終了",
+        },
+    }
+}
+
 /// Duration in hours and minutes: "1 h 30 min", "1 ч 30 мин", "1時間30分".
 pub fn format_duration(locale: LocaleCode, minutes: i64) -> String {
     let minutes = minutes.max(0);
@@ -1152,6 +1194,33 @@ pub fn format_short_date(locale: LocaleCode, date: LocalDate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tray_menu_is_translated_in_all_four_languages() {
+        let en = tray_menu_copy(LocaleCode::En);
+        for locale in [
+            LocaleCode::En,
+            LocaleCode::Ru,
+            LocaleCode::Es,
+            LocaleCode::Ja,
+        ] {
+            let copy = tray_menu_copy(locale);
+            for label in [
+                copy.open,
+                copy.today,
+                copy.settings,
+                copy.sponsor,
+                copy.exit,
+            ] {
+                assert!(!label.trim().is_empty());
+            }
+            assert!(copy.sponsor.starts_with('♥'));
+            if locale != LocaleCode::En {
+                assert_ne!(copy.open, en.open);
+                assert_ne!(copy.exit, en.exit);
+            }
+        }
+    }
 
     #[test]
     fn pluralization_and_date_formatting_all_four_languages() {
