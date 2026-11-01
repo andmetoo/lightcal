@@ -62,6 +62,20 @@ impl TrayIconMode {
         }
     }
 
+    /// True when `value` is a name or alias this build understands (case-insensitive).
+    fn recognises(value: &str) -> bool {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "date_only"
+                | "weekday_and_date"
+                | "weekday"
+                | "weekday-date"
+                | "time_and_date"
+                | "time"
+                | "time-date"
+        )
+    }
+
     pub fn from_str_lossy(value: &str) -> Self {
         match value.trim().to_ascii_lowercase().as_str() {
             "weekday_and_date" | "weekday" | "weekday-date" => Self::WeekdayAndDate,
@@ -78,6 +92,14 @@ impl ThemePreference {
             Self::Light => "light",
             Self::Dark => "dark",
         }
+    }
+
+    /// True when `value` is a name this build understands (case-insensitive).
+    fn recognises(value: &str) -> bool {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "system" | "light" | "dark"
+        )
     }
 
     pub fn from_str_lossy(value: &str) -> Self {
@@ -309,43 +331,148 @@ fn has_schema_version(value: &serde_json::Value) -> bool {
 struct Deviations {
     /// Keys this build does not write.
     unknown_keys: bool,
-    /// Known keys whose raw value differs from what this build would write back.
-    changed_values: bool,
+    /// Known keys whose value could not be understood and fell back to a default.
+    /// Benign canonicalization (case, ordering, duplicates) is not counted.
+    fallback_values: bool,
 }
 
 impl Deviations {
     fn any(&self) -> bool {
-        self.unknown_keys || self.changed_values
+        self.unknown_keys || self.fallback_values
+    }
+}
+
+/// True when `raw` differs from `canonical` only by normalization that loses nothing.
+fn is_benign_normalization(
+    key: &str,
+    raw: &serde_json::Value,
+    canonical: &serde_json::Value,
+) -> bool {
+    match key {
+        "theme" => raw.as_str().is_some_and(ThemePreference::recognises),
+        "tray_icon_mode" => raw.as_str().is_some_and(TrayIconMode::recognises),
+        "selected_calendar_ids" => match (raw.as_array(), canonical.as_array()) {
+            (Some(raw), Some(canonical)) => {
+                let raw: BTreeSet<_> = raw.iter().map(|item| item.as_str()).collect();
+                let canonical: BTreeSet<_> = canonical.iter().map(|item| item.as_str()).collect();
+                !raw.contains(&None) && raw == canonical
+            }
+            _ => false,
+        },
+        _ => false,
     }
 }
 
 /// Compares the raw file against the canonical serialization of what it parsed to.
-/// Keys missing from the file are fine; anything else that differs is not an exact round trip.
+/// Keys missing from the file are fine; unknown keys and values that fell back to a default
+/// are not an exact round trip.
 fn deviations(raw: &serde_json::Value, parsed: &Preferences) -> Deviations {
     let mut result = Deviations::default();
     let (serde_json::Value::Object(file), Ok(serde_json::Value::Object(expected))) =
         (raw, serde_json::to_value(parsed))
     else {
-        result.changed_values = true;
+        result.fallback_values = true;
         return result;
     };
     for (key, value) in file {
         match expected.get(key) {
             None => result.unknown_keys = true,
-            Some(canonical) if canonical != value => result.changed_values = true,
+            Some(canonical)
+                if canonical != value && !is_benign_normalization(key, value, canonical) =>
+            {
+                result.fallback_values = true;
+            }
             Some(_) => {}
         }
     }
     result
 }
 
+/// Why a load produced a warning; rendered in English by `LoadOutcome::warning`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WarningKind {
+    Unreadable(String),
+    NewerSchema(u64),
+    MissingSchema,
+    ResetValues,
+    Malformed(String),
+}
+
+impl WarningKind {
+    fn message(&self, locale: LocaleCode) -> String {
+        use LocaleCode::{En, Es, Ja, Ru};
+        let n = CURRENT_SCHEMA_VERSION;
+        match (self, locale) {
+            (Self::Unreadable(e), En) => format!("Could not read preferences file: {e}"),
+            (Self::Unreadable(e), Ru) => format!("Не удалось прочитать файл настроек: {e}"),
+            (Self::Unreadable(e), Es) => {
+                format!("No se pudo leer el archivo de preferencias: {e}")
+            }
+            (Self::Unreadable(e), Ja) => format!("設定ファイルを読み込めませんでした: {e}"),
+            (Self::NewerSchema(v), En) => format!(
+                "Preferences schema v{v} is newer than supported v{n}; the original file is kept and safe defaults were loaded."
+            ),
+            (Self::NewerSchema(v), Ru) => format!(
+                "Схема настроек v{v} новее поддерживаемой v{n}; исходный файл сохранён, загружены безопасные значения по умолчанию."
+            ),
+            (Self::NewerSchema(v), Es) => format!(
+                "El esquema de preferencias v{v} es más reciente que el compatible v{n}; se conserva el archivo original y se cargaron valores predeterminados seguros."
+            ),
+            (Self::NewerSchema(v), Ja) => format!(
+                "設定のスキーマ v{v} は対応バージョン v{n} より新しいため、元のファイルは保持し、安全な既定値を読み込みました。"
+            ),
+            (Self::MissingSchema, En) => "Preferences file has no schema_version; a copy is kept and safe defaults were loaded.".into(),
+            (Self::MissingSchema, Ru) => "В файле настроек нет schema_version; копия сохранена, загружены безопасные значения по умолчанию.".into(),
+            (Self::MissingSchema, Es) => "El archivo de preferencias no tiene schema_version; se conserva una copia y se cargaron valores predeterminados seguros.".into(),
+            (Self::MissingSchema, Ja) => "設定ファイルに schema_version がないため、コピーを保持し、安全な既定値を読み込みました。".into(),
+            (Self::ResetValues, En) => "Some settings were not recognised and were reset; the original file is kept.".into(),
+            (Self::ResetValues, Ru) => "Некоторые настройки не распознаны и сброшены; исходный файл сохранён.".into(),
+            (Self::ResetValues, Es) => "Algunos ajustes no se reconocieron y se restablecieron; se conserva el archivo original.".into(),
+            (Self::ResetValues, Ja) => "認識できない設定があったため初期値に戻しました。元のファイルは保持されています。".into(),
+            (Self::Malformed(e), En) => format!(
+                "Malformed preferences file ({e}); a copy is kept and safe defaults were loaded."
+            ),
+            (Self::Malformed(e), Ru) => format!(
+                "Файл настроек повреждён ({e}); копия сохранена, загружены безопасные значения по умолчанию."
+            ),
+            (Self::Malformed(e), Es) => format!(
+                "Archivo de preferencias dañado ({e}); se conserva una copia y se cargaron valores predeterminados seguros."
+            ),
+            (Self::Malformed(e), Ja) => format!(
+                "設定ファイルが壊れています ({e})。コピーを保持し、安全な既定値を読み込みました。"
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadOutcome {
     pub preferences: Preferences,
+    /// English warning text, kept for compatibility; see `localized_warning`.
     pub warning: Option<String>,
+    warning_kind: Option<WarningKind>,
     /// When a malformed or newer schema file was encountered, atomic saves must not
     /// silently clobber the user's original `preferences.json` unless explicitly updated.
     pub recovered_from_error: bool,
+}
+
+impl LoadOutcome {
+    fn new(preferences: Preferences, kind: Option<WarningKind>, recovered: bool) -> Self {
+        Self {
+            preferences,
+            warning: kind.as_ref().map(|kind| kind.message(LocaleCode::En)),
+            warning_kind: kind,
+            recovered_from_error: recovered,
+        }
+    }
+
+    /// The same warning in the language of the loaded preferences. Detail text from the
+    /// parser or the OS stays untranslated.
+    pub fn localized_warning(&self) -> Option<String> {
+        self.warning_kind
+            .as_ref()
+            .map(|kind| kind.message(self.preferences.locale()))
+    }
 }
 
 /// Resolves the writable data directory, honoring `LIGHTCAL_DATA_DIR` first.
@@ -460,21 +587,17 @@ impl PreferencesStore {
     pub fn load(&self) -> LoadOutcome {
         let path = self.file_path();
         if !path.exists() {
-            return LoadOutcome {
-                preferences: Preferences::default(),
-                warning: None,
-                recovered_from_error: false,
-            };
+            return LoadOutcome::new(Preferences::default(), None, false);
         }
 
         let raw = match fs::read_to_string(&path) {
             Ok(s) => s,
             Err(err) => {
-                return LoadOutcome {
-                    preferences: Preferences::default(),
-                    warning: Some(format!("Could not read preferences file: {err}")),
-                    recovered_from_error: true,
-                };
+                return LoadOutcome::new(
+                    Preferences::default(),
+                    Some(WarningKind::Unreadable(err.to_string())),
+                    true,
+                );
             }
         };
 
@@ -487,54 +610,40 @@ impl PreferencesStore {
             .and_then(|v| v.as_u64())
         {
             if ver > CURRENT_SCHEMA_VERSION as u64 {
-                return LoadOutcome {
-                    preferences: self.load_last_good_or_default(),
-                    warning: Some(format!(
-                        "Preferences schema v{ver} is newer than supported v{CURRENT_SCHEMA_VERSION}; the original file is kept and safe defaults were loaded."
-                    )),
-                    recovered_from_error: true,
-                };
+                return LoadOutcome::new(
+                    self.load_last_good_or_default(),
+                    Some(WarningKind::NewerSchema(ver)),
+                    true,
+                );
             }
         }
 
         // A JSON document without `schema_version` is not a preferences file (for example `{}`).
         if value.as_ref().is_some_and(|val| !has_schema_version(val)) {
-            return LoadOutcome {
-                preferences: self.load_last_good_or_default(),
-                warning: Some(
-                    "Preferences file has no schema_version; a copy is kept and safe defaults were loaded."
-                        .to_string(),
-                ),
-                recovered_from_error: true,
-            };
+            return LoadOutcome::new(
+                self.load_last_good_or_default(),
+                Some(WarningKind::MissingSchema),
+                true,
+            );
         }
 
         match serde_json::from_str::<Preferences>(&raw) {
             Ok(mut prefs) => {
-                let changed = value
+                let fell_back = value
                     .as_ref()
-                    .is_some_and(|val| deviations(val, &prefs).changed_values);
+                    .is_some_and(|val| deviations(val, &prefs).fallback_values);
                 // Normalize language code to supported set (fallback to "en").
                 prefs.language = LocaleCode::from_code_or_default(&prefs.language)
                     .as_str()
                     .to_string();
                 prefs.gray_weekdays_bits &= 0b0111_1111;
-                LoadOutcome {
-                    preferences: prefs,
-                    warning: changed.then(|| {
-                        "Some settings were not recognised and were reset; the original file is kept."
-                            .to_string()
-                    }),
-                    recovered_from_error: false,
-                }
+                LoadOutcome::new(prefs, fell_back.then_some(WarningKind::ResetValues), false)
             }
-            Err(err) => LoadOutcome {
-                preferences: self.load_last_good_or_default(),
-                warning: Some(format!(
-                    "Malformed preferences file ({err}); a copy is kept and safe defaults were loaded."
-                )),
-                recovered_from_error: true,
-            },
+            Err(err) => LoadOutcome::new(
+                self.load_last_good_or_default(),
+                Some(WarningKind::Malformed(err.to_string())),
+                true,
+            ),
         }
     }
 
@@ -893,6 +1002,91 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
                 .any(|path| fs::read_to_string(path).unwrap() == original));
         }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_alias_and_unsorted_ids_load_without_warning_or_preservation() {
+        let dir = unique_temp_dir("benign");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(
+            store.file_path(),
+            r#"{"schema_version": 1, "theme": "Dark", "tray_icon_mode": "WEEKDAY", "selected_calendar_ids": ["b", "a", "b"]}"#,
+        )
+        .unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_none());
+        assert!(loaded.localized_warning().is_none());
+        assert_eq!(loaded.preferences.theme, ThemePreference::Dark);
+        assert_eq!(loaded.preferences.selected_calendar_ids.len(), 2);
+        store.save(&loaded.preferences).unwrap();
+        assert!(store.preserved_files().is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn wrong_typed_enum_value_warns() {
+        let dir = unique_temp_dir("wrong_type");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(
+            store.file_path(),
+            r#"{"schema_version": 1, "theme": 3, "selected_calendar_ids": ["a"]}"#,
+        )
+        .unwrap();
+        assert!(store.load().warning.is_some());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn localized_warning_follows_the_loaded_language() {
+        let dir = unique_temp_dir("localized_warning");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        for (code, expected) in [
+            ("ru", "Некоторые настройки"),
+            ("es", "Algunos ajustes"),
+            ("ja", "認識できない設定"),
+            ("en", "Some settings were not recognised"),
+        ] {
+            fs::write(
+                store.file_path(),
+                format!(r#"{{"schema_version": 1, "language": "{code}", "theme": "sepia"}}"#),
+            )
+            .unwrap();
+            let loaded = store.load();
+            assert!(loaded.localized_warning().unwrap().starts_with(expected));
+            assert!(loaded
+                .warning
+                .as_deref()
+                .unwrap()
+                .starts_with("Some settings were not recognised"));
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_warning_kind_has_text_in_every_locale() {
+        let kinds = [
+            WarningKind::Unreadable("e".into()),
+            WarningKind::NewerSchema(99),
+            WarningKind::MissingSchema,
+            WarningKind::ResetValues,
+            WarningKind::Malformed("e".into()),
+        ];
+        for kind in &kinds {
+            let english = kind.message(LocaleCode::En);
+            for locale in LocaleCode::ALL {
+                let text = kind.message(locale);
+                assert!(!text.is_empty());
+                if locale != LocaleCode::En {
+                    assert_ne!(text, english);
+                }
+            }
+        }
+        assert!(WarningKind::NewerSchema(99)
+            .message(LocaleCode::Ru)
+            .contains("v99"));
     }
 
     #[test]

@@ -20,10 +20,13 @@ impl SignInGate {
         }
     }
 
+    /// The state is two plain values that are never left half-updated, so a poisoned lock
+    /// (a panic elsewhere) is recovered instead of disabling sign-in for the session.
     fn state(&self) -> Result<MutexGuard<'_, State>, String> {
-        self.state
+        Ok(self
+            .state
             .lock()
-            .map_err(|_| "Sign-in state is unavailable".into())
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
     }
 
     pub fn begin(&self) -> Result<u64, String> {
@@ -110,6 +113,23 @@ mod tests {
         gate.commit(generation, || Ok(())).unwrap();
         assert!(!gate.cancel().unwrap());
         assert!(gate.is_current(generation));
+    }
+
+    #[test]
+    fn gate_recovers_after_its_lock_is_poisoned() {
+        let gate = Arc::new(SignInGate::new());
+        let poisoner = gate.clone();
+        let handle = std::thread::spawn(move || {
+            let generation = poisoner.begin().unwrap();
+            let _ = poisoner.commit(generation, || -> Result<(), String> {
+                panic!("simulated panic while the gate is locked")
+            });
+        });
+        assert!(handle.join().is_err());
+        assert!(gate.state.is_poisoned());
+        let generation = gate.begin().unwrap();
+        assert!(gate.is_current(generation));
+        assert!(gate.cancel().unwrap());
     }
 
     #[test]

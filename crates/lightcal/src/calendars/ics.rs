@@ -18,8 +18,8 @@ pub struct Parsed {
 
 impl Parsed {
     /// A short note for the UI error list; `None` when the feed was fully readable.
-    pub fn note(&self, name: &str) -> Option<String> {
-        (self.skipped > 0).then(|| format!("{name}: {} events could not be read", self.skipped))
+    pub fn note(&self, locale: crate::preferences::LocaleCode, name: &str) -> Option<String> {
+        (self.skipped > 0).then(|| super::skipped_events_note(locale, name, self.skipped))
     }
 }
 
@@ -447,6 +447,7 @@ fn emit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::preferences::LocaleCode;
     fn feed() -> IcsSubscription {
         IcsSubscription {
             id: "ics:test".into(),
@@ -561,7 +562,7 @@ mod tests {
         assert_eq!(parsed.occurrences[0].title, "Good");
         assert_eq!(parsed.skipped, 2);
         assert_eq!(
-            parsed.note("Work").unwrap(),
+            parsed.note(LocaleCode::En, "Work").unwrap(),
             "Work: 2 events could not be read"
         );
     }
@@ -569,7 +570,7 @@ mod tests {
     fn healthy_feed_reports_no_skipped_note() {
         let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
         assert_eq!(parsed.skipped, 0);
-        assert!(parsed.note("Work").is_none());
+        assert!(parsed.note(LocaleCode::En, "Work").is_none());
     }
     #[test]
     fn unreadable_events_are_counted() {
