@@ -1019,6 +1019,136 @@ pub fn format_update_status(
     }
 }
 
+/// Calendar popup agenda copy (ADR 0011). "All day" and "Today" come from [`UiStrings`].
+pub struct AgendaCopy {
+    pub now: &'static str,
+    pub next_prefix: &'static str,
+    pub copy: &'static str,
+    pub copied: &'static str,
+    pub open: &'static str,
+    pub prev_month: &'static str,
+    pub next_month: &'static str,
+}
+
+pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
+    match locale {
+        LocaleCode::En => &AgendaCopy {
+            now: "Now",
+            next_prefix: "Next:",
+            copy: "Copy",
+            copied: "Copied",
+            open: "Open",
+            prev_month: "Previous month",
+            next_month: "Next month",
+        },
+        LocaleCode::Ru => &AgendaCopy {
+            now: "Сейчас",
+            next_prefix: "Далее:",
+            copy: "Копировать",
+            copied: "Скопировано",
+            open: "Открыть",
+            prev_month: "Предыдущий месяц",
+            next_month: "Следующий месяц",
+        },
+        LocaleCode::Es => &AgendaCopy {
+            now: "Ahora",
+            next_prefix: "Siguiente:",
+            copy: "Copiar",
+            copied: "Copiado",
+            open: "Abrir",
+            prev_month: "Mes anterior",
+            next_month: "Mes siguiente",
+        },
+        LocaleCode::Ja => &AgendaCopy {
+            now: "進行中",
+            next_prefix: "次の予定:",
+            copy: "コピー",
+            copied: "コピーしました",
+            open: "開く",
+            prev_month: "前の月",
+            next_month: "次の月",
+        },
+    }
+}
+
+/// Duration in hours and minutes: "1 h 30 min", "1 ч 30 мин", "1時間30分".
+pub fn format_duration(locale: LocaleCode, minutes: i64) -> String {
+    let minutes = minutes.max(0);
+    let (h, m) = (minutes / 60, minutes % 60);
+    let (hour_unit, minute_unit) = match locale {
+        LocaleCode::En | LocaleCode::Es => (" h", " min"),
+        LocaleCode::Ru => (" ч", " мин"),
+        LocaleCode::Ja => ("時間", "分"),
+    };
+    let separator = if locale == LocaleCode::Ja { "" } else { " " };
+    match (h, m) {
+        (0, m) => format!("{m}{minute_unit}"),
+        (h, 0) => format!("{h}{hour_unit}"),
+        (h, m) => format!("{h}{hour_unit}{separator}{m}{minute_unit}"),
+    }
+}
+
+/// Time until the next event starts: "in 3 h 55 min", "через 3 ч 55 мин", "3時間55分後".
+pub fn format_starts_in(locale: LocaleCode, minutes: i64) -> String {
+    let duration = format_duration(locale, minutes.max(1));
+    match locale {
+        LocaleCode::En => format!("in {duration}"),
+        LocaleCode::Ru => format!("через {duration}"),
+        LocaleCode::Es => format!("en {duration}"),
+        LocaleCode::Ja => format!("{duration}後"),
+    }
+}
+
+/// Short weekday and date for the "Next:" link: "Fri 13 Nov", "Пт, 13 нояб.", "vie, 13 nov", "11月13日 (金)".
+pub fn format_short_date(locale: LocaleCode, date: LocalDate) -> String {
+    let month = (date.month.clamp(1, 12) - 1) as usize;
+    let weekday = date.weekday().monday_index() as usize;
+    match locale {
+        LocaleCode::En => {
+            const WD: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const MO: [&str; 12] = [
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            ];
+            format!("{} {} {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Ru => {
+            const MO: [&str; 12] = [
+                "янв.",
+                "февр.",
+                "мар.",
+                "апр.",
+                "мая",
+                "июн.",
+                "июл.",
+                "авг.",
+                "сент.",
+                "окт.",
+                "нояб.",
+                "дек.",
+            ];
+            format!(
+                "{}, {} {}",
+                weekday_short(locale, date.weekday()),
+                date.day,
+                MO[month]
+            )
+        }
+        LocaleCode::Es => {
+            const WD: [&str; 7] = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+            const MO: [&str; 12] = [
+                "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic",
+            ];
+            format!("{}, {} {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Ja => format!(
+            "{}月{}日 ({})",
+            date.month,
+            date.day,
+            weekday_short(locale, date.weekday())
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1064,6 +1194,37 @@ mod tests {
             format_update_status(LocaleCode::Ru, &up_to_date),
             "Установлена последняя версия (v0.1.0)"
         );
+    }
+
+    #[test]
+    fn agenda_copy_durations_and_short_dates_in_every_language() {
+        let nov13 = LocalDate::new(2026, 11, 13).unwrap();
+        assert_eq!(format_starts_in(LocaleCode::En, 235), "in 3 h 55 min");
+        assert_eq!(format_starts_in(LocaleCode::Ru, 60), "через 1 ч");
+        assert_eq!(format_starts_in(LocaleCode::Es, 5), "en 5 min");
+        assert_eq!(format_starts_in(LocaleCode::Ja, 235), "3時間55分後");
+        assert_eq!(format_duration(LocaleCode::En, 90), "1 h 30 min");
+        assert_eq!(format_short_date(LocaleCode::En, nov13), "Fri 13 Nov");
+        assert_eq!(format_short_date(LocaleCode::Ru, nov13), "Пт, 13 нояб.");
+        assert_eq!(format_short_date(LocaleCode::Es, nov13), "vie, 13 nov");
+        assert_eq!(format_short_date(LocaleCode::Ja, nov13), "11月13日 (金)");
+        for locale in [
+            LocaleCode::En,
+            LocaleCode::Ru,
+            LocaleCode::Es,
+            LocaleCode::Ja,
+        ] {
+            let copy = agenda_copy(locale);
+            for text in [
+                copy.now,
+                copy.next_prefix,
+                copy.copy,
+                copy.copied,
+                copy.open,
+            ] {
+                assert!(!text.is_empty());
+            }
+        }
     }
 
     #[test]

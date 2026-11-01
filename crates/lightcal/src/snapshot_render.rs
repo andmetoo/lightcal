@@ -95,6 +95,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         google_label: String::new(),
         google_error: String::new(),
         ics_error: String::new(),
+        agenda: Default::default(),
     };
 
     let helper = HeadlessPlatform {
@@ -759,6 +760,237 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             )?;
         }
     }
+    render_calendar_boards(&mut ctrl, &ui, &helper, out_dir)?;
     let _ = std::fs::remove_dir_all(&temp_dir);
+    Ok(())
+}
+
+/// Sample month from the design canvas boards (design/canvas/Main.dc.html):
+/// today is Sunday 1 November 2026 at 14:05 with Google calendars.
+pub(crate) fn canvas_month() -> ProviderSnapshot {
+    use calendar_core::{local_minutes, CalendarSource};
+    let sources = [
+        ("google:personal", "Personal", "#D9822B"),
+        ("google:work", "Work", "#3B82C4"),
+        ("google:family", "Family", "#2E9D5B"),
+    ]
+    .map(|(id, name, color)| CalendarSource {
+        id: id.into(),
+        name: name.into(),
+        account_label: "Google Calendar".into(),
+        color_hex: color.into(),
+    });
+    /// Month, day, start and end, title, source index, location.
+    type CanvasEvent<'a> = (
+        u8,
+        u8,
+        Option<(&'a str, &'a str)>,
+        &'a str,
+        usize,
+        Option<&'a str>,
+    );
+    let events: &[CanvasEvent] = &[
+        (10, 27, Some(("09:30", "09:45")), "Standup", 1, None),
+        (10, 29, Some(("12:00", "13:00")), "Lunch with Leo", 0, None),
+        (10, 30, Some(("09:30", "09:45")), "Standup", 1, None),
+        (10, 30, Some(("16:00", "17:00")), "Retro", 1, None),
+        (11, 1, None, "Book fair", 2, None),
+        (
+            11,
+            1,
+            Some(("10:00", "11:00")),
+            "Coffee with Maya",
+            0,
+            Some("Café Lumen"),
+        ),
+        (
+            11,
+            1,
+            Some(("13:30", "15:00")),
+            "Weekend walk",
+            2,
+            Some("Riverside park"),
+        ),
+        (
+            11,
+            1,
+            Some(("18:00", "19:30")),
+            "Dinner at Ana’s",
+            0,
+            Some("Ana’s place"),
+        ),
+        (11, 3, Some(("09:30", "09:45")), "Standup", 1, None),
+        (11, 4, Some(("08:40", "09:20")), "Dentist", 0, None),
+        (11, 4, Some(("11:00", "12:00")), "Sprint planning", 1, None),
+        (11, 6, None, "Release 0.3.1", 1, None),
+        (11, 10, Some(("09:30", "09:45")), "Standup", 1, None),
+        (
+            11,
+            13,
+            Some(("15:00", "16:00")),
+            "Design review",
+            1,
+            Some("Room 4 and video call"),
+        ),
+        (11, 17, Some(("09:30", "09:45")), "Standup", 1, None),
+        (11, 17, Some(("14:00", "14:30")), "1:1 with Sam", 1, None),
+        (11, 17, Some(("19:00", "20:00")), "Gym", 0, None),
+        (11, 19, Some(("19:00", "20:00")), "Gym", 0, None),
+        (11, 21, Some(("20:00", "22:30")), "Concert", 0, None),
+        (11, 24, Some(("09:30", "09:45")), "Standup", 1, None),
+        (11, 26, Some(("10:00", "11:00")), "Sprint review", 1, None),
+        (11, 26, Some(("12:30", "13:30")), "Team lunch", 1, None),
+        (11, 26, Some(("16:30", "17:00")), "School pickup", 2, None),
+        (11, 26, Some(("19:00", "19:30")), "Call Mum", 0, None),
+        (11, 28, None, "Hike", 2, None),
+        (12, 1, Some(("09:30", "09:45")), "Standup", 1, None),
+        (12, 3, Some(("18:00", "19:00")), "Book club", 0, None),
+    ];
+    let minutes = |raw: &str| {
+        let (h, m) = raw.split_once(':').unwrap();
+        h.parse::<u32>().unwrap() * 60 + m.parse::<u32>().unwrap()
+    };
+    let occurrences = events
+        .iter()
+        .enumerate()
+        .map(|(i, &(month, day, time, title, source, location))| {
+            let date = LocalDate::new(2026, month, day).unwrap();
+            let span = time.map(|(start, end)| {
+                (
+                    local_minutes(date, minutes(start)),
+                    local_minutes(date, minutes(end)),
+                )
+            });
+            CalendarOccurrence {
+                source_id: sources[source].id.clone(),
+                event_id: format!("canvas-{i}"),
+                color_hex: sources[source].color_hex.clone(),
+                start_date: date,
+                end_date_exclusive: date.add_days(1),
+                is_all_day: time.is_none(),
+                title: title.into(),
+                time_label: time.map(|(start, _)| start.to_string()).unwrap_or_default(),
+                start_minutes: span.map(|(start, _)| start),
+                end_minutes: span.map(|(_, end)| end),
+                location: location.map(String::from),
+                web_link: Some(format!(
+                    "https://www.google.com/calendar/event?eid=Y2FudmFzLXtp{i}"
+                )),
+            }
+        })
+        .collect();
+    ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::Available,
+        sources: sources.to_vec(),
+        occurrences,
+    }
+}
+
+/// Calendar popup states from the Main, CalendarDetail and CalendarDark boards.
+fn render_calendar_boards(
+    ctrl: &mut AppController,
+    ui: &AppWindow,
+    helper: &HeadlessPlatform,
+    out_dir: &Path,
+) -> std::io::Result<()> {
+    let today = LocalDate::new(2026, 11, 1).unwrap();
+    ctrl.provider = canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    ctrl.prefs.show_week_numbers = true;
+    ctrl.prefs.show_event_dots = true;
+    ctrl.settings_open = false;
+    ctrl.cal_state =
+        CalendarState::new(today, ctrl.prefs.first_weekday, ctrl.prefs.gray_weekdays());
+    ctrl.agenda = Default::default();
+    ctrl.agenda.now_override = Some(calendar_core::local_minutes(today, 14 * 60 + 5));
+    let shot = |ctrl: &AppController, name: &str| {
+        ctrl.sync_to_ui(ui);
+        helper.render_to_png(&out_dir.join(format!("calendar-{name}.png")), 352, 432)
+    };
+
+    ctrl.prefs.set_locale(LocaleCode::En);
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("today-{}", theme.as_str()))?;
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.prefs.show_week_numbers = false;
+    shot(ctrl, "today-no-weeks-light")?;
+    ctrl.prefs.show_week_numbers = true;
+
+    // Event details: Friday 13 November, Design review expanded.
+    ctrl.cal_state
+        .select_date(LocalDate::new(2026, 11, 13).unwrap());
+    ctrl.toggle_agenda_event(0);
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("detail-{}", theme.as_str()))?;
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.copy_agenda_event(0);
+    shot(ctrl, "detail-copied-light")?;
+    ctrl.agenda.expanded = None;
+    ctrl.agenda.copied = None;
+
+    // Empty day with the Next link: Thursday 12 November.
+    ctrl.cal_state
+        .select_date(LocalDate::new(2026, 11, 12).unwrap());
+    for theme in [ThemePreference::Dark, ThemePreference::Light] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("empty-{}", theme.as_str()))?;
+    }
+
+    // Away from today, the Today button returns.
+    ctrl.cal_state.return_to_today();
+    ctrl.cal_state.navigate_months(1);
+    ctrl.prefs.theme = ThemePreference::Light;
+    shot(ctrl, "december-light")?;
+    ctrl.cal_state.return_to_today();
+
+    // Keyboard focus ring on the selected day after arrow-key navigation.
+    ctrl.cal_state.move_selection_by_days(3);
+    ui.set_calendar_keyboard_nav(true);
+    shot(ctrl, "keyboard-focus-light")?;
+    ui.set_calendar_keyboard_nav(false);
+    ctrl.cal_state.return_to_today();
+
+    // Expanded all-day chip on today.
+    ctrl.toggle_agenda_event(0);
+    shot(ctrl, "chip-detail-light")?;
+    ctrl.agenda.expanded = None;
+
+    for (locale, theme) in [
+        (LocaleCode::Ru, ThemePreference::Light),
+        (LocaleCode::Ja, ThemePreference::Dark),
+        (LocaleCode::Es, ThemePreference::Light),
+    ] {
+        ctrl.prefs.set_locale(locale);
+        ctrl.prefs.theme = theme;
+        ctrl.cal_state.return_to_today();
+        shot(
+            ctrl,
+            &format!("today-{}-{}", locale.as_str(), theme.as_str()),
+        )?;
+        ctrl.cal_state
+            .select_date(LocalDate::new(2026, 11, 13).unwrap());
+        ctrl.toggle_agenda_event(0);
+        shot(
+            ctrl,
+            &format!("detail-{}-{}", locale.as_str(), theme.as_str()),
+        )?;
+        ctrl.agenda.expanded = None;
+        ctrl.cal_state
+            .select_date(LocalDate::new(2026, 11, 12).unwrap());
+        shot(
+            ctrl,
+            &format!("empty-{}-{}", locale.as_str(), theme.as_str()),
+        )?;
+    }
+    ctrl.prefs.set_locale(LocaleCode::En);
     Ok(())
 }

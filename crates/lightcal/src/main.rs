@@ -16,6 +16,7 @@ use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
     LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
+mod calendar_view;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -111,6 +112,8 @@ pub(crate) struct AppController {
     pub(crate) google_label: String,
     pub(crate) google_error: String,
     pub(crate) ics_error: String,
+    /// Calendar popup agenda: expanded and copied events.
+    pub(crate) agenda: calendar_view::AgendaUiState,
 }
 
 fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
@@ -511,42 +514,7 @@ impl AppController {
         ui.set_selected_event_summary(format_event_count(locale, selected_total_events).into());
         ui.set_active_calendars_label(format_calendar_count(locale, active_count).into());
         ui.set_back_to_calendar_text(strings.back_to_calendar.into());
-
-        let day_events = self.cal_state.events_for_date(
-            self.cal_state.selected_date,
-            &self.provider.occurrences,
-            &self.prefs.selected_calendar_ids,
-        );
-        let max_agenda_rows = 2;
-        let agenda_items: Vec<AgendaEventItem> = day_events
-            .into_iter()
-            .take(max_agenda_rows)
-            .map(|occ| {
-                let cal_name = self
-                    .provider
-                    .sources
-                    .iter()
-                    .find(|s| s.id == occ.source_id)
-                    .map(|s| s.name.as_str())
-                    .unwrap_or(strings.agenda_calendar_fallback);
-                let time_display = if occ.time_label.is_empty() {
-                    strings.agenda_all_day.to_string()
-                } else {
-                    occ.time_label.clone()
-                };
-                AgendaEventItem {
-                    time_label: time_display.into(),
-                    title: if occ.title.is_empty() {
-                        strings.agenda_event_fallback.into()
-                    } else {
-                        occ.title.into()
-                    },
-                    calendar_name: cal_name.into(),
-                    swatch: parse_hex_color(&occ.color_hex),
-                }
-            })
-            .collect();
-        ui.set_selected_day_events(ModelRc::new(VecModel::from(agenda_items)));
+        self.sync_calendar_view(ui, &grid);
 
         let compact_events = if selected_total_events > 0 {
             selected_total_events.min(2)
@@ -2082,6 +2050,7 @@ fn main() {
         google_label: String::new(),
         google_error: String::new(),
         ics_error: String::new(),
+        agenda: Default::default(),
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;
@@ -2368,6 +2337,9 @@ fn main() {
             }
         });
     }
+    calendar_view::connect_agenda_callbacks(&ui, &ctrl, move |weak| {
+        request_visible_calendars(weak, use_synthetic)
+    });
 
     {
         let ctrl = Rc::clone(&ctrl);

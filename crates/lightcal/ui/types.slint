@@ -33,9 +33,37 @@ export struct WeekdayChipItem {
     active: bool,
 }
 
+// One agenda event. `index` addresses the selected day's agenda in Rust.
 export struct AgendaEventItem {
+    index: int,
+    // "10:00–11:00", or "All day" for all-day events.
     time-label: string,
     title: string,
     calendar-name: string,
     swatch: color,
+    all-day: bool,
+    // Past events on today, drawn at 55 percent opacity.
+    dimmed: bool,
+    // In progress on today: Now badge and a semibold title.
+    is-now: bool,
+    // "in 3 h 55 min" for the next event on today.
+    badge: string,
+    // Details: "10:00–11:00 · 1 h", location, "Personal · Google Calendar".
+    detail-time: string,
+    location: string,
+    provider-line: string,
+    can-open: bool,
+    expanded: bool,
+    copied: bool,
+}
+
+// One line of all-day chips; Rust wraps chips into lines.
+export struct AgendaChipRow {
+    chips: [AgendaEventItem],
+}
+
+// A run of adjacent shaded weekday columns, drawn as one flat band.
+export struct ShadedBand {
+    start: int,
+    span: int,
 }
