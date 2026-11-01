@@ -203,4 +203,4 @@ test.skipIf(!Bun.which("pwsh"))("portable validation rejects a different applica
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}, 60_000); // Cold PowerShell startup on hosted Linux runners can exceed Bun's 5s default.
