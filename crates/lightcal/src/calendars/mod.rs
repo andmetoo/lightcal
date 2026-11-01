@@ -124,7 +124,7 @@ pub fn query(
                 append_provider(&mut snapshot, data.snapshot, &mut errors);
             }
             Err(e) => {
-                google_needs_signin = e.contains("sign in again");
+                google_needs_signin = crate::net::is_sign_in_required(&e);
                 if google_needs_signin {
                     google_connected = false;
                 } else {
@@ -144,7 +144,13 @@ pub fn query(
         });
         if selected.contains(&feed.id) {
             match ics::fetch(feed, anchor) {
-                Ok(events) => snapshot.occurrences.extend(events),
+                Ok(parsed) => {
+                    if let Some(note) = parsed.note(&feed.name) {
+                        ics_errors.push(note.clone());
+                        errors.push(note);
+                    }
+                    snapshot.occurrences.extend(parsed.occurrences);
+                }
                 Err(e) => {
                     let message = format!("{}: {e}", feed.name);
                     ics_errors.push(message.clone());
@@ -168,6 +174,29 @@ pub fn query(
         google_error,
         google_skipped,
         ics_error: ics_errors.join("\n"),
+    }
+}
+
+/// Folds one calendar's outcome (readable events and the count of unreadable ones) into the
+/// snapshot and returns that count. A `hard` failure (sign-in) aborts the provider; any other
+/// failure is recorded as "name: error" and the remaining calendars still load.
+pub(crate) fn merge_calendar(
+    snapshot: &mut ProviderSnapshot,
+    errors: &mut Vec<String>,
+    outcome: Result<(Vec<calendar_core::CalendarOccurrence>, usize), String>,
+    name: &str,
+    hard: bool,
+) -> Result<usize, String> {
+    match outcome {
+        Ok((events, skipped)) => {
+            snapshot.occurrences.extend(events);
+            Ok(skipped)
+        }
+        Err(error) if hard => Err(error),
+        Err(error) => {
+            errors.push(format!("{name}: {error}"));
+            Ok(0)
+        }
     }
 }
 

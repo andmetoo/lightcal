@@ -121,6 +121,8 @@ pub fn connect(
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
+                // An accepted socket can inherit the listener's non-blocking flag on Windows.
+                let _ = stream.set_nonblocking(false);
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
                 let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
                 let mut line = String::new();
@@ -270,6 +272,7 @@ pub fn query(
         .map(str::to_string);
     let (from, to) = range(anchor);
     let mut skipped = 0;
+    let mut errors: Vec<String> = Vec::new();
     let mut snapshot = ProviderSnapshot {
         status: ProviderStatus::Available,
         sources: Vec::new(),
@@ -316,9 +319,18 @@ pub fn query(
                 "timeMax",
                 &format!("{:04}-{:02}-{:02}T00:00:00Z", to.year, to.month, to.day),
             );
-        let (events, unreadable) = collect_events(pages(uri.as_str(), token)?, &id, color);
-        skipped += unreadable;
-        snapshot.occurrences.extend(events);
+        let name = calendar["summary"].as_str().unwrap_or("Google");
+        skipped += merge_calendar(
+            &mut snapshot,
+            &mut errors,
+            pages(uri.as_str(), token),
+            name,
+            &id,
+            color,
+        )?;
+    }
+    if !errors.is_empty() {
+        snapshot.status = ProviderStatus::ProviderUnavailable(errors.join("\n"));
     }
     Ok(GoogleQuery {
         snapshot,
@@ -362,6 +374,20 @@ fn collect_events(
     (occurrences, skipped)
 }
 
+/// Sign-in failure aborts the provider; any other failure is recorded and the rest still load.
+fn merge_calendar(
+    snapshot: &mut ProviderSnapshot,
+    errors: &mut Vec<String>,
+    outcome: Result<Vec<Value>, String>,
+    name: &str,
+    source: &str,
+    color: &str,
+) -> Result<usize, String> {
+    let hard = matches!(&outcome, Err(error) if crate::net::is_sign_in_required(error));
+    let outcome = outcome.map(|events| collect_events(events, source, color));
+    super::merge_calendar(snapshot, errors, outcome, name, hard)
+}
+
 fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
     collect_pages(raw, |current| {
         let url = crate::net::https_url(current)?;
@@ -370,7 +396,7 @@ fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
         }
         let (status, bytes) = crate::net::get(current, Some(token), 8 * 1024 * 1024)?;
         if status == 401 {
-            return Err("Sign-in expired or consent was revoked; sign in again".into());
+            return Err(crate::net::SIGN_IN_REQUIRED_MESSAGE.into());
         }
         if status != 200 {
             return Err(format!("Google calendar request failed (HTTP {status})"));
@@ -548,5 +574,58 @@ mod tests {
             occurrences[0].end_date_exclusive,
             LocalDate::new(2026, 11, 1).unwrap()
         );
+    }
+
+    fn empty_snapshot() -> ProviderSnapshot {
+        ProviderSnapshot {
+            status: ProviderStatus::Available,
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        }
+    }
+    #[test]
+    fn failing_calendar_including_pagination_limit_is_isolated() {
+        let mut snapshot = empty_snapshot();
+        let mut errors = Vec::new();
+        let ok = vec![
+            serde_json::json!({"id":"ok","summary":"A","start":{"date":"2026-10-31"},"end":{"date":"2026-11-01"}}),
+            serde_json::json!({"id":"bad","start":{}}),
+        ];
+        let first = merge_calendar(
+            &mut snapshot,
+            &mut errors,
+            Err("Google calendar pagination exceeded the supported limit".into()),
+            "Work",
+            "google:a",
+            "#008573",
+        );
+        let second = merge_calendar(
+            &mut snapshot,
+            &mut errors,
+            Ok(ok),
+            "Home",
+            "google:b",
+            "#008573",
+        );
+        assert_eq!(first, Ok(0));
+        assert_eq!(second, Ok(1));
+        assert_eq!(snapshot.occurrences.len(), 1);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].starts_with("Work: "));
+    }
+    #[test]
+    fn sign_in_required_is_still_a_hard_error() {
+        let mut snapshot = empty_snapshot();
+        let mut errors = Vec::new();
+        let outcome = merge_calendar(
+            &mut snapshot,
+            &mut errors,
+            Err("Sign-in expired or consent was revoked; sign in again".into()),
+            "Work",
+            "google:a",
+            "#008573",
+        );
+        assert!(outcome.unwrap_err().contains("sign in again"));
+        assert!(errors.is_empty());
     }
 }

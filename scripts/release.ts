@@ -36,6 +36,7 @@ import {
   editReleaseArgs,
   missingSignedAssets,
   matchingBuildRuns,
+  thumbprintMatches,
   parseReleaseView,
   publishedReleaseNotes,
   publishedReleaseTitle,
@@ -167,7 +168,10 @@ function signWithSigntool(target = DIST_BIN): void {
   runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-File", target]);
 }
 
-function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN): void {
+function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requirePin = false): void {
+  if (requirePin && !process.env.SIGN_CERT_SHA1?.trim()) {
+    throw new Error("SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env so publication can verify the signer.");
+  }
   if (!existsSync(target)) {
     console.error(`Error: No binary found at ${target}. Run 'just build-release' first.`);
     process.exit(1);
@@ -185,6 +189,15 @@ function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN)
       "-Command",
       `$sig = Get-AuthenticodeSignature -LiteralPath '${target.replaceAll("'", "''")}'; Format-List -InputObject $sig; if ($sig.Status -ne 'Valid') { exit 1 }`,
     ]);
+  }
+  if (process.env.SIGN_CERT_SHA1?.trim()) {
+    const result = Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-Command",
+      `$sig=Get-AuthenticodeSignature -LiteralPath '${target.replaceAll("'", "''")}'; if ($sig.SignerCertificate) { $sig.SignerCertificate.Thumbprint }`,
+    ], { stdout: "pipe", stderr: "inherit" });
+    const actual = result.stdout.toString().trim();
+    if (result.exitCode !== 0 || !thumbprintMatches(process.env.SIGN_CERT_SHA1, actual)) {
+      throw new Error(`Signer certificate of ${target} does not match SIGN_CERT_SHA1.`);
+    }
   }
   writeChecksums(target);
 }
@@ -420,7 +433,7 @@ function publishDraft(): void {
   if (ghInherit(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])]) !== 0) {
     throw new Error(`Could not download release ${tag} for signature verification.`);
   }
-  verifyReleaseFiles(downloaded, version, readFileSync, verifySignature, verifyPortablePayload);
+  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verifySignature(path, true), verifyPortablePayload);
   assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
   assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);
   for (const name of unsignedAssetsPresent(view, tag)) {
