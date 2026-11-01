@@ -370,6 +370,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Sprint planning".to_string(),
             time_label: "10:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -380,6 +381,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Tech sync".to_string(),
             time_label: "14:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-personal".to_string(),
@@ -390,6 +392,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Gym session".to_string(),
             time_label: "18:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -400,6 +403,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Design review".to_string(),
             time_label: "11:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-holidays".to_string(),
@@ -410,6 +414,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: true,
             title: "Veterans Day".to_string(),
             time_label: "All day".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -420,6 +425,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Q4 roadmap review".to_string(),
             time_label: "09:30".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-personal".to_string(),
@@ -430,6 +436,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Dinner with Alex".to_string(),
             time_label: "18:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -440,6 +447,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Backend sync".to_string(),
             time_label: "15:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -450,6 +458,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Release cutoff".to_string(),
             time_label: "17:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-personal".to_string(),
@@ -460,6 +469,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Dentist follow-up".to_string(),
             time_label: "16:00".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-holidays".to_string(),
@@ -470,6 +480,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: true,
             title: "Thanksgiving".to_string(),
             time_label: "All day".to_string(),
+            ..Default::default()
         },
         CalendarOccurrence {
             source_id: "win-work".to_string(),
@@ -480,6 +491,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             is_all_day: false,
             title: "Monthly wrap-up".to_string(),
             time_label: "16:30".to_string(),
+            ..Default::default()
         },
     ];
     ctrl.provider.occurrences.extend(nov_occurrences);

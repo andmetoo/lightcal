@@ -192,12 +192,22 @@ impl YearMonth {
     }
 }
 
-/// Proleptic Gregorian calendar date.
+/// Proleptic Gregorian calendar date. The default is 1970-01-01.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct LocalDate {
     pub year: i32,
     pub month: u8,
     pub day: u8,
+}
+
+impl Default for LocalDate {
+    fn default() -> Self {
+        Self {
+            year: 1970,
+            month: 1,
+            day: 1,
+        }
+    }
 }
 
 impl LocalDate {
@@ -355,7 +365,7 @@ pub struct CalendarSource {
 }
 
 /// Read-only event occurrence mapped to local calendar dates (`[start_date, end_date_exclusive)`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarOccurrence {
     pub source_id: String,
     pub event_id: String,
@@ -371,6 +381,18 @@ pub struct CalendarOccurrence {
     pub title: String,
     #[serde(default)]
     pub time_label: String,
+    /// Local wall-clock start of a timed occurrence ([`local_minutes`]); `None` when all-day.
+    #[serde(default)]
+    pub start_minutes: Option<i64>,
+    /// Local wall-clock end of a timed occurrence ([`local_minutes`]); `None` when all-day.
+    #[serde(default)]
+    pub end_minutes: Option<i64>,
+    /// Provider location text, when the event has one.
+    #[serde(default)]
+    pub location: Option<String>,
+    /// Provider web page for the event. Validate before opening; never fetch it.
+    #[serde(default)]
+    pub web_link: Option<String>,
 }
 
 impl CalendarOccurrence {
@@ -378,6 +400,102 @@ impl CalendarOccurrence {
     pub fn covers_date(&self, date: LocalDate) -> bool {
         date >= self.start_date && date < self.end_date_exclusive
     }
+
+    /// Timed start and end in [`local_minutes`], or `None` for all-day events.
+    pub fn timed_span(&self) -> Option<(i64, i64)> {
+        if self.is_all_day {
+            return None;
+        }
+        let start = self.start_minutes?;
+        Some((start, self.end_minutes.unwrap_or(start).max(start)))
+    }
+
+    /// Sort key for an agenda: all-day first, then by start time and title.
+    fn agenda_key(&self) -> (bool, LocalDate, i64, &str) {
+        (
+            !self.is_all_day,
+            self.start_date,
+            self.start_minutes.unwrap_or(i64::MIN),
+            self.title.as_str(),
+        )
+    }
+}
+
+/// Minutes since 1970-01-01 00:00 local wall-clock time for `date` at `minute_of_day`.
+pub const fn local_minutes(date: LocalDate, minute_of_day: u32) -> i64 {
+    date.to_epoch_days() * 1440 + minute_of_day as i64
+}
+
+/// Splits [`local_minutes`] back into a date and the hour and minute of that day.
+pub const fn split_local_minutes(minutes: i64) -> (LocalDate, u8, u8) {
+    let date = LocalDate::from_epoch_days(minutes.div_euclid(1440));
+    let of_day = minutes.rem_euclid(1440);
+    (date, (of_day / 60) as u8, (of_day % 60) as u8)
+}
+
+/// How a timed agenda row relates to the current time on today.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgendaTiming {
+    /// Not today, or an all-day event.
+    Plain,
+    /// Ended before now.
+    Past,
+    /// In progress now.
+    Now,
+    /// The first event that starts after now, `minutes` from now.
+    Next { minutes: i64 },
+    /// Starts later, after the next one.
+    Later,
+}
+
+/// Orders an agenda: all-day events first, then timed events by start.
+pub fn sort_agenda(events: &mut [CalendarOccurrence]) {
+    events.sort_by(|a, b| a.agenda_key().cmp(&b.agenda_key()));
+}
+
+/// Classifies each event of an agenda against `now` ([`local_minutes`]).
+/// Only today's agenda is classified; any other day is all [`AgendaTiming::Plain`].
+pub fn agenda_timings(
+    events: &[CalendarOccurrence],
+    is_today: bool,
+    now: i64,
+) -> Vec<AgendaTiming> {
+    let mut next_found = false;
+    events
+        .iter()
+        .map(|event| {
+            let Some((start, end)) = event.timed_span().filter(|_| is_today) else {
+                return AgendaTiming::Plain;
+            };
+            if end <= now && !(start == end && start == now) {
+                AgendaTiming::Past
+            } else if start <= now {
+                AgendaTiming::Now
+            } else if !next_found {
+                next_found = true;
+                AgendaTiming::Next {
+                    minutes: start - now,
+                }
+            } else {
+                AgendaTiming::Later
+            }
+        })
+        .collect()
+}
+
+/// First checked occurrence that starts after `date`, for the empty-day "Next" link.
+pub fn next_occurrence_after<'a>(
+    date: LocalDate,
+    occurrences: &'a [CalendarOccurrence],
+    selected_source_ids: &BTreeSet<String>,
+) -> Option<&'a CalendarOccurrence> {
+    occurrences
+        .iter()
+        .filter(|occ| selected_source_ids.contains(&occ.source_id) && occ.start_date > date)
+        .min_by_key(|occ| {
+            let (all_day_last, date, start, title) = occ.agenda_key();
+            (date, all_day_last, start, title)
+        })
 }
 
 /// Projects occurrences onto local dates for the checked `selected_source_ids`.
@@ -702,6 +820,7 @@ mod tests {
                 is_all_day: true,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
             // Duplicate of evt-1 from same source on Oct 29 -> must be deduplicated
             CalendarOccurrence {
@@ -713,6 +832,7 @@ mod tests {
                 is_all_day: false,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
             // Multi-day event Oct 29..Nov 1 (covers Oct 29, 30, 31)
             CalendarOccurrence {
@@ -724,6 +844,7 @@ mod tests {
                 is_all_day: true,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
             // Two more events on Oct 29 to test >3 events cap
             CalendarOccurrence {
@@ -735,6 +856,7 @@ mod tests {
                 is_all_day: false,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "personal".into(),
@@ -745,6 +867,7 @@ mod tests {
                 is_all_day: false,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
             // Unchecked calendar source -> must be ignored
             CalendarOccurrence {
@@ -756,6 +879,7 @@ mod tests {
                 is_all_day: true,
                 title: String::new(),
                 time_label: String::new(),
+                ..Default::default()
             },
         ];
 
@@ -779,5 +903,77 @@ mod tests {
             .unwrap();
         assert_eq!(oct30_cell.total_event_count, 1); // Only multi-day evt-2 covers Oct 30
         assert_eq!(oct30_cell.dot_colors, vec!["#F59E0B".to_string()]);
+    }
+
+    fn timed(id: &str, date: LocalDate, start: u32, end: u32) -> CalendarOccurrence {
+        CalendarOccurrence {
+            source_id: "work".into(),
+            event_id: id.into(),
+            start_date: date,
+            end_date_exclusive: date.add_days(1),
+            start_minutes: Some(local_minutes(date, start)),
+            end_minutes: Some(local_minutes(date, end)),
+            title: id.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn agenda_marks_past_now_and_only_the_first_upcoming_event() {
+        let day = LocalDate::new(2026, 11, 1).unwrap();
+        let mut events = vec![
+            timed("dinner", day, 18 * 60, 19 * 60 + 30),
+            timed("coffee", day, 10 * 60, 11 * 60),
+            CalendarOccurrence {
+                source_id: "work".into(),
+                event_id: "fair".into(),
+                start_date: day,
+                end_date_exclusive: day.add_days(1),
+                is_all_day: true,
+                title: "fair".into(),
+                ..Default::default()
+            },
+            timed("walk", day, 13 * 60 + 30, 15 * 60),
+            timed("late", day, 21 * 60, 22 * 60),
+        ];
+        sort_agenda(&mut events);
+        let order: Vec<_> = events.iter().map(|e| e.event_id.as_str()).collect();
+        assert_eq!(order, ["fair", "coffee", "walk", "dinner", "late"]);
+        let now = local_minutes(day, 14 * 60 + 5);
+        assert_eq!(
+            agenda_timings(&events, true, now),
+            [
+                AgendaTiming::Plain,
+                AgendaTiming::Past,
+                AgendaTiming::Now,
+                AgendaTiming::Next { minutes: 235 },
+                AgendaTiming::Later,
+            ]
+        );
+        assert!(agenda_timings(&events, false, now)
+            .iter()
+            .all(|t| *t == AgendaTiming::Plain));
+        assert_eq!(
+            split_local_minutes(local_minutes(day, 14 * 60 + 5)),
+            (day, 14, 5)
+        );
+    }
+
+    #[test]
+    fn next_occurrence_skips_unchecked_calendars_and_the_same_day() {
+        let day = LocalDate::new(2026, 11, 12).unwrap();
+        let mut hidden = timed("hidden", day.add_days(1), 8 * 60, 9 * 60);
+        hidden.source_id = "other".into();
+        let events = vec![
+            timed("today", day, 9 * 60, 10 * 60),
+            timed("later", day.add_days(1), 15 * 60, 16 * 60),
+            timed("earlier", day.add_days(1), 9 * 60, 10 * 60),
+            hidden,
+            timed("far", day.add_days(9), 9 * 60, 10 * 60),
+        ];
+        let selected = BTreeSet::from(["work".to_string()]);
+        let next = next_occurrence_after(day, &events, &selected).unwrap();
+        assert_eq!(next.event_id, "earlier");
+        assert!(next_occurrence_after(day.add_days(9), &events, &selected).is_none());
     }
 }
