@@ -37,6 +37,11 @@ release step="release" *args:
     const { exitCode } = Bun.spawnSync(["bun", "run", "scripts/release.ts", ...process.argv.slice(2)], { stdio: ["inherit", "inherit", "inherit"] });
     process.exit(exitCode ?? 1);
 
+# Copy build configuration from .env to GitHub Actions variables/secrets; --dry-run to preview
+# (not a Bun script recipe: that parent would load .env.local into the child's environment)
+github-env *args:
+    bun --no-env-file run scripts/github-env.ts {{args}}
+
 # Download CI build vX.Y.Z, sign it on Windows and replace its assets
 sign-draft version: (release "sign-draft" version)
 

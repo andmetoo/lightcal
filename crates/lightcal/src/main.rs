@@ -2527,8 +2527,14 @@ fn main() {
             .to_string();
     }
     if prefs.google_client_secret.is_empty() {
+        // A runtime value (environment or a local `.env`) overrides the embedded one.
         prefs.google_client_secret =
             lightcal::preferences::local_env_value("LIGHTCAL_GOOGLE_CLIENT_SECRET");
+    }
+    if prefs.google_client_secret.is_empty() {
+        prefs.google_client_secret = option_env!("LIGHTCAL_GOOGLE_CLIENT_SECRET")
+            .unwrap_or("")
+            .to_string();
     }
     if use_synthetic && prefs.selected_calendar_ids.is_empty() {
         prefs.selected_calendar_ids.insert("win-work".to_string());
