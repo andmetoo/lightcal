@@ -100,7 +100,7 @@ pub fn stage(data_dir: &Path) -> Result<PathBuf, String> {
     if payload.get(..2) != Some(b"MZ") {
         return Err("Update asset is not a Windows executable".into());
     }
-    let sha = format!("{:x}", Sha256::digest(&payload));
+    let sha = sha256_hex(&payload);
     if let Some(digest) = asset["digest"].as_str() {
         if digest != format!("sha256:{sha}") {
             return Err("GitHub asset digest does not match the downloaded update".into());
@@ -325,13 +325,24 @@ pub fn apply(plan_path: &Path) -> Result<(), String> {
     }
 }
 
+/// Lowercase hexadecimal SHA-256, matching the published `.sha256` checksum files.
+fn sha256_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
+}
+
 fn verify_payload(path: &Path, expected: &str) -> Result<(), String> {
     let metadata = std::fs::metadata(path).map_err(|_| "Missing staged update")?;
     if !metadata.is_file() || metadata.len() > 128 * 1024 * 1024 {
         return Err("Invalid staged update size/type".into());
     }
     let bytes = std::fs::read(path).map_err(|_| "Could not read staged update")?;
-    if format!("{:x}", Sha256::digest(bytes)) != expected {
+    if sha256_hex(&bytes) != expected {
         return Err("Staged update changed after verification".into());
     }
     Ok(())
@@ -434,6 +445,13 @@ fn replace(_: &Path, _: &Path, _: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn sha256_hex_matches_published_checksum_format() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+    #[test]
     fn pin_and_version_checks_fail_closed() {
         assert!(ensure_portable_update_allowed(true).is_err());
         assert!(ensure_portable_update_allowed(false).is_ok());
@@ -476,7 +494,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("candidate.exe");
         std::fs::write(&file, b"original").unwrap();
-        let hash = format!("{:x}", Sha256::digest(b"original"));
+        let hash = sha256_hex(b"original");
         assert!(verify_payload(&file, &hash).is_ok());
         std::fs::write(&file, b"changed").unwrap();
         assert!(verify_payload(&file, &hash).is_err());

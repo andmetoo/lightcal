@@ -10,8 +10,8 @@ This distribution incorporates the following open-source Rust crates:
 | `chrono` | `0.4.45` | `MIT OR Apache-2.0` | https://github.com/chronotope/chrono |
 | `serde` | `1.0.229` | `MIT OR Apache-2.0` | https://github.com/serde-rs/serde |
 | `serde_json` | `1.0.154` | `MIT OR Apache-2.0` | https://github.com/serde-rs/json |
-| `tray-icon` | `0.25.1` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/tray-icon |
-| `muda` | `0.20.0` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/muda |
+| `tray-icon` | `0.26.1` | `MIT OR Apache-2.0` | https://github.com/tauri-apps/tray-icon |
+| `muda` | `0.21.2` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/muda |
 | `windows` | `0.61.0` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `windows-sys` | `0.61.2` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `skrifa` | `0.44.0` | `MIT OR Apache-2.0` | https://github.com/googlefonts/fontations |
@@ -22,10 +22,10 @@ This distribution incorporates the following open-source Rust crates:
 | `chrono-tz` | `0.10.4` | `MIT OR Apache-2.0` | https://github.com/chronotope/chrono-tz |
 | `ureq` | `3.5.0` | `MIT OR Apache-2.0` | https://github.com/algesten/ureq |
 | `native-tls` | `0.2.18` | `MIT OR Apache-2.0` | https://github.com/rust-native-tls/rust-native-tls |
-| `sha2` | `0.10.9` | `MIT OR Apache-2.0` | https://github.com/RustCrypto/hashes |
+| `sha2` | `0.11.1` | `MIT OR Apache-2.0` | https://github.com/RustCrypto/hashes |
 | `socket2` | `0.6.5` | `MIT OR Apache-2.0` | https://github.com/rust-lang/socket2 |
-| `base64` | `0.22.1` | `MIT OR Apache-2.0` | https://github.com/marshallpierce/rust-base64 |
-| `getrandom` | `0.3.4` | `MIT OR Apache-2.0` | https://github.com/rust-random/getrandom |
+| `base64` | `0.23.1` | `MIT OR Apache-2.0` | https://github.com/marshallpierce/rust-base64 |
+| `getrandom` | `0.4.3` | `MIT OR Apache-2.0` | https://github.com/rust-random/getrandom |
 | `url` | `2.5.8` | `MIT OR Apache-2.0` | https://github.com/servo/rust-url |
 
 ## Design & Typography References
