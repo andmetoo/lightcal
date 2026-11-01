@@ -1310,12 +1310,53 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
     });
 }
 
+thread_local! {
+    /// A calendar reload was requested while another load or account operation was running.
+    static RELOAD_PENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether the last reload used the synthetic fixture (replayed reloads reuse it).
+    static RELOAD_SYNTHETIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs a calendar load, converting a panic into an error message so the completion path
+/// always runs and `provider_loading` is always cleared.
+fn run_load_guarded<F>(load: F) -> Result<lightcal::calendars::CalendarLoad, String>
+where
+    F: FnOnce() -> lightcal::calendars::CalendarLoad,
+{
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(load))
+        .map_err(|_| "Calendar refresh failed unexpectedly. It will be retried.".to_string())
+}
+
+/// Returns true when a load may start now; otherwise records that one reload is pending.
+fn start_or_defer_reload(busy: bool) -> bool {
+    if busy {
+        RELOAD_PENDING.with(|p| p.set(true));
+        false
+    } else {
+        RELOAD_PENDING.with(|p| p.set(false));
+        true
+    }
+}
+
+fn take_pending_reload() -> bool {
+    RELOAD_PENDING.with(|p| p.replace(false))
+}
+
+fn replay_pending_reload(ui_weak: slint::Weak<AppWindow>) {
+    if take_pending_reload() {
+        let synthetic = RELOAD_SYNTHETIC.with(|s| s.get());
+        request_visible_calendars(ui_weak, synthetic);
+    }
+}
+
 fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: bool) {
+    RELOAD_SYNTHETIC.with(|s| s.set(use_synthetic));
     let mut anchor = None;
     let mut request_id = 0;
     let mut config = None;
+    let mut previous_account = None;
     with_active_controller(&ui_weak, |ctrl, ui| {
-        if ctrl.connection_busy {
+        if !start_or_defer_reload(ctrl.connection_busy || ctrl.provider_loading) {
             return;
         }
         ctrl.provider_request += 1;
@@ -1323,6 +1364,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
         let month = ctrl.cal_state.displayed_month;
         anchor = LocalDate::new(month.year, month.month, 1);
         config = Some((ctrl.store.dir().to_path_buf(), ctrl.prefs.clone()));
+        previous_account = Some(ctrl.microsoft_account.clone());
         ctrl.provider_loading = true;
         if !matches!(
             ctrl.microsoft_account,
@@ -1335,38 +1377,61 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
     });
     if let (Some(anchor), Some((dir, prefs))) = (anchor, config) {
         std::thread::spawn(move || {
-            let data = if use_synthetic {
-                lightcal::calendars::CalendarLoad {
-                    snapshot: ProviderSnapshot::synthetic(anchor),
-                    microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
-                    google_connected: false,
-                    google_needs_signin: false,
-                    google_configuration: None,
-                    google_label: None,
-                    google_error: String::new(),
-                    google_skipped: 0,
-                    ics_error: String::new(),
+            let result = run_load_guarded(|| {
+                if use_synthetic {
+                    lightcal::calendars::CalendarLoad {
+                        snapshot: ProviderSnapshot::synthetic(anchor),
+                        microsoft:
+                            lightcal::calendars::account::MicrosoftAccountState::Disconnected,
+                        google_connected: false,
+                        google_needs_signin: false,
+                        google_configuration: None,
+                        google_label: None,
+                        google_error: String::new(),
+                        google_skipped: 0,
+                        ics_error: String::new(),
+                    }
+                } else {
+                    lightcal::calendars::query(
+                        anchor,
+                        &dir,
+                        &prefs.microsoft_client_id,
+                        &prefs.google_client_id,
+                        &prefs.google_client_secret,
+                        &prefs.selected_calendar_ids,
+                        prefs.windows_calendars_enabled,
+                    )
                 }
-            } else {
-                lightcal::calendars::query(
-                    anchor,
-                    &dir,
-                    &prefs.microsoft_client_id,
-                    &prefs.google_client_id,
-                    &prefs.google_client_secret,
-                    &prefs.selected_calendar_ids,
-                    prefs.windows_calendars_enabled,
-                )
-            };
+            });
             let _ = slint::invoke_from_event_loop(move || {
                 let mut still_visible = false;
                 with_active_controller(&ui_weak, |ctrl, _| {
                     still_visible = ctrl.provider_request == request_id
                         && ctrl.cal_state.displayed_month == anchor.year_month();
+                    if !still_visible {
+                        // A stale result is dropped, but the in-flight guard must be released.
+                        ctrl.provider_loading = false;
+                    }
                 });
-                if still_visible {
-                    apply_loaded_provider(data, ui_weak);
+                match result {
+                    Ok(data) if still_visible => apply_loaded_provider(data, ui_weak.clone()),
+                    Ok(_) => {}
+                    Err(message) => with_active_controller(&ui_weak, |ctrl, ui| {
+                        ctrl.provider_loading = false;
+                        if matches!(
+                            ctrl.microsoft_account,
+                            lightcal::calendars::account::MicrosoftAccountState::Checking
+                        ) {
+                            if let Some(previous) = previous_account {
+                                ctrl.microsoft_account = previous;
+                            }
+                        }
+                        ctrl.provider.status =
+                            lightcal::platform::ProviderStatus::ProviderUnavailable(message);
+                        ctrl.sync_to_ui(ui);
+                    }),
                 }
+                replay_pending_reload(ui_weak);
             });
         });
     }
@@ -1611,6 +1676,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             });
             if success {
                 request_visible_calendars(ui_weak, synthetic);
+            } else {
+                replay_pending_reload(ui_weak);
             }
         });
     });
@@ -1673,6 +1740,7 @@ fn main() {
 
     let store = PreferencesStore::from_env();
     let loaded = store.load();
+    let loaded_warning = loaded.warning;
     let mut prefs = loaded.preferences;
     if prefs.microsoft_client_id.is_empty() {
         prefs.microsoft_client_id = option_env!("LIGHTCAL_MICROSOFT_CLIENT_ID")
@@ -1713,8 +1781,13 @@ fn main() {
 
     let startup_mgr = StartupManager::from_env(store.dir());
     let mut shortcut_mgr = ShortcutManager::new();
+    let mut startup_shortcut_error = String::new();
+    let mut startup_conflicting_shortcut = None;
     if let Some(binding) = prefs.global_shortcut.as_deref() {
-        let _ = shortcut_mgr.bind(Some(binding));
+        if let Err(error) = shortcut_mgr.bind(Some(binding)) {
+            startup_shortcut_error = error;
+            startup_conflicting_shortcut = Some(binding.to_string());
+        }
     }
 
     let ui = AppWindow::new().expect("Failed to create Lightcal window");
@@ -1798,9 +1871,9 @@ fn main() {
         install_status: String::new(),
         startup_mgr,
         shortcut_mgr,
-        shortcut_error: String::new(),
+        shortcut_error: startup_shortcut_error,
         startup_error: String::new(),
-        conflicting_shortcut: None,
+        conflicting_shortcut: startup_conflicting_shortcut,
         update_state: UpdateCheckState::Idle,
         settings_open: false,
         settings_tab: 0,
@@ -1827,6 +1900,9 @@ fn main() {
         google_error: String::new(),
         ics_error: String::new(),
     }));
+    if let Some(warning) = loaded_warning {
+        ctrl.borrow_mut().connection_message = warning;
+    }
 
     ACTIVE_CONTROLLER.with(|c| {
         *c.borrow_mut() = Some(Rc::downgrade(&ctrl));
@@ -2797,6 +2873,7 @@ fn main() {
                 c.connection_message.clear();
                 c.sync_to_ui(w);
             });
+            replay_pending_reload(weak.clone());
         });
     }
     {
@@ -2814,6 +2891,37 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn panicking_calendar_load_becomes_an_error_instead_of_unwinding() {
+        let result = run_load_guarded(|| panic!("provider exploded"));
+        assert!(result.is_err());
+        let ok = run_load_guarded(|| lightcal::calendars::CalendarLoad {
+            snapshot: ProviderSnapshot::synthetic(LocalDate::new(2026, 1, 1).unwrap()),
+            microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
+            google_connected: false,
+            google_needs_signin: false,
+            google_configuration: None,
+            google_label: None,
+            google_error: String::new(),
+            google_skipped: 0,
+            ics_error: String::new(),
+        });
+        assert!(ok.is_ok());
+    }
+
+    #[test]
+    fn reload_requested_while_busy_is_remembered_once_and_replayed() {
+        assert!(!take_pending_reload());
+        assert!(!start_or_defer_reload(true));
+        assert!(!start_or_defer_reload(true));
+        assert!(take_pending_reload());
+        assert!(!take_pending_reload());
+        assert!(!start_or_defer_reload(true));
+        // Starting a load consumes the pending request.
+        assert!(start_or_defer_reload(false));
+        assert!(!take_pending_reload());
+    }
 
     #[test]
     fn target_logical_size_matches_compact_and_settings_specs() {
