@@ -32,5 +32,5 @@ checks character coverage and widths, not byte identity or rasterization.
 
 Retired from the design on November 1, 2026: the refresh uses Segoe UI
 Variable from Windows ([ADR 0011](../../../docs/decisions/0011-windows-only-design-refresh.md)).
-The app bundles Onest until the Slint UI is updated; then these files and
-their notice can be removed.
+The app no longer bundles Onest; these files are kept only as design
+provenance.

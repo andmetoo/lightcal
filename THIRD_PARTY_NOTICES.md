@@ -30,7 +30,6 @@ This distribution incorporates the following open-source Rust crates:
 
 ## Design & Typography References
 
-- **Onest Font**: `crates/lightcal/assets/fonts/Onest-{Regular,Medium,SemiBold,Bold}.ttf` are licensed under the SIL Open Font License, Version 1.1. Full license text is preserved in `crates/lightcal/assets/fonts/OFL-Onest.txt`. They remain bundled only until the Slint UI switches to Segoe UI Variable; the tray and application icons no longer use them. Provenance: see `design/fonts/onest/README.md`.
 - **NSIS installer runtime**: the Windows setup and uninstaller use NSIS (zlib/libpng license), Modern UI, and the public-domain LZMA compressor. The full compiler-distribution notice is installed as `NSIS-LICENSE.txt`; see https://nsis.sourceforge.io/License. NSIS is a packaging tool, not a Cargo dependency.
 - The current design uses the Windows system font Segoe UI Variable, which is not redistributed. The tray date icon reads Segoe UI Variable (or Segoe UI Bold) from `%WINDIR%\Fonts` at runtime. Earlier design mockups used **Onest** (SIL OFL 1.1); see `design/fonts/`.
 - **Radix Colors**: the Gray + Teal palette is adapted from Radix Colors (MIT; Copyright 2021-2022 Modulz and 2022-Present WorkOS). Source: https://github.com/radix-ui/colors. License: `design/palettes/RADIX-LICENSE.txt`. This does not add a web or JavaScript runtime dependency.
