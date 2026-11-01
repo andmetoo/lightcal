@@ -24,6 +24,43 @@ pub(crate) struct EventKey {
     event_id: String,
 }
 
+impl EventKey {
+    const SEPARATOR: char = '\u{1f}';
+
+    fn for_event(date: LocalDate, event: &CalendarOccurrence) -> Self {
+        Self {
+            date,
+            source_id: event.source_id.clone(),
+            event_id: event.event_id.clone(),
+        }
+    }
+
+    /// The row key handed to Slint: date, source and event id joined by U+001F.
+    pub(crate) fn encode(&self) -> String {
+        let d = self.date;
+        let sep = Self::SEPARATOR;
+        format!(
+            "{}-{}-{}{sep}{}{sep}{}",
+            d.year, d.month, d.day, self.source_id, self.event_id
+        )
+    }
+
+    fn decode(raw: &str) -> Option<Self> {
+        let mut parts = raw.splitn(3, Self::SEPARATOR);
+        let mut date = parts.next()?.splitn(3, '-');
+        let date = LocalDate::new(
+            date.next()?.parse().ok()?,
+            date.next()?.parse().ok()?,
+            date.next()?.parse().ok()?,
+        )?;
+        Some(Self {
+            date,
+            source_id: parts.next()?.to_string(),
+            event_id: parts.next()?.to_string(),
+        })
+    }
+}
+
 /// Agenda interaction state kept between UI syncs.
 #[derive(Debug, Default)]
 pub(crate) struct AgendaUiState {
@@ -33,9 +70,6 @@ pub(crate) struct AgendaUiState {
     pub(crate) copy_generation: u64,
     /// Fixed local wall-clock time ([`local_minutes`]) for tests and snapshots.
     pub(crate) now_override: Option<i64>,
-    /// Event keys in the order last rendered; row indexes from Slint resolve against these,
-    /// so a background refresh cannot redirect a click to a different event.
-    pub(crate) rendered: RefCell<Vec<EventKey>>,
 }
 
 impl AppController {
@@ -50,13 +84,17 @@ impl AppController {
         events
     }
 
-    fn agenda_key(&self, index: i32) -> Option<(EventKey, CalendarOccurrence)> {
-        let key = self
-            .agenda
-            .rendered
-            .borrow()
-            .get(usize::try_from(index).ok()?)?
-            .clone();
+    /// The row key of the `index`-th event of the selected day (tests and snapshots).
+    pub(crate) fn agenda_key_at(&self, index: usize) -> String {
+        self.day_agenda()
+            .get(index)
+            .map(|event| EventKey::for_event(self.cal_state.selected_date, event).encode())
+            .unwrap_or_default()
+    }
+
+    /// Resolves a row key from Slint to the current occurrence; `None` if it disappeared.
+    fn agenda_key(&self, row_key: &str) -> Option<(EventKey, CalendarOccurrence)> {
+        let key = EventKey::decode(row_key)?;
         if key.date != self.cal_state.selected_date {
             return None;
         }
@@ -68,8 +106,8 @@ impl AppController {
     }
 
     /// Expands the event at `index`, or collapses it when it is already open.
-    pub(crate) fn toggle_agenda_event(&mut self, index: i32) {
-        let Some((key, _)) = self.agenda_key(index) else {
+    pub(crate) fn toggle_agenda_event(&mut self, row_key: &str) {
+        let Some((key, _)) = self.agenda_key(row_key) else {
             return;
         };
         self.agenda.copied = None;
@@ -82,8 +120,8 @@ impl AppController {
 
     /// Plain-text details of the event at `index` for the clipboard and the copy
     /// generation to pass to [`Self::clear_copied`]; marks the event copied.
-    pub(crate) fn copy_agenda_event(&mut self, index: i32) -> Option<(String, u64)> {
-        let (key, event) = self.agenda_key(index)?;
+    pub(crate) fn copy_agenda_event(&mut self, row_key: &str) -> Option<(String, u64)> {
+        let (key, event) = self.agenda_key(row_key)?;
         let locale = self.prefs.locale();
         let mut lines = vec![self.event_title(&event).to_string()];
         let date = format_date_line(locale, self.cal_state.selected_date, true);
@@ -111,8 +149,8 @@ impl AppController {
     }
 
     /// The validated provider page of the event at `index`.
-    pub(crate) fn agenda_event_link(&self, index: i32) -> Option<String> {
-        let (_, event) = self.agenda_key(index)?;
+    pub(crate) fn agenda_event_link(&self, row_key: &str) -> Option<String> {
+        let (_, event) = self.agenda_key(row_key)?;
         openable_link(&event).map(String::from)
     }
 
@@ -225,16 +263,11 @@ impl AppController {
         let mut chips = Vec::new();
         let mut timed = Vec::new();
         let mut expanded_chip = None;
-        let mut rendered = Vec::with_capacity(events.len());
         for (index, (event, timing)) in events.iter().zip(timings).enumerate() {
-            let key = EventKey {
-                date: selected,
-                source_id: event.source_id.clone(),
-                event_id: event.event_id.clone(),
-            };
-            rendered.push(key.clone());
+            let key = EventKey::for_event(selected, event);
             let item = AgendaEventItem {
                 index: index as i32,
+                key: key.encode().into(),
                 time_label: time_range(locale, event).into(),
                 title: self.event_title(event).into(),
                 calendar_name: self
@@ -281,7 +314,6 @@ impl AppController {
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
         ui.set_agenda_events(ModelRc::new(VecModel::from(timed)));
-        *self.agenda.rendered.borrow_mut() = rendered;
         ui.set_agenda_empty(events.is_empty());
         ui.set_agenda_empty_text(format_event_count(locale, 0).into());
         let next = events
@@ -324,9 +356,9 @@ pub(crate) fn connect_agenda_callbacks(
     {
         let ctrl = Rc::clone(ctrl);
         let weak = ui.as_weak();
-        ui.on_toggle_agenda_event(move |index| {
+        ui.on_toggle_agenda_event(move |row_key| {
             let mut c = ctrl.borrow_mut();
-            c.toggle_agenda_event(index);
+            c.toggle_agenda_event(&row_key);
             if let Some(w) = weak.upgrade() {
                 c.sync_to_ui(&w);
             }
@@ -335,9 +367,9 @@ pub(crate) fn connect_agenda_callbacks(
     {
         let ctrl = Rc::clone(ctrl);
         let weak = ui.as_weak();
-        ui.on_copy_agenda_event(move |index| {
+        ui.on_copy_agenda_event(move |row_key| {
             let mut c = ctrl.borrow_mut();
-            let Some((text, generation)) = c.copy_agenda_event(index) else {
+            let Some((text, generation)) = c.copy_agenda_event(&row_key) else {
                 return;
             };
             if lightcal::platform::windows::clipboard::copy_text(&text).is_err() {
@@ -362,9 +394,9 @@ pub(crate) fn connect_agenda_callbacks(
     }
     {
         let ctrl = Rc::clone(ctrl);
-        ui.on_open_agenda_event(move |index| {
+        ui.on_open_agenda_event(move |row_key| {
             // Opened only on this click; the address is never fetched by Lightcal.
-            if let Some(link) = ctrl.borrow().agenda_event_link(index) {
+            if let Some(link) = ctrl.borrow().agenda_event_link(&row_key) {
                 #[cfg(windows)]
                 crate::open_allowed_browser_link(&link);
                 #[cfg(not(windows))]

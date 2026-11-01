@@ -692,6 +692,19 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
 
 #[test]
 fn recorded_keys_become_registrable_shortcuts() {
+    // The physical key wins over the produced text: Ctrl+Alt+M types "\r", Shift+2 types "@".
+    assert_eq!(
+        shortcut_from_press(Some("M"), "\r", true, true, false, false).as_deref(),
+        Some("Ctrl + Alt + M")
+    );
+    assert_eq!(
+        shortcut_from_press(Some("2"), "@", true, false, true, false).as_deref(),
+        Some("Ctrl + Shift + 2")
+    );
+    assert_eq!(
+        shortcut_from_press(Some("M"), "\r", false, false, true, false),
+        None
+    );
     // Backspace, Tab and Enter share codes with Ctrl+H/I/J/M and are never recorded as letters.
     for named in ["\u{8}", "\t", "\n", "\r"] {
         assert_eq!(
@@ -750,7 +763,7 @@ fn agenda_actions_use_the_row_that_was_rendered() {
     ctrl.provider
         .occurrences
         .retain(|event| event.title != "Coffee with Maya");
-    ctrl.toggle_agenda_event(walk.index);
+    ctrl.toggle_agenda_event(&walk.key);
     ctrl.sync_to_ui(&ui);
     let expanded: Vec<_> = (0..ui.get_agenda_events().row_count())
         .map(|row| ui.get_agenda_events().row_data(row).unwrap())

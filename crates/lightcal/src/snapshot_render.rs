@@ -746,13 +746,19 @@ fn render_calendar_boards(
     // Event details: Friday 13 November, Design review expanded.
     ctrl.cal_state
         .select_date(LocalDate::new(2026, 11, 13).unwrap());
-    ctrl.toggle_agenda_event(0);
+    {
+        let key = ctrl.agenda_key_at(0);
+        ctrl.toggle_agenda_event(&key);
+    }
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         ctrl.prefs.theme = theme;
         shot(ctrl, &format!("detail-{}", theme.as_str()))?;
     }
     ctrl.prefs.theme = ThemePreference::Light;
-    ctrl.copy_agenda_event(0);
+    {
+        let key = ctrl.agenda_key_at(0);
+        ctrl.copy_agenda_event(&key);
+    }
     shot(ctrl, "detail-copied-light")?;
     ctrl.agenda.expanded = None;
     ctrl.agenda.copied = None;
@@ -780,7 +786,10 @@ fn render_calendar_boards(
     ctrl.cal_state.return_to_today();
 
     // Expanded all-day chip on today.
-    ctrl.toggle_agenda_event(0);
+    {
+        let key = ctrl.agenda_key_at(0);
+        ctrl.toggle_agenda_event(&key);
+    }
     shot(ctrl, "chip-detail-light")?;
     ctrl.agenda.expanded = None;
 
@@ -798,7 +807,10 @@ fn render_calendar_boards(
         )?;
         ctrl.cal_state
             .select_date(LocalDate::new(2026, 11, 13).unwrap());
-        ctrl.toggle_agenda_event(0);
+        {
+            let key = ctrl.agenda_key_at(0);
+            ctrl.toggle_agenda_event(&key);
+        }
         shot(
             ctrl,
             &format!("detail-{}-{}", locale.as_str(), theme.as_str()),

@@ -64,9 +64,9 @@ export component AppWindow inherits Window {
     in property <string> agenda-copy-label: "Copy";
     in property <string> agenda-copied-label: "Copied";
     in property <string> agenda-open-label: "Open";
-    callback toggle-agenda-event(int);
-    callback copy-agenda-event(int);
-    callback open-agenda-event(int);
+    callback toggle-agenda-event(string);
+    callback copy-agenda-event(string);
+    callback open-agenda-event(string);
     callback go-next-event();
 
     // Settings Localized Strings & State

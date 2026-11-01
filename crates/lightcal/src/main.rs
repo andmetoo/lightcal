@@ -128,11 +128,48 @@ fn remember_sign_in_url(url: &str) {
     LAST_SIGN_IN_URL.with(|slot| *slot.borrow_mut() = Some(url.to_string()));
 }
 
+/// Forgets the consent address so "Open browser again" never reopens an old sign-in.
+fn forget_sign_in_url() {
+    LAST_SIGN_IN_URL.with(|slot| *slot.borrow_mut() = None);
+}
+
 /// Builds a normalized shortcut ("Ctrl + Alt + K") from a recorded key press.
 /// Returns `None` for keys Lightcal cannot register or presses without Ctrl, Alt or Win.
+#[cfg_attr(windows, allow(dead_code))]
 fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool) -> Option<String> {
+    shortcut_from_press(None, text, ctrl, alt, shift, meta)
+}
+
+/// The main key held down right now (A–Z, 0–9, F1–F12, Space), read from the keyboard
+/// state. Unlike the produced text it does not change with Ctrl, Shift or the layout:
+/// Ctrl+M and Enter both type "\r", and Shift+2 types "@" on a US layout.
+#[cfg(windows)]
+fn pressed_main_key() -> Option<String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+    // SAFETY: GetAsyncKeyState only reads the current key state.
+    let down = |vk: i32| (unsafe { GetAsyncKeyState(vk) } as u16) & 0x8000 != 0;
+    (b'A'..=b'Z')
+        .chain(b'0'..=b'9')
+        .find(|&vk| down(i32::from(vk)))
+        .map(|vk| char::from(vk).to_string())
+        .or_else(|| (1..=12).find(|n| down(0x6F + n)).map(|n| format!("F{n}")))
+        .or_else(|| down(0x20).then(|| "Space".to_string()))
+}
+
+/// Like [`shortcut_from_key`], but `pressed` (from [`pressed_main_key`]) wins over the text.
+fn shortcut_from_press(
+    pressed: Option<&str>,
+    text: &str,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+) -> Option<String> {
     if !(ctrl || alt || meta) {
         return None;
+    }
+    if let Some(key) = pressed {
+        return Some(shortcut_label(key.to_string(), ctrl, alt, shift, meta));
     }
     let mut chars = text.chars();
     let first = chars.next()?;
@@ -168,6 +205,10 @@ fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool)
     } else {
         return None;
     };
+    Some(shortcut_label(key, ctrl, alt, shift, meta))
+}
+
+fn shortcut_label(key: String, ctrl: bool, alt: bool, shift: bool, meta: bool) -> String {
     let mut parts = Vec::new();
     if ctrl {
         parts.push("Ctrl".to_string());
@@ -182,7 +223,7 @@ fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool)
         parts.push("Win".to_string());
     }
     parts.push(key);
-    Some(parts.join(" + "))
+    parts.join(" + ")
 }
 
 /// Registers `candidate`; on failure the previous binding stays and the conflict is shown.
@@ -1707,7 +1748,7 @@ impl TrayMenuItems {
         let labels = lightcal::i18n::tray_menu_copy(locale);
         Self {
             open: muda::MenuItem::new(labels.open, true, None),
-            today: muda::MenuItem::new(labels.today, true, None),
+            today: muda::MenuItem::new(lightcal::i18n::catalog(locale).today_button, true, None),
             settings: muda::MenuItem::new(labels.settings, true, None),
             sponsor: muda::MenuItem::new(labels.sponsor, true, None),
             exit: muda::MenuItem::new(labels.exit, true, None),
@@ -1721,7 +1762,8 @@ impl TrayMenuItems {
         }
         let labels = lightcal::i18n::tray_menu_copy(locale);
         self.open.set_text(labels.open);
-        self.today.set_text(labels.today);
+        self.today
+            .set_text(lightcal::i18n::catalog(locale).today_button);
         self.settings.set_text(labels.settings);
         self.sponsor.set_text(labels.sponsor);
         self.exit.set_text(labels.exit);
@@ -1787,9 +1829,10 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
                 ctrl.calendars_is_empty = snapshot.sources.is_empty();
             }
         }
-        if !matches!(
+        if matches!(
             snapshot.status,
-            lightcal::platform::ProviderStatus::ProviderUnavailable(_)
+            lightcal::platform::ProviderStatus::Available
+                | lightcal::platform::ProviderStatus::NoCalendars
         ) {
             ctrl.last_refreshed = Some(chrono::Local::now());
         }
@@ -2141,6 +2184,12 @@ enum CalendarAction {
 }
 
 fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, synthetic: bool) {
+    if matches!(
+        action,
+        CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
+    ) {
+        forget_sign_in_url();
+    }
     let mut config = None;
     with_active_controller(&ui_weak, |ctrl, ui| {
         let allowed = match &action {
@@ -2337,6 +2386,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             let success = result.is_ok();
             with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.connection_busy = false;
+                forget_sign_in_url();
                 ctrl.connection_message = match result {
                     Ok(removed) => {
                         if let Some(client) = connected_client {
@@ -2560,7 +2610,11 @@ fn main() {
         let menu = muda::Menu::new();
         let labels = lightcal::i18n::tray_menu_copy(prefs.locale());
         let open_item = muda::MenuItem::new(labels.open, true, None);
-        let today_item = muda::MenuItem::new(labels.today, true, None);
+        let today_item = muda::MenuItem::new(
+            lightcal::i18n::catalog(prefs.locale()).today_button,
+            true,
+            None,
+        );
         let settings_item = muda::MenuItem::new(labels.settings, true, None);
         let sponsor_item = muda::MenuItem::new(labels.sponsor, true, None);
         let quit_item = muda::MenuItem::new(labels.exit, true, None);
@@ -3120,7 +3174,13 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_record_shortcut(move |text, control, alt, shift, meta| {
             let mut c = ctrl.borrow_mut();
-            if let Some(candidate) = shortcut_from_key(text.as_str(), control, alt, shift, meta) {
+            #[cfg(windows)]
+            let pressed = pressed_main_key();
+            #[cfg(not(windows))]
+            let pressed: Option<String> = None;
+            if let Some(candidate) =
+                shortcut_from_press(pressed.as_deref(), text.as_str(), control, alt, shift, meta)
+            {
                 apply_shortcut(&mut c, &candidate);
             }
             if let Some(w) = ui_weak.upgrade() {
@@ -3638,6 +3698,7 @@ fn main() {
             with_active_controller(&weak, |c, w| {
                 c.connection_busy = false;
                 c.sign_in_cancelled = true;
+                forget_sign_in_url();
                 match c.active_sign_in {
                     ActiveSignIn::Microsoft => {
                         c.microsoft_account = c.held_microsoft.clone();

@@ -1071,10 +1071,9 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
     }
 }
 
-/// Tray context-menu labels.
+/// Tray context-menu labels; "Today" comes from [`UiStrings::today_button`].
 pub struct TrayMenuCopy {
     pub open: &'static str,
-    pub today: &'static str,
     pub settings: &'static str,
     pub sponsor: &'static str,
     pub exit: &'static str,
@@ -1084,28 +1083,24 @@ pub fn tray_menu_copy(locale: LocaleCode) -> &'static TrayMenuCopy {
     match locale {
         LocaleCode::En => &TrayMenuCopy {
             open: "Open Lightcal",
-            today: "Today",
             settings: "Settings…",
             sponsor: "♥ Sponsor Lightcal",
             exit: "Exit",
         },
         LocaleCode::Ru => &TrayMenuCopy {
             open: "Открыть Lightcal",
-            today: "Сегодня",
             settings: "Настройки…",
             sponsor: "♥ Поддержать Lightcal",
             exit: "Выход",
         },
         LocaleCode::Es => &TrayMenuCopy {
             open: "Abrir Lightcal",
-            today: "Hoy",
             settings: "Ajustes…",
             sponsor: "♥ Patrocinar Lightcal",
             exit: "Salir",
         },
         LocaleCode::Ja => &TrayMenuCopy {
             open: "Lightcal を開く",
-            today: "今日",
             settings: "設定…",
             sponsor: "♥ Lightcal を支援",
             exit: "終了",
@@ -1205,13 +1200,7 @@ mod tests {
             LocaleCode::Ja,
         ] {
             let copy = tray_menu_copy(locale);
-            for label in [
-                copy.open,
-                copy.today,
-                copy.settings,
-                copy.sponsor,
-                copy.exit,
-            ] {
+            for label in [copy.open, copy.settings, copy.sponsor, copy.exit] {
                 assert!(!label.trim().is_empty());
             }
             assert!(copy.sponsor.starts_with('♥'));

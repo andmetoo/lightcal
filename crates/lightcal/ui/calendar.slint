@@ -304,9 +304,9 @@ export component CalendarView inherits Rectangle {
     callback open-settings(int);
     callback return-to-today();
     callback select-cell(int);
-    callback toggle-event(int);
-    callback copy-event(int);
-    callback open-event(int);
+    callback toggle-event(string);
+    callback copy-event(string);
+    callback open-event(string);
     callback go-next-event();
 
     // Wheel travel since the last month step (one notch is 60 px in Slint's winit backend).
@@ -633,7 +633,7 @@ export component CalendarView inherits Rectangle {
                     alignment: start;
                     for chip in chip-row.chips : AllDayChip {
                         event: chip;
-                        clicked => { root.toggle-event(chip.index); }
+                        clicked => { root.toggle-event(chip.key); }
                     }
                 }
             }
@@ -645,8 +645,8 @@ export component CalendarView inherits Rectangle {
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;
                     open-label: root.open-label;
-                    copy => { root.copy-event(root.expanded-chip.index); }
-                    open => { root.open-event(root.expanded-chip.index); }
+                    copy => { root.copy-event(root.expanded-chip.key); }
+                    open => { root.open-event(root.expanded-chip.key); }
                 }
             }
 
@@ -655,15 +655,15 @@ export component CalendarView inherits Rectangle {
                 AgendaRow {
                     event: ev;
                     now-label: root.now-label;
-                    clicked => { root.toggle-event(ev.index); }
+                    clicked => { root.toggle-event(ev.key); }
                 }
                 if ev.expanded : EventDetails {
                     event: ev;
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;
                     open-label: root.open-label;
-                    copy => { root.copy-event(ev.index); }
-                    open => { root.open-event(ev.index); }
+                    copy => { root.copy-event(ev.key); }
+                    open => { root.open-event(ev.key); }
                 }
             }
 
