@@ -7,7 +7,7 @@
  *   bun run scripts/release.ts sign     # Sign with signtool while SimplySign Desktop is signed in
  *   bun run scripts/release.ts verify   # Verify Authenticode signature and update SHA-256
  *   bun run scripts/release.ts release  # Full pipeline: build -> stage -> signtool -> checksum
- *   bun run scripts/release.ts sign-draft vX.Y.Z      # Download that draft, sign on Windows, upload signed files
+ *   bun run scripts/release.ts sign-draft vX.Y.Z      # Download that release, sign on Windows, upload signed files
  *   bun run scripts/release.ts publish-release vX.Y.Z # Publish that draft after the signed assets are attached
  *
  * Signing uses scripts/sign-windows.ps1. Set SIGN_CERT_SHA1 (thumbprint, not a secret) in
@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
+  mkdtempSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -27,22 +28,24 @@ import {
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import {
-  UNSIGNED_EXE,
   assertChecksum,
   assertFilesExist,
-  assertUnsignedDraft,
+  assertReleaseExists,
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
   missingSignedAssets,
+  matchingBuildRuns,
   parseReleaseView,
   publishedReleaseNotes,
   publishedReleaseTitle,
   signedUploadPaths,
+  signingAsset,
   tagForVersion,
   unsignedAssetsPresent,
   uploadArgs,
   versionFromCheckout,
+  verifyReleaseFiles,
 } from "./release-draft.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -292,7 +295,7 @@ function loadRelease(tag: string) {
     return parseReleaseView(ghJson(["release", "view", tag, "--json", "isDraft,assets,url"]));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/release not found/i.test(message) || /not found/i.test(message)) return null;
+    if (/release not found/i.test(message)) return null;
     throw error;
   }
 }
@@ -309,32 +312,17 @@ function signDraft(): void {
   }
   const version = draftVersion();
   const tag = tagForVersion(version);
-  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-Check"]);
   ensureGh();
   const view = loadRelease(tag);
-  assertUnsignedDraft(view, tag);
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "sign-windows.ps1"), "-Check"]);
 
-  const dir = join(ROOT, "target", "draft-sign");
-  mkdirSync(dir, { recursive: true });
-  const downloaded = ghInherit([
-    "release",
-    "download",
-    tag,
-    "--dir",
-    dir,
-    "--clobber",
-    "--pattern",
-    UNSIGNED_EXE,
-    "--pattern",
-    `${UNSIGNED_EXE}.sha256`,
-  ]);
-  if (downloaded !== 0) {
-    throw new Error(`Could not download ${UNSIGNED_EXE} from draft ${tag}.`);
-  }
-  const exePath = join(dir, UNSIGNED_EXE);
+  const dir = releaseDownloadDirectory(tag);
+  const asset = downloadSigningInput(view, tag, dir);
+  const exePath = join(dir, asset);
   const bytes = readFileSync(exePath);
-  assertChecksum(bytes, readFileSync(`${exePath}.sha256`, "utf8"), UNSIGNED_EXE);
+  assertChecksum(bytes, readFileSync(`${exePath}.sha256`, "utf8"), asset);
   assertWindowsExecutable(bytes);
+  assertExecutableVersion(exePath, version);
 
   mkdirSync(DIST_DIR, { recursive: true });
   try {
@@ -354,26 +342,88 @@ function signDraft(): void {
 
   const uploads = signedUploadPaths(ROOT, version);
   assertFilesExist(uploads, existsSync);
-  console.log(`=== Uploading signed files to draft ${tag} ===`);
-  if (ghInherit(uploadArgs(tag, uploads)) !== 0) {
-    throw new Error(`Upload to draft ${tag} failed. Re-run just sign-draft ${tag} after signing finishes.`);
+  // Only an explicit publish-release command changes visibility.
+  if (!loadRelease(tag)) {
+    if (ghInherit(["release", "create", tag, "--verify-tag", "--draft", "--title", publishedReleaseTitle(version), "--notes", "Signed Windows build. Awaiting explicit publication."]) !== 0) {
+      throw new Error(`Could not create draft ${tag}; signed files remain in target/dist and target/nsis.`);
+    }
   }
-  console.log(`Uploaded. The release stays a draft. Publish it with: just publish-release ${tag}`);
+  console.log(`=== Uploading signed files to release ${tag} ===`);
+  if (ghInherit(uploadArgs(tag, uploads)) !== 0) {
+    throw new Error(`Upload to release ${tag} failed. Re-run just sign-draft ${tag} after signing finishes.`);
+  }
+  console.log(`Uploaded. Release visibility is unchanged. To publish/promote it: just publish-release ${tag}`);
+}
+
+function downloadSigningInput(view: ReturnType<typeof loadRelease>, tag: string, dir: string): string {
+  if (view) {
+    let asset: string | undefined;
+    try { asset = signingAsset(view); } catch { /* Try the matching CI artifact below. */ }
+    if (asset) {
+      const downloaded = ghInherit([
+        "release", "download", tag, "--dir", dir,
+        "--pattern", asset, "--pattern", `${asset}.sha256`,
+      ]);
+      if (downloaded !== 0) throw new Error(`Could not download ${asset} from release ${tag}.`);
+      return asset;
+    }
+  }
+  const commit = ghJson(["api", `repos/{owner}/{repo}/commits/${tag}`, "--jq", ".sha"]);
+  const runs = JSON.parse(ghJson(["run", "list", "--workflow", "windows-build.yml", "--branch", tag,
+    "--event", "push", "--limit", "30", "--json", "databaseId,headSha,status,event"]));
+  for (const run of matchingBuildRuns(runs, commit)) {
+    const artifacts = JSON.parse(ghJson(["api", `repos/{owner}/{repo}/actions/runs/${run.databaseId}/artifacts`]));
+    if (!artifacts.artifacts.some((artifact: { name: string; expired: boolean }) => artifact.name === "lightcal-windows-x64-unsigned" && !artifact.expired)) continue;
+    console.log(`Release has no application asset. Downloading CI build ${run.databaseId} for ${tag} (${commit}).`);
+    if (ghInherit(["run", "download", String(run.databaseId), "--name", "lightcal-windows-x64-unsigned", "--dir", dir]) !== 0) {
+      throw new Error(`Could not download build ${run.databaseId}.`);
+    }
+    return signingAsset({ isDraft: true, assets: readdirSync(dir).map((name) => ({ name })) });
+  }
+  throw new Error(`No completed Windows build artifact for ${tag} (${commit}). Wait for the build in GitHub Actions. To rebuild an existing tag: gh workflow run windows-build.yml --ref main -f release_tag=${tag}`);
+}
+
+function releaseDownloadDirectory(tag: string): string {
+  const parent = join(ROOT, "target", "release-sign", tag);
+  mkdirSync(parent, { recursive: true });
+  return mkdtempSync(join(parent, "download-"));
+}
+
+function assertExecutableVersion(path: string, version: string): void {
+  const escaped = path.replaceAll("'", "''");
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-Command",
+    `$actual = [Diagnostics.FileVersionInfo]::GetVersionInfo('${escaped}').ProductVersion; if ($actual -ne '${version}') { throw "Payload ProductVersion $actual differs from release version ${version}" }`,
+  ]);
+}
+
+function verifyPortablePayload(archive: string, executable: string): void {
+  runCmd(["pwsh", "-NoLogo", "-NoProfile", "-File", join(ROOT, "scripts", "verify-portable.ps1"),
+    "-Archive", archive, "-Executable", executable,
+  ]);
 }
 
 function publishDraft(): void {
+  if (process.platform !== "win32") throw new Error("Publish from Windows so Authenticode can be verified before publication.");
   const version = draftVersion();
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
-  assertUnsignedDraft(view, tag);
-  const missing = missingSignedAssets(view!, version);
+  assertReleaseExists(view, tag);
+  const missing = missingSignedAssets(view, version);
   if (missing.length > 0) {
     throw new Error(
-      `Draft ${tag} is missing signed files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`,
+      `Release ${tag} is missing files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`,
     );
   }
-  for (const name of unsignedAssetsPresent(view!, tag)) {
+  const downloaded = releaseDownloadDirectory(tag);
+  const names = signedUploadPaths(ROOT, version).map((path) => basename(path));
+  if (ghInherit(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])]) !== 0) {
+    throw new Error(`Could not download release ${tag} for signature verification.`);
+  }
+  verifyReleaseFiles(downloaded, version, readFileSync, verifySignature, verifyPortablePayload);
+  assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
+  assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);
+  for (const name of unsignedAssetsPresent(view, tag)) {
     console.log(`Removing unsigned draft file ${name}`);
     if (ghInherit(deleteAssetArgs(tag, name)) !== 0) {
       throw new Error(`Could not remove unsigned file ${name} from ${tag}.`);
@@ -385,7 +435,7 @@ function publishDraft(): void {
   writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
   console.log(`=== Publishing ${tag} ===`);
   if (ghInherit(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath)) !== 0) {
-    throw new Error(`Could not publish ${tag}. It remains a draft when the edit fails.`);
+    throw new Error(`Could not publish ${tag}. Check the release state in GitHub before retrying.`);
   }
   console.log(`Published ${tag}.`);
 }

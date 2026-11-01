@@ -6,6 +6,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag to rebuild and attach (for example v0.3.0); empty means review build"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -18,7 +23,11 @@ jobs:
   portable:
     name: Unsigned Windows build
     runs-on: windows-latest
+    outputs:
+      release_tag: ${{ steps.release-tag.outputs.tag }}
     env:
+      RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+      LIGHTCAL_RELEASE_VERSION: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
       LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
       LIGHTCAL_GOOGLE_CLIENT_ID: ${{ vars.LIGHTCAL_GOOGLE_CLIENT_ID }}
       LIGHTCAL_UPDATE_CERT_SHA256: ${{ vars.LIGHTCAL_UPDATE_CERT_SHA256 }}
@@ -26,22 +35,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
           persist-credentials: false
-          fetch-depth: ${{ startsWith(github.ref, 'refs/tags/') && '0' || '1' }}
+          fetch-depth: ${{ (inputs.release_tag || startsWith(github.ref, 'refs/tags/')) && '0' || '1' }}
 
       - name: Verify release tag
-        if: startsWith(github.ref, 'refs/tags/')
+        id: release-tag
         shell: pwsh
         run: |
+          if (-not $env:RELEASE_TAG) { exit 0 }
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tags must be a stable version such as v0.3.0."
+          }
           git fetch --no-tags origin main:refs/remotes/origin/main
-          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch main." }
+          git merge-base --is-ancestor HEAD origin/main
           if ($LASTEXITCODE -ne 0) {
             throw "Release tags must point to a commit contained in main."
           }
 
-          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+$') {
-            throw "Release tags must be a stable version such as v0.2.0."
-          }
+          "tag=$env:RELEASE_TAG" >> $env:GITHUB_OUTPUT
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -87,34 +100,30 @@ jobs:
           retention-days: 14
 
   release:
-    name: Open unsigned draft release
-    if: startsWith(github.ref, 'refs/tags/')
+    name: Attach Windows build to release
+    if: needs.portable.outputs.release_tag != ''
     needs: portable
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
       - name: Download release assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: lightcal-windows-x64-unsigned
           path: release-assets
 
-      - name: Open unsigned draft release
+      - name: Attach Windows build to release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.portable.outputs.release_tag }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          tag="${RELEASE_TAG}"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Refusing to open a draft for unexpected tag: $tag" >&2
+            echo "Unexpected release tag: $tag" >&2
             exit 1
           fi
           mapfile -t zips < <(find release-assets -type f -name '*.zip' | sort)
@@ -127,46 +136,43 @@ jobs:
             exit 1
           fi
           mkdir -p named
-          cp "${exes[0]}" named/lightcal-unsigned.exe
-          cp "${zips[0]}" "named/lightcal-${tag}-windows-x64-unsigned.zip"
-          cp "${setups[0]}" "named/lightcal-${tag}-windows-x64-unsigned-setup.exe"
+          version="${tag#v}"
+          cp "${exes[0]}" named/lightcal.exe
+          cp "${zips[0]}" "named/lightcal-${tag}-windows-x64.zip"
+          cp "${setups[0]}" "named/lightcal-${version}-windows-x64-setup.exe"
           sum_text="$(tr -d '\r' < "${exe_sums[0]}")"
           expected_name="$(awk '{print $2}' <<< "$sum_text")"
           expected_hash="$(awk '{print $1}' <<< "$sum_text")"
-          actual_hash="$(sha256sum named/lightcal-unsigned.exe | awk '{print $1}')"
+          actual_hash="$(sha256sum named/lightcal.exe | awk '{print $1}')"
           if [[ "$expected_name" != "lightcal-unsigned.exe" || "$expected_hash" != "$actual_hash" ]]; then
             echo "Unsigned executable checksum does not match the build." >&2
             exit 1
           fi
           (
             cd named
-            printf '%s  lightcal-unsigned.exe\n' "$actual_hash" > lightcal-unsigned.exe.sha256
-            sha256sum -c lightcal-unsigned.exe.sha256
-            sha256sum "lightcal-${tag}-windows-x64-unsigned.zip" > "lightcal-${tag}-windows-x64-unsigned.zip.sha256"
-            sha256sum "lightcal-${tag}-windows-x64-unsigned-setup.exe" > "lightcal-${tag}-windows-x64-unsigned-setup.exe.sha256"
+            printf '%s  lightcal.exe\n' "$actual_hash" > lightcal.exe.sha256
+            sha256sum -c lightcal.exe.sha256
+            sha256sum "lightcal-${tag}-windows-x64.zip" > "lightcal-${tag}-windows-x64.zip.sha256"
+            sha256sum "lightcal-${version}-windows-x64-setup.exe" > "lightcal-${version}-windows-x64-setup.exe.sha256"
           )
-          if [[ -e named/lightcal.exe ]]; then
-            echo "Refusing to attach an unsigned file named lightcal.exe." >&2
-            exit 1
-          fi
           notes="${RUNNER_TEMP}/lightcal-draft-notes.md"
           cat > "$notes" <<EOF
-          Unsigned Windows draft for ${tag}.
+          Windows build for ${tag}.
 
           These files are not Authenticode-signed. SimpleSign Desktop runs only on the maintainer's Windows PC, so this workflow does not sign them.
 
-          On that PC, check out this tag and run just sign-draft. It downloads lightcal-unsigned.exe, checks the SHA-256, signs the application, builds the NSIS setup from that signed application, signs the setup, and uploads the signed files to this draft.
+          On that PC, run just sign-draft ${tag}. It downloads the application, checks SHA-256, signs it, rebuilds NSIS with the signed payload, signs the setup, and replaces the attached files.
 
-          The draft stays unpublished. When the signed lightcal.exe asset should become the public release, run just publish-release from the same tag.
+          Signing preserves draft/prerelease/public status. Run just publish-release ${tag} to explicitly publish/promote the verified signed release.
           EOF
-          title="Lightcal ${tag} (unsigned draft)"
+          title="Lightcal ${tag}"
           files=(
-            "named/lightcal-unsigned.exe"
-            "named/lightcal-unsigned.exe.sha256"
-            "named/lightcal-${tag}-windows-x64-unsigned.zip"
-            "named/lightcal-${tag}-windows-x64-unsigned.zip.sha256"
-            "named/lightcal-${tag}-windows-x64-unsigned-setup.exe"
-            "named/lightcal-${tag}-windows-x64-unsigned-setup.exe.sha256"
+            "named/lightcal.exe"
+            "named/lightcal.exe.sha256"
+            "named/lightcal-${tag}-windows-x64.zip"
+            "named/lightcal-${tag}-windows-x64.zip.sha256"
+            "named/lightcal-${version}-windows-x64-setup.exe"
+            "named/lightcal-${version}-windows-x64-setup.exe.sha256"
           )
           for file in "${files[@]}"; do
             if [[ ! -f "$file" ]]; then
@@ -174,14 +180,18 @@ jobs:
               exit 1
             fi
           done
-          if draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)"; then
-            if [[ "$draft" != "true" ]]; then
-              echo "::error::${tag} is already published. A signed upload needs a new version." >&2
-              exit 1
-            fi
-            gh release upload "$tag" "${files[@]}" --clobber
-            gh release edit "$tag" --draft=true --title "$title" --notes-file "$notes"
+          # An existing release may be a draft, prerelease, or stable release.
+          # Never overwrite existing assets: a rerun must not replace signed files.
+          if gh release view "$tag" --json assets > existing.json 2>/dev/null; then
+            for file in "${files[@]}"; do
+              name="$(basename "$file")"
+              if jq -e --arg name "$name" '.assets | any(.name == $name)' existing.json > /dev/null; then
+                echo "Keeping existing asset: $name"
+              else
+                gh release upload "$tag" "$file"
+              fi
+            done
           else
             gh release create "$tag" --draft --verify-tag --title "$title" --notes-file "$notes" "${files[@]}"
           fi
-          echo "Draft ${tag} is unsigned. On Windows, at this tag: just sign-draft" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build attached to ${tag}; existing assets and release visibility preserved. On Windows: just sign-draft ${tag}" >> "$GITHUB_STEP_SUMMARY"

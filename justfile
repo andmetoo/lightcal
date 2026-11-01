@@ -51,11 +51,11 @@ build-release:
 sign-release:
     bun run scripts/release.ts sign
 
-# Download draft vX.Y.Z, sign it on Windows, and upload the signed files
+# Download release/CI build vX.Y.Z, sign on Windows, and replace its assets (any release status)
 sign-draft version:
     bun run scripts/release.ts sign-draft {{version}}
 
-# Publish draft vX.Y.Z after the signed executable, archive, and setup are attached
+# Verify attached signatures on Windows, then explicitly publish/promote vX.Y.Z
 publish-release version:
     bun run scripts/release.ts publish-release {{version}}
 
