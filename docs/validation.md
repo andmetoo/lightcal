@@ -37,7 +37,7 @@ Hidden mode must not repaint continuously, run a busy timer, or poll the tray. C
 
 Pure Rust unit tests cover date arithmetic and state transitions. Integration tests use a temporary `LIGHTCAL_DATA_DIR`. OS shell and accessibility behavior need real desktop smoke checks; a headless successful build is insufficient. Add regression tests for concrete defects, not snapshots duplicating the implementation.
 
-Current checks: `python scripts/check_docs.py` (Python 3.9 or newer), `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. The documentation check validates local file targets and whitespace, not external URLs, heading anchors, or YAML semantics.
+Current checks: `bun scripts/check-docs.ts`, `bun test scripts`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked`. The documentation check validates local file targets and whitespace, not external URLs, heading anchors, or YAML semantics.
 
 ## Review regression checks
 

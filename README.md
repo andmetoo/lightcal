@@ -31,8 +31,8 @@ Rust and [just](https://github.com/casey/just) are required.
 
 ```powershell
 just check
-just build-release
-just build-installer
+just release build
+just installer
 ```
 
 `just run-demo` needs a display and uses sample events. Headless renders do not use the network:

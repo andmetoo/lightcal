@@ -173,7 +173,7 @@ function verifySignature(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN,
     throw new Error("SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env so publication can verify the signer.");
   }
   if (!existsSync(target)) {
-    console.error(`Error: No binary found at ${target}. Run 'just build-release' first.`);
+    console.error(`Error: No binary found at ${target}. Run 'just release build' first.`);
     process.exit(1);
   }
   const signtool = findSignTool();

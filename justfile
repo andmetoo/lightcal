@@ -1,97 +1,45 @@
-set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
+set windows-shell := ["pwsh.exe", "-NoLogo", "-NoProfile", "-Command"]
 
-# List available recipes
 default:
     @just --list
 
-# Run documentation, draft-signing script tests, formatting, clippy, and unit tests
-check: check-docs check-scripts fmt-check clippy test
-
-# Check Markdown links and trailing whitespace
-check-docs:
-    python scripts/check_docs.py
-
-# Check the draft-release signing plan
-check-scripts:
-    bun test scripts/release-draft.test.ts
-
-# Check Rust formatting
-fmt-check:
+# Linux gate: docs, script tests, format, Clippy, tests
+check:
+    bun scripts/check-docs.ts
+    bun test scripts
     cargo fmt --all -- --check
-
-# Run Clippy across the workspace with warnings denied
-clippy:
     cargo clippy --workspace --all-targets --locked -- -D warnings
-
-# Run all workspace unit tests
-test:
     cargo test --workspace --locked
 
-# Run the compact calendar
-run:
-    cargo run -p lightcal -- --compact
+# Compact calendar; extra flags pass through to lightcal
+run *args:
+    cargo run -p lightcal -- --compact {{args}}
 
-# Run Lightcal in compact tray popup mode
-run-tray:
-    cargo run -p lightcal -- --compact
+# Sample events only; never connects to real calendars
+run-demo: (run "--synthetic-calendars")
 
-# Demo fixture only; never connects to real calendars
-run-demo:
-    cargo run -p lightcal -- --compact --synthetic-calendars
-
-# Explicit read-only Windows calendar probe (excluded from ordinary tests)
+# Read-only Windows calendar probe, excluded from ordinary tests
 probe-calendars:
     cargo test -p lightcal real_windows_store_does_not_crash -- --ignored --nocapture
 
-# Build optimized release binary and stage to target/dist/lightcal.exe with SHA-256 via Bun
-build-release:
-    bun run scripts/release.ts build
+# Release step: build | sign | verify | certificate-info | package | sign-installer | release
+release step="release" *args:
+    bun run scripts/release.ts {{step}} {{args}}
 
-# Sign target/dist/lightcal.exe with signtool while SimplySign Desktop is signed in
-sign-release:
-    bun run scripts/release.ts sign
+# Download CI build vX.Y.Z, sign it on Windows and replace its assets
+sign-draft version: (release "sign-draft" version)
 
-# Download release/CI build vX.Y.Z, sign on Windows, and replace its assets (any release status)
-sign-draft version:
-    bun run scripts/release.ts sign-draft {{version}}
+# Verify signatures, then publish or promote vX.Y.Z
+publish-release version: (release "publish-release" version)
 
-# Verify attached signatures on Windows, then explicitly publish/promote vX.Y.Z
-publish-release version:
-    bun run scripts/release.ts publish-release {{version}}
+# NSIS setup; -SkipBuild packages the existing release EXE
+installer *args:
+    pwsh -NoLogo -NoProfile -File scripts/package-nsis.ps1 {{args}}
 
-# Verify Authenticode signature on target/dist/lightcal.exe and refresh SHA-256 checksum
-verify-release:
-    bun run scripts/release.ts verify
-
-# Print the public SHA-256 signing certificate fingerprint after signature verification
-certificate-info:
-    bun run scripts/release.ts certificate-info
-
-# Package portable archive with license/notices/readme and SHA-256 (permits unsigned review builds)
-package-release:
-    bun run scripts/release.ts package
-
-# Build, sign, and verify the app and NSIS setup; also package the portable ZIP
-release:
-    bun run scripts/release.ts release
-
-# Build an unsigned NSIS review installer
-build-installer:
-    pwsh -NoLogo -NoProfile -File scripts/package-nsis.ps1
-
-# Package the existing release EXE without rebuilding
-package-installer:
-    pwsh -NoLogo -NoProfile -File scripts/package-nsis.ps1 -SkipBuild
-
-# Verify a signed app, package it, sign the setup, and verify the setup
-sign-installer:
-    bun run scripts/release.ts sign-installer
-
-# Fetch the pinned portable compiler without a system installation
+# Fetch the pinned portable NSIS compiler into target/tools
 prepare-nsis:
     pwsh -NoLogo -NoProfile -File scripts/prepare-nsis.ps1
 
-# Exercise a compile-time isolated installer/uninstaller in target/ only
+# Isolated installer and uninstaller test inside target/
 test-installer:
     pwsh -NoLogo -NoProfile -File scripts/test-nsis.ps1
-

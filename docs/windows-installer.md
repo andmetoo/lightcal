@@ -4,7 +4,7 @@ Windows releases use NSIS setup executables alongside the portable application. 
 
 ## Build
 
-Run `just build-installer`, or `pwsh -NoProfile -File scripts/package-nsis.ps1`. The script builds locked release code and writes `target/nsis/lightcal-<version>-windows-x64-setup.exe` and a SHA-256 file. `just package-installer` skips Cargo compilation and packages the current `target/release/lightcal.exe`.
+Run `just installer`, or `pwsh -NoProfile -File scripts/package-nsis.ps1`. The script builds locked release code and writes `target/nsis/lightcal-<version>-windows-x64-setup.exe` and a SHA-256 file. `just installer -SkipBuild` skips Cargo compilation and packages the current `target/release/lightcal.exe`.
 
 The script uses `LIGHTCAL_NSIS_COMPILER`, `makensis.exe` on PATH, or an installed NSIS compiler. Otherwise it downloads the pinned official portable NSIS 3.13 archive into ignored `target/tools`, verifies its published SHA-256, and extracts it there. `just prepare-nsis` performs that step separately. It does not install NSIS or change Windows configuration. The archive and hash come from the [official download page](https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13.zip/download).
 
@@ -23,7 +23,7 @@ The existing trusted updater continues to require a signed release asset named e
 
 ## Signing
 
-`just release` builds and signs `target/dist/lightcal.exe` with `signtool`, verifies it, creates the portable ZIP and NSIS setup from that signed payload, then signs and verifies the setup. `just sign-installer` packages an already signed staged application and signs the resulting setup. The signed route fails if the application or setup cannot pass Authenticode validation; it never labels an unsigned review build as signed.
+`just release` builds and signs `target/dist/lightcal.exe` with `signtool`, verifies it, creates the portable ZIP and NSIS setup from that signed payload, then signs and verifies the setup. `just release sign-installer` packages an already signed staged application and signs the resulting setup. The signed route fails if the application or setup cannot pass Authenticode validation; it never labels an unsigned review build as signed.
 
 Signing uses `scripts/sign-windows.ps1`: `signtool sign /sha1` with the `SIGN_CERT_SHA1` thumbprint from `.env`, and a Certum timestamp (`http://time.certum.pl`). Certum SimplySign Desktop must already be signed in, so the certificate is in the current-user store. The script does not launch SimplySign. Keys stay in that tool. Set `SIGNTOOL` only when `signtool.exe` is neither on `PATH` nor in the Windows SDK. The generated uninstaller is not separately signed by this workflow. `LIGHTCAL_UPDATE_CERT_SHA256` remains the public certificate pin required for automatic application updates.
 
