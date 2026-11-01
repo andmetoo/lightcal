@@ -204,6 +204,10 @@ pub fn is_verified_github_url(url: &str) -> bool {
         && (parsed.path() == PATH || parsed.path().starts_with(&format!("{PATH}/")))
 }
 
+/// GitHub Sponsors pages for the maintainer (monthly and one-time). Exact matches only.
+pub const SPONSOR_URL: &str = "https://github.com/sponsors/andmetoo";
+pub const SPONSOR_ONCE_URL: &str = "https://github.com/sponsors/andmetoo?frequency=one-time";
+
 pub fn is_allowed_external_link(url: &str) -> bool {
     if let Ok(uri) = url::Url::parse(url) {
         if uri.scheme() == "https"
@@ -220,6 +224,8 @@ pub fn is_allowed_external_link(url: &str) -> bool {
     }
     url == "https://github.com/andmetoo/lightcal"
         || url == "https://koona.app"
+        || url == SPONSOR_URL
+        || url == SPONSOR_ONCE_URL
         || url == "ms-settings:privacy-calendar"
         || url == "ms-settings:emailandaccounts"
         || is_verified_github_url(url)
@@ -404,6 +410,14 @@ mod tests {
         assert!(is_allowed_external_link("ms-settings:privacy-calendar"));
         assert!(is_allowed_external_link("ms-settings:emailandaccounts"));
         assert!(!is_allowed_external_link("ms-settings:windowsupdate"));
+        assert!(is_allowed_external_link(SPONSOR_URL));
+        assert!(is_allowed_external_link(SPONSOR_ONCE_URL));
+        assert!(!is_allowed_external_link(
+            "https://github.com/sponsors/someone-else"
+        ));
+        assert!(!is_allowed_external_link(
+            "https://github.com/sponsors/andmetoo?frequency=one-time&evil=1"
+        ));
         assert!(!is_allowed_external_link("https://malicious.site"));
         assert!(!is_allowed_external_link("cmd.exe"));
     }

@@ -7,7 +7,46 @@
 
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { BrandMark, CaptionButton, ControlFrame, Keycap, LinkButton, Menu, MenuOption, Select, Switch, TextField } from "controls.slint";
+import { BrandMark, CaptionButton, ControlFrame, Icon, Keycap, LinkButton, Menu, MenuOption, Select, Switch, TextField } from "controls.slint";
+
+// Heart + label that opens GitHub Sponsors (footer, always visible).
+component SponsorButton inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+
+    height: 24px;
+    width: self.preferred-width;
+    border-radius: Theme.radius-control;
+    background: touch.pressed ? Theme.press : touch.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 8px;
+        spacing: 5px;
+        alignment: center;
+        Icon {
+            name: "heart";
+            size: 14px;
+            color: Theme.coral;
+            fill-color: Theme.coral;
+            weight: 1.5;
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.label;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-medium;
+            color: touch.has-hover ? Theme.ink : Theme.ink2;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
 import { AccountCardItem, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
@@ -1963,6 +2002,18 @@ export component SettingsView inherits Rectangle {
                         divider: true;
                         clicked => { root.open-external-url("https://github.com/andmetoo/lightcal/releases"); }
                     }
+                    LinkRow {
+                        title: "♥ " + root.copy.sponsor-monthly-title;
+                        desc: root.copy.sponsor-monthly-desc;
+                        divider: true;
+                        clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
+                    }
+                    LinkRow {
+                        title: "♥ " + root.copy.sponsor-once-title;
+                        desc: root.copy.sponsor-once-desc;
+                        divider: true;
+                        clicked => { root.open-external-url("https://github.com/sponsors/andmetoo?frequency=one-time"); }
+                    }
                 }
 
                 SettingsCard {
@@ -2011,9 +2062,15 @@ export component SettingsView inherits Rectangle {
             label: root.about-link-text;
             clicked => { root.open-settings(3); }
         }
-        Text {
-            x: 220px;
-            width: parent.width - 236px;
+        SponsorButton {
+            x: parent.width - 16px - version-text.width - 8px - self.width;
+            y: (parent.height - self.height) / 2;
+            label: root.copy.sponsor-label;
+            clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
+        }
+        version-text := Text {
+            x: parent.width - 16px - self.width;
+            width: self.preferred-width;
             height: parent.height;
             text: root.about-version-text;
             font-size: Theme.type-caption;
@@ -2033,6 +2090,12 @@ export component SettingsView inherits Rectangle {
             y: (parent.height - self.height) / 2;
             label: root.back-to-calendar-text;
             clicked => { root.open-settings(2); }
+        }
+        SponsorButton {
+            x: parent.width - 12px - self.width;
+            y: (parent.height - self.height) / 2;
+            label: root.copy.sponsor-label;
+            clicked => { root.open-external-url("https://github.com/sponsors/andmetoo"); }
         }
     }
 }
