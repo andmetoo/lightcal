@@ -22,9 +22,8 @@ mod ui_tests;
 use snapshot_render::render_snapshots_to_dir;
 
 use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static SIGN_IN_EPOCH: AtomicU64 = AtomicU64::new(0);
+static SIGN_IN_GATE: lightcal::calendars::sign_in::SignInGate =
+    lightcal::calendars::sign_in::SignInGate::new();
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActiveSignIn {
@@ -1398,6 +1397,21 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             _ => true,
         };
         if !ctrl.connection_busy && !ctrl.provider_loading && allowed {
+            let sign_in_epoch = if matches!(
+                action,
+                CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
+            ) {
+                match SIGN_IN_GATE.begin() {
+                    Ok(epoch) => epoch,
+                    Err(error) => {
+                        ctrl.connection_message = error;
+                        ctrl.sync_to_ui(ui);
+                        return;
+                    }
+                }
+            } else {
+                0
+            };
             ctrl.connection_busy = true;
             ctrl.connection_message.clear();
             ctrl.provider_request += 1;
@@ -1405,6 +1419,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 ctrl.store.dir().to_path_buf(),
                 ctrl.cal_state.today,
                 ctrl.microsoft_account.clone(),
+                sign_in_epoch,
             ));
             if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
                 ctrl.held_microsoft = ctrl.microsoft_account.clone();
@@ -1429,16 +1444,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             ctrl.sync_to_ui(ui);
         }
     });
-    let Some((dir, anchor, previous_account)) = config else {
+    let Some((dir, anchor, previous_account, sign_in_epoch)) = config else {
         return;
-    };
-    let sign_in_epoch = if matches!(
-        action,
-        CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
-    ) {
-        SIGN_IN_EPOCH.fetch_add(1, Ordering::Relaxed) + 1
-    } else {
-        0
     };
     std::thread::spawn(move || {
         let operation = || -> Result<Option<String>, String> {
@@ -1450,7 +1457,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                     let token = lightcal::calendars::microsoft::connect(client, |url| {
                         let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
                     })?;
-                    if SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
+                    if !SIGN_IN_GATE.is_current(sign_in_epoch) {
                         return Err("Sign-in cancelled".into());
                     }
                     microsoft_token = Some(token);
@@ -1463,7 +1470,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                         lightcal::calendars::google::connect(client_id, client_secret, |url| {
                             let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
                         })?;
-                    if SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
+                    if !SIGN_IN_GATE.is_current(sign_in_epoch) {
                         return Err("Sign-in cancelled".into());
                     }
                     google_token = Some(token);
@@ -1471,62 +1478,69 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 _ => {}
             }
             let _guard = lightcal::secure_store::credential_lock()?;
-            let store = lightcal::secure_store::SecureStore::new(&dir);
-            let mut credentials = store.load()?;
-            let mut removed = None;
-            match &action {
-                CalendarAction::ConnectMicrosoft(client) => {
-                    credentials.microsoft_refresh_token = microsoft_token;
-                    credentials.microsoft_client_id = Some(client.clone());
-                }
-                CalendarAction::ConnectGoogle {
-                    client_id,
-                    client_secret,
-                } => {
-                    credentials.google_refresh_token = google_token;
-                    credentials.google_client_id = Some(client_id.clone());
-                    credentials.google_client_secret = Some(client_secret.clone());
-                }
-                CalendarAction::DisconnectMicrosoft => {
-                    credentials.microsoft_refresh_token = None;
-                    credentials.microsoft_client_id = None;
-                    removed = Some("graph:".to_string());
-                }
-                CalendarAction::DisconnectGoogle => {
-                    credentials.google_refresh_token = None;
-                    credentials.google_client_id = None;
-                    credentials.google_client_secret = None;
-                    removed = Some("google:".to_string());
-                }
-                CalendarAction::AddIcs(name, address) => {
-                    let id = lightcal::calendars::add_feed(&mut credentials, name, address)?;
-                    let feed = credentials
-                        .ics
-                        .iter()
-                        .find(|f| f.id == id)
-                        .ok_or("Could not prepare ICS subscription")?;
-                    lightcal::calendars::ics::fetch(feed, anchor)?;
-                }
-                CalendarAction::Remove(id) => {
-                    if id.starts_with("graph:") {
+            let save = || -> Result<Option<String>, String> {
+                let store = lightcal::secure_store::SecureStore::new(&dir);
+                let mut credentials = store.load()?;
+                let mut removed = None;
+                match &action {
+                    CalendarAction::ConnectMicrosoft(client) => {
+                        credentials.microsoft_refresh_token = microsoft_token;
+                        credentials.microsoft_client_id = Some(client.clone());
+                    }
+                    CalendarAction::ConnectGoogle {
+                        client_id,
+                        client_secret,
+                    } => {
+                        credentials.google_refresh_token = google_token;
+                        credentials.google_client_id = Some(client_id.clone());
+                        credentials.google_client_secret = Some(client_secret.clone());
+                    }
+                    CalendarAction::DisconnectMicrosoft => {
                         credentials.microsoft_refresh_token = None;
                         credentials.microsoft_client_id = None;
                         removed = Some("graph:".to_string());
-                    } else if id.starts_with("google:") {
+                    }
+                    CalendarAction::DisconnectGoogle => {
                         credentials.google_refresh_token = None;
                         credentials.google_client_id = None;
                         credentials.google_client_secret = None;
                         removed = Some("google:".to_string());
-                    } else if id.starts_with("ics:") {
-                        credentials.ics.retain(|f| f.id != *id);
-                        removed = Some(id.clone());
-                    } else {
-                        return Err("Disable legacy Windows calendars using the switch".into());
+                    }
+                    CalendarAction::AddIcs(name, address) => {
+                        let id = lightcal::calendars::add_feed(&mut credentials, name, address)?;
+                        let feed = credentials
+                            .ics
+                            .iter()
+                            .find(|f| f.id == id)
+                            .ok_or("Could not prepare ICS subscription")?;
+                        lightcal::calendars::ics::fetch(feed, anchor)?;
+                    }
+                    CalendarAction::Remove(id) => {
+                        if id.starts_with("graph:") {
+                            credentials.microsoft_refresh_token = None;
+                            credentials.microsoft_client_id = None;
+                            removed = Some("graph:".to_string());
+                        } else if id.starts_with("google:") {
+                            credentials.google_refresh_token = None;
+                            credentials.google_client_id = None;
+                            credentials.google_client_secret = None;
+                            removed = Some("google:".to_string());
+                        } else if id.starts_with("ics:") {
+                            credentials.ics.retain(|f| f.id != *id);
+                            removed = Some(id.clone());
+                        } else {
+                            return Err("Disable legacy Windows calendars using the switch".into());
+                        }
                     }
                 }
+                store.save(&credentials)?;
+                Ok(removed)
+            };
+            if sign_in_epoch != 0 {
+                SIGN_IN_GATE.commit(sign_in_epoch, save)
+            } else {
+                save()
             }
-            store.save(&credentials)?;
-            Ok(removed)
         };
         let result = operation();
         let added_ics = matches!(action, CalendarAction::AddIcs(..));
@@ -1539,7 +1553,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             _ => (None, None),
         };
         let _ = slint::invoke_from_event_loop(move || {
-            if sign_in_epoch != 0 && SIGN_IN_EPOCH.load(Ordering::Relaxed) != sign_in_epoch {
+            if sign_in_epoch != 0 && !SIGN_IN_GATE.is_current(sign_in_epoch) {
                 return;
             }
             let success = result.is_ok();
@@ -2750,7 +2764,17 @@ fn main() {
     {
         let weak = ui.as_weak();
         ui.on_cancel_account_sign_in(move || {
-            SIGN_IN_EPOCH.fetch_add(1, Ordering::Relaxed);
+            match SIGN_IN_GATE.cancel() {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(error) => {
+                    with_active_controller(&weak, |c, w| {
+                        c.connection_message = error;
+                        c.sync_to_ui(w);
+                    });
+                    return;
+                }
+            }
             with_active_controller(&weak, |c, w| {
                 c.connection_busy = false;
                 c.sign_in_cancelled = true;

@@ -3,6 +3,7 @@ pub mod account;
 pub mod google;
 pub mod ics;
 pub mod microsoft;
+pub mod sign_in;
 use crate::{
     platform::{ProviderSnapshot, ProviderStatus},
     secure_store::Credentials,
