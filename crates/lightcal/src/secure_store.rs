@@ -60,7 +60,16 @@ impl SecureStore {
             "credentials-{}.tmp",
             crate::calendars::random_key()?
         ));
-        std::fs::write(&temp, protected).map_err(|_| "Could not save protected credentials")?;
+        let written = (|| -> std::io::Result<()> {
+            use std::io::Write;
+            let mut file = std::fs::File::create(&temp)?;
+            file.write_all(&protected)?;
+            file.sync_all()
+        })();
+        if written.is_err() {
+            let _ = std::fs::remove_file(&temp);
+            return Err("Could not save protected credentials".into());
+        }
         if std::fs::rename(&temp, &self.path).is_err() {
             let _ = std::fs::remove_file(temp);
             return Err("Could not replace protected credentials".into());

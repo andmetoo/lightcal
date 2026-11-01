@@ -7,6 +7,11 @@ use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Maximum number of preserved copies of unreadable or newer-schema files.
+const MAX_PRESERVED_FILES: usize = 5;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
@@ -26,6 +31,26 @@ pub enum TrayIconMode {
     DateOnly,
     WeekdayAndDate,
     TimeAndDate,
+}
+
+fn lenient_theme<'de, D>(deserializer: D) -> Result<ThemePreference, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::String(value) => ThemePreference::from_str_lossy(&value),
+        _ => ThemePreference::default(),
+    })
+}
+
+fn lenient_tray_mode<'de, D>(deserializer: D) -> Result<TrayIconMode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::String(value) => TrayIconMode::from_str_lossy(&value),
+        _ => TrayIconMode::default(),
+    })
 }
 
 impl TrayIconMode {
@@ -188,15 +213,17 @@ pub fn local_env_value(key: &str) -> String {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Preferences {
     pub schema_version: u32,
     pub language: String,
+    #[serde(deserialize_with = "lenient_theme")]
     pub theme: ThemePreference,
     pub first_weekday: Weekday,
     pub gray_weekdays_bits: u8,
     pub show_weekday: bool,
     pub show_week_numbers: bool,
-    #[serde(default)]
+    #[serde(deserialize_with = "lenient_tray_mode")]
     pub tray_icon_mode: TrayIconMode,
     #[serde(default)]
     pub tray_icon_monochrome: bool,
@@ -274,6 +301,44 @@ impl Preferences {
     }
 }
 
+fn has_schema_version(value: &serde_json::Value) -> bool {
+    value.get("schema_version").is_some()
+}
+
+#[derive(Default)]
+struct Deviations {
+    /// Keys this build does not write.
+    unknown_keys: bool,
+    /// Known keys whose raw value differs from what this build would write back.
+    changed_values: bool,
+}
+
+impl Deviations {
+    fn any(&self) -> bool {
+        self.unknown_keys || self.changed_values
+    }
+}
+
+/// Compares the raw file against the canonical serialization of what it parsed to.
+/// Keys missing from the file are fine; anything else that differs is not an exact round trip.
+fn deviations(raw: &serde_json::Value, parsed: &Preferences) -> Deviations {
+    let mut result = Deviations::default();
+    let (serde_json::Value::Object(file), Ok(serde_json::Value::Object(expected))) =
+        (raw, serde_json::to_value(parsed))
+    else {
+        result.changed_values = true;
+        return result;
+    };
+    for (key, value) in file {
+        match expected.get(key) {
+            None => result.unknown_keys = true,
+            Some(canonical) if canonical != value => result.changed_values = true,
+            Some(_) => {}
+        }
+    }
+    result
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadOutcome {
     pub preferences: Preferences,
@@ -334,8 +399,58 @@ impl PreferencesStore {
         self.dir.join("preferences.last_good.json")
     }
 
-    pub fn preserved_corrupt_path(&self) -> PathBuf {
-        self.dir.join("preferences.preserved.json")
+    /// Existing preserved copies (`preferences.preserved-<unix-seconds>[-n].json`), oldest first.
+    pub fn preserved_files(&self) -> Vec<PathBuf> {
+        let mut files: Vec<PathBuf> = fs::read_dir(&self.dir)
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                    .filter(|path| {
+                        path.file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| {
+                                name.starts_with("preferences.preserved-")
+                                    && name.ends_with(".json")
+                            })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort_by_key(|path| {
+            fs::metadata(path)
+                .and_then(|meta| meta.modified())
+                .ok()
+                .zip(path.file_name().map(|name| name.to_os_string()))
+        });
+        files
+    }
+
+    fn preserve_existing(&self, source: &Path) {
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        for attempt in 0..1000u32 {
+            let name = if attempt == 0 {
+                format!("preferences.preserved-{seconds}.json")
+            } else {
+                format!("preferences.preserved-{seconds}-{attempt}.json")
+            };
+            let destination = self.dir.join(name);
+            if destination.exists() {
+                continue;
+            }
+            if fs::copy(source, &destination).is_ok() {
+                break;
+            }
+            return;
+        }
+        let files = self.preserved_files();
+        if files.len() > MAX_PRESERVED_FILES {
+            for stale in &files[..files.len() - MAX_PRESERVED_FILES] {
+                let _ = fs::remove_file(stale);
+            }
+        }
     }
 
     /// Loads preferences from disk. On missing file, returns defaults cleanly.
@@ -363,24 +478,42 @@ impl PreferencesStore {
             }
         };
 
+        let value = serde_json::from_str::<serde_json::Value>(&raw).ok();
+
         // First inspect schema_version if valid JSON object.
-        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Some(ver) = val.get("schema_version").and_then(|v| v.as_u64()) {
-                if ver > CURRENT_SCHEMA_VERSION as u64 {
-                    let _ = fs::copy(&path, self.preserved_corrupt_path());
-                    return LoadOutcome {
-                        preferences: self.load_last_good_or_default(),
-                        warning: Some(format!(
-                            "Preferences schema v{ver} is newer than supported v{CURRENT_SCHEMA_VERSION}; preserved original and loaded safe defaults."
-                        )),
-                        recovered_from_error: true,
-                    };
-                }
+        if let Some(ver) = value
+            .as_ref()
+            .and_then(|val| val.get("schema_version"))
+            .and_then(|v| v.as_u64())
+        {
+            if ver > CURRENT_SCHEMA_VERSION as u64 {
+                return LoadOutcome {
+                    preferences: self.load_last_good_or_default(),
+                    warning: Some(format!(
+                        "Preferences schema v{ver} is newer than supported v{CURRENT_SCHEMA_VERSION}; the original file is kept and safe defaults were loaded."
+                    )),
+                    recovered_from_error: true,
+                };
             }
+        }
+
+        // A JSON document without `schema_version` is not a preferences file (for example `{}`).
+        if value.as_ref().is_some_and(|val| !has_schema_version(val)) {
+            return LoadOutcome {
+                preferences: self.load_last_good_or_default(),
+                warning: Some(
+                    "Preferences file has no schema_version; a copy is kept and safe defaults were loaded."
+                        .to_string(),
+                ),
+                recovered_from_error: true,
+            };
         }
 
         match serde_json::from_str::<Preferences>(&raw) {
             Ok(mut prefs) => {
+                let changed = value
+                    .as_ref()
+                    .is_some_and(|val| deviations(val, &prefs).changed_values);
                 // Normalize language code to supported set (fallback to "en").
                 prefs.language = LocaleCode::from_code_or_default(&prefs.language)
                     .as_str()
@@ -388,20 +521,20 @@ impl PreferencesStore {
                 prefs.gray_weekdays_bits &= 0b0111_1111;
                 LoadOutcome {
                     preferences: prefs,
-                    warning: None,
+                    warning: changed.then(|| {
+                        "Some settings were not recognised and were reset; the original file is kept."
+                            .to_string()
+                    }),
                     recovered_from_error: false,
                 }
             }
-            Err(err) => {
-                let _ = fs::copy(&path, self.preserved_corrupt_path());
-                LoadOutcome {
-                    preferences: self.load_last_good_or_default(),
-                    warning: Some(format!(
-                        "Malformed preferences file preserved ({err}); started with safe defaults."
-                    )),
-                    recovered_from_error: true,
-                }
-            }
+            Err(err) => LoadOutcome {
+                preferences: self.load_last_good_or_default(),
+                warning: Some(format!(
+                    "Malformed preferences file ({err}); a copy is kept and safe defaults were loaded."
+                )),
+                recovered_from_error: true,
+            },
         }
     }
 
@@ -425,7 +558,11 @@ impl PreferencesStore {
             .map_err(|e| format!("Failed to create config directory: {e}"))?;
 
         let target = self.file_path();
-        let tmp = self.dir.join("preferences.json.tmp");
+        let tmp = self.dir.join(format!(
+            "preferences.json.{}-{}.tmp",
+            std::process::id(),
+            TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
         let last_good = self.last_good_path();
 
         let serialized = serde_json::to_string_pretty(prefs)
@@ -440,21 +577,32 @@ impl PreferencesStore {
                 .map_err(|e| format!("Failed to flush temporary preferences file: {e}"))?;
         }
 
-        // If the existing target is valid JSON with supported schema, copy it to last_good before replacing.
+        // Keep the user's original file when it cannot be read as current preferences, so
+        // recovering with defaults never silently destroys it. Otherwise refresh last_good.
         if target.exists() {
             if let Ok(existing_raw) = fs::read_to_string(&target) {
-                if let Ok(existing_prefs) = serde_json::from_str::<Preferences>(&existing_raw) {
-                    if existing_prefs.schema_version <= CURRENT_SCHEMA_VERSION {
-                        let _ = fs::copy(&target, &last_good);
-                    }
-                } else if !self.preserved_corrupt_path().exists() {
-                    let _ = fs::copy(&target, self.preserved_corrupt_path());
+                let exact = serde_json::from_str::<serde_json::Value>(&existing_raw)
+                    .ok()
+                    .zip(serde_json::from_str::<Preferences>(&existing_raw).ok())
+                    .is_some_and(|(value, existing)| {
+                        existing.schema_version <= CURRENT_SCHEMA_VERSION
+                            && has_schema_version(&value)
+                            && !deviations(&value, &existing).any()
+                    });
+                if exact {
+                    let _ = fs::copy(&target, &last_good);
+                } else {
+                    self.preserve_existing(&target);
                 }
+            } else {
+                self.preserve_existing(&target);
             }
         }
 
-        fs::rename(&tmp, &target)
-            .map_err(|e| format!("Failed to replace preferences file: {e}"))?;
+        fs::rename(&tmp, &target).map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            format!("Failed to replace preferences file: {e}")
+        })?;
         let _ = fs::copy(&target, &last_good);
         Ok(())
     }
@@ -529,7 +677,11 @@ mod tests {
         assert!(outcome.recovered_from_error);
         assert!(outcome.warning.is_some());
         assert_eq!(outcome.preferences.locale(), LocaleCode::Ru);
-        assert!(store.preserved_corrupt_path().exists());
+        // Loading never rewrites the file; the next save preserves it.
+        assert_eq!(
+            fs::read_to_string(store.file_path()).unwrap(),
+            "{ not valid json "
+        );
 
         // Newer schema version.
         fs::write(
@@ -627,6 +779,155 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             .unwrap()
             .contains("microsoft_client_id"));
 
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_after_recovery_preserves_original_under_unique_names() {
+        let dir = unique_temp_dir("preserve");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(store.file_path(), "{ broken original").unwrap();
+        let loaded = store.load();
+        assert!(loaded.recovered_from_error);
+        store.save(&loaded.preferences).unwrap();
+        let preserved = store.preserved_files();
+        assert_eq!(preserved.len(), 1);
+        assert_eq!(
+            fs::read_to_string(&preserved[0]).unwrap(),
+            "{ broken original"
+        );
+
+        // Newer schema, saved repeatedly, is preserved without clobbering and capped at 5.
+        for index in 0..8 {
+            fs::write(
+                store.file_path(),
+                format!(r#"{{"schema_version": 99, "n": {index}}}"#),
+            )
+            .unwrap();
+            store.save(&Preferences::default()).unwrap();
+        }
+        let preserved = store.preserved_files();
+        assert_eq!(preserved.len(), MAX_PRESERVED_FILES);
+        assert!(preserved
+            .iter()
+            .any(|path| fs::read_to_string(path).unwrap().contains(r#""n": 7"#)));
+        assert!(fs::read_dir(&dir).unwrap().all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".tmp")));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unknown_enum_values_and_missing_fields_fall_back_per_field() {
+        let dir = unique_temp_dir("lenient");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(
+            store.file_path(),
+            r#"{"schema_version": 1, "theme": "sepia", "tray_icon_mode": 7, "language": "ja", "show_event_dots": false}"#,
+        )
+        .unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_some());
+        assert!(!loaded.recovered_from_error);
+        assert_eq!(loaded.preferences.theme, ThemePreference::System);
+        assert_eq!(loaded.preferences.tray_icon_mode, TrayIconMode::DateOnly);
+        assert_eq!(loaded.preferences.locale(), LocaleCode::Ja);
+        assert!(!loaded.preferences.show_event_dots);
+        assert!(loaded.preferences.highlight_current_month);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unknown_enum_value_warns_and_original_is_preserved_on_save() {
+        let dir = unique_temp_dir("unknown_enum");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        let original = r#"{"schema_version": 1, "theme": "sepia"}"#;
+        fs::write(store.file_path(), original).unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_some());
+        assert!(!loaded.recovered_from_error);
+        assert_eq!(loaded.preferences.theme, ThemePreference::System);
+        store.save(&loaded.preferences).unwrap();
+        let preserved = store.preserved_files();
+        assert_eq!(preserved.len(), 1);
+        assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), original);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unknown_key_is_preserved_on_save_without_load_warning() {
+        let dir = unique_temp_dir("unknown_key");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(
+            store.file_path(),
+            r#"{"schema_version": 1, "from_newer_build": true}"#,
+        )
+        .unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_none());
+        store.save(&loaded.preferences).unwrap();
+        assert_eq!(store.preserved_files().len(), 1);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn object_without_schema_version_warns_and_is_preserved() {
+        let dir = unique_temp_dir("no_schema");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        for original in ["{}", r#"{"unrelated": 1}"#] {
+            fs::write(store.file_path(), original).unwrap();
+            let loaded = store.load();
+            assert!(loaded.warning.is_some(), "{original}");
+            assert!(loaded.recovered_from_error);
+            store.save(&loaded.preferences).unwrap();
+            assert!(store
+                .preserved_files()
+                .iter()
+                .any(|path| fs::read_to_string(path).unwrap() == original));
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn exact_valid_file_has_no_warning_and_no_preserved_copy() {
+        let dir = unique_temp_dir("exact");
+        let store = PreferencesStore::new(&dir);
+        let prefs = Preferences {
+            theme: ThemePreference::Dark,
+            selected_calendar_ids: BTreeSet::from(["a".to_string()]),
+            ..Preferences::default()
+        };
+        store.save(&prefs).unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_none());
+        assert!(!loaded.recovered_from_error);
+        store.save(&loaded.preferences).unwrap();
+        store.save(&loaded.preferences).unwrap();
+        assert!(store.preserved_files().is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preserved_cap_holds_for_unknown_enum_files() {
+        let dir = unique_temp_dir("enum_cap");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        for index in 0..8 {
+            fs::write(
+                store.file_path(),
+                format!(r#"{{"schema_version": 1, "theme": "sepia{index}"}}"#),
+            )
+            .unwrap();
+            store.save(&Preferences::default()).unwrap();
+        }
+        assert_eq!(store.preserved_files().len(), MAX_PRESERVED_FILES);
         let _ = fs::remove_dir_all(&dir);
     }
 }

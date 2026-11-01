@@ -215,7 +215,7 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
 
                 let (end_date_exclusive, time_label) = if is_all_day {
                     let days = (duration_secs / 86_400).max(1) as i32;
-                    (start_date.add_days(days), "All day".to_string())
+                    (start_date.add_days(days), String::new())
                 } else {
                     let end_utc = utc_dt + chrono::Duration::seconds(duration_secs);
                     let end_local = end_utc.with_timezone(&chrono::Local);

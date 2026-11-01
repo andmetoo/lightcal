@@ -40,7 +40,7 @@ pub fn download_release_asset(raw: &str) -> Result<Vec<u8>, String> {
         .build()
         .into();
     let mut response = client
-        .get(raw)
+        .get(uri.as_str())
         .header("User-Agent", "Lightcal updater")
         .call()
         .map_err(|_| "Update download failed or timed out")?;
@@ -102,6 +102,13 @@ pub fn get_with_headers(
     Ok((status, bytes))
 }
 
+/// Message for an expired or revoked sign-in; the one text callers compare against.
+pub const SIGN_IN_REQUIRED_MESSAGE: &str = "Sign-in expired or consent was revoked; sign in again";
+
+pub fn is_sign_in_required(message: &str) -> bool {
+    message == SIGN_IN_REQUIRED_MESSAGE
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AuthenticationError {
     SignInRequired,
@@ -110,7 +117,7 @@ pub enum AuthenticationError {
 impl AuthenticationError {
     pub fn message(self) -> String {
         match self {
-            Self::SignInRequired => "Sign-in expired or consent was revoked; sign in again".into(),
+            Self::SignInRequired => SIGN_IN_REQUIRED_MESSAGE.into(),
             Self::Failed(message) => message,
         }
     }
@@ -223,5 +230,12 @@ mod tests {
             "https://calendar.google.com/calendar/ical/ru.rs%23holiday%40group.v.calendar.google.com/public/basic.ics"
         )
         .is_ok());
+    }
+    #[test]
+    fn sign_in_required_is_matched_exactly() {
+        assert!(is_sign_in_required(
+            &AuthenticationError::SignInRequired.message()
+        ));
+        assert!(!is_sign_in_required("Please sign in again later"));
     }
 }
