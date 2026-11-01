@@ -52,6 +52,8 @@ pub(crate) struct AppController {
     pub(crate) provider_request: u64,
     pub(crate) connection_busy: bool,
     pub(crate) connection_message: String,
+    /// Preferences recovery warning; shown on the General tab until dismissed.
+    pub(crate) startup_warning: String,
     pub(crate) microsoft_account: lightcal::calendars::account::MicrosoftAccountState,
     pub(crate) provider_loading: bool,
     pub(crate) install_busy: bool,
@@ -590,6 +592,7 @@ impl AppController {
         ui.set_install_status_text(self.install_status.clone().into());
         ui.set_connection_busy(self.connection_busy);
         ui.set_connection_message(self.connection_message.clone().into());
+        ui.set_startup_warning(self.startup_warning.clone().into());
         let account_idle = !self.connection_busy && !self.provider_loading;
         ui.set_provider_loading(self.provider_loading);
         ui.set_account_status_text(self.microsoft_account.status_text(locale).into());
@@ -1342,6 +1345,64 @@ fn take_pending_reload() -> bool {
     RELOAD_PENDING.with(|p| p.replace(false))
 }
 
+/// How long a calendar load may run before the UI stops waiting for it.
+const LOAD_WATCHDOG_SECS: u64 = 90;
+
+thread_local! {
+    /// Watchdog for the in-flight load: (request id, timer). Dropping the timer stops it.
+    static LOAD_WATCHDOG: std::cell::RefCell<Option<(u64, slint::Timer)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// A watchdog fires only for the request that is still current and still loading.
+fn watchdog_should_expire(current_request: u64, request_id: u64, loading: bool) -> bool {
+    loading && current_request == request_id
+}
+
+/// A result that is not visible may release the in-flight guard only when it belongs to the
+/// current request; a newer in-flight request owns the flag.
+fn stale_result_releases_guard(current_request: u64, request_id: u64) -> bool {
+    current_request == request_id
+}
+
+fn cancel_load_watchdog(request_id: u64) {
+    LOAD_WATCHDOG.with(|w| {
+        let mut slot = w.borrow_mut();
+        if matches!(&*slot, Some((id, _)) if *id == request_id) {
+            *slot = None;
+        }
+    });
+}
+
+fn start_load_watchdog(ui_weak: slint::Weak<AppWindow>, request_id: u64) {
+    let timer = slint::Timer::default();
+    let weak = ui_weak;
+    timer.start(
+        slint::TimerMode::SingleShot,
+        std::time::Duration::from_secs(LOAD_WATCHDOG_SECS),
+        move || {
+            let mut expired = false;
+            with_active_controller(&weak, |ctrl, ui| {
+                if watchdog_should_expire(ctrl.provider_request, request_id, ctrl.provider_loading)
+                {
+                    expired = true;
+                    ctrl.provider_loading = false;
+                    // Make the late original result stale.
+                    ctrl.provider_request += 1;
+                    ctrl.provider.status = lightcal::platform::ProviderStatus::ProviderUnavailable(
+                        "Calendar refresh timed out".to_string(),
+                    );
+                    ctrl.sync_to_ui(ui);
+                }
+            });
+            if expired {
+                replay_pending_reload(weak.clone());
+            }
+        },
+    );
+    LOAD_WATCHDOG.with(|w| *w.borrow_mut() = Some((request_id, timer)));
+}
+
 fn replay_pending_reload(ui_weak: slint::Weak<AppWindow>) {
     if take_pending_reload() {
         let synthetic = RELOAD_SYNTHETIC.with(|s| s.get());
@@ -1376,6 +1437,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
         ctrl.sync_to_ui(ui);
     });
     if let (Some(anchor), Some((dir, prefs))) = (anchor, config) {
+        start_load_watchdog(ui_weak.clone(), request_id);
         std::thread::spawn(move || {
             let result = run_load_guarded(|| {
                 if use_synthetic {
@@ -1404,18 +1466,23 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                 }
             });
             let _ = slint::invoke_from_event_loop(move || {
+                cancel_load_watchdog(request_id);
                 let mut still_visible = false;
                 with_active_controller(&ui_weak, |ctrl, _| {
                     still_visible = ctrl.provider_request == request_id
                         && ctrl.cal_state.displayed_month == anchor.year_month();
-                    if !still_visible {
-                        // A stale result is dropped, but the in-flight guard must be released.
+                    if !still_visible
+                        && stale_result_releases_guard(ctrl.provider_request, request_id)
+                    {
+                        // A stale result is dropped, but this request's in-flight guard must
+                        // be released. A newer request owns its own flag.
                         ctrl.provider_loading = false;
                     }
                 });
                 match result {
                     Ok(data) if still_visible => apply_loaded_provider(data, ui_weak.clone()),
                     Ok(_) => {}
+                    Err(_) if !still_visible => {}
                     Err(message) => with_active_controller(&ui_weak, |ctrl, ui| {
                         ctrl.provider_loading = false;
                         if matches!(
@@ -1865,6 +1932,7 @@ fn main() {
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
+        startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Checking,
         provider_loading: false,
         install_busy: false,
@@ -1901,7 +1969,7 @@ fn main() {
         ics_error: String::new(),
     }));
     if let Some(warning) = loaded_warning {
-        ctrl.borrow_mut().connection_message = warning;
+        ctrl.borrow_mut().startup_warning = warning;
     }
 
     ACTIVE_CONTROLLER.with(|c| {
@@ -2719,6 +2787,15 @@ fn main() {
     }
     {
         let ui_weak = ui.as_weak();
+        ui.on_dismiss_startup_warning(move || {
+            with_active_controller(&ui_weak, |ctrl, ui| {
+                ctrl.startup_warning.clear();
+                ctrl.sync_to_ui(ui);
+            });
+        });
+    }
+    {
+        let ui_weak = ui.as_weak();
         ui.on_retry_calendar_sync(move || {
             request_visible_calendars(ui_weak.clone(), use_synthetic);
         });
@@ -2921,6 +2998,19 @@ mod tests {
         // Starting a load consumes the pending request.
         assert!(start_or_defer_reload(false));
         assert!(!take_pending_reload());
+    }
+
+    #[test]
+    fn watchdog_expires_only_the_current_loading_request() {
+        assert!(watchdog_should_expire(5, 5, true));
+        assert!(!watchdog_should_expire(6, 5, true));
+        assert!(!watchdog_should_expire(5, 5, false));
+    }
+
+    #[test]
+    fn stale_result_never_releases_a_newer_requests_guard() {
+        assert!(stale_result_releases_guard(4, 4));
+        assert!(!stale_result_releases_guard(5, 4));
     }
 
     #[test]
