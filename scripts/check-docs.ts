@@ -1,6 +1,17 @@
 // Check repository Markdown links, trailing whitespace and final newlines.
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+
+/** Percent-decodes a link path; a malformed escape is kept literally, like Python's unquote. */
+function decodePath(path: string): string {
+  return path.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+    try {
+      return decodeURIComponent(run);
+    } catch {
+      return run;
+    }
+  });
+}
 
 const root = resolve(import.meta.dir, "..");
 // Include untracked files while respecting ignore rules.
@@ -27,9 +38,9 @@ for (const name of paths) {
       if (scheme.test(target) || target.startsWith("//")) continue;
       const local = target.split("#")[0].split("?")[0];
       if (!local) continue;
-      const destination = resolve(dirname(path), decodeURIComponent(local));
+      const destination = resolve(dirname(path), decodePath(local));
       const fromRoot = relative(root, destination);
-      if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+      if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
         errors.push(`${name}:${number}: link leaves repository: ${target}`);
       } else if (!existsSync(destination)) {
         errors.push(`${name}:${number}: missing link target: ${target}`);

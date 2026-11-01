@@ -82,7 +82,15 @@ function requireWindows(message: string): void {
 
 // --- build, sign, verify, package ------------------------------------------
 
+let resolvedVersion: string | undefined;
+
+/** Resolves once per process; sign-draft sets LIGHTCAL_RELEASE_VERSION before the first call. */
 function releaseVersion(): string {
+  resolvedVersion ??= resolveReleaseVersion();
+  return resolvedVersion;
+}
+
+function resolveReleaseVersion(): string {
   const sources = [
     () => process.env.LIGHTCAL_RELEASE_VERSION,
     () => (process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined),
@@ -130,23 +138,55 @@ function sign(target = DIST_BIN): void {
   run(pwsh("-File", join(SCRIPTS, "sign-windows.ps1"), "-File", target));
 }
 
-/** Requires a valid Authenticode signature (and the pinned signer when SIGN_CERT_SHA1 is set), then refreshes the checksum. */
-function verify(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requirePin = false): void {
+/** signtool from SIGNTOOL/SIGNTOOL_PATH, the newest Windows 10/11 SDK, or PATH. */
+function findSignTool(): string | null {
+  const configured = process.env.SIGNTOOL || process.env.SIGNTOOL_PATH;
+  if (configured && existsSync(configured)) return configured;
+  const kits = "C:\\Program Files (x86)\\Windows Kits\\10\\bin";
+  if (existsSync(kits)) {
+    const parts = (name: string) => name.split(".").map(Number);
+    const versions = readdirSync(kits).filter((name) => /^10(\.\d+)+$/.test(name)).sort((a, b) => {
+      const [x, y] = [parts(a), parts(b)];
+      for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0);
+      return 0;
+    });
+    for (const version of versions) {
+      const candidate = join(kits, version, "x64", "signtool.exe");
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return Bun.which("signtool");
+}
+
+type Signature = { status: string; message: string; thumbprint: string | null; subject: string | null };
+
+/**
+ * Requires a valid Authenticode signature: `signtool verify /pa` when the SDK is present, and
+ * PowerShell's Get-AuthenticodeSignature always. With SIGN_CERT_SHA1 set, the signer must match it.
+ * `writeSum` refreshes the local `.sha256`; publication passes false to leave downloaded files untouched.
+ */
+function verify(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requirePin = false, writeSum = true): void {
   const pin = process.env.SIGN_CERT_SHA1?.trim();
   if (requirePin && !pin) {
     throw new Error("SIGN_CERT_SHA1 is not set. Put the code-signing thumbprint in .env so publication can verify the signer.");
   }
   if (!existsSync(target)) throw new Error(`No binary found at ${target}. Run 'just release build' first.`);
   console.log(`=== Verifying Authenticode signature on ${target} ===`);
-  const signer = output(pwsh("-Command",
+  const signtool = findSignTool();
+  if (signtool) run([signtool, "verify", "/pa", "/v", target], `signtool rejected the signature of ${target}.`);
+  // One compact JSON object on the last stdout line, so warnings or unusual subjects cannot shift fields.
+  const lines = output(pwsh("-Command",
     `$sig = Get-AuthenticodeSignature -LiteralPath ${psQuote(target)}; ` +
-    `if ($sig.Status -ne 'Valid') { [Console]::Error.WriteLine("Signature is $($sig.Status): $($sig.StatusMessage)"); exit 1 }; ` +
-    `"$($sig.SignerCertificate.Thumbprint)|$($sig.SignerCertificate.Subject)"`,
-  ));
-  const [thumbprint, subject] = signer.split("|");
-  if (pin && !thumbprintMatches(pin, thumbprint)) throw new Error(`Signer certificate of ${target} does not match SIGN_CERT_SHA1.`);
-  console.log(`Valid signature by ${subject} (${thumbprint})`);
-  writeChecksum(target);
+    `[ordered]@{ status = "$($sig.Status)"; message = $sig.StatusMessage; ` +
+    `thumbprint = $sig.SignerCertificate.Thumbprint; subject = $sig.SignerCertificate.Subject } | ConvertTo-Json -Compress`,
+  )).split(/\r?\n/);
+  const signature = JSON.parse(lines[lines.length - 1]) as Signature;
+  if (signature.status !== "Valid") throw new Error(`Signature of ${target} is ${signature.status}: ${signature.message}`);
+  if (pin && !thumbprintMatches(pin, signature.thumbprint ?? "")) {
+    throw new Error(`Signer certificate of ${target} does not match SIGN_CERT_SHA1.`);
+  }
+  console.log(`Valid signature by ${signature.subject} (${signature.thumbprint})`);
+  if (writeSum) writeChecksum(target);
 }
 
 function showCertificateFingerprint(): void {
@@ -292,7 +332,7 @@ function publishDraft(): void {
   const names = signedUploadPaths(ROOT, version).map((path) => basename(path));
   ghRun(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])],
     `Could not download release ${tag} for signature verification.`);
-  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true), (archive, executable) =>
+  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false), (archive, executable) =>
     run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable)));
   assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
   assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);

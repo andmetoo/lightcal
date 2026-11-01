@@ -1158,21 +1158,19 @@ fn open_browser_link(url: &str) {
 
 #[cfg(windows)]
 fn open_allowed_browser_link(url: &str) {
-    {
-        use windows_sys::Win32::UI::Shell::ShellExecuteW;
-        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        let wide_url: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
-        let wide_open: Vec<u16> = "open\0".encode_utf16().collect();
-        unsafe {
-            ShellExecuteW(
-                std::ptr::null_mut(),
-                wide_open.as_ptr(),
-                wide_url.as_ptr(),
-                std::ptr::null(),
-                std::ptr::null(),
-                SW_SHOWNORMAL,
-            );
-        }
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let wide_url: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide_open: Vec<u16> = "open\0".encode_utf16().collect();
+    unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            wide_open.as_ptr(),
+            wide_url.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        );
     }
 }
 

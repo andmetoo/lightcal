@@ -27,7 +27,7 @@ Pushing a stable tag attaches the unsigned Windows build to its GitHub release, 
 
 ## Build
 
-Rust and [just](https://github.com/casey/just) are required.
+Rust, [Bun](https://bun.sh) and a current [just](https://github.com/casey/just) (tested with 1.59; script recipes need a recent release) are required.
 
 ```powershell
 just check

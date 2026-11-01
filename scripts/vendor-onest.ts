@@ -97,5 +97,7 @@ const manifest = {
   nativeSource: { version: "2.001", url: RELEASE_URL, sha256: RELEASE_SHA256, sourceCommit: "8739b1910618a15335e4cc48842052d0ee739ade" },
   filesSha256,
 };
-writeFileSync(join(DESTINATION, "source.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+// ASCII-only JSON (\uXXXX escapes), matching the committed provenance file byte for byte.
+const json = JSON.stringify(manifest, null, 2).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+writeFileSync(join(DESTINATION, "source.json"), `${json}\n`);
 console.log(`Prepared ${Object.keys(filesSha256).length} verified font/license files and source.json in ${DESTINATION}`);
