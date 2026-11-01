@@ -4,6 +4,7 @@ pub mod google;
 pub mod ics;
 pub mod microsoft;
 pub mod sign_in;
+use crate::preferences::LocaleCode;
 use crate::{
     platform::{ProviderSnapshot, ProviderStatus},
     secure_store::Credentials,
@@ -49,6 +50,36 @@ pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
     )
 }
 
+/// "name: N events could not be read" with count-aware grammar in every supported language.
+pub fn skipped_events_note(locale: LocaleCode, name: &str, count: usize) -> String {
+    match locale {
+        LocaleCode::En => {
+            let noun = if count == 1 { "event" } else { "events" };
+            format!("{name}: {count} {noun} could not be read")
+        }
+        LocaleCode::Ru => {
+            let (tens, ones) = (count % 100, count % 10);
+            let noun = if (11..=14).contains(&tens) || ones == 0 || ones >= 5 {
+                "событий"
+            } else if ones == 1 {
+                "событие"
+            } else {
+                "события"
+            };
+            format!("{name}: не удалось прочитать {count} {noun}")
+        }
+        LocaleCode::Es => {
+            if count == 1 {
+                format!("{name}: no se pudo leer 1 evento")
+            } else {
+                format!("{name}: no se pudieron leer {count} eventos")
+            }
+        }
+        LocaleCode::Ja => format!("{name}: {count} 件の予定を読み込めませんでした"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn query(
     anchor: LocalDate,
     dir: &Path,
@@ -57,15 +88,20 @@ pub fn query(
     google_client_secret: &str,
     selected: &BTreeSet<String>,
     legacy_windows: bool,
+    locale: LocaleCode,
 ) -> CalendarLoad {
-    let _guard = match crate::secure_store::credential_lock() {
-        Ok(guard) => guard,
-        Err(error) => return failure(error),
-    };
     let store = crate::secure_store::SecureStore::new(dir);
-    let mut credentials = match store.load() {
-        Ok(c) => c,
-        Err(error) => return failure(error),
+    // The credential lock covers only this local read. Provider requests below can hang, so
+    // they run without it; refreshed tokens are written back through `save_rotated_token`.
+    let mut credentials = {
+        let _guard = match crate::secure_store::credential_lock() {
+            Ok(guard) => guard,
+            Err(error) => return failure(error),
+        };
+        match store.load() {
+            Ok(c) => c,
+            Err(error) => return failure(error),
+        }
     };
     let mut snapshot = ProviderSnapshot {
         status: ProviderStatus::Available,
@@ -85,6 +121,7 @@ pub fn query(
             &mut credentials,
             &store,
             &mut account,
+            locale,
         ) {
             Ok(data) => append_provider(&mut snapshot, data, &mut errors),
             Err(e) => errors.push(e),
@@ -124,7 +161,7 @@ pub fn query(
                 append_provider(&mut snapshot, data.snapshot, &mut errors);
             }
             Err(e) => {
-                google_needs_signin = e.contains("sign in again");
+                google_needs_signin = crate::net::is_sign_in_required(&e);
                 if google_needs_signin {
                     google_connected = false;
                 } else {
@@ -144,7 +181,13 @@ pub fn query(
         });
         if selected.contains(&feed.id) {
             match ics::fetch(feed, anchor) {
-                Ok(events) => snapshot.occurrences.extend(events),
+                Ok(parsed) => {
+                    if let Some(note) = parsed.note(locale, &feed.name) {
+                        ics_errors.push(note.clone());
+                        errors.push(note);
+                    }
+                    snapshot.occurrences.extend(parsed.occurrences);
+                }
                 Err(e) => {
                     let message = format!("{}: {e}", feed.name);
                     ics_errors.push(message.clone());
@@ -168,6 +211,29 @@ pub fn query(
         google_error,
         google_skipped,
         ics_error: ics_errors.join("\n"),
+    }
+}
+
+/// Folds one calendar's outcome (readable events and the count of unreadable ones) into the
+/// snapshot and returns that count. A `hard` failure (sign-in) aborts the provider; any other
+/// failure is recorded as "name: error" and the remaining calendars still load.
+pub(crate) fn merge_calendar(
+    snapshot: &mut ProviderSnapshot,
+    errors: &mut Vec<String>,
+    outcome: Result<(Vec<calendar_core::CalendarOccurrence>, usize), String>,
+    name: &str,
+    hard: bool,
+) -> Result<usize, String> {
+    match outcome {
+        Ok((events, skipped)) => {
+            snapshot.occurrences.extend(events);
+            Ok(skipped)
+        }
+        Err(error) if hard => Err(error),
+        Err(error) => {
+            errors.push(format!("{name}: {error}"));
+            Ok(0)
+        }
     }
 }
 
@@ -248,6 +314,59 @@ mod tests {
             occurrences: Vec::new(),
         }
     }
+    #[test]
+    fn skipped_note_is_count_aware_in_english() {
+        assert_eq!(
+            skipped_events_note(LocaleCode::En, "Work", 1),
+            "Work: 1 event could not be read"
+        );
+        assert_eq!(
+            skipped_events_note(LocaleCode::En, "Work", 2),
+            "Work: 2 events could not be read"
+        );
+    }
+
+    #[test]
+    fn skipped_note_uses_russian_plural_forms() {
+        let note = |count| skipped_events_note(LocaleCode::Ru, "Работа", count);
+        for (count, noun) in [
+            (1, "событие"),
+            (2, "события"),
+            (4, "события"),
+            (5, "событий"),
+            (11, "событий"),
+            (12, "событий"),
+            (14, "событий"),
+            (21, "событие"),
+            (22, "события"),
+            (25, "событий"),
+            (100, "событий"),
+            (101, "событие"),
+            (111, "событий"),
+        ] {
+            assert_eq!(
+                note(count),
+                format!("Работа: не удалось прочитать {count} {noun}")
+            );
+        }
+    }
+
+    #[test]
+    fn skipped_note_is_localized_for_spanish_and_japanese() {
+        assert_eq!(
+            skipped_events_note(LocaleCode::Es, "Trabajo", 1),
+            "Trabajo: no se pudo leer 1 evento"
+        );
+        assert_eq!(
+            skipped_events_note(LocaleCode::Es, "Trabajo", 3),
+            "Trabajo: no se pudieron leer 3 eventos"
+        );
+        assert_eq!(
+            skipped_events_note(LocaleCode::Ja, "仕事", 3),
+            "仕事: 3 件の予定を読み込めませんでした"
+        );
+    }
+
     #[test]
     fn denied_provider_is_not_downgraded_to_no_calendars() {
         let mut snapshot = empty(ProviderStatus::Available);
@@ -334,6 +453,7 @@ mod tests {
             "",
             &BTreeSet::new(),
             false,
+            LocaleCode::En,
         );
         assert!(result.google_connected);
         assert!(!result.google_needs_signin);

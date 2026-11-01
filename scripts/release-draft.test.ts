@@ -20,6 +20,7 @@ import {
   signedAssetNames,
   signedUploadPaths,
   signingAsset,
+  thumbprintMatches,
   unsignedAssetNames,
   unsignedAssetsPresent,
   uploadArgs,
@@ -204,3 +205,15 @@ test.skipIf(!Bun.which("pwsh"))("portable validation rejects a different applica
     rmSync(dir, { recursive: true, force: true });
   }
 }, 60_000); // Cold PowerShell startup on hosted Linux runners can exceed Bun's 5s default.
+
+describe("signer thumbprint pin", () => {
+  test("matches case-insensitively and ignores spaces", () => {
+    expect(thumbprintMatches("ab cd ef", "ABCDEF")).toBe(true);
+    expect(thumbprintMatches("ABCDEF", "abcdef\r\n")).toBe(true);
+  });
+  test("rejects other signers and an unset pin", () => {
+    expect(thumbprintMatches("ABCDEF", "ABCDE0")).toBe(false);
+    expect(thumbprintMatches(undefined, "ABCDEF")).toBe(false);
+    expect(thumbprintMatches("  ", "")).toBe(false);
+  });
+});

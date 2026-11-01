@@ -750,6 +750,8 @@ export component AppWindow inherits Window {
     in property <bool> can-disconnect-microsoft;
     in property <bool> can-refresh-calendars;
     in property <string> connection-message;
+    in property <string> startup-warning: "";
+    in property <string> dismiss-label-text: "Dismiss";
     in property <string> connect-microsoft-label;
     in property <string> disconnect-microsoft-label;
     in property <string> ics-name-placeholder;
@@ -911,6 +913,7 @@ export component AppWindow inherits Window {
     callback cancel-account-sign-in();
     callback disconnect-google();
     callback retry-sign-in();
+    callback dismiss-startup-warning();
     callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
@@ -1476,6 +1479,50 @@ export component AppWindow inherits Window {
             }
         }
 
+        // Preferences recovery warning, shown on the General tab until dismissed.
+        // The text is wrapped (up to 4 lines) and the App card is pushed down by its height.
+        warn-box := Rectangle {
+            visible: root.settings-tab == 2 && root.startup-warning != "";
+            x: 16px;
+            y: 90px;
+            width: 416px;
+            // Reserved above the App settings card; 0 when there is no warning.
+            height: (root.settings-tab == 2 && root.startup-warning != "")
+                ? min(56px, warning-text.preferred-height) + 2px
+                : 0px;
+            clip: true;
+
+            warning-text := Text {
+                x: 0px;
+                y: 0px;
+                width: parent.width - 28px;
+                text: root.startup-warning;
+                font-size: 11px;
+                wrap: word-wrap;
+                vertical-alignment: top;
+                color: root.dark-mode ? #FF9DA1 : #BC333B;
+            }
+
+            Rectangle {
+                x: parent.width - 24px;
+                y: 0px;
+                width: 24px;
+                height: 24px;
+                Text {
+                    text: "×";
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    color: root.dark-mode ? #FF9DA1 : #BC333B;
+                }
+                TouchArea {
+                    accessible-role: button;
+                    accessible-label: root.dismiss-label-text;
+                    clicked => { root.dismiss-startup-warning(); }
+                }
+            }
+        }
+
         // ===== TAB 0: Calendar =====
         if root.settings-tab == 0 : Rectangle {
             x: 16px;
@@ -1852,14 +1899,18 @@ export component AppWindow inherits Window {
         // ===== TAB 2: App =====
         if root.settings-tab == 2 : Rectangle {
             x: 16px;
-            y: 96px;
+            y: 96px + warn-box.height;
             width: 416px;
-            height: 200px;
+            // Shrinks (and scrolls) when a wrapped warning pushes the card toward the footer.
+            height: min(200px, 314px - (96px + warn-box.height));
             border-radius: 9px;
             background: root.dark-mode ? #222222 : #F0F0F0;
             clip: true;
 
+            Flickable {
+            content-height: 200px;
             VerticalLayout {
+                height: 200px;
                 padding: 0px;
                 spacing: 0px;
 
@@ -2045,12 +2096,13 @@ export component AppWindow inherits Window {
                     }
                 }
             }
+            }
 
         }
 
         if root.settings-tab == 2 && root.language-dropdown-open : Rectangle {
             x: 244px;
-            y: 108px;
+            y: 108px + warn-box.height;
             width: 176px;
             height: lang-menu.height;
             lang-menu := SettingsMenu {

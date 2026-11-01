@@ -58,8 +58,10 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
+        startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
         provider_loading: false,
+        account_before_check: None,
         install_busy: false,
         install_status: String::new(),
         startup_mgr,
@@ -276,6 +278,23 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     ctrl.prefs.theme = ThemePreference::Light;
     ctrl.sync_to_ui(&ui);
     helper.render_to_png(&out_dir.join("settings-app-es-light.png"), 448, 360)?;
+
+    // Long preferences recovery warning on the App tab (wrapped; pushes the card down).
+    ctrl.startup_warning = "Preferences could not be read, so Lightcal restored the defaults. The damaged file was kept as preferences.json.corrupt in your Lightcal data folder (C:\\Users\\someone\\AppData\\Roaming\\Lightcal) and your calendar choices and shortcut were reset.".into();
+    ctrl.prefs.set_locale(LocaleCode::En);
+    ctrl.settings_tab = 2;
+    ctrl.prefs.theme = ThemePreference::Dark;
+    ctrl.sync_to_ui(&ui);
+    helper.render_to_png(&out_dir.join("warning-app-en-dark.png"), 448, 360)?;
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.sync_to_ui(&ui);
+    helper.render_to_png(&out_dir.join("warning-app-en-light.png"), 448, 360)?;
+    ctrl.prefs.set_locale(LocaleCode::Ja);
+    ctrl.startup_warning = "設定ファイルを読み込めなかったため、Lightcal は既定値に戻しました。破損したファイルは Lightcal のデータフォルダーに preferences.json.corrupt として保存されています。カレンダーの選択とショートカットはリセットされました。".into();
+    ctrl.prefs.theme = ThemePreference::Dark;
+    ctrl.sync_to_ui(&ui);
+    helper.render_to_png(&out_dir.join("warning-app-ja-dark.png"), 448, 360)?;
+    ctrl.startup_warning.clear();
 
     // 10..13. Rendered 64×64 Taskbar / Tray Icons
     let icon_colored_wk = render_squircle_icon_rgba_64(

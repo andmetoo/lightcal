@@ -13,6 +13,25 @@ fn exact_git_tag(root: &std::path::Path) -> Option<String> {
     String::from_utf8(output.stdout).ok()
 }
 
+/// Packs a stable `x.y.z` version as `(major<<48)|(minor<<32)|(patch<<16)`.
+/// Prerelease or malformed versions return `None`, leaving the Cargo package version.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn numeric_version(version: &str) -> Option<u64> {
+    let mut parts = version.split('.');
+    let mut next = || -> Option<u64> {
+        let text = parts.next()?;
+        if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        text.parse::<u64>().ok().filter(|value| *value <= 0xFFFF)
+    };
+    let (major, minor, patch) = (next()?, next()?, next()?);
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((major << 48) | (minor << 32) | (patch << 16))
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=assets/lightcal.ico");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -86,6 +105,10 @@ fn main() {
             res.set("ProductName", "Lightcal");
             res.set("ProductVersion", &release_version);
             res.set("FileVersion", &release_version);
+            if let Some(numeric) = numeric_version(&release_version) {
+                res.set_version_info(winres::VersionInfo::FILEVERSION, numeric);
+                res.set_version_info(winres::VersionInfo::PRODUCTVERSION, numeric);
+            }
             res.set("FileDescription", "Lightcal Desktop Calendar");
             res.set("LegalCopyright", "GPL-3.0-only");
             if let Err(e) = res.compile() {

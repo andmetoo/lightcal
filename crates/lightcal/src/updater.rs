@@ -186,9 +186,22 @@ pub fn evaluate_release_response(
 
 /// Validates that a URL points strictly to the official repository or koona.app.
 pub fn is_verified_github_url(url: &str) -> bool {
-    (url == ALLOWED_RELEASE_URL_PREFIX
-        || url.starts_with(&format!("{ALLOWED_RELEASE_URL_PREFIX}/")))
-        && !url.contains(|c: char| c.is_control() || c.is_whitespace() || c == '"' || c == '\'')
+    const PATH: &str = "/andmetoo/lightcal/releases";
+    if url.contains(|c: char| c.is_control() || c.is_whitespace() || matches!(c, '"' | '\'' | '\\'))
+        || url.contains("..")
+        || url.to_ascii_lowercase().contains("%2e")
+    {
+        return false;
+    }
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    parsed.scheme() == "https"
+        && parsed.host_str() == Some("github.com")
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.port().is_none()
+        && (parsed.path() == PATH || parsed.path().starts_with(&format!("{PATH}/")))
 }
 
 /// Exact macOS Privacy & Security pane for calendar access. Not a general URL scheme.
@@ -255,6 +268,31 @@ mod tests {
             evaluate_release_response("0.1.0", 200, prerelease_json),
             UpdateCheckState::NoStableRelease
         );
+    }
+
+    #[test]
+    fn release_url_rejects_traversal_and_authority_tricks() {
+        assert!(is_verified_github_url(
+            "https://github.com/andmetoo/lightcal/releases"
+        ));
+        assert!(is_verified_github_url(
+            "https://github.com/andmetoo/lightcal/releases/tag/v0.2.0"
+        ));
+        for bad in [
+            "https://github.com/andmetoo/lightcal/releases/../../other/repo",
+            "https://github.com/andmetoo/lightcal/releases/%2e%2e/%2E%2e/other",
+            "https://github.com/andmetoo/lightcal/releases/..%2f..%2fother",
+            "https://github.com/andmetoo/lightcal/releases\\..\\other",
+            "https://github.com/andmetoo/lightcal/releases/tag/v1 x",
+            "https://github.com/andmetoo/lightcal/releases/\n",
+            "https://user@github.com/andmetoo/lightcal/releases",
+            "https://github.com:444/andmetoo/lightcal/releases",
+            "http://github.com/andmetoo/lightcal/releases",
+            "https://github.com.evil.example/andmetoo/lightcal/releases",
+            "https://github.com/andmetoo/lightcal/releases-untrusted",
+        ] {
+            assert!(!is_verified_github_url(bad), "{bad}");
+        }
     }
 
     #[test]

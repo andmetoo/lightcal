@@ -223,3 +223,13 @@ export function publishedReleaseNotes(version: string): string {
     "",
   ].join("\n");
 }
+
+export function normalizeThumbprint(raw: string): string {
+  return raw.replace(/\s+/g, "").toUpperCase();
+}
+
+/** Compares a signer thumbprint with the pinned SIGN_CERT_SHA1 (case-insensitive, spaces ignored). */
+export function thumbprintMatches(expected: string | undefined, actual: string): boolean {
+  const pin = normalizeThumbprint(expected ?? "");
+  return pin.length > 0 && pin === normalizeThumbprint(actual);
+}
