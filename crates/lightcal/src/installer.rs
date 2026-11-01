@@ -38,14 +38,8 @@ pub fn certificate_pin() -> Result<String, String> {
 
 /// Parses one or more comma-separated SHA-256 fingerprints; any malformed entry fails closed.
 fn parse_pins(raw: &str) -> Result<Vec<String>, String> {
-    let pins = raw
-        .split(',')
-        .map(normalize_pin)
-        .collect::<Result<Vec<_>, _>>()?;
-    if pins.is_empty() {
-        return normalize_pin("").map(|p| vec![p]);
-    }
-    Ok(pins)
+    // `split` always yields at least one item, so an empty list fails in `normalize_pin`.
+    raw.split(',').map(normalize_pin).collect()
 }
 
 /// Signed in-place installation is only offered when this build has a certificate pin.
