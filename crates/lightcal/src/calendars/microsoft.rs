@@ -359,7 +359,10 @@ pub fn query(
         let outcome = graph_pages(uri.as_str(), token, account);
         let hard = matches!(account, MicrosoftAccountState::NeedsSignIn);
         let name = calendar["name"].as_str().unwrap_or("Outlook");
-        merge_calendar(&mut result, &mut errors, outcome, name, &id, color, hard)?;
+        let skipped = merge_calendar(&mut result, &mut errors, outcome, name, &id, color, hard)?;
+        if skipped > 0 {
+            errors.push(format!("{name}: {skipped} events could not be read"));
+        }
     }
     if !errors.is_empty() {
         result.status = ProviderStatus::ProviderUnavailable(errors.join("\n"));
@@ -387,8 +390,7 @@ fn collect_events(
     (occurrences, skipped)
 }
 
-/// Folds one calendar's outcome into the snapshot. A sign-in failure (`hard`) aborts the
-/// provider; any other failure is recorded and the remaining calendars still load.
+/// Provider wrapper over the shared merge; returns how many events were unreadable.
 fn merge_calendar(
     result: &mut ProviderSnapshot,
     errors: &mut Vec<String>,
@@ -397,20 +399,9 @@ fn merge_calendar(
     source: &str,
     color: &str,
     hard: bool,
-) -> Result<(), String> {
-    match outcome {
-        Ok(events) => {
-            result
-                .occurrences
-                .extend(collect_events(events, source, color).0);
-            Ok(())
-        }
-        Err(error) if hard => Err(error),
-        Err(error) => {
-            errors.push(format!("{name}: {error}"));
-            Ok(())
-        }
-    }
+) -> Result<usize, String> {
+    let outcome = outcome.map(|events| collect_events(events, source, color));
+    super::merge_calendar(result, errors, outcome, name, hard)
 }
 
 fn graph_datetime(value: &Value) -> Result<chrono::DateTime<chrono::Utc>, String> {

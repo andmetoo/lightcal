@@ -374,8 +374,7 @@ fn collect_events(
     (occurrences, skipped)
 }
 
-/// Folds one calendar's outcome into the snapshot and returns the skipped-event count. A
-/// sign-in failure aborts the provider; any other failure is recorded and the rest still load.
+/// Sign-in failure aborts the provider; any other failure is recorded and the rest still load.
 fn merge_calendar(
     snapshot: &mut ProviderSnapshot,
     errors: &mut Vec<String>,
@@ -384,18 +383,9 @@ fn merge_calendar(
     source: &str,
     color: &str,
 ) -> Result<usize, String> {
-    match outcome {
-        Ok(events) => {
-            let (events, unreadable) = collect_events(events, source, color);
-            snapshot.occurrences.extend(events);
-            Ok(unreadable)
-        }
-        Err(error) if error.contains("sign in again") => Err(error),
-        Err(error) => {
-            errors.push(format!("{name}: {error}"));
-            Ok(0)
-        }
-    }
+    let hard = matches!(&outcome, Err(error) if crate::net::is_sign_in_required(error));
+    let outcome = outcome.map(|events| collect_events(events, source, color));
+    super::merge_calendar(snapshot, errors, outcome, name, hard)
 }
 
 fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
@@ -406,7 +396,7 @@ fn pages(raw: &str, token: &str) -> Result<Vec<Value>, String> {
         }
         let (status, bytes) = crate::net::get(current, Some(token), 8 * 1024 * 1024)?;
         if status == 401 {
-            return Err("Sign-in expired or consent was revoked; sign in again".into());
+            return Err(crate::net::SIGN_IN_REQUIRED_MESSAGE.into());
         }
         if status != 200 {
             return Err(format!("Google calendar request failed (HTTP {status})"));
