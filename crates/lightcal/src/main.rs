@@ -1529,6 +1529,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                         &prefs.google_client_secret,
                         &prefs.selected_calendar_ids,
                         prefs.windows_calendars_enabled,
+                        prefs.locale(),
                     )
                 }
             });
@@ -1890,7 +1891,7 @@ fn main() {
 
     let store = PreferencesStore::from_env();
     let loaded = store.load();
-    let loaded_warning = loaded.warning;
+    let loaded_warning = loaded.localized_warning();
     let mut prefs = loaded.preferences;
     if prefs.microsoft_client_id.is_empty() {
         prefs.microsoft_client_id = option_env!("LIGHTCAL_MICROSOFT_CLIENT_ID")
