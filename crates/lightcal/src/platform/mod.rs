@@ -46,7 +46,7 @@ impl ProviderSnapshot {
 
         let ym = anchor.year_month();
         let d = |day: u8| LocalDate::new(ym.year, ym.month, day.min(ym.days_in_month())).unwrap();
-        let occurrences = vec![
+        let mut occurrences = vec![
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
                 event_id: "syn-1".to_string(),
@@ -56,6 +56,7 @@ impl ProviderSnapshot {
                 is_all_day: false,
                 title: "Quarterly roadmap review".to_string(),
                 time_label: "09:30".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-personal".to_string(),
@@ -66,6 +67,7 @@ impl ProviderSnapshot {
                 is_all_day: false,
                 title: "Evening gym session".to_string(),
                 time_label: "18:00".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
@@ -76,6 +78,7 @@ impl ProviderSnapshot {
                 is_all_day: false,
                 title: "Design system sync".to_string(),
                 time_label: "11:00".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-personal".to_string(),
@@ -86,6 +89,7 @@ impl ProviderSnapshot {
                 is_all_day: true,
                 title: "Family dinner".to_string(),
                 time_label: "19:30".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-holidays".to_string(),
@@ -96,6 +100,7 @@ impl ProviderSnapshot {
                 is_all_day: true,
                 title: "Public Holiday".to_string(),
                 time_label: "All day".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-work".to_string(),
@@ -106,6 +111,7 @@ impl ProviderSnapshot {
                 is_all_day: false,
                 title: "Architecture sync".to_string(),
                 time_label: "10:00".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-personal".to_string(),
@@ -116,6 +122,7 @@ impl ProviderSnapshot {
                 is_all_day: false,
                 title: "Dentist checkup".to_string(),
                 time_label: "14:30".to_string(),
+                ..Default::default()
             },
             CalendarOccurrence {
                 source_id: "win-holidays".to_string(),
@@ -126,8 +133,18 @@ impl ProviderSnapshot {
                 is_all_day: true,
                 title: "Release milestone".to_string(),
                 time_label: "All day".to_string(),
+                ..Default::default()
             },
         ];
+        // Sample timed events last an hour from their start label.
+        for occ in occurrences.iter_mut().filter(|occ| !occ.is_all_day) {
+            let mut parts = occ.time_label.split(':').map(|p| p.parse::<u32>().ok());
+            if let (Some(Some(hour)), Some(Some(minute))) = (parts.next(), parts.next()) {
+                let start = calendar_core::local_minutes(occ.start_date, hour * 60 + minute);
+                occ.start_minutes = Some(start);
+                occ.end_minutes = Some(start + 60);
+            }
+        }
 
         Self {
             status: ProviderStatus::Available,

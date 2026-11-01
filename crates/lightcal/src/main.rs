@@ -16,6 +16,7 @@ use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
     LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
+mod calendar_view;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -41,6 +42,27 @@ use std::path::Path;
 use std::rc::Rc;
 
 slint::include_modules!();
+
+/// Keeps the UI on Segoe UI when Segoe UI Variable is missing (Windows 10).
+/// Slint 1.18 falls back to the generic sans-serif family (Arial on Windows)
+/// for an unknown name, so the static face is selected explicitly.
+pub(crate) fn apply_system_font(ui: &AppWindow) {
+    if !segoe_ui_variable_installed() {
+        ui.global::<Theme>().set_font_family("Segoe UI".into());
+    }
+}
+
+#[cfg(windows)]
+fn segoe_ui_variable_installed() -> bool {
+    lightcal::platform::windows::system_fonts_dir()
+        .is_some_and(|fonts| fonts.join("SegUIVar.ttf").is_file())
+}
+
+/// Off Windows the named family is absent and Slint uses its sans-serif fallback.
+#[cfg(not(windows))]
+fn segoe_ui_variable_installed() -> bool {
+    true
+}
 
 pub(crate) struct AppController {
     pub(crate) store: PreferencesStore,
@@ -68,6 +90,9 @@ pub(crate) struct AppController {
     pub(crate) settings_tab: i32,
     #[cfg(windows)]
     pub(crate) tray_icon: Option<tray_icon::TrayIcon>,
+    /// Tray menu items, relabeled when the language changes.
+    #[cfg(windows)]
+    pub(crate) tray_menu: TrayMenuItems,
     pub(crate) language_dropdown_open: bool,
     pub(crate) theme_dropdown_open: bool,
     pub(crate) first_day_dropdown_open: bool,
@@ -88,6 +113,156 @@ pub(crate) struct AppController {
     pub(crate) google_label: String,
     pub(crate) google_error: String,
     pub(crate) ics_error: String,
+    /// Calendar popup agenda: expanded and copied events.
+    pub(crate) agenda: calendar_view::AgendaUiState,
+    /// When calendars last loaded successfully; drives "Updated … ago" in Accounts.
+    pub(crate) last_refreshed: Option<chrono::DateTime<chrono::Local>>,
+}
+
+thread_local! {
+    /// Last browser sign-in address, for "Open browser again" while signing in.
+    static LAST_SIGN_IN_URL: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+fn remember_sign_in_url(url: &str) {
+    LAST_SIGN_IN_URL.with(|slot| *slot.borrow_mut() = Some(url.to_string()));
+}
+
+/// Forgets the consent address so "Open browser again" never reopens an old sign-in.
+fn forget_sign_in_url() {
+    LAST_SIGN_IN_URL.with(|slot| *slot.borrow_mut() = None);
+}
+
+/// Builds a normalized shortcut ("Ctrl + Alt + K") from a recorded key press.
+/// Returns `None` for keys Lightcal cannot register or presses without Ctrl, Alt or Win.
+#[cfg(test)]
+fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool) -> Option<String> {
+    shortcut_from_press(None, text, ctrl, alt, shift, meta)
+}
+
+/// The main key held down right now (A–Z, 0–9, F1–F12, Space), read from the keyboard
+/// state. Unlike the produced text it does not change with Ctrl, Shift or the layout:
+/// Ctrl+M and Enter both type "\r", and Shift+2 types "@" on a US layout.
+#[cfg(windows)]
+fn pressed_main_key() -> Option<String> {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+    // SAFETY: GetAsyncKeyState only reads the current key state.
+    let down = |vk: i32| (unsafe { GetAsyncKeyState(vk) } as u16) & 0x8000 != 0;
+    (b'A'..=b'Z')
+        .chain(b'0'..=b'9')
+        .find(|&vk| down(i32::from(vk)))
+        .map(|vk| char::from(vk).to_string())
+        .or_else(|| (1..=12).find(|n| down(0x6F + n)).map(|n| format!("F{n}")))
+        .or_else(|| down(0x20).then(|| "Space".to_string()))
+}
+
+/// Like [`shortcut_from_key`], but `pressed` (from [`pressed_main_key`]) wins over the text.
+fn shortcut_from_press(
+    pressed: Option<&str>,
+    text: &str,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+) -> Option<String> {
+    if !(ctrl || alt || meta) {
+        return None;
+    }
+    if let Some(key) = pressed {
+        return Some(shortcut_label(key.to_string(), ctrl, alt, shift, meta));
+    }
+    let mut chars = text.chars();
+    let first = chars.next()?;
+    if chars.next().is_some() {
+        return None;
+    }
+    let function_keys = [
+        slint::platform::Key::F1,
+        slint::platform::Key::F2,
+        slint::platform::Key::F3,
+        slint::platform::Key::F4,
+        slint::platform::Key::F5,
+        slint::platform::Key::F6,
+        slint::platform::Key::F7,
+        slint::platform::Key::F8,
+        slint::platform::Key::F9,
+        slint::platform::Key::F10,
+        slint::platform::Key::F11,
+        slint::platform::Key::F12,
+    ];
+    let key = if let Some(index) = function_keys.iter().position(|k| char::from(*k) == first) {
+        format!("F{}", index + 1)
+    } else if first == ' ' {
+        "Space".to_string()
+    } else if matches!(first, '\u{8}' | '\t' | '\n' | '\r') {
+        // Backspace, Tab and Enter share codes with Ctrl+H/I/J/M; never guess a letter.
+        return None;
+    } else if ('\u{1}'..='\u{1a}').contains(&first) {
+        // Ctrl+letter can arrive as an ASCII control character.
+        char::from(b'A' + (first as u8) - 1).to_string()
+    } else if first.is_ascii_alphanumeric() {
+        first.to_ascii_uppercase().to_string()
+    } else {
+        return None;
+    };
+    Some(shortcut_label(key, ctrl, alt, shift, meta))
+}
+
+fn shortcut_label(key: String, ctrl: bool, alt: bool, shift: bool, meta: bool) -> String {
+    let mut parts = Vec::new();
+    if ctrl {
+        parts.push("Ctrl".to_string());
+    }
+    if alt {
+        parts.push("Alt".to_string());
+    }
+    if shift {
+        parts.push("Shift".to_string());
+    }
+    if meta {
+        parts.push("Win".to_string());
+    }
+    parts.push(key);
+    parts.join(" + ")
+}
+
+/// Registers `candidate`; on failure the previous binding stays and the conflict is shown.
+fn apply_shortcut(c: &mut AppController, candidate: &str) {
+    match c.shortcut_mgr.bind(Some(candidate)) {
+        Ok(bound) => {
+            c.prefs.global_shortcut = bound;
+            c.shortcut_error.clear();
+            c.conflicting_shortcut = None;
+            c.persist();
+        }
+        Err(err) => {
+            // ShortcutManager restores the previous registration itself.
+            c.shortcut_error = err;
+            c.conflicting_shortcut = Some(candidate.to_string());
+        }
+    }
+}
+
+/// A display name for a one-field ICS subscription: the address host.
+fn ics_name_from_address(address: &str) -> String {
+    let trimmed = address.trim();
+    let without_scheme = trimmed
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(trimmed);
+    let host = without_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .rsplit('@')
+        .next()
+        .unwrap_or_default();
+    let host = host.split(':').next().unwrap_or_default();
+    if host.is_empty() {
+        "Calendar".to_string()
+    } else {
+        host.chars().take(100).collect()
+    }
 }
 
 fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
@@ -235,6 +410,7 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
             unsafe {
                 lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h);
             }
+            apply_window_chrome(ui);
             return;
         }
     }
@@ -357,7 +533,11 @@ impl AppController {
         let managed = lightcal::installer::package_managed();
         ui.set_package_managed_updates(managed);
 
+        let theme_changed = ui.get_dark_mode() != dark_mode;
         ui.set_dark_mode(dark_mode);
+        if theme_changed {
+            apply_window_chrome(ui);
+        }
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
 
@@ -408,9 +588,6 @@ impl AppController {
 
         ui.set_is_current_month(grid.is_current_month);
         ui.set_current_month_badge(strings.current_month_badge.into());
-        ui.set_today_date_line(
-            format_date_line(locale, self.cal_state.today, self.prefs.show_weekday).into(),
-        );
         ui.set_today_button_label(strings.today_button.into());
         ui.set_week_header_label(strings.week_col_header.into());
         ui.set_show_week_numbers(self.prefs.show_week_numbers);
@@ -422,9 +599,6 @@ impl AppController {
             .map(|&d| SharedString::from(weekday_short(locale, d)))
             .collect();
         ui.set_weekday_headers(ModelRc::new(VecModel::from(wd_headers)));
-
-        let gray_cols: Vec<bool> = grid.gray_columns.to_vec();
-        ui.set_gray_columns(ModelRc::new(VecModel::from(gray_cols)));
 
         let iso_wks: Vec<SharedString> = grid
             .iso_weeks
@@ -488,42 +662,7 @@ impl AppController {
         ui.set_selected_event_summary(format_event_count(locale, selected_total_events).into());
         ui.set_active_calendars_label(format_calendar_count(locale, active_count).into());
         ui.set_back_to_calendar_text(strings.back_to_calendar.into());
-
-        let day_events = self.cal_state.events_for_date(
-            self.cal_state.selected_date,
-            &self.provider.occurrences,
-            &self.prefs.selected_calendar_ids,
-        );
-        let max_agenda_rows = 2;
-        let agenda_items: Vec<AgendaEventItem> = day_events
-            .into_iter()
-            .take(max_agenda_rows)
-            .map(|occ| {
-                let cal_name = self
-                    .provider
-                    .sources
-                    .iter()
-                    .find(|s| s.id == occ.source_id)
-                    .map(|s| s.name.as_str())
-                    .unwrap_or(strings.agenda_calendar_fallback);
-                let time_display = if occ.time_label.is_empty() {
-                    strings.agenda_all_day.to_string()
-                } else {
-                    occ.time_label.clone()
-                };
-                AgendaEventItem {
-                    time_label: time_display.into(),
-                    title: if occ.title.is_empty() {
-                        strings.agenda_event_fallback.into()
-                    } else {
-                        occ.title.into()
-                    },
-                    calendar_name: cal_name.into(),
-                    swatch: parse_hex_color(&occ.color_hex),
-                }
-            })
-            .collect();
-        ui.set_selected_day_events(ModelRc::new(VecModel::from(agenda_items)));
+        self.sync_calendar_view(ui, &grid);
 
         let compact_events = if selected_total_events > 0 {
             selected_total_events.min(2)
@@ -985,12 +1124,13 @@ impl AppController {
         ui.set_update_is_available(is_avail);
 
         let gray_set = self.prefs.gray_weekdays();
-        let chips: Vec<WeekdayChipItem> = Weekday::ALL
-            .iter()
-            .enumerate()
-            .map(|(idx, &day)| WeekdayChipItem {
-                index: idx as i32,
-                label: weekday_short(locale, day).into(),
+        // One letter per day, in calendar column order; `index` stays Monday-based.
+        let first = self.prefs.first_weekday.monday_index();
+        let chips: Vec<WeekdayChipItem> = (0..7u8)
+            .map(|offset| Weekday::from_monday_index((first + offset) % 7))
+            .map(|day| WeekdayChipItem {
+                index: day.monday_index() as i32,
+                label: lightcal::i18n::weekday_letter(locale, day).into(),
                 active: gray_set.contains(day),
             })
             .collect();
@@ -1036,6 +1176,7 @@ impl AppController {
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
+        self.sync_settings_view(ui);
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
@@ -1057,6 +1198,8 @@ impl AppController {
             );
             let _ = tray.set_tooltip(Some(&tip));
         }
+        #[cfg(windows)]
+        self.tray_menu.relabel(locale);
 
         #[cfg(windows)]
         invalidate_taskbar_preview();
@@ -1064,6 +1207,380 @@ impl AppController {
 
     fn persist(&self) {
         let _ = self.store.save(&self.prefs);
+    }
+}
+
+/// Settings and About (ADR 0011): copy, account cards and update status.
+impl AppController {
+    fn sync_settings_view(&self, ui: &AppWindow) {
+        use lightcal::calendars::account::MicrosoftAccountState as Ms;
+        use lightcal::i18n::{settings_text, updated_ago};
+        let locale = self.prefs.locale();
+        let st = settings_text(locale);
+        let strings = catalog(locale);
+        let now = chrono::Local::now();
+        let updated = self.last_refreshed.map(|at| {
+            updated_ago(
+                locale,
+                (now - at).num_minutes(),
+                &at.format("%H:%M").to_string(),
+            )
+        });
+        let offline_text = match self.last_refreshed {
+            Some(at) => lightcal::i18n::offline_saved_at(locale, &at.format("%H:%M").to_string()),
+            None => st.offline_plain.to_string(),
+        };
+        let join = |parts: &[&str]| {
+            parts
+                .iter()
+                .filter(|p| !p.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" · ")
+        };
+        let initial = |text: &str, fallback: &str| {
+            text.chars()
+                .find(|c| c.is_alphanumeric())
+                .map(|c| c.to_uppercase().to_string())
+                .unwrap_or_else(|| fallback.to_string())
+        };
+
+        let items: Vec<CalendarSourceItem> = self
+            .provider
+            .sources
+            .iter()
+            .map(|s| CalendarSourceItem {
+                id: s.id.clone().into(),
+                name: s.name.clone().into(),
+                account: s.account_label.clone().into(),
+                swatch: parse_hex_color(&s.color_hex),
+                checked: self.prefs.selected_calendar_ids.contains(&s.id),
+                removable: s.id.starts_with("ics:"),
+            })
+            .collect();
+        let (outlook, google, ics, windows) = split_sources(&items);
+        let can_refresh = ui.get_can_refresh_calendars();
+        let idle = !self.connection_busy && !self.provider_loading;
+        let model = |list: Vec<CalendarSourceItem>| ModelRc::new(VecModel::from(list));
+        let blank = AccountCardItem::default();
+        let mut cards = Vec::new();
+
+        // Outlook: a check in progress keeps showing the state it started from.
+        let ms = match (&self.microsoft_account, &self.account_before_check) {
+            (Ms::Checking, Some(before)) => before,
+            (state, _) => state,
+        };
+        let outlook_visible = matches!(
+            ms,
+            Ms::Connected { .. }
+                | Ms::NeedsSignIn
+                | Ms::Unavailable {
+                    saved_credentials: true
+                }
+        ) || !outlook.is_empty();
+        if outlook_visible {
+            let label = match ms {
+                Ms::Connected { label: Some(label) } => label.as_str(),
+                _ => "",
+            };
+            let checking = matches!(self.microsoft_account, Ms::Checking);
+            let fresh = if matches!(ms, Ms::Connected { .. }) {
+                updated.as_deref().unwrap_or("")
+            } else {
+                ""
+            };
+            let (notice_kind, notice, action) = match ms {
+                Ms::NeedsSignIn => (2, st.access_expired.to_string(), st.sign_in),
+                Ms::Unavailable { .. } => (1, offline_text.clone(), ""),
+                _ => (0, String::new(), ""),
+            };
+            cards.push(AccountCardItem {
+                id: "outlook".into(),
+                title: st.outlook_title.into(),
+                initial: initial(label, "O").into(),
+                detail: if checking {
+                    join(&[label, st.checking_account])
+                } else {
+                    join(&[label, fresh])
+                }
+                .into(),
+                notice: notice.into(),
+                notice_kind,
+                notice_offline: notice_kind == 1,
+                action_label: action.into(),
+                can_refresh,
+                can_disconnect: ui.get_can_disconnect_microsoft(),
+                disconnect_label: st.disconnect.into(),
+                empty_text: if outlook.is_empty() && matches!(ms, Ms::Connected { .. }) {
+                    st.no_calendars.into()
+                } else {
+                    "".into()
+                },
+                sources: model(outlook.clone()),
+            });
+        }
+
+        let google_visible = self.google_connected
+            || self.google_needs_signin
+            || !google.is_empty()
+            || !self.google_error.is_empty();
+        if google_visible {
+            let fresh = if self.google_connected {
+                updated.as_deref().unwrap_or("")
+            } else {
+                ""
+            };
+            let lower = self.google_error.to_lowercase();
+            let offline = ["network", "offline", "connect", "timed out", "dns"]
+                .iter()
+                .any(|needle| lower.contains(needle));
+            let (notice_kind, notice, action) = if self.google_needs_signin {
+                (2, st.access_expired.to_string(), st.sign_in)
+            } else if !self.google_error.is_empty() {
+                (1, self.google_error.clone(), "")
+            } else {
+                (0, String::new(), "")
+            };
+            cards.push(AccountCardItem {
+                id: "google".into(),
+                title: st.google_title.into(),
+                initial: initial(&self.google_label, "G").into(),
+                detail: join(&[&self.google_label, fresh]).into(),
+                notice: notice.into(),
+                notice_kind,
+                notice_offline: offline,
+                action_label: action.into(),
+                can_refresh: can_refresh && (self.google_connected || self.google_needs_signin),
+                can_disconnect: idle,
+                disconnect_label: st.disconnect.into(),
+                empty_text: if google.is_empty() && self.google_connected {
+                    st.no_calendars.into()
+                } else {
+                    "".into()
+                },
+                sources: model(google.clone()),
+            });
+        }
+
+        for (index, source) in ics.iter().enumerate() {
+            let error = if index == 0 {
+                self.ics_error.as_str()
+            } else {
+                ""
+            };
+            cards.push(AccountCardItem {
+                id: source.id.clone(),
+                title: source.name.clone(),
+                initial: initial(source.name.as_str(), "I").into(),
+                detail: join(&[st.ics_detail, updated.as_deref().unwrap_or("")]).into(),
+                notice: error.into(),
+                notice_kind: if error.is_empty() { 0 } else { 1 },
+                action_label: "".into(),
+                can_refresh,
+                can_disconnect: idle,
+                disconnect_label: st.disconnect.into(),
+                sources: model(vec![source.clone()]),
+                ..blank.clone()
+            });
+        }
+
+        if self.prefs.windows_calendars_enabled
+            || !windows.is_empty()
+            || self.calendars_access_denied
+        {
+            let denied = self.calendars_access_denied;
+            cards.push(AccountCardItem {
+                id: "windows".into(),
+                title: st.windows_title.into(),
+                initial: "W".into(),
+                detail: join(&[
+                    st.windows_detail,
+                    if denied {
+                        ""
+                    } else {
+                        updated.as_deref().unwrap_or("")
+                    },
+                ])
+                .into(),
+                notice: if denied { st.access_denied } else { "" }.into(),
+                notice_kind: if denied { 2 } else { 0 },
+                action_label: st.open_privacy.into(),
+                can_refresh,
+                can_disconnect: idle,
+                disconnect_label: st.turn_off.into(),
+                empty_text: if windows.is_empty() && !denied {
+                    st.no_calendars.into()
+                } else {
+                    "".into()
+                },
+                sources: model(windows.clone()),
+                ..blank.clone()
+            });
+        }
+
+        // A provider-wide failure (slow refresh, worker error) is a quiet line.
+        if let lightcal::platform::ProviderStatus::ProviderUnavailable(message) =
+            &self.provider.status
+        {
+            if let Some(card) = cards.iter_mut().find(|card| card.notice_kind == 0) {
+                card.notice = message.clone().into();
+                card.notice_kind = 1;
+            }
+        }
+        ui.set_account_cards(ModelRc::new(VecModel::from(cards)));
+
+        let keys: Vec<SharedString> = self
+            .conflicting_shortcut
+            .as_deref()
+            .or(self.prefs.global_shortcut.as_deref())
+            .map(|s| s.split(" + ").map(SharedString::from).collect())
+            .unwrap_or_default();
+        ui.set_shortcut_keys(ModelRc::new(VecModel::from(keys)));
+        let shortcut_error = if self.shortcut_error.is_empty() {
+            String::new()
+        } else if let Some(candidate) = &self.conflicting_shortcut {
+            lightcal::i18n::shortcut_conflict_text(
+                locale,
+                candidate,
+                self.prefs.global_shortcut.as_deref(),
+                self.shortcut_error.contains("in use"),
+            )
+        } else {
+            self.shortcut_error.clone()
+        };
+
+        let configured = lightcal::installer::automatic_install_configured();
+        ui.set_install_configured(configured);
+        let quiet_note = if self.prefs.auto_check_updates {
+            st.auto_note
+        } else {
+            st.manual_note
+        };
+        let (kind, short, title, note) = match &self.update_state {
+            UpdateCheckState::Idle => (
+                0,
+                st.not_checked_short.to_string(),
+                st.idle_title.to_string(),
+                quiet_note.to_string(),
+            ),
+            UpdateCheckState::Checking => (
+                2,
+                st.checking_short.to_string(),
+                st.checking_title.to_string(),
+                quiet_note.to_string(),
+            ),
+            UpdateCheckState::UpToDate { .. } => (
+                1,
+                st.up_to_date_short.to_string(),
+                st.up_to_date_title.to_string(),
+                quiet_note.to_string(),
+            ),
+            UpdateCheckState::UpdateAvailable { latest_version, .. } => (
+                3,
+                lightcal::i18n::update_available_short(locale, latest_version),
+                ui.get_update_ready_title_text().to_string(),
+                if configured {
+                    strings.update_ready_notes.to_string()
+                } else {
+                    st.release_page_note.to_string()
+                },
+            ),
+            UpdateCheckState::NoStableRelease => (
+                0,
+                st.not_checked_short.to_string(),
+                st.idle_title.to_string(),
+                format_update_status(locale, &self.update_state),
+            ),
+            UpdateCheckState::Offline => (
+                4,
+                st.offline_short.to_string(),
+                st.offline_title.to_string(),
+                format_update_status(locale, &self.update_state),
+            ),
+            UpdateCheckState::Timeout
+            | UpdateCheckState::RateLimited
+            | UpdateCheckState::InvalidResponse(_) => (
+                5,
+                st.problem_short.to_string(),
+                st.problem_title.to_string(),
+                format_update_status(locale, &self.update_state),
+            ),
+        };
+        let note = if lightcal::installer::package_managed() {
+            ui.get_update_status_text().to_string()
+        } else {
+            note
+        };
+
+        ui.set_settings_strings(SettingsStrings {
+            window_title: st.window_title.into(),
+            close_label: st.close.into(),
+            connected_accounts: st.connected_accounts.into(),
+            add_account: st.add_account.into(),
+            read_only_note: st.read_only_note.into(),
+            connect_heading: st.connect_heading.into(),
+            connect_note: st.connect_note.into(),
+            google_title: st.google_title.into(),
+            google_desc: st.google_desc.into(),
+            outlook_title: st.outlook_title.into(),
+            outlook_desc: st.outlook_desc.into(),
+            ics_title: st.ics_title.into(),
+            ics_desc: st.ics_desc.into(),
+            windows_title: st.windows_title.into(),
+            windows_desc: st.windows_desc.into(),
+            signing_title: lightcal::i18n::signing_in_title(
+                locale,
+                if self.active_sign_in == ActiveSignIn::Google {
+                    "Google"
+                } else {
+                    "Outlook"
+                },
+            )
+            .into(),
+            signing_note: st.signing_note.into(),
+            open_browser_again: st.open_browser_again.into(),
+            cancel: st.cancel.into(),
+            ics_heading: st.ics_heading.into(),
+            ics_field_label: st.ics_field_label.into(),
+            ics_placeholder: st.ics_placeholder.into(),
+            ics_privacy: st.ics_privacy.into(),
+            subscribe: st.subscribe.into(),
+            refresh_label: st.refresh.into(),
+            more_label: st.more.into(),
+            back_label: st.back.into(),
+            no_selection_hint: if !items.is_empty() && items.iter().all(|item| !item.checked) {
+                st.no_selection_hint.into()
+            } else {
+                "".into()
+            },
+            cancelled_text: st.cancelled_text.into(),
+            try_again: st.try_again.into(),
+            shortcut_recording: st.shortcut_recording.into(),
+            shortcut_clear_label: st.shortcut_clear.into(),
+            shortcut_error: shortcut_error.into(),
+            update_short: short.into(),
+            update_kind: kind,
+            app_update_button: if kind == 3 { st.details } else { st.check_now }.into(),
+            about_tagline: st.about_tagline.into(),
+            about_status_title: title.into(),
+            about_status_note: note.into(),
+            view_release: st.view_release.into(),
+            check_now: st.check_now.into(),
+            github_title: st.github_title.into(),
+            github_desc: st.github_desc.into(),
+            koona_title: st.koona_title.into(),
+            koona_desc: st.koona_desc.into(),
+            sponsor_label: st.sponsor_label.into(),
+            sponsor_monthly_title: st.sponsor_monthly_title.into(),
+            sponsor_monthly_desc: st.sponsor_monthly_desc.into(),
+            sponsor_once_title: st.sponsor_once_title.into(),
+            sponsor_once_desc: st.sponsor_once_desc.into(),
+            license_title: st.license_title.into(),
+            license_desc: st.license_desc.into(),
+            release_notes_title: st.release_notes_title.into(),
+            release_notes_desc: st.release_notes_desc.into(),
+            auto_check_label: st.auto_check_label.into(),
+        });
     }
 }
 
@@ -1130,6 +1647,44 @@ fn ensure_taskbar_preview(ui: &AppWindow) {
     });
 }
 
+/// Requests DWM rounded corners, the system shadow and, with `LIGHTCAL_MICA=1`, the Mica
+/// backdrop prototype (ADR 0011). Silently does nothing before the native window exists.
+fn apply_window_chrome(ui: &AppWindow) {
+    #[cfg(windows)]
+    {
+        use lightcal::platform::windows::{find_lightcal_hwnd, mica_requested, WindowChrome};
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        thread_local! {
+            /// Last window handle and the (dark, mica) state applied to it.
+            static APPLIED: std::cell::Cell<(isize, Option<(bool, bool)>)> =
+                const { std::cell::Cell::new((0, None)) };
+        }
+        let (cached, applied) = APPLIED.with(|slot| slot.get());
+        let mut hwnd = cached as windows_sys::Win32::Foundation::HWND;
+        // SAFETY: IsWindow only checks whether the handle still names a window.
+        if hwnd.is_null() || unsafe { IsWindow(hwnd) } == 0 {
+            hwnd = find_lightcal_hwnd();
+        }
+        if hwnd.is_null() {
+            return;
+        }
+        let state = (ui.get_dark_mode(), mica_requested());
+        if hwnd as isize == cached && applied == Some(state) {
+            return;
+        }
+        let chrome = WindowChrome {
+            dark_mode: state.0,
+            mica: state.1,
+        };
+        unsafe {
+            lightcal::platform::windows::apply_window_chrome(hwnd, chrome);
+        }
+        APPLIED.with(|slot| slot.set((hwnd as isize, Some(state))));
+    }
+    #[cfg(not(windows))]
+    let _ = ui;
+}
+
 #[cfg(windows)]
 fn invalidate_taskbar_preview() {
     TASKBAR_PREVIEW.with(|slot| {
@@ -1171,6 +1726,48 @@ fn open_allowed_browser_link(url: &str) {
             std::ptr::null(),
             SW_SHOWNORMAL,
         );
+    }
+}
+
+/// Handles to the tray context-menu items, so a language change can relabel them.
+#[cfg(windows)]
+pub(crate) struct TrayMenuItems {
+    open: muda::MenuItem,
+    today: muda::MenuItem,
+    settings: muda::MenuItem,
+    sponsor: muda::MenuItem,
+    exit: muda::MenuItem,
+    /// Locale the labels currently show; relabeling is skipped while it matches.
+    locale: std::cell::Cell<LocaleCode>,
+}
+
+#[cfg(windows)]
+impl TrayMenuItems {
+    /// Items labeled for `locale`, not yet attached to a menu (tests and headless renders).
+    pub(crate) fn new(locale: LocaleCode) -> Self {
+        let labels = lightcal::i18n::tray_menu_copy(locale);
+        Self {
+            open: muda::MenuItem::new(labels.open, true, None),
+            today: muda::MenuItem::new(lightcal::i18n::catalog(locale).today_button, true, None),
+            settings: muda::MenuItem::new(labels.settings, true, None),
+            sponsor: muda::MenuItem::new(labels.sponsor, true, None),
+            exit: muda::MenuItem::new(labels.exit, true, None),
+            locale: std::cell::Cell::new(locale),
+        }
+    }
+
+    fn relabel(&self, locale: LocaleCode) {
+        if self.locale.get() == locale {
+            return;
+        }
+        let labels = lightcal::i18n::tray_menu_copy(locale);
+        self.open.set_text(labels.open);
+        self.today
+            .set_text(lightcal::i18n::catalog(locale).today_button);
+        self.settings.set_text(labels.settings);
+        self.sponsor.set_text(labels.sponsor);
+        self.exit.set_text(labels.exit);
+        self.locale.set(locale);
     }
 }
 
@@ -1231,6 +1828,13 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
                 ctrl.calendars_access_denied = false;
                 ctrl.calendars_is_empty = snapshot.sources.is_empty();
             }
+        }
+        if matches!(
+            snapshot.status,
+            lightcal::platform::ProviderStatus::Available
+                | lightcal::platform::ProviderStatus::NoCalendars
+        ) {
+            ctrl.last_refreshed = Some(chrono::Local::now());
         }
         ctrl.provider = snapshot;
         ctrl.sync_to_ui(ui);
@@ -1580,6 +2184,12 @@ enum CalendarAction {
 }
 
 fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, synthetic: bool) {
+    if matches!(
+        action,
+        CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
+    ) {
+        forget_sign_in_url();
+    }
     let mut config = None;
     with_active_controller(&ui_weak, |ctrl, ui| {
         let allowed = match &action {
@@ -1655,7 +2265,10 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             match &action {
                 CalendarAction::ConnectMicrosoft(client) => {
                     let token = lightcal::calendars::microsoft::connect(client, |url| {
-                        let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
+                        let _ = slint::invoke_from_event_loop(move || {
+                            remember_sign_in_url(&url);
+                            open_browser_link(&url);
+                        });
                     })?;
                     if !SIGN_IN_GATE.is_current(sign_in_epoch) {
                         return Err("Sign-in cancelled".into());
@@ -1668,7 +2281,10 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 } => {
                     let token =
                         lightcal::calendars::google::connect(client_id, client_secret, |url| {
-                            let _ = slint::invoke_from_event_loop(move || open_browser_link(&url));
+                            let _ = slint::invoke_from_event_loop(move || {
+                                remember_sign_in_url(&url);
+                                open_browser_link(&url);
+                            });
                         })?;
                     if !SIGN_IN_GATE.is_current(sign_in_epoch) {
                         return Err("Sign-in cancelled".into());
@@ -1770,6 +2386,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             let success = result.is_ok();
             with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.connection_busy = false;
+                forget_sign_in_url();
                 ctrl.connection_message = match result {
                     Ok(removed) => {
                         if let Some(client) = connected_client {
@@ -1837,6 +2454,21 @@ fn main() {
             lightcal::platform::windows::icon::generate_application_ico(),
         )
         .expect("Could not write application icon");
+        return;
+    }
+    if args.get(1).map(String::as_str) == Some("--export-icon-review") {
+        let dir = args
+            .get(2)
+            .map(Path::new)
+            .expect("Provide an output directory");
+        let written = lightcal::platform::windows::icon::export_review_set(dir)
+            .expect("Could not write icon review images");
+        println!(
+            "Wrote {} icon review images to {} (numerals: {})",
+            written.len(),
+            dir.display(),
+            lightcal::platform::windows::icon::numeral_font_source()
+        );
         return;
     }
     if args.get(1).map(String::as_str) == Some("--apply-update") {
@@ -1933,6 +2565,7 @@ fn main() {
     }
 
     let ui = AppWindow::new().expect("Failed to create Lightcal window");
+    apply_system_font(&ui);
 
     ACTIVE_UI.with(|u| {
         *u.borrow_mut() = Some(ui.as_weak());
@@ -1955,7 +2588,15 @@ fn main() {
         });
     });
     #[cfg(windows)]
-    let (tray_icon, open_item_id, today_item_id, settings_item_id, quit_item_id) = {
+    let (
+        tray_icon,
+        tray_menu,
+        open_item_id,
+        today_item_id,
+        settings_item_id,
+        sponsor_item_id,
+        quit_item_id,
+    ) = {
         let now = chrono::Local::now();
         let dark_mode = resolve_dark_mode(prefs.theme);
         let (rgba, icon_size) = render_native_tray_icon(
@@ -1967,17 +2608,25 @@ fn main() {
             dark_mode,
         );
         let menu = muda::Menu::new();
-        let open_item = muda::MenuItem::new("Open Lightcal", true, None);
-        let today_item = muda::MenuItem::new("Today", true, None);
-        let settings_item = muda::MenuItem::new("Settings…", true, None);
-        let quit_item = muda::MenuItem::new("Exit", true, None);
+        let labels = lightcal::i18n::tray_menu_copy(prefs.locale());
+        let open_item = muda::MenuItem::new(labels.open, true, None);
+        let today_item = muda::MenuItem::new(
+            lightcal::i18n::catalog(prefs.locale()).today_button,
+            true,
+            None,
+        );
+        let settings_item = muda::MenuItem::new(labels.settings, true, None);
+        let sponsor_item = muda::MenuItem::new(labels.sponsor, true, None);
+        let quit_item = muda::MenuItem::new(labels.exit, true, None);
         let open_id = open_item.id().clone();
         let today_id = today_item.id().clone();
         let settings_id = settings_item.id().clone();
+        let sponsor_id = sponsor_item.id().clone();
         let quit_id = quit_item.id().clone();
         let _ = menu.append(&open_item);
         let _ = menu.append(&today_item);
         let _ = menu.append(&settings_item);
+        let _ = menu.append(&sponsor_item);
         let _ = menu.append(&muda::PredefinedMenuItem::separator());
         let _ = menu.append(&quit_item);
         let initial_tip = format!(
@@ -1996,7 +2645,23 @@ fn main() {
                     .build()
                     .ok()
             });
-        (tray, open_id, today_id, settings_id, quit_id)
+        let items = TrayMenuItems {
+            open: open_item.clone(),
+            today: today_item.clone(),
+            settings: settings_item.clone(),
+            sponsor: sponsor_item.clone(),
+            exit: quit_item.clone(),
+            locale: std::cell::Cell::new(prefs.locale()),
+        };
+        (
+            tray,
+            items,
+            open_id,
+            today_id,
+            settings_id,
+            sponsor_id,
+            quit_id,
+        )
     };
 
     let ctrl = Rc::new(RefCell::new(AppController {
@@ -2023,6 +2688,8 @@ fn main() {
         settings_tab: 0,
         #[cfg(windows)]
         tray_icon,
+        #[cfg(windows)]
+        tray_menu,
         language_dropdown_open: false,
         theme_dropdown_open: false,
         first_day_dropdown_open: false,
@@ -2043,6 +2710,8 @@ fn main() {
         google_label: String::new(),
         google_error: String::new(),
         ics_error: String::new(),
+        agenda: Default::default(),
+        last_refreshed: None,
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;
@@ -2162,6 +2831,7 @@ fn main() {
         let open_id = open_item_id.clone();
         let today_id = today_item_id.clone();
         let settings_id = settings_item_id.clone();
+        let sponsor_id = sponsor_item_id.clone();
         let quit_id = quit_item_id.clone();
 
         muda::MenuEvent::set_event_handler(Some(move |ev: muda::MenuEvent| {
@@ -2170,6 +2840,7 @@ fn main() {
             let open_id = open_id.clone();
             let today_id = today_id.clone();
             let settings_id = settings_id.clone();
+            let sponsor_id = sponsor_id.clone();
             let quit_id = quit_id.clone();
 
             let _ = slint::invoke_from_event_loop(move || {
@@ -2197,6 +2868,9 @@ fn main() {
                         show_application_window(w);
                         bring_to_foreground();
                     });
+                } else if id == sponsor_id {
+                    // Opens only the allowlisted GitHub Sponsors page in the browser.
+                    open_browser_link(lightcal::updater::SPONSOR_URL);
                 } else if id == quit_id {
                     let _ = slint::quit_event_loop();
                 }
@@ -2329,6 +3003,9 @@ fn main() {
             }
         });
     }
+    calendar_view::connect_agenda_callbacks(&ui, &ctrl, move |weak| {
+        request_visible_calendars(weak, use_synthetic)
+    });
 
     {
         let ctrl = Rc::clone(&ctrl);
@@ -2495,27 +3172,26 @@ fn main() {
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
-        ui.on_cycle_shortcut_preset(move || {
+        ui.on_record_shortcut(move |text, control, alt, shift, meta| {
             let mut c = ctrl.borrow_mut();
-            let candidate = match c.prefs.global_shortcut.as_deref() {
-                None => "Alt + Shift + C",
-                Some("Alt + Shift + C") => "Ctrl + Alt + C", // Demonstrates conflict rollback!
-                _ => "Ctrl + Shift + L",
-            };
-            match c.shortcut_mgr.bind(Some(candidate)) {
-                Ok(bound) => {
-                    c.prefs.global_shortcut = bound;
-                    c.shortcut_error.clear();
-                    c.conflicting_shortcut = None;
-                    c.persist();
-                }
-                Err(err) => {
-                    c.shortcut_error = err;
-                    c.conflicting_shortcut = Some(candidate.to_string());
-                }
+            #[cfg(windows)]
+            let pressed = pressed_main_key();
+            #[cfg(not(windows))]
+            let pressed: Option<String> = None;
+            if let Some(candidate) =
+                shortcut_from_press(pressed.as_deref(), text.as_str(), control, alt, shift, meta)
+            {
+                apply_shortcut(&mut c, &candidate);
             }
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
+            }
+        });
+    }
+    {
+        ui.on_reopen_sign_in_browser(move || {
+            if let Some(url) = LAST_SIGN_IN_URL.with(|slot| slot.borrow().clone()) {
+                open_browser_link(&url);
             }
         });
     }
@@ -2587,7 +3263,14 @@ fn main() {
         ui.on_add_ics_source(move |name, address| {
             run_calendar_action(
                 weak.clone(),
-                CalendarAction::AddIcs(name.to_string(), address.to_string()),
+                CalendarAction::AddIcs(
+                    if name.trim().is_empty() {
+                        ics_name_from_address(address.as_str())
+                    } else {
+                        name.to_string()
+                    },
+                    address.to_string(),
+                ),
                 use_synthetic,
             )
         });
@@ -2688,6 +3371,13 @@ fn main() {
     {
         ui.on_open_external_url(move |url| {
             open_browser_link(url.as_str());
+        });
+        ui.on_open_sponsor(|one_time| {
+            open_browser_link(if one_time {
+                lightcal::updater::SPONSOR_ONCE_URL
+            } else {
+                lightcal::updater::SPONSOR_URL
+            });
         });
     }
     {
@@ -3008,6 +3698,7 @@ fn main() {
             with_active_controller(&weak, |c, w| {
                 c.connection_busy = false;
                 c.sign_in_cancelled = true;
+                forget_sign_in_url();
                 match c.active_sign_in {
                     ActiveSignIn::Microsoft => {
                         c.microsoft_account = c.held_microsoft.clone();
@@ -3024,14 +3715,6 @@ fn main() {
                 c.sync_to_ui(w);
             });
             replay_pending_reload(weak.clone());
-        });
-    }
-    {
-        let ui_weak = ui.as_weak();
-        ui.on_minimize_window(move || {
-            if let Some(w) = ui_weak.upgrade() {
-                hide_application_window(&w);
-            }
         });
     }
 

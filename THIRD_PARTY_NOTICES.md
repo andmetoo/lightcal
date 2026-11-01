@@ -14,7 +14,8 @@ This distribution incorporates the following open-source Rust crates:
 | `muda` | `0.20.0` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/muda |
 | `windows` | `0.61.0` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `windows-sys` | `0.61.2` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
-| `fontdue` | `0.9.3` | `MIT OR Apache-2.0` | https://github.com/redox-os/fontdue |
+| `skrifa` | `0.44.0` | `MIT OR Apache-2.0` | https://github.com/googlefonts/fontations |
+| `zeno` | `0.3.3` | `Apache-2.0 OR MIT` | https://github.com/dfrg/zeno |
 | `winres` | `0.1.12` | `MIT` | https://github.com/mxre/winres |
 | `ical` | `0.11.0` | `Apache-2.0` (upstream LICENSE file) | https://github.com/Peltoche/ical-rs |
 | `rrule` | `0.14.0` | `MIT OR Apache-2.0` | https://github.com/fmeringdal/rust-rrule |
@@ -29,9 +30,7 @@ This distribution incorporates the following open-source Rust crates:
 
 ## Design & Typography References
 
-- **Onest Font**: `crates/lightcal/assets/fonts/Onest-{Regular,Medium,SemiBold,Bold}.ttf` are licensed under the SIL Open Font License, Version 1.1. Full license text is preserved in `crates/lightcal/assets/fonts/OFL-Onest.txt`. Bundled for the Windows Slint UI. Provenance: see `design/fonts/onest/README.md`.
-- **Inter Font**: `crates/lightcal/assets/fonts/Inter.ttf` and the static `Inter-Bold.ttf` instance are licensed under the SIL Open Font License, Version 1.1 (Copyright 2016-2024 The Inter Project Authors, Rasmus Andersson). Full license text is preserved in `crates/lightcal/assets/fonts/OFL.txt`. These historical assets retain their provenance; the current Windows UI and date-numeral renderer use Onest. `Inter-Bold.ttf` is generated from the bundled variable font at `wght=700`, `opsz=14` using fontTools 4.61.1; the font's OFL metadata is preserved.
 - **NSIS installer runtime**: the Windows setup and uninstaller use NSIS (zlib/libpng license), Modern UI, and the public-domain LZMA compressor. The full compiler-distribution notice is installed as `NSIS-LICENSE.txt`; see https://nsis.sourceforge.io/License. NSIS is a packaging tool, not a Cargo dependency.
-- The current design uses the Windows system font Segoe UI Variable, which is not redistributed. Earlier design mockups used **Onest** (SIL OFL 1.1); see `design/fonts/`.
+- The current design uses the Windows system font Segoe UI Variable, which is not redistributed. The tray date icon reads Segoe UI Variable (or Segoe UI Bold) from `%WINDIR%\Fonts` at runtime. Earlier design mockups used **Onest** (SIL OFL 1.1); see `design/fonts/`.
 - **Radix Colors**: the Gray + Teal palette is adapted from Radix Colors (MIT; Copyright 2021-2022 Modulz and 2022-Present WorkOS). Source: https://github.com/radix-ui/colors. License: `design/palettes/RADIX-LICENSE.txt`. This does not add a web or JavaScript runtime dependency.
 

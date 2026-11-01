@@ -471,6 +471,14 @@ fn parse_event(event: &Value, source: &str, color: &str) -> Result<CalendarOccur
         } else {
             format!("{:02}:{:02}", start.1.hour(), start.1.minute())
         },
+        start_minutes: (!all_day)
+            .then(|| super::wall_minutes(start.0.and_time(start.1)))
+            .flatten(),
+        end_minutes: (!all_day)
+            .then(|| super::wall_minutes(end.0.and_time(end.1)))
+            .flatten(),
+        location: super::optional_text(event["location"].as_str()),
+        web_link: super::event_link(event["htmlLink"].as_str()),
     })
 }
 
@@ -581,6 +589,37 @@ mod tests {
             occurrences[0].end_date_exclusive,
             LocalDate::new(2026, 11, 1).unwrap()
         );
+    }
+
+    #[test]
+    fn timed_event_keeps_its_span_location_and_calendar_link() {
+        let raw = serde_json::json!({
+            "id": "evt",
+            "summary": "Coffee with Maya",
+            "location": "  Café Lumen,
+        Main street ",
+            "htmlLink": "https://www.google.com/calendar/event?eid=ZXZ0IGV4YW1wbGU",
+            "start": {"dateTime": "2026-11-01T10:00:00Z"},
+            "end": {"dateTime": "2026-11-01T11:30:00Z"}
+        });
+        let event = parse_event(&raw, "google:primary", "#008573").unwrap();
+        let (start, end) = event.timed_span().unwrap();
+        assert_eq!(end - start, 90);
+        assert_eq!(event.location.as_deref(), Some("Café Lumen, Main street"));
+        assert_eq!(
+            event.web_link.as_deref(),
+            Some("https://www.google.com/calendar/event?eid=ZXZ0IGV4YW1wbGU")
+        );
+        let hostile = serde_json::json!({
+            "id": "x",
+            "htmlLink": "https://evil.example/calendar/event?eid=1",
+            "start": {"date": "2026-11-01"},
+            "end": {"date": "2026-11-02"}
+        });
+        let event = parse_event(&hostile, "google:primary", "#008573").unwrap();
+        assert_eq!(event.web_link, None);
+        assert_eq!(event.location, None);
+        assert_eq!(event.timed_span(), None);
     }
 
     fn empty_snapshot() -> ProviderSnapshot {

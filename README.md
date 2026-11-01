@@ -55,6 +55,10 @@ Lightcal is Windows only. CI also compiles and tests the portable calendar logic
 
 [Documentation index](docs/README.md) · [Required features](docs/features.md) · [Contributing](CONTRIBUTING.md)
 
+## Support
+
+Lightcal is free and open source. If it is useful to you, you can [sponsor its development on GitHub](https://github.com/sponsors/andmetoo), monthly or [one time](https://github.com/sponsors/andmetoo?frequency=one-time).
+
 ## License
 
 Lightcal is licensed under [GPL-3.0-only](LICENSE). Copyright (c) 2026 Lightcal contributors.

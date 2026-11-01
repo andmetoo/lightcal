@@ -1,0 +1,711 @@
+// Compact calendar popup, 352 × 432 (design/canvas Main, CalendarDetail and
+// CalendarDark boards, `.lc` styles). AppWindow forwards its data and callbacks.
+//
+// Layout: 12 px side and bottom padding; a 44 px header; a 24 px weekday row;
+// six 32 px week rows; a hairline; the agenda header; a scrolling agenda.
+
+import { Theme } from "theme.slint";
+import { Icon, IconButton, TextButton } from "controls.slint";
+import { DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
+
+// Inline accent action inside the event details (.gb): 24 px, accent 12/500.
+component DetailAction inherits Rectangle {
+    in property <string> label;
+    in property <bool> external: false;
+    in property <string> accessible-name;
+    callback clicked();
+
+    height: 24px;
+    width: self.preferred-width;
+    border-radius: Theme.radius-control;
+    background: touch.has-hover ? Theme.press : transparent;
+    accessible-role: button;
+    accessible-label: root.accessible-name != "" ? root.accessible-name : root.label;
+
+    HorizontalLayout {
+        padding-left: 6px;
+        padding-right: 6px;
+        spacing: 4px;
+        alignment: center;
+        Text {
+            text: root.label;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-medium;
+            color: Theme.accent;
+            vertical-alignment: center;
+        }
+        if root.external : VerticalLayout {
+            alignment: center;
+            Icon {
+                name: "external";
+                size: 11px;
+                weight: 2.25;
+                color: Theme.accent;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Event details panel (.det), joined to the row above it.
+component EventDetails inherits Rectangle {
+    in property <AgendaEventItem> event;
+    in property <string> copy-label;
+    in property <string> copied-label;
+    in property <string> open-label;
+    // Chips are not joined to the panel, so it is rounded on every corner.
+    in property <bool> joined: true;
+    callback copy();
+    callback open();
+
+    background: Theme.chip;
+    border-top-left-radius: root.joined ? 0px : 8px;
+    border-top-right-radius: root.joined ? 0px : 8px;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+
+    VerticalLayout {
+        padding-top: root.joined ? 2px : 6px;
+        padding-right: 8px;
+        padding-bottom: 6px;
+        padding-left: 21px;
+        spacing: 4px;
+
+        HorizontalLayout {
+            spacing: 6px;
+            min-height: 16px;
+            VerticalLayout {
+                alignment: center;
+                Icon { name: "clock"; size: 12px; color: Theme.ink2; }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.event.detail-time;
+                font-size: Theme.type-caption;
+                color: Theme.ink2;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        if root.event.location != "" : HorizontalLayout {
+            spacing: 6px;
+            min-height: 16px;
+            VerticalLayout {
+                alignment: center;
+                Icon { name: "pin"; size: 12px; color: Theme.ink2; }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.event.location;
+                font-size: Theme.type-caption;
+                color: Theme.ink2;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            height: 24px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: root.event.swatch;
+                }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.event.provider-line;
+                font-size: Theme.type-caption;
+                color: Theme.ink2;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            HorizontalLayout {
+                spacing: 2px;
+                DetailAction {
+                    label: root.event.copied ? root.copied-label : root.copy-label;
+                    clicked => { root.copy(); }
+                }
+                if root.event.can-open : DetailAction {
+                    label: root.open-label;
+                    external: true;
+                    clicked => { root.open(); }
+                }
+            }
+        }
+    }
+}
+
+// One timed agenda row (.row): 3×16 bar, 80 px time range, title, badge.
+component AgendaRow inherits Rectangle {
+    in property <AgendaEventItem> event;
+    in property <string> now-label;
+    callback clicked();
+
+    height: 30px;
+    border-top-left-radius: Theme.radius-control;
+    border-top-right-radius: Theme.radius-control;
+    border-bottom-left-radius: root.event.expanded ? 0px : Theme.radius-control;
+    border-bottom-right-radius: root.event.expanded ? 0px : Theme.radius-control;
+    background: root.event.expanded ? Theme.chip : (touch.has-hover ? Theme.hover : transparent);
+    accessible-role: button;
+    accessible-label: root.event.time-label + ", " + root.event.title
+        + (root.event.badge != "" ? ", " + root.event.badge : "");
+    accessible-expanded: root.event.expanded;
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 10px;
+        opacity: root.event.dimmed ? 0.55 : 1;
+
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 3px;
+                height: 16px;
+                border-radius: 1.5px;
+                background: root.event.swatch;
+            }
+        }
+        Text {
+            width: 80px;
+            text: root.event.time-label;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-medium;
+            color: Theme.ink2;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            horizontal-stretch: 1;
+            text: root.event.title;
+            font-size: Theme.type-body;
+            font-weight: root.event.is-now ? Theme.weight-semibold : Theme.weight-regular;
+            color: Theme.ink;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        if root.event.is-now : VerticalLayout {
+            alignment: center;
+            Rectangle {
+                height: 18px;
+                width: now-text.preferred-width + 12px;
+                border-radius: Theme.radius-key;
+                background: Theme.accent-soft;
+                now-text := Text {
+                    text: root.now-label;
+                    font-size: Theme.type-small;
+                    font-weight: Theme.weight-semibold;
+                    color: Theme.accent;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        if !root.event.is-now && root.event.badge != "" : Text {
+            text: root.event.badge;
+            font-size: Theme.type-small;
+            font-weight: Theme.weight-medium;
+            color: Theme.ink2;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// All-day chip (.chip): 22 px, dot and title.
+component AllDayChip inherits Rectangle {
+    in property <AgendaEventItem> event;
+    callback clicked();
+
+    height: 22px;
+    width: min(self.preferred-width, 320px);
+    border-radius: Theme.radius-control;
+    background: root.event.expanded || touch.has-hover ? Theme.selected : Theme.chip;
+    accessible-role: button;
+    accessible-label: root.event.time-label + ", " + root.event.title;
+    accessible-expanded: root.event.expanded;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 6px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 6px;
+                height: 6px;
+                border-radius: 3px;
+                background: root.event.swatch;
+            }
+        }
+        Text {
+            text: root.event.title;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-medium;
+            color: Theme.ink;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component CalendarView inherits Rectangle {
+    // Header
+    in property <string> month-name;
+    in property <string> year-text;
+    // Japanese puts the year first ("2026年 11月").
+    in property <bool> year-first: false;
+    in property <string> today-button-label;
+    // Today is hidden, keeping its space, while today is shown and selected.
+    in property <bool> today-hidden: false;
+    in property <string> prev-label: "Previous month";
+    in property <string> next-label: "Next month";
+    in property <string> settings-label: "Settings";
+    // Grid
+    in property <bool> show-week-numbers;
+    in property <[ShadedBand]> shaded-bands;
+    in property <[string]> weekday-headers;
+    in property <[string]> iso-weeks;
+    in property <[DayCellData]> cells;
+    in property <bool> show-event-dots;
+    // Keyboard navigation draws the focus ring on the selected day.
+    in property <bool> keyboard-nav: false;
+    // Agenda
+    in property <string> agenda-title;
+    in property <string> agenda-count;
+    in property <[AgendaChipRow]> chip-rows;
+    in property <AgendaEventItem> expanded-chip;
+    in property <bool> has-expanded-chip: false;
+    in property <[AgendaEventItem]> agenda-events;
+    in property <bool> agenda-empty: false;
+    in property <string> empty-text;
+    in property <string> next-event-text;
+    in property <string> now-label;
+    in property <string> copy-label;
+    in property <string> copied-label;
+    in property <string> open-label;
+    callback prev-month();
+    callback next-month();
+    callback open-settings(int);
+    callback return-to-today();
+    callback select-cell(int);
+    callback toggle-event(string);
+    callback copy-event(string);
+    callback open-event(string);
+    callback go-next-event();
+
+    // Wheel travel since the last month step (one notch is 60 px in Slint's winit backend).
+    property <length> wheel-travel: 0px;
+    property <length> content-x: 12px;
+    property <length> content-width: root.width - 24px;
+
+    border-radius: Theme.radius-window;
+    border-width: 1px;
+    border-color: Theme.card-line;
+    background: Theme.popup;
+    clip: true;
+
+    // ---------- Header (44 px) ----------
+    HorizontalLayout {
+        x: root.content-x;
+        y: 0px;
+        width: root.content-width;
+        height: Theme.header-height;
+        padding-left: 4px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 2px;
+
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: 5px;
+            alignment: start;
+            if root.year-first : Text {
+                text: root.year-text;
+                font-size: Theme.type-title;
+                font-weight: Theme.weight-regular;
+                letter-spacing: -0.2px;
+                color: Theme.ink2;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.month-name;
+                font-size: Theme.type-title;
+                font-weight: Theme.weight-semibold;
+                letter-spacing: -0.2px;
+                color: Theme.ink;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            if !root.year-first : Text {
+                text: root.year-text;
+                font-size: Theme.type-title;
+                font-weight: Theme.weight-regular;
+                letter-spacing: -0.2px;
+                color: Theme.ink2;
+                vertical-alignment: center;
+            }
+        }
+
+        IconButton {
+            icon: "chevron-left";
+            label: root.prev-label;
+            clicked => { root.prev-month(); }
+        }
+        TextButton {
+            label: root.today-button-label;
+            visible: !root.today-hidden;
+            enabled: !root.today-hidden;
+            clicked => { root.return-to-today(); }
+        }
+        IconButton {
+            icon: "chevron-right";
+            label: root.next-label;
+            clicked => { root.next-month(); }
+        }
+        HorizontalLayout {
+            padding-left: 4px;
+            padding-right: 4px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 1px;
+                    height: 16px;
+                    background: Theme.popup-line;
+                }
+            }
+        }
+        IconButton {
+            icon: "gear";
+            icon-weight: 1.75;
+            label: root.settings-label;
+            clicked => { root.open-settings(0); }
+        }
+    }
+
+    // ---------- Weekday row and grid (24 + 6 × 32 px) ----------
+    grid := TouchArea {
+        x: root.content-x;
+        y: Theme.header-height;
+        width: root.content-width;
+        height: 24px + 6 * 32px;
+
+        property <length> lead: root.show-week-numbers ? 24px : 0px;
+        property <length> col-width: (self.width - self.lead) / 7;
+
+        scroll-event(event) => {
+            if (event.delta-y == 0) {
+                return reject;
+            }
+            if ((root.wheel-travel > 0 && event.delta-y < 0) || (root.wheel-travel < 0 && event.delta-y > 0)) {
+                root.wheel-travel = 0px;
+            }
+            root.wheel-travel += event.delta-y;
+            if (root.wheel-travel >= 50px) {
+                root.wheel-travel = 0px;
+                root.prev-month();
+            } else if (root.wheel-travel <= -50px) {
+                root.wheel-travel = 0px;
+                root.next-month();
+            }
+            accept
+        }
+
+        // Flat shaded-weekday bands behind whole columns (.band).
+        for band in root.shaded-bands : Rectangle {
+            x: grid.lead + band.start * grid.col-width;
+            y: 0px;
+            width: band.span * grid.col-width;
+            height: grid.height;
+            border-radius: Theme.radius-day;
+            background: Theme.weekend-band;
+        }
+
+        for wd[col] in root.weekday-headers : Text {
+            x: grid.lead + col * grid.col-width;
+            y: 0px;
+            width: grid.col-width;
+            height: 24px;
+            text: wd;
+            font-size: Theme.type-small;
+            font-weight: Theme.weight-medium;
+            color: Theme.ink3;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        for row in [0, 1, 2, 3, 4, 5] : Rectangle {
+            x: 0px;
+            y: 24px + row * 32px;
+            width: grid.width;
+            height: 32px;
+
+            if root.show-week-numbers : Text {
+                x: 0px;
+                y: 0px;
+                width: 24px;
+                height: 32px;
+                text: root.iso-weeks[row];
+                font-size: Theme.type-tiny;
+                font-weight: Theme.weight-medium;
+                color: Theme.ink3;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                accessible-role: none;
+            }
+
+            for col in [0, 1, 2, 3, 4, 5, 6] : pill := Rectangle {
+                property <int> index: row * 7 + col;
+                property <DayCellData> cell: root.cells[self.index];
+                property <bool> dots: root.show-event-dots && self.cell.in-month && self.cell.dot-count > 0;
+
+                x: grid.lead + col * grid.col-width + (grid.col-width - 34px) / 2;
+                y: 2px;
+                width: 34px;
+                height: 28px;
+                accessible-role: button;
+                accessible-label: self.cell.accessible-label;
+
+                // Keyboard focus: 2 px accent ring with a 2 px gap.
+                if root.keyboard-nav && pill.cell.is-selected : Rectangle {
+                    x: -4px;
+                    y: -4px;
+                    width: parent.width + 8px;
+                    height: parent.height + 8px;
+                    border-radius: Theme.radius-day + 4px;
+                    border-width: 2px;
+                    border-color: Theme.accent;
+                    background: Theme.popup;
+                }
+                // Selected today: 1.5 px coral ring with a 2 px gap.
+                if !root.keyboard-nav && pill.cell.is-today && pill.cell.is-selected : Rectangle {
+                    x: -3.5px;
+                    y: -3.5px;
+                    width: parent.width + 7px;
+                    height: parent.height + 7px;
+                    border-radius: Theme.radius-day + 3.5px;
+                    border-width: 1.5px;
+                    border-color: Theme.coral;
+                    // The 2 px gap shows the popup background, even over a shaded band.
+                    background: Theme.popup;
+                }
+
+                Rectangle {
+                    border-radius: Theme.radius-day;
+                    background: pill.cell.is-today ? Theme.coral-band
+                        : pill.cell.is-selected ? Theme.selected
+                        : touch.has-hover ? Theme.hover
+                        : transparent;
+                }
+                // Today: coral tile under a 5 px darker band.
+                if pill.cell.is-today : Rectangle {
+                    y: 5px;
+                    height: parent.height - 5px;
+                    border-top-left-radius: 1px;
+                    border-top-right-radius: 1px;
+                    border-bottom-left-radius: Theme.radius-day;
+                    border-bottom-right-radius: Theme.radius-day;
+                    background: Theme.coral;
+                }
+
+                Text {
+                    x: 0px;
+                    y: (pill.cell.is-today ? 13.5px : 12px) - 8px;
+                    width: parent.width;
+                    height: 16px;
+                    text: pill.cell.day-number;
+                    font-size: Theme.type-day;
+                    font-weight: pill.cell.is-today || pill.cell.is-selected ? Theme.weight-semibold
+                        : !pill.cell.in-month ? Theme.weight-regular
+                        : Theme.weight-medium;
+                    color: pill.cell.is-today ? Theme.on-coral
+                        : !pill.cell.in-month ? Theme.ink3
+                        : Theme.ink;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                if pill.dots : HorizontalLayout {
+                    x: 0px;
+                    y: pill.cell.is-today ? 23px : 22px;
+                    width: parent.width;
+                    height: 4px;
+                    spacing: 3px;
+                    alignment: center;
+
+                    if pill.cell.dot-count >= 1 : Rectangle {
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot1;
+                    }
+                    if pill.cell.dot-count >= 2 : Rectangle {
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot2;
+                    }
+                    if pill.cell.dot-count >= 3 : Rectangle {
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot3;
+                    }
+                }
+
+                touch := TouchArea {
+                    clicked => { root.select-cell(pill.index); }
+                }
+            }
+        }
+    }
+
+    // ---------- Agenda ----------
+    property <length> agenda-top: Theme.header-height + 24px + 6 * 32px + 8px;
+
+    Rectangle {
+        x: root.content-x + 4px;
+        y: root.agenda-top;
+        width: root.content-width - 8px;
+        height: 1px;
+        background: Theme.popup-line;
+    }
+
+    HorizontalLayout {
+        x: root.content-x + 4px;
+        y: root.agenda-top + 1px + 10px;
+        width: root.content-width - 8px;
+        height: 16px;
+        spacing: 8px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.agenda-title;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-semibold;
+            color: Theme.ink;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        Text {
+            text: root.agenda-count;
+            font-size: Theme.type-caption;
+            font-weight: Theme.weight-medium;
+            color: Theme.ink2;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+    }
+
+    agenda := Flickable {
+        x: root.content-x;
+        y: root.agenda-top + 1px + 10px + 16px + 6px;
+        width: root.content-width;
+        height: root.height - self.y - 12px;
+        content-height: max(self.height, list.preferred-height);
+        interactive: list.preferred-height > self.height;
+
+        list := VerticalLayout {
+            width: agenda.width;
+            alignment: start;
+
+            if root.chip-rows.length > 0 : VerticalLayout {
+                padding-left: 4px;
+                padding-right: 4px;
+                padding-bottom: 6px;
+                spacing: 6px;
+                for chip-row in root.chip-rows : HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    for chip in chip-row.chips : AllDayChip {
+                        event: chip;
+                        clicked => { root.toggle-event(chip.key); }
+                    }
+                }
+            }
+            if root.has-expanded-chip : VerticalLayout {
+                padding-bottom: 6px;
+                EventDetails {
+                    event: root.expanded-chip;
+                    joined: false;
+                    copy-label: root.copy-label;
+                    copied-label: root.copied-label;
+                    open-label: root.open-label;
+                    copy => { root.copy-event(root.expanded-chip.key); }
+                    open => { root.open-event(root.expanded-chip.key); }
+                }
+            }
+
+            for ev in root.agenda-events : VerticalLayout {
+                padding-bottom: ev.expanded ? 6px : 0px;
+                AgendaRow {
+                    event: ev;
+                    now-label: root.now-label;
+                    clicked => { root.toggle-event(ev.key); }
+                }
+                if ev.expanded : EventDetails {
+                    event: ev;
+                    copy-label: root.copy-label;
+                    copied-label: root.copied-label;
+                    open-label: root.open-label;
+                    copy => { root.copy-event(ev.key); }
+                    open => { root.open-event(ev.key); }
+                }
+            }
+
+            if root.agenda-empty : VerticalLayout {
+                alignment: start;
+                HorizontalLayout {
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    padding-top: 4px;
+                    padding-bottom: 2px;
+                    Text {
+                        text: root.empty-text;
+                        font-size: Theme.type-body;
+                        color: Theme.ink2;
+                        vertical-alignment: center;
+                    }
+                }
+                if root.next-event-text != "" : HorizontalLayout {
+                    alignment: start;
+                    next-link := Rectangle {
+                        height: 26px;
+                        width: next-label.preferred-width + 8px;
+                        border-radius: Theme.radius-control;
+                        background: next-touch.pressed ? Theme.press : (next-touch.has-hover ? Theme.hover : transparent);
+                        accessible-role: button;
+                        accessible-label: root.next-event-text;
+                        next-label := Text {
+                            x: 4px;
+                            width: min(self.preferred-width, agenda.width - 8px);
+                            text: root.next-event-text;
+                            font-size: Theme.type-caption;
+                            font-weight: Theme.weight-medium;
+                            color: Theme.accent;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        next-touch := TouchArea {
+                            clicked => { root.go-next-event(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

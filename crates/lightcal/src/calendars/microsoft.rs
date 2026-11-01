@@ -483,6 +483,14 @@ fn parse_event(event: &Value, source: &str, color: &str) -> Result<CalendarOccur
                 start.with_timezone(&chrono::Local).minute()
             )
         },
+        start_minutes: (!all_day)
+            .then(|| super::wall_minutes(start.with_timezone(&chrono::Local).naive_local()))
+            .flatten(),
+        end_minutes: (!all_day)
+            .then(|| super::wall_minutes(end_local.naive_local()))
+            .flatten(),
+        location: super::optional_text(event["location"]["displayName"].as_str()),
+        web_link: super::event_link(event["webLink"].as_str()),
     })
 }
 
@@ -608,6 +616,33 @@ mod tests {
             event.end_date_exclusive,
             LocalDate::new(2026, 10, 31).unwrap()
         );
+    }
+
+    #[test]
+    fn graph_event_keeps_location_and_outlook_web_link() {
+        let raw = serde_json::json!({
+            "id": "evt",
+            "subject": "Design review",
+            "isAllDay": false,
+            "location": {"displayName": "Room 4 and video call"},
+            "webLink": "https://outlook.office365.com/owa/?itemid=AAMkAGI2T&exvsurl=1&path=/calendar/item",
+            "start": {"dateTime": "2026-11-13T15:00:00.0000000", "timeZone": "UTC"},
+            "end": {"dateTime": "2026-11-13T16:00:00.0000000", "timeZone": "UTC"}
+        });
+        let event = parse_event(&raw, "graph:a", "#123456").unwrap();
+        let (start, end) = event.timed_span().unwrap();
+        assert_eq!(end - start, 60);
+        assert_eq!(event.location.as_deref(), Some("Room 4 and video call"));
+        assert!(event
+            .web_link
+            .unwrap()
+            .starts_with("https://outlook.office365.com/owa/"));
+        let mut hostile = raw.clone();
+        hostile["webLink"] = serde_json::json!("https://outlook.office365.com.evil.example/owa/");
+        hostile["location"] = serde_json::json!({"displayName": "   "});
+        let event = parse_event(&hostile, "graph:a", "#123456").unwrap();
+        assert_eq!(event.web_link, None);
+        assert_eq!(event.location, None);
     }
 
     fn empty_snapshot() -> ProviderSnapshot {

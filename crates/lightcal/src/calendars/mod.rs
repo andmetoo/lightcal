@@ -50,6 +50,35 @@ pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
     )
 }
 
+/// Local wall-clock minutes ([`calendar_core::local_minutes`]) for a provider timestamp.
+pub(crate) fn wall_minutes(value: chrono::NaiveDateTime) -> Option<i64> {
+    use chrono::{Datelike, Timelike};
+    let date = LocalDate::new(value.year(), value.month() as u8, value.day() as u8)?;
+    Some(calendar_core::local_minutes(
+        date,
+        value.hour() * 60 + value.minute(),
+    ))
+}
+
+/// Trimmed, single-line provider text capped at 256 characters; `None` when blank.
+pub(crate) fn optional_text(raw: Option<&str>) -> Option<String> {
+    let text: String = raw?
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(256)
+        .collect();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Keeps a provider event link only when Lightcal would open it.
+pub(crate) fn event_link(raw: Option<&str>) -> Option<String> {
+    raw.filter(|url| crate::updater::is_allowed_event_link(url))
+        .map(String::from)
+}
+
 /// "name: N events could not be read" with count-aware grammar in every supported language.
 pub fn skipped_events_note(locale: LocaleCode, name: &str, count: usize) -> String {
     match locale {

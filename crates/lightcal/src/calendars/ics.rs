@@ -440,6 +440,15 @@ fn emit(
         } else {
             format!("{:02}:{:02}", local_start.hour(), local_start.minute())
         },
+        start_minutes: (!all_day)
+            .then(|| super::wall_minutes(local_start.naive_local()))
+            .flatten(),
+        end_minutes: (!all_day)
+            .then(|| super::wall_minutes(local_end.naive_local()))
+            .flatten(),
+        location: super::optional_text(value(event, "LOCATION").map(unescape).as_deref()),
+        // Private ICS links never get an Open action.
+        web_link: None,
     });
     Ok(())
 }
@@ -465,6 +474,19 @@ mod tests {
         )
         .unwrap()
         .occurrences
+    }
+    #[test]
+    fn location_is_unescaped_and_ics_events_never_get_a_link() {
+        let events = parse_events("BEGIN:VEVENT\r\nUID:loc\r\nDTSTART:20261031T090000Z\r\nDTEND:20261031T094500Z\r\nSUMMARY:Standup\r\nLOCATION:Room 4\\, floor 2\r\nURL:https://www.google.com/calendar/event?eid=1\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].location.as_deref(), Some("Room 4, floor 2"));
+        assert_eq!(events[0].web_link, None);
+        let (start, end) = events[0].timed_span().unwrap();
+        assert_eq!(end - start, 45);
+        assert_eq!(
+            calendar_core::split_local_minutes(start),
+            (LocalDate::new(2026, 10, 31).unwrap(), 9, 0)
+        );
     }
     #[test]
     fn folded_text_escaped_summary_and_exclusive_all_day_end() {

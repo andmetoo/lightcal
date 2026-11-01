@@ -204,6 +204,10 @@ pub fn is_verified_github_url(url: &str) -> bool {
         && (parsed.path() == PATH || parsed.path().starts_with(&format!("{PATH}/")))
 }
 
+/// GitHub Sponsors pages for the maintainer (monthly and one-time). Exact matches only.
+pub const SPONSOR_URL: &str = "https://github.com/sponsors/andmetoo";
+pub const SPONSOR_ONCE_URL: &str = "https://github.com/sponsors/andmetoo?frequency=one-time";
+
 pub fn is_allowed_external_link(url: &str) -> bool {
     if let Ok(uri) = url::Url::parse(url) {
         if uri.scheme() == "https"
@@ -220,14 +224,84 @@ pub fn is_allowed_external_link(url: &str) -> bool {
     }
     url == "https://github.com/andmetoo/lightcal"
         || url == "https://koona.app"
+        || url == SPONSOR_URL
+        || url == SPONSOR_ONCE_URL
         || url == "ms-settings:privacy-calendar"
         || url == "ms-settings:emailandaccounts"
         || is_verified_github_url(url)
 }
 
+/// Provider web pages an agenda event's Open action may launch: Google Calendar
+/// `htmlLink` and Microsoft Graph `webLink` addresses. HTTPS only, no
+/// credentials or ports. Lightcal opens these on user action and never fetches them.
+pub fn is_allowed_event_link(url: &str) -> bool {
+    if url.len() > 4096 || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
+    let Ok(uri) = url::Url::parse(url) else {
+        return false;
+    };
+    if uri.scheme() != "https"
+        || !uri.username().is_empty()
+        || uri.password().is_some()
+        || uri.port().is_some()
+    {
+        return false;
+    }
+    let path = uri.path();
+    match uri.host_str() {
+        // Google Calendar: https://www.google.com/calendar/event?eid=...
+        Some("www.google.com") => path == "/calendar/event",
+        // Graph webLink: https://outlook.office365.com/owa/?itemid=...&path=/calendar/item
+        // (work or school), https://outlook.live.com/owa/?itemid=... (personal), and the
+        // newer https://outlook.office.com/calendar/item/... form.
+        Some("outlook.office.com" | "outlook.office365.com" | "outlook.live.com") => {
+            path.starts_with("/owa/") || path.starts_with("/calendar/")
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn event_links_accept_only_provider_calendar_pages() {
+        for allowed in [
+            "https://www.google.com/calendar/event?eid=ZXZ0IGV4YW1wbGU",
+            "https://outlook.office365.com/owa/?itemid=AAMk%2FAGI&exvsurl=1&path=/calendar/item",
+            "https://outlook.live.com/owa/?itemid=AQMk&exvsurl=1&path=/calendar/item",
+            "https://outlook.office.com/calendar/item/AAMkAGI",
+            "https://outlook.office.com/owa/?itemid=AAMk",
+        ] {
+            assert!(is_allowed_event_link(allowed), "{allowed}");
+        }
+        for rejected in [
+            "http://www.google.com/calendar/event?eid=1",
+            "https://www.google.com:8443/calendar/event?eid=1",
+            "https://user:pw@www.google.com/calendar/event?eid=1",
+            "https://user@outlook.live.com/owa/?itemid=1",
+            "https://www.google.com/url?q=https://evil.example",
+            "https://www.google.com/calendar/eventx",
+            "https://calendar.google.com.evil.example/calendar/event",
+            "https://google.com/calendar/event?eid=1",
+            "https://outlook.office365.com/mail/inbox",
+            "https://outlook.office365.com.evil.example/owa/",
+            "https://evil.example/owa/?r=https://outlook.live.com",
+            "https://outlook.live.com/owa/ ?itemid=1",
+            "javascript:alert(1)",
+            "file:///C:/Temp/run.exe",
+            "ms-settings:privacy-calendar",
+            "",
+        ] {
+            assert!(!is_allowed_event_link(rejected), "{rejected}");
+        }
+        // Event links are a separate allow-list from the app's fixed links.
+        assert!(!is_allowed_external_link(
+            "https://www.google.com/calendar/event?eid=1"
+        ));
+    }
 
     #[test]
     fn evaluates_newer_current_and_prerelease_versions() {
@@ -336,6 +410,14 @@ mod tests {
         assert!(is_allowed_external_link("ms-settings:privacy-calendar"));
         assert!(is_allowed_external_link("ms-settings:emailandaccounts"));
         assert!(!is_allowed_external_link("ms-settings:windowsupdate"));
+        assert!(is_allowed_external_link(SPONSOR_URL));
+        assert!(is_allowed_external_link(SPONSOR_ONCE_URL));
+        assert!(!is_allowed_external_link(
+            "https://github.com/sponsors/someone-else"
+        ));
+        assert!(!is_allowed_external_link(
+            "https://github.com/sponsors/andmetoo?frequency=one-time&evil=1"
+        ));
         assert!(!is_allowed_external_link("https://malicious.site"));
         assert!(!is_allowed_external_link("cmd.exe"));
     }

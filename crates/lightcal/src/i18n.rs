@@ -196,7 +196,7 @@ const EN_STRINGS: UiStrings = UiStrings {
     desc_language: "Interface language for month names, weekdays, and controls",
     label_startup: "Start with Windows",
     desc_startup: "Start Lightcal quietly in the system tray when you sign in",
-    label_shortcut: "Keyboard shortcut",
+    label_shortcut: "Open shortcut",
     desc_shortcut: "Toggle the calendar popover from anywhere on the desktop",
     shortcut_unset: "Not set",
     shortcut_record: "Record…",
@@ -211,7 +211,7 @@ const EN_STRINGS: UiStrings = UiStrings {
     theme_dark: "Dark",
     label_first_weekday: "Week starts on",
     desc_first_weekday: "First column shown in the calendar grid",
-    label_gray_weekdays: "Shade days",
+    label_gray_weekdays: "Shaded days",
     desc_gray_weekdays: "Tint selected weekday columns with a soft vertical band",
     label_show_weekday: "Show weekday in dates",
     desc_show_weekday: "Include weekday name in today and selected-date text.",
@@ -315,9 +315,9 @@ const RU_STRINGS: UiStrings = UiStrings {
     general_subtitle: "Язык, автозапуск, сочетание клавиш, значок в трее и обновления.",
     label_language: "Язык",
     desc_language: "Мгновенно обновляет интерфейс, дни недели и формат дат.",
-    label_startup: "Запускать вместе с Windows",
+    label_startup: "Запускать с Windows",
     desc_startup: "Открывать свернутым в системном лотке при входе в систему.",
-    label_shortcut: "Горячая клавиша",
+    label_shortcut: "Быстрый вызов",
     desc_shortcut: "Открывать или скрывать компактный календарь из любого окна.",
     shortcut_unset: "Не задано",
     shortcut_record: "Задать…",
@@ -332,7 +332,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     theme_dark: "Тёмная",
     label_first_weekday: "Неделя начинается с",
     desc_first_weekday: "Настраивается независимо от языка интерфейса.",
-    label_gray_weekdays: "Затенять дни недели",
+    label_gray_weekdays: "Затенённые дни",
     desc_gray_weekdays: "Мягкий нейтральный фон для выбранных колонок дней недели.",
     label_show_weekday: "Показывать день недели",
     desc_show_weekday: "Отображать день недели в сегодняшней и выбранной дате.",
@@ -429,7 +429,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     week_col_header: "SEM",
     selected_date_overline: "FECHA SELECCIONADA",
     settings_title: "Ajustes",
-    nav_general: "App",
+    nav_general: "Aplicación",
     nav_appearance: "Calendario",
     nav_calendars: "Cuentas",
     nav_about: "Acerca de",
@@ -438,7 +438,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     desc_language: "Actualiza textos, días de la semana y fechas al instante.",
     label_startup: "Iniciar con Windows",
     desc_startup: "Abrir silenciosamente en la bandeja al iniciar sesión.",
-    label_shortcut: "Atajo de teclado",
+    label_shortcut: "Atajo para abrir",
     desc_shortcut: "Mostrar u ocultar el calendario compacto desde cualquier aplicación.",
     shortcut_unset: "Sin asignar",
     shortcut_record: "Grabar…",
@@ -453,7 +453,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     theme_dark: "Oscuro",
     label_first_weekday: "La semana empieza el",
     desc_first_weekday: "Independiente del idioma de la interfaz.",
-    label_gray_weekdays: "Sombrear días",
+    label_gray_weekdays: "Días sombreados",
     desc_gray_weekdays: "Aplicar un fondo neutro suave a cualquier subconjunto de días.",
     label_show_weekday: "Mostrar día de la semana",
     desc_show_weekday: "Incluir el día de la semana en la fecha actual y seleccionada.",
@@ -483,10 +483,10 @@ const ES_STRINGS: UiStrings = UiStrings {
     back_to_calendar: "‹ Volver a ajustes",
     label_tray_mode: "Bandeja",
     desc_tray_mode: "Color o gris",
-    label_tray_palette: "Bandeja",
+    label_tray_palette: "Icono de la bandeja",
     desc_tray_palette: "Color o gris",
     palette_colored: "Color",
-    palette_monochrome: "Gris",
+    palette_monochrome: "Mono",
     preferences_subtitle: "Preferencias",
     lang_en_us: "English",
     lang_ru: "Русский",
@@ -557,9 +557,9 @@ const JA_STRINGS: UiStrings = UiStrings {
     general_subtitle: "言語、起動、ショートカット、トレイアイコン、アップデート。",
     label_language: "言語",
     desc_language: "再起動せずに UI と日付の表記をすぐに切り替えます。",
-    label_startup: "Windows 起動時に開始",
+    label_startup: "Windows の起動時に開く",
     desc_startup: "サインイン時にシステムトレイへ最小化した状態で起動します。",
-    label_shortcut: "キーボードショートカット",
+    label_shortcut: "呼び出しショートカット",
     desc_shortcut: "どのアプリからでもトレイカレンダーを表示・非表示にします。",
     shortcut_unset: "未設定",
     shortcut_record: "記録…",
@@ -574,7 +574,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     theme_dark: "ダーク",
     label_first_weekday: "週の始まり",
     desc_first_weekday: "表示言語とは独立して設定できます。",
-    label_gray_weekdays: "曜日を陰影",
+    label_gray_weekdays: "網掛けする曜日",
     desc_gray_weekdays: "任意の曜日の列に落ち着いた背景色を適用します。",
     label_show_weekday: "日付に曜日を表示",
     desc_show_weekday: "今日と選択した日付に曜日を含めます。",
@@ -605,7 +605,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     label_tray_palette: "トレイアイコン",
     desc_tray_palette: "カラーまたはモノクロ",
     palette_colored: "カラー",
-    palette_monochrome: "モノ",
+    palette_monochrome: "モノクロ",
     preferences_subtitle: "環境設定",
     lang_en_us: "English",
     lang_ru: "Русский",
@@ -1019,9 +1019,197 @@ pub fn format_update_status(
     }
 }
 
+/// Calendar popup agenda copy (ADR 0011). "All day" and "Today" come from [`UiStrings`].
+pub struct AgendaCopy {
+    pub now: &'static str,
+    pub next_prefix: &'static str,
+    pub copy: &'static str,
+    pub copied: &'static str,
+    pub open: &'static str,
+    pub prev_month: &'static str,
+    pub next_month: &'static str,
+}
+
+pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
+    match locale {
+        LocaleCode::En => &AgendaCopy {
+            now: "Now",
+            next_prefix: "Next:",
+            copy: "Copy",
+            copied: "Copied",
+            open: "Open",
+            prev_month: "Previous month",
+            next_month: "Next month",
+        },
+        LocaleCode::Ru => &AgendaCopy {
+            now: "Сейчас",
+            next_prefix: "Далее:",
+            copy: "Копировать",
+            copied: "Скопировано",
+            open: "Открыть",
+            prev_month: "Предыдущий месяц",
+            next_month: "Следующий месяц",
+        },
+        LocaleCode::Es => &AgendaCopy {
+            now: "Ahora",
+            next_prefix: "Siguiente:",
+            copy: "Copiar",
+            copied: "Copiado",
+            open: "Abrir",
+            prev_month: "Mes anterior",
+            next_month: "Mes siguiente",
+        },
+        LocaleCode::Ja => &AgendaCopy {
+            now: "進行中",
+            next_prefix: "次の予定:",
+            copy: "コピー",
+            copied: "コピーしました",
+            open: "開く",
+            prev_month: "前の月",
+            next_month: "次の月",
+        },
+    }
+}
+
+/// Tray context-menu labels; "Today" comes from [`UiStrings::today_button`].
+pub struct TrayMenuCopy {
+    pub open: &'static str,
+    pub settings: &'static str,
+    pub sponsor: &'static str,
+    pub exit: &'static str,
+}
+
+pub fn tray_menu_copy(locale: LocaleCode) -> &'static TrayMenuCopy {
+    match locale {
+        LocaleCode::En => &TrayMenuCopy {
+            open: "Open Lightcal",
+            settings: "Settings…",
+            sponsor: "♥ Sponsor Lightcal",
+            exit: "Exit",
+        },
+        LocaleCode::Ru => &TrayMenuCopy {
+            open: "Открыть Lightcal",
+            settings: "Настройки…",
+            sponsor: "♥ Поддержать Lightcal",
+            exit: "Выход",
+        },
+        LocaleCode::Es => &TrayMenuCopy {
+            open: "Abrir Lightcal",
+            settings: "Ajustes…",
+            sponsor: "♥ Patrocinar Lightcal",
+            exit: "Salir",
+        },
+        LocaleCode::Ja => &TrayMenuCopy {
+            open: "Lightcal を開く",
+            settings: "設定…",
+            sponsor: "♥ Lightcal を支援",
+            exit: "終了",
+        },
+    }
+}
+
+/// Duration in hours and minutes: "1 h 30 min", "1 ч 30 мин", "1時間30分".
+pub fn format_duration(locale: LocaleCode, minutes: i64) -> String {
+    let minutes = minutes.max(0);
+    let (h, m) = (minutes / 60, minutes % 60);
+    let (hour_unit, minute_unit) = match locale {
+        LocaleCode::En | LocaleCode::Es => (" h", " min"),
+        LocaleCode::Ru => (" ч", " мин"),
+        LocaleCode::Ja => ("時間", "分"),
+    };
+    let separator = if locale == LocaleCode::Ja { "" } else { " " };
+    match (h, m) {
+        (0, m) => format!("{m}{minute_unit}"),
+        (h, 0) => format!("{h}{hour_unit}"),
+        (h, m) => format!("{h}{hour_unit}{separator}{m}{minute_unit}"),
+    }
+}
+
+/// Time until the next event starts: "in 3 h 55 min", "через 3 ч 55 мин", "3時間55分後".
+pub fn format_starts_in(locale: LocaleCode, minutes: i64) -> String {
+    let duration = format_duration(locale, minutes.max(1));
+    match locale {
+        LocaleCode::En => format!("in {duration}"),
+        LocaleCode::Ru => format!("через {duration}"),
+        LocaleCode::Es => format!("en {duration}"),
+        LocaleCode::Ja => format!("{duration}後"),
+    }
+}
+
+/// Short weekday and date for the "Next:" link: "Fri 13 Nov", "Пт, 13 нояб.", "vie, 13 nov", "11月13日 (金)".
+pub fn format_short_date(locale: LocaleCode, date: LocalDate) -> String {
+    let month = (date.month.clamp(1, 12) - 1) as usize;
+    let weekday = date.weekday().monday_index() as usize;
+    match locale {
+        LocaleCode::En => {
+            const WD: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const MO: [&str; 12] = [
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            ];
+            format!("{} {} {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Ru => {
+            const MO: [&str; 12] = [
+                "янв.",
+                "февр.",
+                "мар.",
+                "апр.",
+                "мая",
+                "июн.",
+                "июл.",
+                "авг.",
+                "сент.",
+                "окт.",
+                "нояб.",
+                "дек.",
+            ];
+            format!(
+                "{}, {} {}",
+                weekday_short(locale, date.weekday()),
+                date.day,
+                MO[month]
+            )
+        }
+        LocaleCode::Es => {
+            const WD: [&str; 7] = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+            const MO: [&str; 12] = [
+                "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic",
+            ];
+            format!("{}, {} {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Ja => format!(
+            "{}月{}日 ({})",
+            date.month,
+            date.day,
+            weekday_short(locale, date.weekday())
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tray_menu_is_translated_in_all_four_languages() {
+        let en = tray_menu_copy(LocaleCode::En);
+        for locale in [
+            LocaleCode::En,
+            LocaleCode::Ru,
+            LocaleCode::Es,
+            LocaleCode::Ja,
+        ] {
+            let copy = tray_menu_copy(locale);
+            for label in [copy.open, copy.settings, copy.sponsor, copy.exit] {
+                assert!(!label.trim().is_empty());
+            }
+            assert!(copy.sponsor.starts_with('♥'));
+            if locale != LocaleCode::En {
+                assert_ne!(copy.open, en.open);
+                assert_ne!(copy.exit, en.exit);
+            }
+        }
+    }
 
     #[test]
     fn pluralization_and_date_formatting_all_four_languages() {
@@ -1067,6 +1255,37 @@ mod tests {
     }
 
     #[test]
+    fn agenda_copy_durations_and_short_dates_in_every_language() {
+        let nov13 = LocalDate::new(2026, 11, 13).unwrap();
+        assert_eq!(format_starts_in(LocaleCode::En, 235), "in 3 h 55 min");
+        assert_eq!(format_starts_in(LocaleCode::Ru, 60), "через 1 ч");
+        assert_eq!(format_starts_in(LocaleCode::Es, 5), "en 5 min");
+        assert_eq!(format_starts_in(LocaleCode::Ja, 235), "3時間55分後");
+        assert_eq!(format_duration(LocaleCode::En, 90), "1 h 30 min");
+        assert_eq!(format_short_date(LocaleCode::En, nov13), "Fri 13 Nov");
+        assert_eq!(format_short_date(LocaleCode::Ru, nov13), "Пт, 13 нояб.");
+        assert_eq!(format_short_date(LocaleCode::Es, nov13), "vie, 13 nov");
+        assert_eq!(format_short_date(LocaleCode::Ja, nov13), "11月13日 (金)");
+        for locale in [
+            LocaleCode::En,
+            LocaleCode::Ru,
+            LocaleCode::Es,
+            LocaleCode::Ja,
+        ] {
+            let copy = agenda_copy(locale);
+            for text in [
+                copy.now,
+                copy.next_prefix,
+                copy.copy,
+                copy.copied,
+                copy.open,
+            ] {
+                assert!(!text.is_empty());
+            }
+        }
+    }
+
+    #[test]
     fn manual_update_copy_is_present_for_every_language() {
         for locale in [
             LocaleCode::En,
@@ -1079,5 +1298,527 @@ mod tests {
             assert!(strings.manual_update_notes.contains("GitHub"));
             assert!(strings.manual_install_status.contains("GitHub"));
         }
+    }
+}
+
+// ---- Settings and About copy (November 2026 refresh, ADR 0011) ----
+
+/// One-letter weekday for the shaded-days picker (e.g. "L M X J V S D" in Spanish).
+pub fn weekday_letter(locale: LocaleCode, day: Weekday) -> &'static str {
+    let letters: [&str; 7] = match locale {
+        LocaleCode::En => ["M", "T", "W", "T", "F", "S", "S"],
+        LocaleCode::Ru => ["П", "В", "С", "Ч", "П", "С", "В"],
+        LocaleCode::Es => ["L", "M", "X", "J", "V", "S", "D"],
+        LocaleCode::Ja => ["月", "火", "水", "木", "金", "土", "日"],
+    };
+    letters[day.monday_index() as usize]
+}
+
+/// Settings, Accounts states and About copy for the refreshed layout.
+pub struct SettingsText {
+    pub window_title: &'static str,
+    pub close: &'static str,
+    pub connected_accounts: &'static str,
+    pub add_account: &'static str,
+    pub read_only_note: &'static str,
+    pub connect_heading: &'static str,
+    pub connect_note: &'static str,
+    pub google_title: &'static str,
+    pub google_desc: &'static str,
+    pub outlook_title: &'static str,
+    pub outlook_desc: &'static str,
+    pub ics_title: &'static str,
+    pub ics_desc: &'static str,
+    pub windows_title: &'static str,
+    pub windows_desc: &'static str,
+    pub windows_detail: &'static str,
+    pub signing_note: &'static str,
+    pub open_browser_again: &'static str,
+    pub cancel: &'static str,
+    pub ics_heading: &'static str,
+    pub ics_field_label: &'static str,
+    pub ics_placeholder: &'static str,
+    pub ics_privacy: &'static str,
+    pub ics_detail: &'static str,
+    pub subscribe: &'static str,
+    pub refresh: &'static str,
+    pub more: &'static str,
+    pub back: &'static str,
+    pub no_selection_hint: &'static str,
+    pub cancelled_text: &'static str,
+    pub try_again: &'static str,
+    pub disconnect: &'static str,
+    pub turn_off: &'static str,
+    pub sign_in: &'static str,
+    pub open_privacy: &'static str,
+    pub access_expired: &'static str,
+    pub access_denied: &'static str,
+    pub no_calendars: &'static str,
+    pub offline_plain: &'static str,
+    pub checking_account: &'static str,
+    pub shortcut_recording: &'static str,
+    pub shortcut_clear: &'static str,
+    pub about_tagline: &'static str,
+    pub check_now: &'static str,
+    pub view_release: &'static str,
+    pub details: &'static str,
+    pub not_checked_short: &'static str,
+    pub checking_short: &'static str,
+    pub up_to_date_short: &'static str,
+    pub offline_short: &'static str,
+    pub problem_short: &'static str,
+    pub idle_title: &'static str,
+    pub checking_title: &'static str,
+    pub up_to_date_title: &'static str,
+    pub offline_title: &'static str,
+    pub problem_title: &'static str,
+    pub manual_note: &'static str,
+    pub auto_note: &'static str,
+    pub release_page_note: &'static str,
+    pub auto_check_label: &'static str,
+    pub github_title: &'static str,
+    pub github_desc: &'static str,
+    pub koona_title: &'static str,
+    pub koona_desc: &'static str,
+    pub sponsor_label: &'static str,
+    pub sponsor_monthly_title: &'static str,
+    pub sponsor_monthly_desc: &'static str,
+    pub sponsor_once_title: &'static str,
+    pub sponsor_once_desc: &'static str,
+    pub license_title: &'static str,
+    pub license_desc: &'static str,
+    pub release_notes_title: &'static str,
+    pub release_notes_desc: &'static str,
+}
+
+const EN_SETTINGS: SettingsText = SettingsText {
+    window_title: "Lightcal settings",
+    close: "Close",
+    connected_accounts: "Connected accounts",
+    add_account: "Add account",
+    read_only_note: "Read-only. Lightcal never changes your events.",
+    connect_heading: "Connect a calendar",
+    connect_note: "Lightcal reads events. It never changes them.",
+    google_title: "Google Calendar",
+    google_desc: "Sign in in your browser",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Work, school or personal account",
+    ics_title: "Private ICS link",
+    ics_desc: "Any calendar that shares a link",
+    windows_title: "Windows calendars",
+    windows_desc: "Calendars already on this PC",
+    windows_detail: "On this PC",
+    signing_note: "We opened your browser. Lightcal asks only for read access to your calendars.",
+    open_browser_again: "Open browser again",
+    cancel: "Cancel",
+    ics_heading: "Add a calendar link",
+    ics_field_label: "Calendar address (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Private links work like a password. Stored only on this PC.",
+    ics_detail: "Private ICS link",
+    subscribe: "Subscribe",
+    refresh: "Refresh",
+    more: "More account actions",
+    back: "Back",
+    no_selection_hint: "Check the calendars whose events you want to see.",
+    cancelled_text: "Sign-in cancelled. Your accounts are unchanged.",
+    try_again: "Try again",
+    disconnect: "Disconnect",
+    turn_off: "Turn off",
+    sign_in: "Sign in",
+    open_privacy: "Open settings",
+    access_expired: "Access expired. Sign in to update events.",
+    access_denied: "Calendar access is off in Windows privacy settings.",
+    no_calendars: "No calendars found for this account.",
+    offline_plain: "Offline. Showing saved events.",
+    checking_account: "Checking…",
+    shortcut_recording: "Press a key combination…",
+    shortcut_clear: "Clear shortcut",
+    about_tagline: "A small calendar for the tray",
+    check_now: "Check now",
+    view_release: "View release",
+    details: "Details",
+    not_checked_short: "Not checked",
+    checking_short: "Checking…",
+    up_to_date_short: "Up to date",
+    offline_short: "Offline",
+    problem_short: "Couldn’t check",
+    idle_title: "Check for updates",
+    checking_title: "Checking for updates…",
+    up_to_date_title: "You’re up to date",
+    offline_title: "You’re offline",
+    problem_title: "Couldn’t check for updates",
+    manual_note: "Lightcal checks only when you ask.",
+    auto_note: "Lightcal also checks at startup and daily.",
+    release_page_note: "Opens the GitHub release page. Nothing downloads until you choose to.",
+    auto_check_label: "Check for updates automatically",
+    github_title: "GitHub repository",
+    github_desc: "Source code and issues",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal on the web",
+    sponsor_label: "Sponsor",
+    sponsor_monthly_title: "Sponsor on GitHub",
+    sponsor_monthly_desc: "Support Lightcal every month",
+    sponsor_once_title: "One-time support",
+    sponsor_once_desc: "Send a one-off thank-you",
+    license_title: "GPL-3.0-only",
+    license_desc: "License and third-party notices",
+    release_notes_title: "Release notes",
+    release_notes_desc: "What changed in each version",
+};
+
+const RU_SETTINGS: SettingsText = SettingsText {
+    window_title: "Настройки Lightcal",
+    close: "Закрыть",
+    connected_accounts: "Подключённые аккаунты",
+    add_account: "Добавить",
+    read_only_note: "Только чтение. Lightcal не изменяет ваши события.",
+    connect_heading: "Подключите календарь",
+    connect_note: "Lightcal читает события и никогда их не изменяет.",
+    google_title: "Google Календарь",
+    google_desc: "Вход в браузере",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Рабочий, учебный или личный аккаунт",
+    ics_title: "Закрытая ссылка ICS",
+    ics_desc: "Любой календарь со ссылкой",
+    windows_title: "Календари Windows",
+    windows_desc: "Календари, уже настроенные на этом ПК",
+    windows_detail: "На этом ПК",
+    signing_note: "Мы открыли браузер. Lightcal запрашивает только чтение календарей.",
+    open_browser_again: "Открыть браузер снова",
+    cancel: "Отмена",
+    ics_heading: "Добавить ссылку на календарь",
+    ics_field_label: "Адрес календаря (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Закрытая ссылка — как пароль. Хранится только на этом ПК.",
+    ics_detail: "Закрытая ссылка ICS",
+    subscribe: "Подписаться",
+    refresh: "Обновить",
+    more: "Другие действия с аккаунтом",
+    back: "Назад",
+    no_selection_hint: "Отметьте календари, события которых хотите видеть.",
+    cancelled_text: "Вход отменён. Аккаунты не изменились.",
+    try_again: "Ещё раз",
+    disconnect: "Отключить",
+    turn_off: "Выключить",
+    sign_in: "Войти",
+    open_privacy: "Открыть параметры",
+    access_expired: "Доступ истёк. Войдите, чтобы обновить события.",
+    access_denied: "Доступ к календарям выключен в параметрах конфиденциальности Windows.",
+    no_calendars: "У этого аккаунта нет календарей.",
+    offline_plain: "Нет сети. Показаны сохранённые события.",
+    checking_account: "Проверка…",
+    shortcut_recording: "Нажмите сочетание клавиш…",
+    shortcut_clear: "Очистить сочетание",
+    about_tagline: "Маленький календарь в трее",
+    check_now: "Проверить",
+    view_release: "Открыть релиз",
+    details: "Подробнее",
+    not_checked_short: "Не проверялось",
+    checking_short: "Проверка…",
+    up_to_date_short: "Последняя версия",
+    offline_short: "Нет сети",
+    problem_short: "Не удалось проверить",
+    idle_title: "Проверка обновлений",
+    checking_title: "Проверяем обновления…",
+    up_to_date_title: "Установлена последняя версия",
+    offline_title: "Нет подключения к сети",
+    problem_title: "Не удалось проверить обновления",
+    manual_note: "Lightcal проверяет только по вашему запросу.",
+    auto_note: "Lightcal также проверяет при запуске и раз в сутки.",
+    release_page_note:
+        "Откроется страница релиза на GitHub. Ничего не скачивается без вашего решения.",
+    auto_check_label: "Автоматически проверять обновления",
+    github_title: "Репозиторий GitHub",
+    github_desc: "Исходный код и задачи",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal в интернете",
+    sponsor_label: "Поддержать",
+    sponsor_monthly_title: "Спонсорство на GitHub",
+    sponsor_monthly_desc: "Ежемесячная поддержка Lightcal",
+    sponsor_once_title: "Разовая поддержка",
+    sponsor_once_desc: "Сказать спасибо один раз",
+    license_title: "GPL-3.0-only",
+    license_desc: "Лицензия и сторонние компоненты",
+    release_notes_title: "Список изменений",
+    release_notes_desc: "Что нового в каждой версии",
+};
+
+const ES_SETTINGS: SettingsText = SettingsText {
+    window_title: "Ajustes de Lightcal",
+    close: "Cerrar",
+    connected_accounts: "Cuentas conectadas",
+    add_account: "Añadir cuenta",
+    read_only_note: "Solo lectura. Lightcal nunca cambia tus eventos.",
+    connect_heading: "Conecta un calendario",
+    connect_note: "Lightcal lee los eventos. Nunca los cambia.",
+    google_title: "Google Calendar",
+    google_desc: "Inicia sesión en el navegador",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Cuenta personal, del trabajo o de la escuela",
+    ics_title: "Enlace ICS privado",
+    ics_desc: "Cualquier calendario que comparta un enlace",
+    windows_title: "Calendarios de Windows",
+    windows_desc: "Calendarios que ya están en este PC",
+    windows_detail: "En este PC",
+    signing_note: "Abrimos tu navegador. Lightcal solo pide acceso de lectura a tus calendarios.",
+    open_browser_again: "Abrir el navegador otra vez",
+    cancel: "Cancelar",
+    ics_heading: "Añadir un enlace de calendario",
+    ics_field_label: "Dirección del calendario (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Los enlaces privados son como una contraseña. Solo se guardan en este PC.",
+    ics_detail: "Enlace ICS privado",
+    subscribe: "Suscribirse",
+    refresh: "Actualizar",
+    more: "Más acciones de la cuenta",
+    back: "Atrás",
+    no_selection_hint: "Marca los calendarios cuyos eventos quieres ver.",
+    cancelled_text: "Inicio de sesión cancelado. Las cuentas no cambiaron.",
+    try_again: "Reintentar",
+    disconnect: "Desconectar",
+    turn_off: "Desactivar",
+    sign_in: "Iniciar sesión",
+    open_privacy: "Abrir ajustes",
+    access_expired: "El acceso caducó. Inicia sesión para actualizar los eventos.",
+    access_denied: "El acceso al calendario está desactivado en la privacidad de Windows.",
+    no_calendars: "No hay calendarios en esta cuenta.",
+    offline_plain: "Sin conexión. Se muestran los eventos guardados.",
+    checking_account: "Comprobando…",
+    shortcut_recording: "Pulsa una combinación de teclas…",
+    shortcut_clear: "Borrar atajo",
+    about_tagline: "Un pequeño calendario para la bandeja",
+    check_now: "Comprobar",
+    view_release: "Ver versión",
+    details: "Detalles",
+    not_checked_short: "Sin comprobar",
+    checking_short: "Comprobando…",
+    up_to_date_short: "Actualizado",
+    offline_short: "Sin conexión",
+    problem_short: "No se pudo comprobar",
+    idle_title: "Buscar actualizaciones",
+    checking_title: "Buscando actualizaciones…",
+    up_to_date_title: "Tienes la última versión",
+    offline_title: "Sin conexión",
+    problem_title: "No se pudieron buscar actualizaciones",
+    manual_note: "Lightcal solo comprueba cuando lo pides.",
+    auto_note: "Lightcal también comprueba al iniciar y cada día.",
+    release_page_note:
+        "Abre la página de la versión en GitHub. No se descarga nada hasta que lo decidas.",
+    auto_check_label: "Buscar actualizaciones automáticamente",
+    github_title: "Repositorio de GitHub",
+    github_desc: "Código fuente e incidencias",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal en la web",
+    sponsor_label: "Patrocinar",
+    sponsor_monthly_title: "Patrocinar en GitHub",
+    sponsor_monthly_desc: "Apoya Lightcal cada mes",
+    sponsor_once_title: "Apoyo único",
+    sponsor_once_desc: "Un agradecimiento puntual",
+    license_title: "GPL-3.0-only",
+    license_desc: "Licencia y avisos de terceros",
+    release_notes_title: "Notas de la versión",
+    release_notes_desc: "Qué cambió en cada versión",
+};
+
+const JA_SETTINGS: SettingsText = SettingsText {
+    window_title: "Lightcal の設定",
+    close: "閉じる",
+    connected_accounts: "接続済みのアカウント",
+    add_account: "アカウントを追加",
+    read_only_note: "読み取り専用です。Lightcal が予定を変更することはありません。",
+    connect_heading: "カレンダーを接続",
+    connect_note: "Lightcal は予定を読み取るだけで、変更しません。",
+    google_title: "Google カレンダー",
+    google_desc: "ブラウザーでサインイン",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "職場、学校、または個人のアカウント",
+    ics_title: "非公開 ICS リンク",
+    ics_desc: "リンクを共有できるカレンダー",
+    windows_title: "Windows のカレンダー",
+    windows_desc: "この PC にあるカレンダー",
+    windows_detail: "この PC",
+    signing_note: "ブラウザーを開きました。Lightcal が求めるのはカレンダーの読み取りだけです。",
+    open_browser_again: "ブラウザーをもう一度開く",
+    cancel: "キャンセル",
+    ics_heading: "カレンダーのリンクを追加",
+    ics_field_label: "カレンダーのアドレス (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "非公開リンクはパスワードと同じです。この PC にのみ保存されます。",
+    ics_detail: "非公開 ICS リンク",
+    subscribe: "購読",
+    refresh: "更新",
+    more: "アカウントのその他の操作",
+    back: "戻る",
+    no_selection_hint: "予定を表示するカレンダーにチェックを入れてください。",
+    cancelled_text: "サインインを取り消しました。アカウントは変更されていません。",
+    try_again: "再試行",
+    disconnect: "切断",
+    turn_off: "オフにする",
+    sign_in: "サインイン",
+    open_privacy: "設定を開く",
+    access_expired: "アクセスの有効期限が切れました。サインインして予定を更新してください。",
+    access_denied: "Windows のプライバシー設定でカレンダーへのアクセスがオフです。",
+    no_calendars: "このアカウントにカレンダーはありません。",
+    offline_plain: "オフラインです。保存済みの予定を表示しています。",
+    checking_account: "確認中…",
+    shortcut_recording: "キーの組み合わせを押してください…",
+    shortcut_clear: "ショートカットを消去",
+    about_tagline: "トレイの小さなカレンダー",
+    check_now: "今すぐ確認",
+    view_release: "リリースを表示",
+    details: "詳細",
+    not_checked_short: "未確認",
+    checking_short: "確認中…",
+    up_to_date_short: "最新です",
+    offline_short: "オフライン",
+    problem_short: "確認できません",
+    idle_title: "アップデートの確認",
+    checking_title: "アップデートを確認しています…",
+    up_to_date_title: "最新バージョンです",
+    offline_title: "オフラインです",
+    problem_title: "アップデートを確認できませんでした",
+    manual_note: "Lightcal は指示したときだけ確認します。",
+    auto_note: "Lightcal は起動時と毎日も確認します。",
+    release_page_note: "GitHub のリリースページを開きます。選ぶまで何もダウンロードされません。",
+    auto_check_label: "更新を自動確認",
+    github_title: "GitHub リポジトリ",
+    github_desc: "ソースコードと Issue",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal のウェブサイト",
+    sponsor_label: "支援する",
+    sponsor_monthly_title: "GitHub でスポンサー",
+    sponsor_monthly_desc: "Lightcal を毎月支援",
+    sponsor_once_title: "1 回だけ支援",
+    sponsor_once_desc: "単発で応援する",
+    license_title: "GPL-3.0-only",
+    license_desc: "ライセンスとサードパーティーの表示",
+    release_notes_title: "リリースノート",
+    release_notes_desc: "各バージョンの変更点",
+};
+
+pub fn settings_text(locale: LocaleCode) -> &'static SettingsText {
+    match locale {
+        LocaleCode::En => &EN_SETTINGS,
+        LocaleCode::Ru => &RU_SETTINGS,
+        LocaleCode::Es => &ES_SETTINGS,
+        LocaleCode::Ja => &JA_SETTINGS,
+    }
+}
+
+/// "Finish signing in to Google".
+pub fn signing_in_title(locale: LocaleCode, provider: &str) -> String {
+    match locale {
+        LocaleCode::En => format!("Finish signing in to {provider}"),
+        LocaleCode::Ru => format!("Завершите вход в {provider}"),
+        LocaleCode::Es => format!("Termina de iniciar sesión en {provider}"),
+        LocaleCode::Ja => format!("{provider} へのサインインを完了してください"),
+    }
+}
+
+/// "Updated 2 min ago"; `None` minutes means the time is unknown.
+pub fn updated_ago(locale: LocaleCode, minutes: i64, clock: &str) -> String {
+    match (locale, minutes) {
+        (LocaleCode::En, m) if m < 1 => "Updated just now".into(),
+        (LocaleCode::En, m) if m < 60 => format!("Updated {m} min ago"),
+        (LocaleCode::En, _) => format!("Updated at {clock}"),
+        (LocaleCode::Ru, m) if m < 1 => "Обновлено только что".into(),
+        (LocaleCode::Ru, m) if m < 60 => format!("Обновлено {m} мин назад"),
+        (LocaleCode::Ru, _) => format!("Обновлено в {clock}"),
+        (LocaleCode::Es, m) if m < 1 => "Actualizado ahora".into(),
+        (LocaleCode::Es, m) if m < 60 => format!("Actualizado hace {m} min"),
+        (LocaleCode::Es, _) => format!("Actualizado a las {clock}"),
+        (LocaleCode::Ja, m) if m < 1 => "たった今更新".into(),
+        (LocaleCode::Ja, m) if m < 60 => format!("{m} 分前に更新"),
+        (LocaleCode::Ja, _) => format!("{clock} に更新"),
+    }
+}
+
+/// "Offline. Showing events saved at 10:42."
+pub fn offline_saved_at(locale: LocaleCode, clock: &str) -> String {
+    match locale {
+        LocaleCode::En => format!("Offline. Showing events saved at {clock}."),
+        LocaleCode::Ru => format!("Нет сети. Показаны события, сохранённые в {clock}."),
+        LocaleCode::Es => format!("Sin conexión. Se muestran los eventos guardados a las {clock}."),
+        LocaleCode::Ja => format!("オフラインです。{clock} に保存した予定を表示しています。"),
+    }
+}
+
+/// "Version 0.3.1 available" (App tab update row).
+pub fn update_available_short(locale: LocaleCode, version: &str) -> String {
+    match locale {
+        LocaleCode::En => format!("Version {version} available"),
+        LocaleCode::Ru => format!("Доступна {version}"),
+        LocaleCode::Es => format!("Versión {version} disponible"),
+        LocaleCode::Ja => format!("{version} があります"),
+    }
+}
+
+/// Inline shortcut conflict text. The previous shortcut stays registered.
+pub fn shortcut_conflict_text(
+    locale: LocaleCode,
+    candidate: &str,
+    previous: Option<&str>,
+    in_use: bool,
+) -> String {
+    let candidate = candidate.replace(" + ", "+");
+    let previous = previous.map(|p| p.replace(" + ", "+"));
+    let first = match (locale, in_use) {
+        (LocaleCode::En, true) => format!("Another app already uses {candidate}."),
+        (LocaleCode::En, false) => format!("{candidate} can’t be used as a shortcut."),
+        (LocaleCode::Ru, true) => format!("Сочетание {candidate} уже занято другим приложением."),
+        (LocaleCode::Ru, false) => format!("Сочетание {candidate} нельзя использовать."),
+        (LocaleCode::Es, true) => format!("Otra aplicación ya usa {candidate}."),
+        (LocaleCode::Es, false) => format!("{candidate} no se puede usar como atajo."),
+        (LocaleCode::Ja, true) => format!("{candidate} は他のアプリが使用しています。"),
+        (LocaleCode::Ja, false) => format!("{candidate} はショートカットに使えません。"),
+    };
+    let second = match (locale, previous) {
+        (LocaleCode::En, Some(p)) => format!("Lightcal kept your previous shortcut, {p}."),
+        (LocaleCode::En, None) => "No shortcut is set.".to_string(),
+        (LocaleCode::Ru, Some(p)) => format!("Lightcal оставил прежнее сочетание {p}."),
+        (LocaleCode::Ru, None) => "Сочетание не задано.".to_string(),
+        (LocaleCode::Es, Some(p)) => format!("Lightcal mantuvo tu atajo anterior, {p}."),
+        (LocaleCode::Es, None) => "No hay ningún atajo asignado.".to_string(),
+        (LocaleCode::Ja, Some(p)) => format!("以前のショートカット {p} はそのまま使えます。"),
+        (LocaleCode::Ja, None) => "ショートカットは設定されていません。".to_string(),
+    };
+    if locale == LocaleCode::Ja {
+        format!("{first}{second}")
+    } else {
+        format!("{first} {second}")
+    }
+}
+
+#[cfg(test)]
+mod settings_text_tests {
+    use super::*;
+
+    #[test]
+    fn weekday_letters_follow_the_locale() {
+        let es: Vec<&str> = Weekday::ALL
+            .iter()
+            .map(|&d| weekday_letter(LocaleCode::Es, d))
+            .collect();
+        assert_eq!(es.join(" "), "L M X J V S D");
+    }
+
+    #[test]
+    fn conflict_text_names_the_kept_shortcut() {
+        assert_eq!(
+            shortcut_conflict_text(LocaleCode::En, "Ctrl + Alt + K", Some("Ctrl + Alt + C"), true),
+            "Another app already uses Ctrl+Alt+K. Lightcal kept your previous shortcut, Ctrl+Alt+C."
+        );
+        assert!(shortcut_conflict_text(LocaleCode::Ru, "Alt + K", None, true).contains("Alt+K"));
+    }
+
+    #[test]
+    fn updated_ago_covers_recent_and_older_refreshes() {
+        assert_eq!(updated_ago(LocaleCode::En, 2, "10:42"), "Updated 2 min ago");
+        assert_eq!(updated_ago(LocaleCode::En, 0, "10:42"), "Updated just now");
+        assert_eq!(
+            updated_ago(LocaleCode::Es, 90, "10:42"),
+            "Actualizado a las 10:42"
+        );
     }
 }

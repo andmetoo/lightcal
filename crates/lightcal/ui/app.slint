@@ -1,646 +1,24 @@
-// Lightcal — Native Desktop Calendar UI (Slint)
-// October 31 2026 Penpot Windows design · Onest · Calendar 352×432 · Settings 448×360
+// Lightcal — native desktop calendar UI (Slint).
+// November 2026 design refresh (ADR 0011) · Segoe UI Variable · Calendar 352×432 · Settings 448×360
+// Modules: theme.slint (tokens), controls.slint (shared controls), types.slint (Rust structs),
+// calendar.slint (CalendarView), settings.slint (SettingsView with About).
 
-import "../assets/fonts/Onest-Regular.ttf";
-import "../assets/fonts/Onest-Medium.ttf";
-import "../assets/fonts/Onest-SemiBold.ttf";
-import "../assets/fonts/Onest-Bold.ttf";
-import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { CalendarView } from "calendar.slint";
+import { SettingsView } from "settings.slint";
+import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
 
-export struct DayCellData {
-    day-number: string,
-    in-month: bool,
-    is-today: bool,
-    is-selected: bool,
-    is-gray-weekday: bool,
-    dot-count: int,
-    dot1: color,
-    dot2: color,
-    dot3: color,
-    accessible-label: string,
-}
-
-export struct MonthViewData {
-    title: string,
-    cells: [DayCellData],
-}
-
-export struct CalendarSourceItem {
-    id: string,
-    name: string,
-    account: string,
-    swatch: color,
-    checked: bool,
-    removable: bool,
-}
-
-export struct WeekdayChipItem {
-    index: int,
-    label: string,
-    active: bool,
-}
-
-export struct AgendaEventItem {
-    time-label: string,
-    title: string,
-    calendar-name: string,
-    swatch: color,
-}
-
-component IconSquareButton inherits Rectangle {
-    in property <string> glyph;
-    in property <bool> filled: false;
-    in property <bool> dark-mode: false;
-    callback clicked();
-
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    background: root.filled
-        ? (touch.has-hover
-            ? (root.dark-mode ? #2A2A2A : #E8E8E8)
-            : (root.dark-mode ? #222222 : #F0F0F0))
-        : (touch.has-hover
-            ? (root.dark-mode ? #2A2A2A : #F0F0F0)
-            : transparent);
-    border-width: 0px;
-
-    Text {
-        width: parent.width;
-        height: parent.height;
-        text: root.glyph;
-        font-size: 14px;
-        font-weight: 500;
-        color: root.dark-mode ? #B4B4B4 : #646464;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-
-    touch := TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
-
-component SwitchToggle inherits Rectangle {
-    in property <bool> checked: false;
-    in property <bool> dark-mode: false;
-    callback toggled();
-
-    width: 36px;
-    height: 22px;
-    border-radius: 11px;
-    background: root.checked
-        ? #00796B
-        : (root.dark-mode ? #606060 : #BBBBBB);
-
-    Rectangle {
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        x: root.checked ? 17px : 3px;
-        y: 3px;
-        background: #FFFFFF;
-        animate x { duration: 140ms; easing: ease-out; }
-    }
-
-    touch := TouchArea {
-        clicked => { root.toggled(); }
-    }
-}
-
-component SettingsSelect inherits Rectangle {
-    in property <string> text;
-    in property <bool> is-open: false;
-    in property <bool> dark-mode: false;
-    in property <length> select-width: 136px;
-    callback clicked();
-
-    width: root.select-width;
-    height: 28px;
-    border-radius: 7px;
-    background: touch.has-hover
-        ? (root.dark-mode ? #2A2A2A : #FFFFFF)
-        : (root.dark-mode ? #2A2A2A : #FFFFFF);
-    border-width: root.is-open ? 1.5px : 1px;
-    border-color: root.is-open
-        ? (root.dark-mode ? #53B9AB : #00796B)
-        : (root.dark-mode ? #606060 : #BBBBBB);
-
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 8px;
-        spacing: 4px;
-        alignment: space-between;
-
-        Text {
-            horizontal-stretch: 1;
-            text: root.text;
-            font-size: 12px;
-            font-weight: 500;
-            color: root.dark-mode ? #EEEEEE : #202020;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        Text {
-            text: "▾";
-            font-size: 10px;
-            color: root.is-open ? (root.dark-mode ? #53B9AB : #00796B) : (root.dark-mode ? #B4B4B4 : #646464);
-            vertical-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
-
-component SettingsButton inherits Rectangle {
-    in property <bool> enabled: true;
-    opacity: root.enabled ? 1 : 0.4;
-    in property <string> label;
-    in property <string> kind: "secondary"; // "primary", "secondary", "subtle", "danger"
-    in property <bool> dark-mode: false;
-    in property <length> button-width: 0px;
-    callback clicked();
-
-    width: root.button-width > 0px ? root.button-width : self.preferred-width;
-    height: 28px;
-    border-radius: 7px;
-    background: root.kind == "primary"
-        ? (touch.has-hover ? #008573 : #00796B)
-        : (root.kind == "subtle"
-            ? (touch.has-hover
-                ? (root.dark-mode ? #2A2A2A : #E8E8E8)
-                : (root.dark-mode ? #222222 : #F0F0F0))
-            : (root.kind == "danger"
-                ? (root.dark-mode ? #2A2A2A : #FFFFFF)
-                : (touch.has-hover
-                    ? (root.dark-mode ? #2A2A2A : #F0F0F0)
-                    : (root.dark-mode ? #2A2A2A : #FFFFFF))));
-    border-width: root.kind == "primary" ? 0px : 1px;
-    border-color: root.kind == "danger"
-        ? (root.dark-mode ? #EEEEEE : #202020)
-        : (root.kind == "subtle"
-            ? (root.dark-mode ? #606060 : #D9D9D9)
-            : (root.dark-mode ? #606060 : #BBBBBB));
-
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
-        alignment: center;
-
-        Text {
-            text: root.label;
-            font-size: 12px;
-            font-weight: 500;
-            color: root.kind == "primary"
-                ? #FFFFFF
-                : (root.kind == "danger"
-                    ? (root.dark-mode ? #EEEEEE : #202020)
-                    : (root.kind == "subtle"
-                        ? (root.dark-mode ? #B4B4B4 : #646464)
-                        : (root.dark-mode ? #EEEEEE : #202020)));
-            vertical-alignment: center;
-            horizontal-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => { root.clicked(); }
-    }
-}
-
-component SettingsDropdownOption inherits Rectangle {
-    in property <string> label;
-    in property <bool> active: false;
-    in property <bool> dark-mode: false;
-    callback clicked();
-
-    height: 28px;
-    border-radius: 5px;
-    background: root.active
-        ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-        : (opt-touch.has-hover ? (root.dark-mode ? #2A2A2A : #F0F0F0) : transparent);
-
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
-        alignment: space-between;
-
-        Text {
-            text: root.label;
-            font-size: 12px;
-            font-weight: root.active ? 600 : 500;
-            color: root.dark-mode ? #EEEEEE : #202020;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
-            overflow: elide;
-        }
-
-        if root.active : Text {
-            text: "✓";
-            font-size: 12px;
-            font-weight: 700;
-            color: root.dark-mode ? #53B9AB : #00796B;
-            vertical-alignment: center;
-        }
-    }
-
-    opt-touch := TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
-
-component SettingsMenu inherits Rectangle {
-    in property <bool> dark-mode: false;
-
-    horizontal-stretch: 0;
-    width: 168px;
-    height: min(196px, content.preferred-height);
-    border-radius: 8px;
-    background: root.dark-mode ? #2A2A2A : #FFFFFF;
-    border-width: 1px;
-    border-color: root.dark-mode ? #606060 : #BBBBBB;
-    drop-shadow-blur: 12px;
-    drop-shadow-offset-y: 4px;
-    drop-shadow-color: root.dark-mode ? #00000088 : #2020201A;
-
-    content := VerticalLayout {
-        padding: 6px;
-        spacing: 2px;
-        @children
-    }
-}
-
-component SegmentedControl inherits Rectangle {
-    in property <[string]> options;
-    in property <int> selected-index: 0;
-    in property <bool> dark-mode: false;
-    in property <length> track-width: 204px;
-    callback selected(int);
-
-    width: root.track-width;
-    height: 28px;
-    border-radius: 7px;
-    background: root.dark-mode ? #191919 : #E8E8E8;
-
-    HorizontalLayout {
-        padding: 2px;
-        spacing: 0px;
-
-        for opt[idx] in root.options : Rectangle {
-            horizontal-stretch: 1;
-            height: 24px;
-            y: 0px;
-            border-radius: 5px;
-            background: root.selected-index == idx
-                ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                : transparent;
-            border-width: root.selected-index == idx ? 1px : 0px;
-            border-color: root.dark-mode ? #7B7B7B : #838383;
-
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: opt;
-                font-size: 11px;
-                font-weight: root.selected-index == idx ? 600 : 400;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-
-            TouchArea {
-                clicked => { root.selected(idx); }
-            }
-        }
-    }
-}
-
-component BrandMark inherits Rectangle {
-    in property <length> mark-size: 20px;
-    width: root.mark-size;
-    height: root.mark-size;
-    border-radius: root.mark-size * 0.22;
-    background: #FFFFFF;
-    border-width: 1px;
-    border-color: #BBBBBB;
-    clip: true;
-
-    Rectangle {
-        width: parent.width;
-        height: parent.height * 0.27;
-        background: #E5484D;
-    }
-
-    property <length> tile: root.mark-size * 0.19;
-    property <length> gap: root.mark-size * 0.12;
-    property <length> left: (root.mark-size - root.tile * 2 - root.gap) / 2;
-    property <length> top: root.mark-size * 0.42;
-
-    Rectangle {
-        x: root.left;
-        y: root.top;
-        width: root.tile;
-        height: root.tile;
-        border-radius: root.mark-size * 0.035;
-        background: #313131;
-    }
-    Rectangle {
-        x: root.left + root.tile + root.gap;
-        y: root.top;
-        width: root.tile;
-        height: root.tile;
-        border-radius: root.mark-size * 0.035;
-        background: #313131;
-    }
-    Rectangle {
-        x: root.left;
-        y: root.top + root.tile + root.gap;
-        width: root.tile;
-        height: root.tile;
-        border-radius: root.mark-size * 0.035;
-        background: #313131;
-    }
-    Rectangle {
-        x: root.left + root.tile + root.gap;
-        y: root.top + root.tile + root.gap;
-        width: root.tile;
-        height: root.tile;
-        border-radius: root.mark-size * 0.035;
-        background: #E5484D;
-    }
-}
-
-component SettingsRow inherits Rectangle {
-    in property <string> title;
-    in property <string> subtitle: "";
-    in property <color> subtitle-color: #BC333B;
-    in property <bool> dark-mode: false;
-    in property <bool> show-divider: true;
-    in property <color> title-color: #202020;
-
-    height: 40px;
-    background: transparent;
-
-    HorizontalLayout {
-        width: 100%;
-        height: 100%;
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 12px;
-        alignment: space-between;
-
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 1;
-            Text {
-                text: root.title;
-                font-size: 12px;
-                font-weight: 500;
-                color: root.title-color;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-            if root.subtitle != "" : Text {
-                text: root.subtitle;
-                font-size: 10.5px;
-                font-weight: 400;
-                color: root.subtitle-color;
-                overflow: elide;
-            }
-        }
-
-        VerticalLayout {
-            alignment: center;
-            HorizontalLayout {
-                vertical-stretch: 0;
-                spacing: 8px;
-                alignment: center;
-                @children
-            }
-        }
-    }
-
-    // Hairline sits inside the 40px row so five rows fit the 200px Penpot card.
-    if root.show-divider : Rectangle {
-        x: 12px;
-        y: parent.height - 1px;
-        width: parent.width - 24px;
-        height: 1px;
-        background: root.dark-mode ? #3A3A3A : #D9D9D9;
-    }
-}
-
-component SettingsField inherits Rectangle {
-    in-out property <string> text;
-    in property <string> placeholder;
-    in property <bool> dark-mode: false;
-    in property <bool> enabled: true;
-
-    height: 28px;
-    border-radius: 7px;
-    opacity: root.enabled ? 1 : 0.45;
-    background: root.dark-mode ? #2A2A2A : #FFFFFF;
-    border-width: input.has-focus ? 1.5px : 1px;
-    border-color: input.has-focus ? (root.dark-mode ? #53B9AB : #00796B) : (root.dark-mode ? #606060 : #BBBBBB);
-
-    if root.text == "" && root.placeholder != "" : Text {
-        x: 10px;
-        y: 0px;
-        width: parent.width - 20px;
-        height: parent.height;
-        text: root.placeholder;
-        font-size: 12px;
-        color: root.dark-mode ? #606060 : #BBBBBB;
-        vertical-alignment: center;
-        overflow: elide;
-    }
-
-    input := TextInput {
-        x: 10px;
-        y: 0px;
-        width: parent.width - 20px;
-        height: parent.height;
-        text <=> root.text;
-        font-size: 12px;
-        color: root.dark-mode ? #EEEEEE : #202020;
-        vertical-alignment: center;
-        single-line: true;
-        enabled: root.enabled;
-    }
-
-    public function focus-input() {
-        input.focus();
-    }
-}
-
-component AccountBlock inherits VerticalLayout {
-    in property <bool> dark-mode: false;
-    in property <string> title;
-    in property <string> status;
-    in property <string> badge;
-    in property <bool> badge-alert: false;
-    in property <[CalendarSourceItem]> sources;
-    in property <string> empty-text;
-    in property <string> remove-label;
-    in property <string> primary-label;
-    in property <bool> show-primary: false;
-    in property <string> secondary-label;
-    in property <bool> show-secondary: false;
-    in property <string> refresh-label;
-    in property <bool> show-refresh: false;
-    in property <bool> controls-enabled: true;
-    callback primary-clicked();
-    callback secondary-clicked();
-    callback refresh-clicked();
-    callback toggle-source(string);
-    callback remove-source(string);
-
-    spacing: 4px;
-
-    HorizontalLayout {
-        height: 36px;
-        spacing: 8px;
-        alignment: space-between;
-        VerticalLayout {
-            spacing: 2px;
-            alignment: center;
-            horizontal-stretch: 1;
-            Text {
-                text: root.title;
-                font-size: 12.5px;
-                font-weight: 600;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                overflow: elide;
-            }
-            if root.status != "" : Text {
-                text: root.status;
-                font-size: 10.5px;
-                font-weight: 400;
-                color: root.badge-alert
-                    ? (root.dark-mode ? #FF9DA1 : #BC333B)
-                    : (root.dark-mode ? #B4B4B4 : #646464);
-                overflow: elide;
-            }
-        }
-        if root.badge != "" : Rectangle {
-            height: 22px;
-            border-radius: 6px;
-            background: root.badge-alert ? #BC333B : (root.dark-mode ? #313131 : #E8E8E8);
-            HorizontalLayout {
-                padding-left: 8px;
-                padding-right: 8px;
-                alignment: center;
-                Text {
-                    text: root.badge;
-                    font-size: 10.5px;
-                    font-weight: 500;
-                    color: root.badge-alert ? #FFFFFF : (root.dark-mode ? #EEEEEE : #202020);
-                    vertical-alignment: center;
-                }
-            }
-        }
-    }
-
-    Rectangle { height: 1px; background: root.dark-mode ? #3A3A3A : #D9D9D9; }
-
-    if root.sources.length == 0 && root.empty-text != "" : Text {
-        text: root.empty-text;
-        font-size: 12px;
-        font-weight: 500;
-        color: root.dark-mode ? #EEEEEE : #202020;
-        wrap: word-wrap;
-    }
-    if root.sources.length > 0 : VerticalLayout {
-        spacing: 2px;
-        for src in root.sources : HorizontalLayout {
-            height: 22px;
-            spacing: 8px;
-            alignment: start;
-            Rectangle {
-                width: 16px;
-                height: 16px;
-                border-radius: 4px;
-                y: (parent.height - self.height) / 2;
-                background: src.checked ? src.swatch : (root.dark-mode ? #2A2A2A : #FFFFFF);
-                border-width: src.checked ? 0px : 1px;
-                border-color: root.dark-mode ? #606060 : #BBBBBB;
-                if src.checked : Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: "✓";
-                    font-size: 10px;
-                    font-weight: 700;
-                    color: #FFFFFF;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-                TouchArea {
-                    enabled: root.controls-enabled;
-                    clicked => { root.toggle-source(src.id); }
-                }
-            }
-            Text {
-                text: src.name;
-                font-size: 12px;
-                font-weight: 400;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-                overflow: elide;
-            }
-            if src.removable : TouchArea {
-                width: 48px;
-                height: 18px;
-                clicked => { root.remove-source(src.id); }
-                Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: root.remove-label;
-                    font-size: 10px;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    horizontal-alignment: right;
-                    vertical-alignment: center;
-                }
-            }
-        }
-    }
-
-    if root.show-refresh || root.show-primary || root.show-secondary : HorizontalLayout {
-        height: 28px;
-        spacing: 8px;
-        alignment: end;
-        if root.show-refresh : SettingsButton {
-            label: root.refresh-label;
-            kind: "subtle";
-            dark-mode: root.dark-mode;
-            clicked => { root.refresh-clicked(); }
-        }
-        if root.show-primary : SettingsButton {
-            label: root.primary-label;
-            kind: "primary";
-            button-width: 112px;
-            dark-mode: root.dark-mode;
-            clicked => { root.primary-clicked(); }
-        }
-        if root.show-secondary : SettingsButton {
-            label: root.secondary-label;
-            dark-mode: root.dark-mode;
-            clicked => { root.secondary-clicked(); }
-        }
-    }
-}
+export { Theme }
+export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
     no-frame: true;
-    default-font-family: "Onest";
+    default-font-family: Theme.font-family;
     in property <image> window-icon;
     icon: root.window-icon;
-    in property <bool> dark-mode: true;
+    // Aliases Theme.dark so every module reads the active palette.
+    in-out property <bool> dark-mode <=> Theme.dark;
     in property <bool> settings-open: false;
     // 0=Calendar, 1=Accounts, 2=App, 3=About
     in property <int> settings-tab: 0;
@@ -651,22 +29,45 @@ export component AppWindow inherits Window {
     out property <string> month-title: root.month-view.title;
     in property <bool> is-current-month: true;
     in property <string> current-month-badge: "Current month";
-    in property <string> today-date-line: "Thursday, 29 October";
     in property <string> today-button-label: "Today";
     in property <string> week-header-label: "W";
     in property <bool> show-week-numbers: true;
     in property <bool> show-weekday-header: true;
     in property <[string]> weekday-headers: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-    in property <[bool]> gray-columns: [false, false, false, false, false, true, true];
     in property <[string]> iso-weeks: ["40", "41", "42", "43", "44", "45"];
     out property <[DayCellData]> cells: root.month-view.cells;
     in property <string> selected-date-line: "Friday, 30 October";
     in property <string> selected-event-summary: "2 events";
     in property <string> active-calendars-label: "2 calendars";
-    in property <[AgendaEventItem]> selected-day-events: [];
     in property <string> back-to-calendar-text: "← Back to Calendar";
     in property <string> compact-summary-header: "";
     in property <string> sync-status-text: "Synced · 3 calendars active";
+    // Calendar popup refresh (ADR 0011): header, shaded bands and agenda.
+    in property <string> month-name-text: "November";
+    in property <string> year-text: "2026";
+    in property <bool> year-first: false;
+    in property <bool> today-hidden: false;
+    in property <string> prev-month-label: "Previous month";
+    in property <string> next-month-label: "Next month";
+    in property <[ShadedBand]> shaded-bands: [];
+    in-out property <bool> calendar-keyboard-nav: false;
+    in property <string> agenda-title: "";
+    in property <string> agenda-count: "";
+    in property <[AgendaChipRow]> agenda-chip-rows: [];
+    in property <AgendaEventItem> agenda-expanded-chip;
+    in property <bool> agenda-has-expanded-chip: false;
+    in property <[AgendaEventItem]> agenda-events: [];
+    in property <bool> agenda-empty: false;
+    in property <string> agenda-empty-text: "No events";
+    in property <string> agenda-next-text: "";
+    in property <string> agenda-now-label: "Now";
+    in property <string> agenda-copy-label: "Copy";
+    in property <string> agenda-copied-label: "Copied";
+    in property <string> agenda-open-label: "Open";
+    callback toggle-agenda-event(string);
+    callback copy-agenda-event(string);
+    callback open-agenda-event(string);
+    callback go-next-event();
 
     // Settings Localized Strings & State
     in property <string> settings-title-text: "Settings";
@@ -862,6 +263,16 @@ export component AppWindow inherits Window {
     in property <string> desc-license-source-text: "GPL-3.0-only · Built with Rust, Slint, and zero webview bloat";
     in property <string> app-version-line-text: "Lightcal · Rust + Slint";
 
+    // November 2026 settings refresh (ADR 0011).
+    in property <SettingsStrings> settings-strings;
+    in property <[AccountCardItem]> account-cards: [];
+    // Shortcut parts for key caps, e.g. ["Ctrl", "Alt", "K"]; empty when unset.
+    in property <[string]> shortcut-keys: [];
+    in property <bool> install-configured: false;
+    // Raw key text plus Ctrl, Alt, Shift and Win modifiers from the recorder.
+    callback record-shortcut(string, bool, bool, bool, bool);
+    callback reopen-sign-in-browser();
+
     // Callbacks
     callback prev-month();
     callback next-month();
@@ -879,7 +290,6 @@ export component AppWindow inherits Window {
     callback toggle-show-weekday();
     callback toggle-show-week-numbers();
     callback toggle-start-with-windows();
-    callback cycle-shortcut-preset();
     callback clear-shortcut();
     callback toggle-calendar-source(string);
     callback refresh-calendars();
@@ -892,6 +302,7 @@ export component AppWindow inherits Window {
     callback toggle-auto-install-updates();
     callback check-updates();
     callback open-external-url(string);
+    callback open-sponsor(bool);
     callback dismiss-compact();
     callback toggle-language-dropdown();
     callback toggle-theme-dropdown();
@@ -914,7 +325,6 @@ export component AppWindow inherits Window {
     callback disconnect-google();
     callback retry-sign-in();
     callback dismiss-startup-warning();
-    callback minimize-window();
 
     width: root.settings-open ? 448px : 352px;
     height: root.settings-open ? 360px : 432px;
@@ -922,8 +332,6 @@ export component AppWindow inherits Window {
     preferred-height: root.settings-open ? 360px : 432px;
     background: transparent;
 
-    property <int> theme-index: root.current-theme-code == "light" ? 1
-        : (root.current-theme-code == "dark" ? 2 : 0);
 
     key-handler := FocusScope {
         key-pressed(event) => {
@@ -943,18 +351,22 @@ export component AppWindow inherits Window {
                 return accept;
             }
             if (event.text == Key.LeftArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(-1);
                 return accept;
             }
             if (event.text == Key.RightArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(1);
                 return accept;
             }
             if (event.text == Key.UpArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(-7);
                 return accept;
             }
             if (event.text == Key.DownArrow) {
+                root.calendar-keyboard-nav = !root.settings-open;
                 root.move-selection-by(7);
                 return accept;
             }
@@ -977,1613 +389,161 @@ export component AppWindow inherits Window {
     }
 
     // ==================== CALENDAR VIEW (352×432) ====================
-    if !root.settings-open : Rectangle {
+    if !root.settings-open : CalendarView {
         width: 100%;
         height: 100%;
-        border-radius: 12px;
-        border-width: 1px;
-        border-color: root.dark-mode ? #606060 : #BBBBBB;
-        background: root.dark-mode ? #111111 : #FFFFFF;
-        clip: true;
-
-        // Month title
-        Text {
-            x: 20px;
-            y: 16px;
-            width: 214px;
-            height: 28px;
-            text: root.month-title;
-            font-size: 18px;
-            font-weight: 600;
-            color: root.dark-mode ? #EEEEEE : #202020;
-            overflow: elide;
-            vertical-alignment: center;
-        }
-
-        IconSquareButton {
-            x: 244px;
-            y: 16px;
-            glyph: "‹";
-            dark-mode: root.dark-mode;
-            clicked => { root.prev-month(); }
-        }
-        IconSquareButton {
-            x: 276px;
-            y: 16px;
-            glyph: "›";
-            dark-mode: root.dark-mode;
-            clicked => { root.next-month(); }
-        }
-        IconSquareButton {
-            x: 308px;
-            y: 16px;
-            glyph: "⚙";
-            filled: true;
-            dark-mode: root.dark-mode;
-            clicked => { root.open-settings(0); }
-        }
-
-        Text {
-            x: 20px;
-            y: 52px;
-            width: 220px;
-            height: 22px;
-            text: root.today-date-line;
-            font-size: 11.5px;
-            font-weight: 400;
-            color: root.dark-mode ? #B4B4B4 : #646464;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-
-        Rectangle {
-            x: 260px;
-            y: 50px;
-            width: 76px;
-            height: 26px;
-            border-radius: 8px;
-            background: root.dark-mode ? #2A2A2A : #FFFFFF;
-            border-width: 1px;
-            border-color: root.dark-mode ? #606060 : #BBBBBB;
-
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: root.today-button-label;
-                font-size: 12px;
-                font-weight: 500;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-            TouchArea {
-                clicked => { root.return-to-today(); }
-            }
-        }
-
-        month-grid-area := Rectangle {
-            x: 0px;
-            y: 84px;
-            width: parent.width;
-            height: 244px;
-            clip: true;
-
-            property <length> grid-start-x: root.show-week-numbers ? 40px : 24px;
-            property <length> col-width: 42px;
-            property <length> band-width: 38px;
-            property <length> tile-width: 34px;
-            property <length> tile-height: 32px;
-            property <length> row-height: 36px;
-            property <length> grid-y: 28px;
-
-            for is-gray[col-idx] in root.gray-columns : Rectangle {
-                if is-gray : Rectangle {
-                    x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 2px;
-                    y: 0px;
-                    width: month-grid-area.band-width;
-                    height: 242px;
-                    border-radius: 8px;
-                    background: root.dark-mode ? #222222 : #F0F0F0;
-                }
-            }
-
-            if root.show-weekday-header : Rectangle {
-                y: 1px;
-                height: 20px;
-                width: parent.width;
-
-                if root.show-week-numbers : Text {
-                    x: 8px;
-                    y: 0px;
-                    width: 26px;
-                    height: 20px;
-                    text: root.week-header-label;
-                    font-size: 9.5px;
-                    font-weight: 500;
-                    color: root.dark-mode ? #9B9B9B : #646464;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-
-                for wd[col-idx] in root.weekday-headers : Text {
-                    x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width;
-                    y: 0px;
-                    width: month-grid-area.col-width;
-                    height: 20px;
-                    text: wd;
-                    font-size: 11px;
-                    font-weight: 500;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-            }
-
-            for row-idx in [0, 1, 2, 3, 4, 5] : Rectangle {
-                y: month-grid-area.grid-y + row-idx * month-grid-area.row-height;
-                height: month-grid-area.row-height;
-                width: parent.width;
-
-                if root.show-week-numbers : Text {
-                    x: 8px;
-                    y: 0px;
-                    width: 26px;
-                    height: 32px;
-                    text: root.iso-weeks[row-idx];
-                    font-size: 9.5px;
-                    font-weight: 400;
-                    color: root.dark-mode ? #9B9B9B : #646464;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-
-                for col-idx in [0, 1, 2, 3, 4, 5, 6] : cell-box := Rectangle {
-                    property <int> cell-index: row-idx * 7 + col-idx;
-                    property <DayCellData> cell: root.cells[self.cell-index];
-                    property <bool> today-mark: self.cell.is-today;
-
-                    x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 4px;
-                    y: 0px;
-                    width: month-grid-area.tile-width;
-                    height: month-grid-area.tile-height;
-                    border-radius: 8px;
-                    accessible-role: button;
-                    accessible-label: self.cell.accessible-label;
-
-                    background: self.today-mark
-                        ? #D73840
-                        : (self.cell.is-selected
-                            ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                            : (cell-touch.has-hover && self.cell.in-month
-                                ? (root.dark-mode ? #2A2A2A : #F0F0F0)
-                                : transparent));
-                    border-width: (self.cell.is-selected && !self.today-mark) ? 1.5px : 0px;
-                    border-color: root.dark-mode ? #7B7B7B : #838383;
-
-                    Text {
-                        width: parent.width;
-                        height: (cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots)
-                            ? 25px
-                            : parent.height;
-                        y: 1px;
-                        text: cell-box.cell.day-number;
-                        font-size: 14px;
-                        font-weight: (cell-box.cell.is-today || cell-box.cell.is-selected)
-                            ? 600
-                            : 500;
-                        color: cell-box.cell.is-today
-                            ? #FFFFFF
-                            : (!cell-box.cell.in-month
-                                ? (root.dark-mode ? #9B9B9B : #646464)
-                                : (root.dark-mode ? #EEEEEE : #202020));
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-
-                    if cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots : HorizontalLayout {
-                        x: 0px;
-                        width: parent.width;
-                        y: 26px;
-                        height: 3px;
-                        spacing: 3px;
-                        alignment: center;
-
-                        if cell-box.cell.dot-count >= 1 : Rectangle {
-                            width: 3px;
-                            height: 3px;
-                            border-radius: 1.5px;
-                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot1;
-                        }
-                        if cell-box.cell.dot-count >= 2 : Rectangle {
-                            width: 3px;
-                            height: 3px;
-                            border-radius: 1.5px;
-                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot2;
-                        }
-                        if cell-box.cell.dot-count >= 3 : Rectangle {
-                            width: 3px;
-                            height: 3px;
-                            border-radius: 1.5px;
-                            background: cell-box.cell.is-today ? #FFFFFF : cell-box.cell.dot3;
-                        }
-                    }
-
-                    cell-touch := TouchArea {
-                        clicked => { root.select-cell(cell-box.cell-index); }
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            x: 16px;
-            y: 338px;
-            width: 320px;
-            height: 1px;
-            background: root.dark-mode ? #3A3A3A : #D9D9D9;
-        }
-
-        Text {
-            x: 20px;
-            y: 347px;
-            width: 246px;
-            height: 22px;
-            text: root.selected-date-line;
-            font-size: 12px;
-            font-weight: 600;
-            color: root.dark-mode ? #EEEEEE : #202020;
-            overflow: elide;
-            vertical-alignment: center;
-        }
-        Text {
-            x: 268px;
-            y: 349px;
-            width: 64px;
-            height: 18px;
-            text: root.selected-event-summary;
-            font-size: 10.5px;
-            font-weight: 400;
-            color: root.dark-mode ? #B4B4B4 : #646464;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-        }
-
-        if root.selected-day-events.length > 0 : VerticalLayout {
-            x: 20px;
-            y: 376px;
-            width: 312px;
-            spacing: 2px;
-
-            for ev in root.selected-day-events : HorizontalLayout {
-                height: 22px;
-                spacing: 9px;
-
-                Rectangle {
-                    width: 3px;
-                    height: 14px;
-                    border-radius: 1.5px;
-                    background: ev.swatch;
-                    y: (parent.height - self.height) / 2;
-                }
-                Text {
-                    text: ev.time-label;
-                    font-size: 11px;
-                    font-weight: 500;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    vertical-alignment: center;
-                    min-width: 42px;
-                }
-                Text {
-                    text: ev.title;
-                    font-size: 12px;
-                    font-weight: 400;
-                    color: root.dark-mode ? #EEEEEE : #202020;
-                    horizontal-stretch: 1;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-            }
-        }
-
-        if root.selected-day-events.length == 0 : HorizontalLayout {
-            x: 20px;
-            y: 381px;
-            width: 312px;
-            height: 24px;
-            spacing: 8px;
-            alignment: space-between;
-
-            Text {
-                text: root.active-calendars-label;
-                font-size: 12px;
-                font-weight: 400;
-                color: root.dark-mode ? #B4B4B4 : #646464;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-                overflow: elide;
-            }
-            calendars-link := TouchArea {
-                width: 88px;
-                height: 18px;
-                clicked => { root.open-settings(1); }
-                Text {
-                    width: parent.width;
-                    height: parent.height;
-                    text: root.nav-calendars-text;
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: calendars-link.has-hover ? (root.dark-mode ? #53B9AB : #00796B) : (root.dark-mode ? #B4B4B4 : #646464);
-                    horizontal-alignment: right;
-                    vertical-alignment: center;
-                }
-            }
-        }
+        month-name: root.month-name-text;
+        year-text: root.year-text;
+        year-first: root.year-first;
+        today-button-label: root.today-button-label;
+        today-hidden: root.today-hidden;
+        prev-label: root.prev-month-label;
+        next-label: root.next-month-label;
+        settings-label: root.settings-title-text;
+        show-week-numbers: root.show-week-numbers;
+        shaded-bands: root.shaded-bands;
+        weekday-headers: root.weekday-headers;
+        iso-weeks: root.iso-weeks;
+        cells: root.cells;
+        show-event-dots: root.show-event-dots;
+        keyboard-nav: root.calendar-keyboard-nav;
+        agenda-title: root.agenda-title;
+        agenda-count: root.agenda-count;
+        chip-rows: root.agenda-chip-rows;
+        expanded-chip: root.agenda-expanded-chip;
+        has-expanded-chip: root.agenda-has-expanded-chip;
+        agenda-events: root.agenda-events;
+        agenda-empty: root.agenda-empty;
+        empty-text: root.agenda-empty-text;
+        next-event-text: root.agenda-next-text;
+        now-label: root.agenda-now-label;
+        copy-label: root.agenda-copy-label;
+        copied-label: root.agenda-copied-label;
+        open-label: root.agenda-open-label;
+        prev-month() => { root.prev-month(); }
+        next-month() => { root.next-month(); }
+        open-settings(arg0) => { root.open-settings(arg0); }
+        return-to-today() => { root.calendar-keyboard-nav = false; root.return-to-today(); }
+        select-cell(arg0) => { root.calendar-keyboard-nav = false; root.select-cell(arg0); }
+        toggle-event(arg0) => { root.toggle-agenda-event(arg0); }
+        copy-event(arg0) => { root.copy-agenda-event(arg0); }
+        open-event(arg0) => { root.open-agenda-event(arg0); }
+        go-next-event() => { root.calendar-keyboard-nav = false; root.go-next-event(); }
     }
 
     // ==================== SETTINGS VIEW (448×360) ====================
-    if root.settings-open : Rectangle {
-        width: 448px;
-        height: 360px;
-        border-radius: 10px;
-        border-width: 1px;
-        border-color: root.dark-mode ? #606060 : #BBBBBB;
-        background: root.dark-mode ? #111111 : #FFFFFF;
-        clip: true;
-
-        // Title bar
-        BrandMark {
-            x: 16px;
-            y: 10px;
-            mark-size: 20px;
-        }
-        Text {
-            x: 44px;
-            y: 4px;
-            width: 84px;
-            height: 28px;
-                text: root.app-name-text;
-                font-size: 13px;
-                font-weight: 600;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                vertical-alignment: center;
-            }
-        Text {
-            x: 130px;
-            y: 6px;
-            width: 210px;
-            height: 24px;
-            text: root.settings-tab == 3 ? root.nav-about-text : root.settings-title-text;
-            font-size: 11px;
-            font-weight: 400;
-            color: root.dark-mode ? #B4B4B4 : #646464;
-            vertical-alignment: center;
-        }
-
-        Rectangle {
-            x: 412px;
-            y: 10px;
-            width: 28px;
-            height: 28px;
-            border-radius: 7px;
-            background: close-btn.has-hover ? (root.dark-mode ? #392327 : #FFF1F1) : transparent;
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: "×";
-                font-size: 14px;
-                color: close-btn.has-hover ? #D73840 : (root.dark-mode ? #B4B4B4 : #646464);
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-            close-btn := TouchArea {
-                clicked => { root.close-settings(); }
-            }
-        }
-
-        // Tabs (not on About)
-        if root.settings-tab != 3 : Rectangle {
-            for tab-info[tab-idx] in [
-                { label: root.nav-appearance-text },
-                { label: root.nav-calendars-text },
-                { label: root.nav-general-text }
-            ] : tab-pill := Rectangle {
-                x: 12px + tab-idx * 144px;
-                y: 42px;
-                width: 136px;
-                height: 32px;
-                border-radius: 7px;
-                background: root.settings-tab == tab-idx
-                    ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                    : (tab-touch.has-hover ? (root.dark-mode ? #222222 : #F0F0F0) : transparent);
-
-                property <color> icon-color: root.settings-tab == tab-idx
-                    ? (root.dark-mode ? #EEEEEE : #202020)
-                    : (root.dark-mode ? #B4B4B4 : #646464);
-
-                if root.settings-tab == tab-idx : Rectangle {
-                    x: 56px;
-                    y: 29px;
-                    width: 24px;
-                    height: 2px;
-                    border-radius: 1px;
-                    background: root.dark-mode ? #53B9AB : #00796B;
-                }
-
-                HorizontalLayout {
-                    padding-left: 14px;
-                    padding-right: 10px;
-                    spacing: 8px;
-                    alignment: center;
-
-                    // Calendar / person / gear marks (vector, no emoji faces).
-                    if tab-idx == 0 : Rectangle {
-                        width: 14px;
-                        height: 14px;
-                        y: (parent.height - self.height) / 2;
-                        border-radius: 2px;
-                        border-width: 1.4px;
-                        border-color: tab-pill.icon-color;
-                        background: transparent;
-                        Rectangle {
-                            x: 0px; y: 3.5px; width: parent.width; height: 1.2px;
-                            background: tab-pill.icon-color;
-                        }
-                        Rectangle { x: 3.5px; y: 6.5px; width: 2.2px; height: 2.2px; border-radius: 0.5px; background: tab-pill.icon-color; }
-                        Rectangle { x: 8px; y: 6.5px; width: 2.2px; height: 2.2px; border-radius: 0.5px; background: tab-pill.icon-color; }
-                        Rectangle { x: 3.5px; y: 10px; width: 2.2px; height: 2.2px; border-radius: 0.5px; background: tab-pill.icon-color; }
-                    }
-                    if tab-idx == 1 : Rectangle {
-                        width: 14px;
-                        height: 14px;
-                        y: (parent.height - self.height) / 2;
-                        background: transparent;
-                        Rectangle {
-                            x: 4px; y: 1px; width: 6px; height: 6px; border-radius: 3px;
-                            background: tab-pill.icon-color;
-                        }
-                        Rectangle {
-                            x: 2px; y: 8px; width: 10px; height: 5.5px; border-radius: 5px;
-                            background: tab-pill.icon-color;
-                        }
-                    }
-                    if tab-idx == 2 : Text {
-                        text: "⚙";
-                        font-size: 13px;
-                        color: tab-pill.icon-color;
-                        vertical-alignment: center;
-                    }
-                    Text {
-                        text: tab-info.label;
-                        font-size: 12px;
-                        font-weight: root.settings-tab == tab-idx ? 600 : 400;
-                        color: root.settings-tab == tab-idx
-                            ? (root.dark-mode ? #EEEEEE : #202020)
-                            : (root.dark-mode ? #B4B4B4 : #646464);
-                        vertical-alignment: center;
-                        overflow: elide;
-                        horizontal-stretch: 1;
-                    }
-                }
-
-                tab-touch := TouchArea {
-                    clicked => { root.open-settings(tab-idx); }
-                }
-            }
-
-            Rectangle {
-                x: 16px;
-                y: 83px;
-                width: 416px;
-                height: 1px;
-                background: root.dark-mode ? #3A3A3A : #D9D9D9;
-            }
-        }
-
-        // Preferences recovery warning, shown on the General tab until dismissed.
-        // The text is wrapped (up to 4 lines) and the App card is pushed down by its height.
-        warn-box := Rectangle {
-            visible: root.settings-tab == 2 && root.startup-warning != "";
-            x: 16px;
-            y: 90px;
-            width: 416px;
-            // Reserved above the App settings card; 0 when there is no warning.
-            height: (root.settings-tab == 2 && root.startup-warning != "")
-                ? min(56px, warning-text.preferred-height) + 2px
-                : 0px;
-            clip: true;
-
-            warning-text := Text {
-                x: 0px;
-                y: 0px;
-                width: parent.width - 28px;
-                text: root.startup-warning;
-                font-size: 11px;
-                wrap: word-wrap;
-                vertical-alignment: top;
-                color: root.dark-mode ? #FF9DA1 : #BC333B;
-            }
-
-            Rectangle {
-                x: parent.width - 24px;
-                y: 0px;
-                width: 24px;
-                height: 24px;
-                Text {
-                    text: "×";
-                    font-size: 16px;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    color: root.dark-mode ? #FF9DA1 : #BC333B;
-                }
-                TouchArea {
-                    accessible-role: button;
-                    accessible-label: root.dismiss-label-text;
-                    clicked => { root.dismiss-startup-warning(); }
-                }
-            }
-        }
-
-        // ===== TAB 0: Calendar =====
-        if root.settings-tab == 0 : Rectangle {
-            x: 16px;
-            y: 96px;
-            width: 416px;
-            height: 200px;
-            border-radius: 9px;
-            background: root.dark-mode ? #222222 : #F0F0F0;
-            clip: true;
-
-            VerticalLayout {
-                padding: 0px;
-                spacing: 0px;
-
-                SettingsRow {
-                    title: root.label-theme-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    SegmentedControl {
-                        track-width: 204px;
-                        options: [root.theme-system-label, root.theme-light-label, root.theme-dark-label];
-                        selected-index: root.theme-index;
-                        dark-mode: root.dark-mode;
-                        selected(idx) => {
-                            if (idx == 0) { root.select-theme("system"); }
-                            if (idx == 1) { root.select-theme("light"); }
-                            if (idx == 2) { root.select-theme("dark"); }
-                        }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-first-weekday-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    SettingsSelect {
-                        text: root.current-first-weekday-display;
-                        is-open: root.first-day-dropdown-open;
-                        select-width: 136px;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.toggle-first-day-dropdown(); }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-gray-weekdays-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    HorizontalLayout {
-                        spacing: 3px;
-                        for chip in root.gray-weekday-chips : Rectangle {
-                            width: 26px;
-                            height: 28px;
-                            border-radius: 6px;
-                            background: chip.active
-                                ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                                : (root.dark-mode ? #2A2A2A : #FFFFFF);
-                            border-width: 1px;
-                            border-color: chip.active
-                                ? (root.dark-mode ? #7B7B7B : #838383)
-                                : (root.dark-mode ? #606060 : #BBBBBB);
-
-                            Text {
-                                width: parent.width;
-                                height: parent.height;
-                                text: chip.label;
-                                font-size: 10.5px;
-                                font-weight: chip.active ? 600 : 400;
-                                color: chip.active
-                                    ? (root.dark-mode ? #EEEEEE : #202020)
-                                    : (root.dark-mode ? #B4B4B4 : #646464);
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                            TouchArea {
-                                clicked => { root.toggle-gray-weekday(chip.index); }
-                            }
-                        }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-show-week-numbers-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    SwitchToggle {
-                        checked: root.show-week-numbers;
-                        dark-mode: root.dark-mode;
-                        toggled => { root.toggle-show-week-numbers(); }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-show-event-dots-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    show-divider: false;
-                    SwitchToggle {
-                        checked: root.show-event-dots;
-                        dark-mode: root.dark-mode;
-                        toggled => { root.toggle-show-event-dots(); }
-                    }
-                }
-            }
-
-            if root.first-day-dropdown-open : Rectangle {
-                x: parent.width - 12px - 136px;
-                y: 46px;
-                width: 136px;
-                height: 72px;
-                SettingsMenu {
-                    dark-mode: root.dark-mode;
-                    width: 136px;
-                    SettingsDropdownOption {
-                        label: root.weekday-monday-label;
-                        active: root.first-weekday-monday;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-first-weekday-option(true); }
-                    }
-                    SettingsDropdownOption {
-                        label: root.weekday-sunday-label;
-                        active: !root.first-weekday-monday;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.select-first-weekday-option(false); }
-                    }
-                }
-            }
-        }
-
-        // ===== TAB 1: Accounts =====
-        if root.settings-tab == 1 : Rectangle {
-            width: parent.width;
-            height: parent.height;
-
-            Text {
-                x: 16px;
-                y: 92px;
-                width: 264px;
-                height: 28px;
-                text: root.provider-heading-text;
-                font-size: 12px;
-                font-weight: 600;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-            SettingsButton {
-                x: 300px;
-                y: 92px;
-                button-width: 132px;
-                label: root.add-calendar-account-label;
-                dark-mode: root.dark-mode;
-                enabled: root.add-account-enabled;
-                clicked => { root.add-calendar-account(); }
-            }
-
-            account-card := Rectangle {
-                x: 16px;
-                y: 132px;
-                width: 416px;
-                height: 168px;
-                border-radius: 9px;
-                background: root.dark-mode ? #222222 : #F0F0F0;
-                clip: true;
-                property <bool> outlook-visible: root.account-connected || root.account-needs-signin || root.outlook-sources.length > 0 || root.can-disconnect-microsoft;
-                property <bool> google-visible: root.google-connected || root.google-needs-signin || root.google-sources.length > 0 || root.google-status-text != "";
-                property <bool> any-account: outlook-visible || google-visible || root.ics-sources.length > 0 || root.windows-sources.length > 0;
-
-                if root.connection-busy : VerticalLayout {
-                    padding: 16px;
-                    spacing: 8px;
-                    Text {
-                        text: root.sign-in-title;
-                        font-size: 12.5px;
-                        font-weight: 600;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                    }
-                    Text {
-                        text: root.waiting-browser-text;
-                        font-size: 11px;
-                        color: root.dark-mode ? #B4B4B4 : #646464;
-                        wrap: word-wrap;
-                    }
-                    SettingsButton {
-                        label: root.cancel-sign-in-label;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.cancel-account-sign-in(); }
-                    }
-                }
-
-                if !root.connection-busy : ScrollView {
-                    width: parent.width;
-                    height: parent.height;
-                    VerticalLayout {
-                        padding: 12px;
-                        spacing: 10px;
-
-                        if root.sign-in-cancelled : VerticalLayout {
-                            spacing: 8px;
-                            Text {
-                                text: root.sign-in-cancelled-text;
-                                font-size: 12px;
-                                font-weight: 500;
-                                color: root.dark-mode ? #EEEEEE : #202020;
-                                wrap: word-wrap;
-                            }
-                            SettingsButton {
-                                label: root.try-again-label;
-                                kind: "primary";
-                                dark-mode: root.dark-mode;
-                                clicked => { root.retry-sign-in(); }
-                            }
-                        }
-
-                        if root.connection-message != "" : Text {
-                            text: root.connection-message;
-                            font-size: 11px;
-                            color: root.dark-mode ? #FF9DA1 : #BC333B;
-                            wrap: word-wrap;
-                        }
-
-                        if outlook-visible : AccountBlock {
-                            dark-mode: root.dark-mode;
-                            title: root.outlook-section-text;
-                            status: root.account-needs-signin ? root.events-stale-text : root.account-status-text;
-                            badge: root.account-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
-                            badge-alert: root.account-needs-signin;
-                            sources: root.outlook-sources;
-                            empty-text: root.no-calendars-text;
-                            remove-label: root.remove-source-label;
-                            primary-label: root.reconnect-label;
-                            show-primary: root.account-needs-signin;
-                            secondary-label: root.disconnect-microsoft-label;
-                            show-secondary: root.can-disconnect-microsoft && !root.account-needs-signin;
-                            refresh-label: root.refresh-button-text;
-                            show-refresh: root.can-refresh-calendars;
-                            controls-enabled: !root.provider-loading;
-                            primary-clicked => { root.connect-microsoft(); }
-                            secondary-clicked => { root.disconnect-microsoft(); }
-                            refresh-clicked => { root.refresh-calendars(); }
-                            toggle-source(id) => { root.toggle-calendar-source(id); }
-                            remove-source(id) => { root.remove-calendar-source(id); }
-                        }
-
-                        if google-visible : AccountBlock {
-                            dark-mode: root.dark-mode;
-                            title: root.google-account-label;
-                            status: root.google-status-text;
-                            badge: root.google-needs-signin ? root.reconnect-label : root.provider-readonly-tag-text;
-                            badge-alert: root.google-needs-signin;
-                            sources: root.google-sources;
-                            empty-text: root.no-calendars-text;
-                            remove-label: root.remove-source-label;
-                            primary-label: root.reconnect-label;
-                            show-primary: root.google-needs-signin;
-                            secondary-label: root.disconnect-google-label;
-                            show-secondary: !root.google-needs-signin && (root.google-connected || root.google-sources.length > 0 || root.google-status-text != "");
-                            refresh-label: root.refresh-button-text;
-                            show-refresh: root.can-refresh-calendars && root.google-connected;
-                            controls-enabled: !root.provider-loading;
-                            primary-clicked => { root.choose-google-account(); }
-                            secondary-clicked => { root.disconnect-google(); }
-                            refresh-clicked => { root.refresh-calendars(); }
-                            toggle-source(id) => { root.toggle-calendar-source(id); }
-                            remove-source(id) => { root.remove-calendar-source(id); }
-                        }
-
-                        if root.ics-sources.length > 0 : AccountBlock {
-                            dark-mode: root.dark-mode;
-                            title: root.ics-section-text;
-                            status: root.ics-status-text;
-                            badge: root.ics-status-text == "" ? root.provider-readonly-tag-text : "";
-                            badge-alert: root.ics-status-text != "";
-                            sources: root.ics-sources;
-                            empty-text: "";
-                            remove-label: root.remove-source-label;
-                            refresh-label: root.refresh-button-text;
-                            show-refresh: root.can-refresh-calendars;
-                            controls-enabled: !root.provider-loading;
-                            refresh-clicked => { root.refresh-calendars(); }
-                            toggle-source(id) => { root.toggle-calendar-source(id); }
-                            remove-source(id) => { root.remove-calendar-source(id); }
-                        }
-
-                        if root.windows-sources.length > 0 : AccountBlock {
-                            dark-mode: root.dark-mode;
-                            title: root.legacy-windows-label;
-                            status: "";
-                            badge: "";
-                            sources: root.windows-sources;
-                            empty-text: "";
-                            remove-label: root.remove-source-label;
-                            refresh-label: root.refresh-button-text;
-                            show-refresh: root.can-refresh-calendars;
-                            controls-enabled: !root.provider-loading;
-                            refresh-clicked => { root.refresh-calendars(); }
-                            toggle-source(id) => { root.toggle-calendar-source(id); }
-                            remove-source(id) => { root.remove-calendar-source(id); }
-                        }
-
-                        if root.calendars-access-denied : VerticalLayout {
-                            spacing: 8px;
-                            Text {
-                                text: root.calendars-denied-title-text;
-                                font-size: 12px;
-                                font-weight: 600;
-                                color: root.dark-mode ? #FF9DA1 : #BC333B;
-                                wrap: word-wrap;
-                            }
-                            Text {
-                                text: root.calendars-denied-desc-text;
-                                font-size: 11px;
-                                color: root.dark-mode ? #B4B4B4 : #646464;
-                                wrap: word-wrap;
-                            }
-                            HorizontalLayout {
-                                spacing: 8px;
-                                SettingsButton {
-                                    label: root.open-privacy-settings-label;
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.open-privacy-settings(); }
-                                }
-                                SettingsButton {
-                                    label: root.retry-sync-label;
-                                    kind: "subtle";
-                                    dark-mode: root.dark-mode;
-                                    clicked => { root.retry-calendar-sync(); }
-                                }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            height: 28px;
-                            spacing: 8px;
-                            alignment: space-between;
-                            Text {
-                                text: root.legacy-windows-label;
-                                font-size: 10.5px;
-                                color: root.dark-mode ? #B4B4B4 : #646464;
-                                vertical-alignment: center;
-                                horizontal-stretch: 1;
-                                overflow: elide;
-                            }
-                            SwitchToggle {
-                                checked: root.legacy-windows-enabled;
-                                dark-mode: root.dark-mode;
-                                toggled => { root.toggle-legacy-windows(); }
-                            }
-                        }
-
-                        if !any-account && !root.sign-in-cancelled && !root.calendars-access-denied : VerticalLayout {
-                            spacing: 8px;
-                            Text {
-                                text: root.calendars-empty-title-text;
-                                font-size: 12.5px;
-                                font-weight: 600;
-                                color: root.dark-mode ? #EEEEEE : #202020;
-                                wrap: word-wrap;
-                            }
-                            Text {
-                                text: root.calendars-empty-desc-text;
-                                font-size: 11px;
-                                font-weight: 400;
-                                color: root.dark-mode ? #B4B4B4 : #646464;
-                                wrap: word-wrap;
-                            }
-                        }
-                    }
-                }
-            }
-
-        }
-
-        // ===== TAB 2: App =====
-        if root.settings-tab == 2 : Rectangle {
-            x: 16px;
-            y: 96px + warn-box.height;
-            width: 416px;
-            // Shrinks (and scrolls) when a wrapped warning pushes the card toward the footer.
-            height: min(200px, 314px - (96px + warn-box.height));
-            border-radius: 9px;
-            background: root.dark-mode ? #222222 : #F0F0F0;
-            clip: true;
-
-            Flickable {
-            content-height: 200px;
-            VerticalLayout {
-                height: 200px;
-                padding: 0px;
-                spacing: 0px;
-
-                SettingsRow {
-                    title: root.label-language-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    SettingsSelect {
-                        text: root.current-language-display;
-                        is-open: root.language-dropdown-open;
-                        select-width: 168px;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.toggle-language-dropdown(); }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.startup-status-text == "" ? root.label-startup-text : root.startup-status-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.startup-status-text == ""
-                        ? (root.dark-mode ? #EEEEEE : #202020)
-                        : (root.dark-mode ? #FF9DA1 : #BC333B);
-                    SwitchToggle {
-                        checked: root.start-with-windows;
-                        dark-mode: root.dark-mode;
-                        toggled => { root.toggle-start-with-windows(); }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-shortcut-text;
-                    subtitle: root.shortcut-has-conflict ? root.shortcut-conflict-line : "";
-                    subtitle-color: root.dark-mode ? #FF9DA1 : #BC333B;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-                    Text {
-                        text: root.global-shortcut-display == ""
-                            ? root.shortcut-unset-text
-                            : root.global-shortcut-display;
-                        font-size: 11px;
-                        font-weight: 500;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                    SettingsButton {
-                        label: root.global-shortcut-display == "" || root.global-shortcut-display == root.shortcut-unset-text
-                            ? root.shortcut-record-label
-                            : root.shortcut-change-label;
-                        button-width: 84px;
-                        dark-mode: root.dark-mode;
-                        clicked => { root.cycle-shortcut-preset(); }
-                    }
-                    if root.shortcut-can-clear : SettingsButton {
-                        label: root.shortcut-clear-label;
-                        kind: "subtle";
-                        dark-mode: root.dark-mode;
-                        clicked => { root.clear-shortcut(); }
-                    }
-                }
-
-                SettingsRow {
-                    title: root.label-tray-palette-text;
-                    dark-mode: root.dark-mode;
-                    title-color: root.dark-mode ? #EEEEEE : #202020;
-
-                    Rectangle {
-                        width: 152px;
-                        height: 28px;
-                        border-radius: 7px;
-                        background: root.dark-mode ? #191919 : #E8E8E8;
-
-                        HorizontalLayout {
-                            padding: 2px;
-                            spacing: 0px;
-
-                            Rectangle {
-                                horizontal-stretch: 1;
-                                height: 24px;
-                                border-radius: 5px;
-                                background: !root.tray-icon-monochrome
-                                    ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                                    : transparent;
-                                border-width: !root.tray-icon-monochrome ? 1px : 0px;
-                                border-color: root.dark-mode ? #7B7B7B : #838383;
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    alignment: center;
-                                    padding-left: 4px;
-                                    padding-right: 4px;
-
-                                    Image {
-                                        width: 16px;
-                                        height: 16px;
-                                        source: root.colored-icon-preview;
-                                        image-fit: contain;
-                                        y: (parent.height - self.height) / 2;
-                                    }
-                                    Text {
-                                        text: root.palette-colored-text;
-                                        font-size: 10.5px;
-                                        font-weight: !root.tray-icon-monochrome ? 600 : 400;
-                                        color: root.dark-mode ? #EEEEEE : #202020;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                TouchArea {
-                                    clicked => {
-                                        if (root.tray-icon-monochrome) {
-                                            root.toggle-tray-icon-monochrome();
-                                        }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                horizontal-stretch: 1;
-                                height: 24px;
-                                border-radius: 5px;
-                                background: root.tray-icon-monochrome
-                                    ? (root.dark-mode ? #3A3A3A : #E0E0E0)
-                                    : transparent;
-                                border-width: root.tray-icon-monochrome ? 1px : 0px;
-                                border-color: root.dark-mode ? #7B7B7B : #838383;
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    alignment: center;
-                                    padding-left: 4px;
-                                    padding-right: 4px;
-
-                                    Image {
-                                        width: 16px;
-                                        height: 16px;
-                                        source: root.monochrome-icon-preview;
-                                        image-fit: contain;
-                                        y: (parent.height - self.height) / 2;
-                                    }
-                                    Text {
-                                        text: root.palette-monochrome-text;
-                                        font-size: 10.5px;
-                                        font-weight: root.tray-icon-monochrome ? 600 : 400;
-                                        color: root.dark-mode ? #EEEEEE : #202020;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                                TouchArea {
-                                    clicked => {
-                                        if (!root.tray-icon-monochrome) {
-                                            root.toggle-tray-icon-monochrome();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    height: 40px;
-                    HorizontalLayout {
-                        padding-left: 12px;
-                        padding-right: 12px;
-                        alignment: space-between;
-                        Text {
-                            text: root.updates-heading-text;
-                            font-size: 12px;
-                            font-weight: 500;
-                            color: root.dark-mode ? #EEEEEE : #202020;
-                            vertical-alignment: center;
-                            horizontal-stretch: 1;
-                        }
-                        Text {
-                            text: "›";
-                            font-size: 16px;
-                            color: root.dark-mode ? #B4B4B4 : #646464;
-                            vertical-alignment: center;
-                        }
-                    }
-                    TouchArea {
-                        clicked => { root.open-settings(3); }
-                    }
-                }
-            }
-            }
-
-        }
-
-        if root.settings-tab == 2 && root.language-dropdown-open : Rectangle {
-            x: 244px;
-            y: 108px + warn-box.height;
-            width: 176px;
-            height: lang-menu.height;
-            lang-menu := SettingsMenu {
-                dark-mode: root.dark-mode;
-                width: 176px;
-                SettingsDropdownOption {
-                    label: root.lang-en-us-label;
-                    active: root.current-language-code == "en";
-                    dark-mode: root.dark-mode;
-                    clicked => { root.select-language("en"); }
-                }
-                SettingsDropdownOption {
-                    label: root.lang-ru-label;
-                    active: root.current-language-code == "ru";
-                    dark-mode: root.dark-mode;
-                    clicked => { root.select-language("ru"); }
-                }
-                SettingsDropdownOption {
-                    label: root.lang-es-label;
-                    active: root.current-language-code == "es";
-                    dark-mode: root.dark-mode;
-                    clicked => { root.select-language("es"); }
-                }
-                SettingsDropdownOption {
-                    label: root.lang-ja-label;
-                    active: root.current-language-code == "ja";
-                    dark-mode: root.dark-mode;
-                    clicked => { root.select-language("ja"); }
-                }
-            }
-        }
-
-        // ===== TAB 3: About =====
-        if root.settings-tab == 3 : Rectangle {
-            width: parent.width;
-            height: parent.height;
-
-            BrandMark {
-                x: 24px;
-                y: 56px;
-                mark-size: 48px;
-            }
-            Text {
-                x: 92px;
-                y: 55px;
-                width: 332px;
-                height: 30px;
-                text: root.app-name-text;
-                font-size: 22px;
-                font-weight: 600;
-                color: root.dark-mode ? #EEEEEE : #202020;
-                vertical-alignment: center;
-            }
-            Text {
-                x: 92px;
-                y: 90px;
-                width: 332px;
-                height: 20px;
-                text: root.about-version-text;
-                font-size: 11px;
-                font-weight: 400;
-                color: root.dark-mode ? #B4B4B4 : #646464;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-
-            ScrollView {
-                x: 0px;
-                y: 132px;
-                width: parent.width;
-                height: 180px;
-                VerticalLayout {
-                    padding-left: 16px;
-                    padding-right: 16px;
-                    padding-bottom: 8px;
-                    spacing: 8px;
-
-                    Rectangle {
-                        height: max(64px, update-note.y + update-note.preferred-height + 10px);
-                        border-radius: 9px;
-                        background: root.dark-mode ? #222222 : #F0F0F0;
-
-                        Text {
-                            x: 12px;
-                            y: 8px;
-                            width: root.update-is-available ? 220px : 264px;
-                            height: 24px;
-                            text: root.update-is-checking
-                                ? root.checking-updates-label
-                                : (root.update-is-available
-                                    ? root.update-ready-title-text
-                                    : root.update-status-text);
-                            font-size: 12px;
-                            font-weight: 500;
-                            color: root.dark-mode ? #EEEEEE : #202020;
-                            overflow: elide;
-                            vertical-alignment: center;
-                        }
-                        update-note := Text {
-                            x: 12px;
-                            y: 34px;
-                            width: root.update-is-available ? 220px : 264px;
-                            height: self.preferred-height;
-                            text: root.update-is-checking
-                                ? ""
-                                : (root.install-status-text != ""
-                                    ? root.install-status-text
-                                    : (root.update-is-available ? root.update-ready-notes-text : ""));
-                            font-size: 10.5px;
-                            font-weight: 400;
-                            color: root.install-status-text != "" && !root.install-busy
-                                ? (root.dark-mode ? #FF9DA1 : #BC333B)
-                                : (root.dark-mode ? #B4B4B4 : #646464);
-                            wrap: word-wrap;
-                            vertical-alignment: center;
-                        }
-
-                        if root.update-is-available : SettingsButton {
-                            x: 244px;
-                            y: 18px;
-                            button-width: 160px;
-                            label: root.install-update-label;
-                            enabled: !root.install-busy && !root.package-managed-updates;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.install-update(); }
-                        }
-                        if !root.update-is-available && !root.update-is-checking : SettingsButton {
-                            x: 300px;
-                            y: 18px;
-                            button-width: 104px;
-                            label: root.updates-check-button-text;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.check-updates(); }
-                        }
-                    }
-
-                    Rectangle {
-                        height: 80px;
-                        border-radius: 9px;
-                        background: root.dark-mode ? #222222 : #F0F0F0;
-                        VerticalLayout {
-                            spacing: 0px;
-                            SettingsRow {
-                                title: root.label-auto-updates-text;
-                                dark-mode: root.dark-mode;
-                                title-color: root.dark-mode ? #EEEEEE : #202020;
-                                SwitchToggle {
-                                    checked: root.auto-check-updates;
-                                    dark-mode: root.dark-mode;
-                                    toggled => { root.toggle-auto-check-updates(); }
-                                }
-                            }
-                            SettingsRow {
-                                title: root.auto-install-label;
-                                dark-mode: root.dark-mode;
-                                title-color: root.dark-mode ? #EEEEEE : #202020;
-                                show-divider: false;
-                                SwitchToggle {
-                                    checked: root.auto-install-updates;
-                                    dark-mode: root.dark-mode;
-                                    toggled => { root.toggle-auto-install-updates(); }
-                                }
-                            }
-                        }
-                    }
-
-                    // Link rows remain available by scrolling within the fixed About panel.
-                    for link[link-idx] in [
-                        { title: root.release-notes-button-text, url: "https://github.com/andmetoo/lightcal/releases" },
-                        { title: root.github-button-text, url: "https://github.com/andmetoo/lightcal" },
-                        { title: root.koona-button-text, url: "https://koona.app" },
-                        { title: root.license-short-text, url: "https://github.com/andmetoo/lightcal/blob/main/LICENSE" }
-                    ] : Rectangle {
-                        height: 30px;
-
-                        Text {
-                            x: 12px;
-                            width: 192px;
-                            height: parent.height;
-                            text: link.title;
-                            font-size: 12px;
-                            font-weight: 500;
-                            color: root.dark-mode ? #EEEEEE : #202020;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        Text {
-                            x: 380px;
-                            width: 24px;
-                            height: parent.height;
-                            text: "↗";
-                            font-size: 12px;
-                            color: root.dark-mode ? #B4B4B4 : #646464;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                        TouchArea {
-                            clicked => { root.open-external-url(link.url); }
-                        }
-                    }
-                }
-            }
-        }
-
-        if root.add-account-open : Rectangle {
-            width: parent.width;
-            height: parent.height;
-            background: root.dark-mode ? #00000066 : #00000033;
-            Rectangle {
-                x: 44px;
-                y: 80px;
-                width: 360px;
-                height: 236px;
-                border-radius: 12px;
-                border-width: 1px;
-                border-color: root.dark-mode ? #606060 : #BBBBBB;
-                background: root.dark-mode ? #111111 : #FFFFFF;
-                Text {
-                    x: 16px;
-                    y: 14px;
-                    width: 292px;
-                    height: 28px;
-                    text: root.add-account-title;
-                    font-size: 18px;
-                    font-weight: 600;
-                    color: root.dark-mode ? #EEEEEE : #202020;
-                    vertical-alignment: center;
-                }
-                Text {
-                    x: 16px;
-                    y: 46px;
-                    width: 328px;
-                    height: 20px;
-                    text: root.add-account-intro;
-                    font-size: 11px;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                }
-                Text {
-                    x: 320px;
-                    y: 12px;
-                    width: 28px;
-                    height: 28px;
-                    text: "×";
-                    font-size: 18px;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-                TouchArea {
-                    x: 320px;
-                    y: 12px;
-                    width: 28px;
-                    height: 28px;
-                    clicked => { root.close-account-dialogs(); }
-                }
-                for choice[i] in [
-                    { title: root.google-account-label, desc: root.google-account-desc },
-                    { title: root.outlook-section-text, desc: root.outlook-account-desc },
-                    { title: root.ics-account-label, desc: root.ics-account-desc }
-                ] : Rectangle {
-                    x: 16px;
-                    y: 74px + i * 48px;
-                    width: 328px;
-                    height: 40px;
-                    border-radius: 7px;
-                    background: root.dark-mode ? #222222 : #F0F0F0;
-                    Text {
-                        x: 12px;
-                        y: 4px;
-                        width: 280px;
-                        height: 18px;
-                        text: choice.title;
-                        font-size: 12px;
-                        font-weight: 500;
-                        color: root.dark-mode ? #EEEEEE : #202020;
-                    }
-                    Text {
-                        x: 12px;
-                        y: 20px;
-                        width: 280px;
-                        height: 16px;
-                        text: choice.desc;
-                        font-size: 10.5px;
-                        color: root.dark-mode ? #B4B4B4 : #646464;
-                    }
-                    TouchArea {
-                        clicked => {
-                            if (i == 0) { root.choose-google-account(); }
-                            if (i == 1) { root.choose-outlook-account(); }
-                            if (i == 2) { root.choose-ics-account(); }
-                        }
-                    }
-                }
-            }
-        }
-
-        if root.ics-dialog-open : ics-dialog := FocusScope {
-            width: parent.width;
-            height: parent.height;
-
-            Rectangle {
-            width: parent.width;
-            height: parent.height;
-            background: root.dark-mode ? #00000066 : #00000033;
-            Rectangle {
-                x: 24px;
-                y: 56px;
-                width: 400px;
-                height: 252px;
-                border-radius: 12px;
-                border-width: 1px;
-                border-color: root.dark-mode ? #606060 : #BBBBBB;
-                background: root.dark-mode ? #111111 : #FFFFFF;
-                Text {
-                    x: 16px;
-                    y: 12px;
-                    width: 320px;
-                    height: 28px;
-                    text: root.ics-dialog-title;
-                    font-size: 18px;
-                    font-weight: 600;
-                    color: root.dark-mode ? #EEEEEE : #202020;
-                }
-                Text {
-                    x: 360px;
-                    y: 12px;
-                    width: 28px;
-                    height: 28px;
-                    text: "×";
-                    font-size: 18px;
-                    horizontal-alignment: center;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                }
-                TouchArea {
-                    x: 360px;
-                    y: 12px;
-                    width: 28px;
-                    height: 28px;
-                    enabled: !root.connection-busy;
-                    clicked => { root.close-account-dialogs(); }
-                }
-                Text {
-                    x: 16px;
-                    y: 48px;
-                    width: 368px;
-                    height: 32px;
-                    text: root.ics-privacy-text;
-                    font-size: 11px;
-                    wrap: word-wrap;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                }
-                SettingsField {
-                    x: 16px;
-                    y: 84px;
-                    width: 368px;
-                    text <=> root.ics-source-name;
-                    placeholder: root.ics-name-placeholder;
-                    dark-mode: root.dark-mode;
-                    enabled: !root.connection-busy && !root.provider-loading;
-                }
-                url-field := SettingsField {
-                    x: 16px;
-                    y: 120px;
-                    width: 368px;
-                    text <=> root.ics-source-url;
-                    placeholder: root.ics-url-placeholder;
-                    dark-mode: root.dark-mode;
-                    enabled: !root.connection-busy && !root.provider-loading;
-                }
-                Text {
-                    x: 16px;
-                    y: 152px;
-                    width: 368px;
-                    height: 44px;
-                    text: root.connection-busy ? root.ics-loading-text
-                        : (root.connection-message != "" ? root.connection-message : root.ics-stays-local-text);
-                    font-size: 10.5px;
-                    wrap: word-wrap;
-                    color: !root.connection-busy && root.connection-message != ""
-                        ? (root.dark-mode ? #FF9DA1 : #BC333B)
-                        : (root.dark-mode ? #B4B4B4 : #646464);
-                }
-                SettingsButton {
-                    x: 196px;
-                    y: 204px;
-                    button-width: 88px;
-                    label: root.cancel-sign-in-label;
-                    dark-mode: root.dark-mode;
-                    enabled: !root.connection-busy;
-                    clicked => { root.close-account-dialogs(); }
-                }
-                SettingsButton {
-                    x: 292px;
-                    y: 204px;
-                    button-width: 92px;
-                    label: root.subscribe-label;
-                    kind: "primary";
-                    enabled: !root.connection-busy && !root.provider-loading
-                        && root.ics-source-name != "" && root.ics-source-url != "";
-                    dark-mode: root.dark-mode;
-                    clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
-                }
-            }
-            }
-            init => { url-field.focus-input(); }
-        }
-
-        // Footer
-        Rectangle {
-            x: 16px;
-            y: 320px;
-            width: 416px;
-            height: 1px;
-            background: root.dark-mode ? #3A3A3A : #D9D9D9;
-        }
-
-        if root.settings-tab != 3 : Rectangle {
-            x: 0px;
-            y: 320px;
-            width: parent.width;
-            height: 40px;
-            Text {
-                x: 16px;
-                y: 8px;
-                width: 240px;
-                height: 24px;
-                text: root.about-link-text;
-                font-size: 11px;
-                font-weight: 500;
-                color: about-touch.has-hover
-                    ? (root.dark-mode ? #EEEEEE : #202020)
-                    : (root.dark-mode ? #B4B4B4 : #646464);
-                vertical-alignment: center;
-            }
-            about-touch := TouchArea {
-                x: 16px;
-                y: 8px;
-                width: 240px;
-                height: 24px;
-                clicked => { root.open-settings(3); }
-            }
-            Text {
-                x: 280px;
-                y: 8px;
-                width: 152px;
-                height: 24px;
-                text: root.app-version-line-text;
-                font-size: 10.5px;
-                font-weight: 400;
-                color: root.dark-mode ? #B4B4B4 : #646464;
-                horizontal-alignment: right;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-        }
-
-        if root.settings-tab == 3 : Rectangle {
-            x: 0px;
-            y: 320px;
-            width: parent.width;
-            height: 40px;
-            Text {
-                x: 16px;
-                y: 8px;
-                width: 416px;
-                height: 24px;
-                text: root.back-to-calendar-text;
-                font-size: 11px;
-                font-weight: 500;
-                color: back-touch.has-hover
-                    ? (root.dark-mode ? #EEEEEE : #202020)
-                    : (root.dark-mode ? #B4B4B4 : #646464);
-                vertical-alignment: center;
-            }
-            back-touch := TouchArea {
-                x: 16px;
-                y: 8px;
-                width: 416px;
-                height: 24px;
-                clicked => { root.open-settings(2); } // App tab (Penpot Back to settings)
-            }
-        }
+    if root.settings-open : SettingsView {
+        width: 100%;
+        height: 100%;
+        app-name-text: root.app-name-text;
+        settings-tab: root.settings-tab;
+        nav-about-text: root.nav-about-text;
+        settings-title-text: root.settings-title-text;
+        nav-appearance-text: root.nav-appearance-text;
+        nav-calendars-text: root.nav-calendars-text;
+        nav-general-text: root.nav-general-text;
+        startup-warning: root.startup-warning;
+        dismiss-label-text: root.dismiss-label-text;
+        label-theme-text: root.label-theme-text;
+        theme-system-label: root.theme-system-label;
+        theme-light-label: root.theme-light-label;
+        theme-dark-label: root.theme-dark-label;
+        label-first-weekday-text: root.label-first-weekday-text;
+        current-first-weekday-display: root.current-first-weekday-display;
+        first-day-dropdown-open: root.first-day-dropdown-open;
+        label-gray-weekdays-text: root.label-gray-weekdays-text;
+        gray-weekday-chips: root.gray-weekday-chips;
+        label-show-week-numbers-text: root.label-show-week-numbers-text;
+        show-week-numbers: root.show-week-numbers;
+        label-show-event-dots-text: root.label-show-event-dots-text;
+        show-event-dots: root.show-event-dots;
+        weekday-monday-label: root.weekday-monday-label;
+        first-weekday-monday: root.first-weekday-monday;
+        weekday-sunday-label: root.weekday-sunday-label;
+        add-account-enabled: root.add-account-enabled;
+        connection-busy: root.connection-busy;
+        sign-in-cancelled: root.sign-in-cancelled;
+        connection-message: root.connection-message;
+        provider-loading: root.provider-loading;
+        label-language-text: root.label-language-text;
+        current-language-display: root.current-language-display;
+        language-dropdown-open: root.language-dropdown-open;
+        startup-status-text: root.startup-status-text;
+        label-startup-text: root.label-startup-text;
+        start-with-windows: root.start-with-windows;
+        label-shortcut-text: root.label-shortcut-text;
+        shortcut-has-conflict: root.shortcut-has-conflict;
+        shortcut-keys: root.shortcut-keys;
+        shortcut-unset-text: root.shortcut-unset-text;
+        shortcut-can-clear: root.shortcut-can-clear;
+        label-tray-palette-text: root.label-tray-palette-text;
+        tray-icon-monochrome: root.tray-icon-monochrome;
+        palette-colored-text: root.palette-colored-text;
+        palette-monochrome-text: root.palette-monochrome-text;
+        live-day-text: root.live-day-text;
+        updates-heading-text: root.updates-heading-text;
+        lang-en-us-label: root.lang-en-us-label;
+        current-language-code: root.current-language-code;
+        lang-ru-label: root.lang-ru-label;
+        lang-es-label: root.lang-es-label;
+        lang-ja-label: root.lang-ja-label;
+        about-version-text: root.about-version-text;
+        update-is-available: root.update-is-available;
+        update-is-checking: root.update-is-checking;
+        install-status-text: root.install-status-text;
+        install-busy: root.install-busy;
+        install-update-label: root.install-update-label;
+        install-configured: root.install-configured;
+        package-managed-updates: root.package-managed-updates;
+        auto-check-updates: root.auto-check-updates;
+        auto-install-label: root.auto-install-label;
+        auto-install-updates: root.auto-install-updates;
+        add-account-open: root.add-account-open;
+        ics-dialog-open: root.ics-dialog-open;
+        ics-source-url <=> root.ics-source-url;
+        ics-loading-text: root.ics-loading-text;
+        about-link-text: root.about-link-text;
+        back-to-calendar-text: root.back-to-calendar-text;
+        current-theme-code: root.current-theme-code;
+        copy: root.settings-strings;
+        account-cards: root.account-cards;
+        close-settings() => { root.close-settings(); }
+        open-settings(arg0) => { root.open-settings(arg0); }
+        dismiss-startup-warning() => { root.dismiss-startup-warning(); }
+        select-theme(arg0) => { root.select-theme(arg0); }
+        toggle-first-day-dropdown() => { root.toggle-first-day-dropdown(); }
+        toggle-gray-weekday(arg0) => { root.toggle-gray-weekday(arg0); }
+        toggle-show-week-numbers() => { root.toggle-show-week-numbers(); }
+        toggle-show-event-dots() => { root.toggle-show-event-dots(); }
+        select-first-weekday-option(arg0) => { root.select-first-weekday-option(arg0); }
+        add-calendar-account() => { root.add-calendar-account(); }
+        cancel-account-sign-in() => { root.cancel-account-sign-in(); }
+        reopen-sign-in-browser() => { root.reopen-sign-in-browser(); }
+        retry-sign-in() => { root.retry-sign-in(); }
+        connect-microsoft() => { root.connect-microsoft(); }
+        disconnect-microsoft() => { root.disconnect-microsoft(); }
+        refresh-calendars() => { root.refresh-calendars(); }
+        toggle-calendar-source(arg0) => { root.toggle-calendar-source(arg0); }
+        remove-calendar-source(arg0) => { root.remove-calendar-source(arg0); }
+        choose-google-account() => { root.choose-google-account(); }
+        disconnect-google() => { root.disconnect-google(); }
+        open-privacy-settings() => { root.open-privacy-settings(); }
+        toggle-legacy-windows() => { root.toggle-legacy-windows(); }
+        toggle-language-dropdown() => { root.toggle-language-dropdown(); }
+        toggle-start-with-windows() => { root.toggle-start-with-windows(); }
+        record-shortcut(text, ctrl, alt, shift, meta) => { root.record-shortcut(text, ctrl, alt, shift, meta); }
+        clear-shortcut() => { root.clear-shortcut(); }
+        toggle-tray-icon-monochrome() => { root.toggle-tray-icon-monochrome(); }
+        select-language(arg0) => { root.select-language(arg0); }
+        install-update() => { root.install-update(); }
+        check-updates() => { root.check-updates(); }
+        toggle-auto-check-updates() => { root.toggle-auto-check-updates(); }
+        toggle-auto-install-updates() => { root.toggle-auto-install-updates(); }
+        open-external-url(arg0) => { root.open-external-url(arg0); }
+        open-sponsor(one-time) => { root.open-sponsor(one-time); }
+        close-account-dialogs() => { root.close-account-dialogs(); }
+        choose-outlook-account() => { root.choose-outlook-account(); }
+        choose-ics-account() => { root.choose-ics-account(); }
+        add-ics-source(arg0, arg1) => { root.add-ics-source(arg0, arg1); }
     }
 }

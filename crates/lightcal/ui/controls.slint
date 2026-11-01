@@ -1,0 +1,666 @@
+// Shared Lightcal controls, styled to the November 2026 design canvas.
+// CSS sources: design/canvas/*.dc.html (.ib, .tb, .tg, .seg, .dd, .btn, .pb,
+// .kbd, .r, .card, .cap, .lnk). Colors and metrics come from `Theme`.
+
+import { Theme } from "theme.slint";
+
+// 24-unit stroke icons from the canvas boards (Lucide-style geometry).
+// Names: chevron-left, chevron-right, chevron-down, gear, close, check,
+// external, clock, pin, calendar, person, app, heart.
+export component Icon inherits Path {
+    in property <string> name;
+    in property <length> size: 16px;
+    in property <color> color: Theme.ink2;
+    // Stroke width in 24-unit viewbox units, as in the SVG sources.
+    in property <float> weight: 2;
+    // Fill for closed shapes such as the heart; transparent by default.
+    in property <brush> fill-color: transparent;
+
+    width: root.size;
+    height: root.size;
+    viewbox-x: 0;
+    viewbox-y: 0;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: root.fill-color;
+    stroke: root.color;
+    stroke-width: root.size * root.weight / 24;
+    stroke-line-cap: round;
+    commands: root.name == "chevron-left" ? "M15 18 L9 12 L15 6"
+        : root.name == "chevron-right" ? "M9 18 L15 12 L9 6"
+        : root.name == "chevron-down" ? "M6 9 L12 15 L18 9"
+        : root.name == "close" ? "M18 6 L6 18 M6 6 L18 18"
+        : root.name == "check" ? "M20 6 L9 17 L4 12"
+        : root.name == "external" ? "M7 17 L17 7 M8 7 L17 7 L17 16"
+        : root.name == "clock" ? "M21 12 A9 9 0 1 1 3 12 A9 9 0 1 1 21 12 Z M12 7 L12 12 L15 14"
+        : root.name == "pin" ? "M20 10 C20 16 12 22 12 22 C12 22 4 16 4 10 A8 8 0 0 1 20 10 Z M15 10 A3 3 0 1 1 9 10 A3 3 0 1 1 15 10 Z"
+        : root.name == "calendar" ? "M6 4.5 L18 4.5 A3 3 0 0 1 21 7.5 L21 17.5 A3 3 0 0 1 18 20.5 L6 20.5 A3 3 0 0 1 3 17.5 L3 7.5 A3 3 0 0 1 6 4.5 Z M3 9.5 L21 9.5 M8 2.5 L8 6.5 M16 2.5 L16 6.5"
+        : root.name == "heart" ? "M12 21 L4.6 13.8 A5 5 0 0 1 12 6.6 A5 5 0 0 1 19.4 13.8 Z"
+        : root.name == "person" ? "M16 8 A4 4 0 1 1 8 8 A4 4 0 1 1 16 8 Z M4 21 A8 8 0 0 1 20 21"
+        : root.name == "app" ? "M7 3 L17 3 A4 4 0 0 1 21 7 L21 17 A4 4 0 0 1 17 21 L7 21 A4 4 0 0 1 3 17 L3 7 A4 4 0 0 1 7 3 Z M8 9 L16 9 M8 15 L13 15"
+        : root.name == "gear" ? "M12.22 2 L11.78 2 A2 2 0 0 0 9.78 4 L9.78 4.18 A2 2 0 0 1 8.78 5.91 L8.35 6.16 A2 2 0 0 1 6.35 6.16 L6.2 6.08 A2 2 0 0 0 3.47 6.81 L3.25 7.19 A2 2 0 0 0 3.98 9.92 L4.13 10.02 A2 2 0 0 1 5.13 11.74 L5.13 12.25 A2 2 0 0 1 4.13 13.99 L3.98 14.08 A2 2 0 0 0 3.25 16.81 L3.47 17.19 A2 2 0 0 0 6.2 17.92 L6.35 17.84 A2 2 0 0 1 8.35 17.84 L8.78 18.09 A2 2 0 0 1 9.78 19.82 L9.78 20 A2 2 0 0 0 11.78 22 L12.22 22 A2 2 0 0 0 14.22 20 L14.22 19.82 A2 2 0 0 1 15.22 18.09 L15.65 17.84 A2 2 0 0 1 17.65 17.84 L17.8 17.92 A2 2 0 0 0 20.53 17.19 L20.75 16.8 A2 2 0 0 0 20.02 14.07 L19.87 13.99 A2 2 0 0 1 18.87 12.25 L18.87 11.75 A2 2 0 0 1 19.87 10.01 L20.02 9.92 A2 2 0 0 0 20.75 7.19 L20.53 6.81 A2 2 0 0 0 17.8 6.08 L17.65 6.16 A2 2 0 0 1 15.65 6.16 L15.22 5.91 A2 2 0 0 1 14.22 4.18 L14.22 4 A2 2 0 0 0 12.22 2 Z M15 12 A3 3 0 1 1 9 12 A3 3 0 1 1 15 12 Z"
+        : "";
+}
+
+// Ghost icon button: 28×28, radius 6, hover and press fills (.ib).
+export component IconButton inherits Rectangle {
+    in property <string> icon;
+    // Text glyph used when no icon name is given.
+    in property <string> glyph;
+    in property <float> icon-weight: 2;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback clicked();
+
+    width: 28px;
+    height: 28px;
+    border-radius: Theme.radius-control;
+    background: !root.enabled ? transparent
+        : touch.pressed ? Theme.press
+        : touch.has-hover ? Theme.hover
+        : transparent;
+    opacity: root.enabled ? 1 : 0.4;
+    accessible-role: button;
+    accessible-label: root.label;
+
+    if root.icon != "" : Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        name: root.icon;
+        weight: root.icon-weight;
+        color: Theme.ink2;
+    }
+    if root.icon == "" : Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.glyph;
+        font-size: Theme.type-day;
+        font-weight: Theme.weight-medium;
+        color: Theme.ink2;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Ghost accent text button, 28 px (.tb), for Today and inline actions.
+export component TextButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <length> font-size: Theme.type-body;
+    callback clicked();
+
+    height: Theme.control-height;
+    width: self.preferred-width;
+    border-radius: Theme.radius-control;
+    background: !root.enabled ? transparent
+        : touch.pressed ? Theme.press
+        : touch.has-hover ? Theme.hover
+        : transparent;
+    opacity: root.enabled ? 1 : 0.4;
+    accessible-role: button;
+    accessible-label: root.label;
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        Text {
+            text: root.label;
+            font-size: root.font-size;
+            font-weight: Theme.weight-medium;
+            color: Theme.accent;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Fluent control surface: 1 px border with a darker bottom edge (.dd, .btn).
+// Slint borders have one color, so the frame is three stacked rectangles.
+export component ControlFrame inherits Rectangle {
+    in property <bool> hovered: false;
+    in property <bool> pressed: false;
+    // Accent outline for open or focused controls.
+    in property <bool> focused: false;
+
+    border-radius: Theme.radius-control;
+    background: root.focused ? Theme.accent : Theme.control-bottom-line;
+
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height - 1px;
+        border-radius: Theme.radius-control;
+        background: root.focused ? Theme.accent : Theme.control-line;
+    }
+    Rectangle {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        border-radius: Theme.radius-control - 1px;
+        background: root.pressed ? Theme.press : (root.hovered ? Theme.hover : Theme.control);
+    }
+
+    @children
+}
+
+// Switch 40×20 (.tg): off is an outline with a 12 px knob, on is a teal
+// fill with a white 14 px knob.
+export component Switch inherits Rectangle {
+    in property <bool> checked: false;
+    in property <bool> enabled: true;
+    in property <string> label;
+    callback toggled();
+
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: root.checked ? Theme.primary : Theme.toggle-off;
+    background: root.checked
+        ? (touch.has-hover ? Theme.primary-hover : Theme.primary)
+        : (touch.has-hover ? Theme.hover : transparent);
+    opacity: root.enabled ? 1 : 0.4;
+    accessible-role: checkbox;
+    accessible-checked: root.checked;
+    accessible-label: root.label;
+
+    Rectangle {
+        width: root.checked ? 14px : 12px;
+        height: self.width;
+        border-radius: self.width / 2;
+        x: root.checked ? 22px : 4px;
+        y: (parent.height - self.height) / 2;
+        background: root.checked ? Theme.on-primary : Theme.toggle-off;
+        animate x, width { duration: 120ms; easing: ease-out; }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.toggled(); }
+    }
+}
+
+// Segmented control (.seg): track, 2 px padding, thumb with a 1 px border.
+export component SegmentedControl inherits Rectangle {
+    in property <[string]> options;
+    in property <int> selected-index: 0;
+    in property <length> track-width: 204px;
+    callback selected(int);
+
+    width: root.track-width;
+    height: Theme.control-height;
+    border-radius: Theme.radius-card;
+    background: Theme.track;
+
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 2px;
+
+        for opt[idx] in root.options : segment := Rectangle {
+            horizontal-stretch: 1;
+            height: 24px;
+            border-radius: Theme.radius-control;
+            background: root.selected-index == idx ? Theme.thumb : transparent;
+            border-width: root.selected-index == idx ? 1px : 0px;
+            border-color: Theme.control-line;
+            accessible-role: button;
+            accessible-label: opt;
+
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: opt;
+                font-size: Theme.type-caption;
+                font-weight: Theme.weight-medium;
+                color: root.selected-index == idx || segment-touch.has-hover ? Theme.ink : Theme.ink2;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+
+            segment-touch := TouchArea {
+                clicked => { root.selected(idx); }
+            }
+        }
+    }
+}
+
+// Select / dropdown field, 28 px, darker bottom border (.dd).
+export component Select inherits Rectangle {
+    in property <string> text;
+    in property <bool> is-open: false;
+    in property <length> select-width: 136px;
+    callback clicked();
+
+    width: root.select-width;
+    height: Theme.control-height;
+    accessible-role: combobox;
+    accessible-value: root.text;
+
+    ControlFrame {
+        width: 100%;
+        height: 100%;
+        hovered: touch.has-hover;
+        focused: root.is-open;
+
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.text;
+                font-size: Theme.type-body;
+                font-weight: Theme.weight-regular;
+                color: Theme.ink;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Icon {
+                y: (parent.height - self.height) / 2;
+                name: "chevron-down";
+                size: 12px;
+                color: root.is-open ? Theme.accent : Theme.ink2;
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Push button, 28 px. kind: "secondary" (.btn, default), "primary" (.pb,
+// teal fill, white text) or "subtle" (ghost, secondary text). Leave
+// `button-width` at 0 to size to the label at 13 px.
+export component Button inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <string> label;
+    in property <string> kind: "secondary";
+    in property <length> button-width: 0px;
+    callback clicked();
+
+    width: root.button-width > 0px ? root.button-width : self.preferred-width;
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    opacity: root.enabled ? 1 : 0.4;
+    accessible-role: button;
+    accessible-label: root.label;
+    background: root.kind == "primary"
+        ? (touch.has-hover && root.enabled ? Theme.primary-hover : Theme.primary)
+        : (root.kind == "subtle"
+            ? (touch.pressed ? Theme.press : (touch.has-hover ? Theme.hover : transparent))
+            : transparent);
+
+    if root.kind != "primary" && root.kind != "subtle" : ControlFrame {
+        width: 100%;
+        height: 100%;
+        hovered: touch.has-hover && root.enabled;
+        pressed: touch.pressed && root.enabled;
+    }
+
+    HorizontalLayout {
+        padding-left: root.button-width > 0px ? 8px : (root.kind == "primary" ? 12px : 10px);
+        padding-right: root.button-width > 0px ? 8px : (root.kind == "primary" ? 12px : 10px);
+        alignment: center;
+
+        Text {
+            text: root.label;
+            // Fixed-width call sites were laid out for 12 px labels; keep them
+            // there so translated labels are not cut off.
+            font-size: root.button-width > 0px ? Theme.type-caption : Theme.type-body;
+            font-weight: Theme.weight-medium;
+            color: root.kind == "primary" ? Theme.on-primary
+                : (root.kind == "subtle" ? Theme.ink2 : Theme.ink);
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Quiet text link (.lnk): secondary ink, hover fill.
+export component LinkButton inherits Rectangle {
+    in property <string> label;
+    in property <length> font-size: Theme.type-caption;
+    callback clicked();
+
+    height: 20px;
+    width: self.preferred-width;
+    border-radius: Theme.radius-key;
+    background: touch.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        Text {
+            text: root.label;
+            font-size: root.font-size;
+            font-weight: Theme.weight-medium;
+            color: touch.has-hover ? Theme.ink : Theme.ink2;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Windows caption button, 46×32 (.cap). `close` turns red on hover.
+export component CaptionButton inherits Rectangle {
+    in property <string> icon: "close";
+    in property <bool> close: true;
+    in property <string> label;
+    callback clicked();
+
+    width: 46px;
+    height: Theme.caption-height;
+    background: touch.has-hover ? (root.close ? Theme.close-hover : Theme.hover) : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+
+    Icon {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        name: root.icon;
+        size: 14px;
+        weight: 1.4;
+        color: touch.has-hover && root.close ? Theme.on-close-hover : Theme.ink2;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Key cap, 20 px high, radius 4, inset bottom edge (.kbd).
+export component Keycap inherits Rectangle {
+    in property <string> text;
+
+    height: 20px;
+    width: max(20px, label.preferred-width + 12px);
+    border-radius: Theme.radius-key;
+    background: Theme.control-bottom-line;
+
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height - 1px;
+        border-radius: Theme.radius-key;
+        background: Theme.key;
+    }
+    label := Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.text;
+        font-size: Theme.type-small;
+        font-weight: Theme.weight-semibold;
+        color: Theme.ink;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// Settings card: card fill, 1 px card line, radius 8 (.card).
+export component Card inherits Rectangle {
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.card-line;
+    border-radius: Theme.radius-card;
+    clip: true;
+}
+
+// Horizontal hairline; override `background` for the popup line.
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.line;
+}
+
+// Settings row, 40 px, 13 px label, inset divider (.r).
+export component SettingsRow inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle: "";
+    in property <color> subtitle-color: Theme.err;
+    in property <bool> show-divider: true;
+    in property <color> title-color: Theme.ink;
+
+    height: Theme.row-height;
+    background: transparent;
+
+    HorizontalLayout {
+        width: 100%;
+        height: 100%;
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        alignment: space-between;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                font-size: Theme.type-body;
+                font-weight: Theme.weight-regular;
+                color: root.title-color;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                font-size: Theme.type-small;
+                font-weight: Theme.weight-regular;
+                color: root.subtitle-color;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                vertical-stretch: 0;
+                spacing: 8px;
+                alignment: center;
+                @children
+            }
+        }
+    }
+
+    // The divider sits inside the 40 px row so the card height stays rows × 40.
+    if root.show-divider : Rectangle {
+        x: 12px;
+        y: parent.height - 1px;
+        width: parent.width - 24px;
+        height: 1px;
+        background: Theme.line;
+    }
+}
+
+// Dropdown menu surface.
+export component Menu inherits Rectangle {
+    horizontal-stretch: 0;
+    width: 168px;
+    height: min(196px, content.preferred-height);
+    border-radius: Theme.radius-card;
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.control-line;
+    drop-shadow-blur: 12px;
+    drop-shadow-offset-y: 4px;
+    drop-shadow-color: Theme.dark ? #00000088 : #2020201A;
+
+    content := VerticalLayout {
+        padding: 4px;
+        spacing: 2px;
+        @children
+    }
+}
+
+// One option in a `Menu`.
+export component MenuOption inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    callback clicked();
+
+    height: Theme.control-height;
+    border-radius: Theme.radius-control;
+    background: root.active ? Theme.selected : (opt-touch.has-hover ? Theme.hover : transparent);
+    accessible-role: button;
+    accessible-label: root.label;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+
+        Text {
+            text: root.label;
+            font-size: Theme.type-body;
+            font-weight: root.active ? Theme.weight-medium : Theme.weight-regular;
+            color: Theme.ink;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+
+        if root.active : Icon {
+            y: (parent.height - self.height) / 2;
+            name: "check";
+            size: 12px;
+            weight: 2.5;
+            color: Theme.accent;
+        }
+    }
+
+    opt-touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+// Single-line text field: control frame, accent edge while focused.
+export component TextField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+
+    height: Theme.control-height;
+    opacity: root.enabled ? 1 : 0.45;
+
+    ControlFrame {
+        width: 100%;
+        height: 100%;
+        focused: input.has-focus;
+    }
+
+    if root.text == "" && root.placeholder != "" : Text {
+        x: 10px;
+        y: 0px;
+        width: parent.width - 20px;
+        height: parent.height;
+        text: root.placeholder;
+        font-size: Theme.type-body;
+        color: Theme.ink3;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    input := TextInput {
+        x: 10px;
+        y: 0px;
+        width: parent.width - 20px;
+        height: parent.height;
+        text <=> root.text;
+        font-size: Theme.type-body;
+        color: Theme.ink;
+        vertical-alignment: center;
+        single-line: true;
+        enabled: root.enabled;
+    }
+
+    public function focus-input() {
+        input.focus();
+    }
+}
+
+// Lightcal app icon: coral rounded tile, darker top band, 2×2 white grid with
+// one solid square (assets/icons/canvas/lightcal-app.svg, 64-unit grid).
+export component BrandMark inherits Rectangle {
+    in property <length> mark-size: 20px;
+    property <length> u: root.mark-size / 64;
+
+    width: root.mark-size;
+    height: root.mark-size;
+
+    Rectangle {
+        x: 4 * root.u;
+        y: 4 * root.u;
+        width: 56 * root.u;
+        height: 56 * root.u;
+        border-radius: 14 * root.u;
+        background: Theme.coral;
+
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: parent.width;
+            height: 14 * root.u;
+            border-top-left-radius: 14 * root.u;
+            border-top-right-radius: 14 * root.u;
+            background: Theme.coral-band;
+        }
+        Rectangle {
+            x: 14 * root.u;
+            y: 21 * root.u;
+            width: 12 * root.u;
+            height: 12 * root.u;
+            border-radius: 3 * root.u;
+            background: #FFFFFF8C;
+        }
+        Rectangle {
+            x: 30 * root.u;
+            y: 21 * root.u;
+            width: 12 * root.u;
+            height: 12 * root.u;
+            border-radius: 3 * root.u;
+            background: #FFFFFF8C;
+        }
+        Rectangle {
+            x: 14 * root.u;
+            y: 37 * root.u;
+            width: 12 * root.u;
+            height: 12 * root.u;
+            border-radius: 3 * root.u;
+            background: #FFFFFF8C;
+        }
+        Rectangle {
+            x: 30 * root.u;
+            y: 37 * root.u;
+            width: 12 * root.u;
+            height: 12 * root.u;
+            border-radius: 3 * root.u;
+            background: #FFFFFF;
+        }
+    }
+}

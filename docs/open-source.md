@@ -26,7 +26,7 @@ Use original icons and layouts. Record third-party fonts, icons, snippets, and d
 
 ### Third-party notices and bundled assets
 
-The complete, current list of bundled fonts (Onest, Inter), the NSIS runtime, Radix Colors, and the Cargo dependencies is in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Both bundled font families are under the SIL Open Font License 1.1, with license texts beside the font files. Regenerate the crate table from `Cargo.lock` before each binary release; no automated license check runs in CI yet.
+The complete, current list of third-party material (the NSIS runtime, Radix Colors, and the Cargo dependencies) is in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Segoe UI is read from Windows at runtime and never redistributed. Regenerate the crate table from `Cargo.lock` before each binary release; no automated license check runs in CI yet.
 
 Commit `Cargo.lock` for reproducible application dependencies. Pin the Rust toolchain at implementation setup and pin CI actions to reviewed commit SHAs. Add dependency advisories/license checks when dependencies exist; do not claim a clean audit for an empty manifest set.
 
