@@ -25,6 +25,8 @@ See [the design specification](../README.md) for the final concept and review ev
 | [prepare-sf-pro.py](prepare-sf-pro.py) | Prepare Apple's design faces in ignored scratch storage without installation |
 | [refinement-macos-key-symbols.js](refinement-macos-key-symbols.js) | Replace missing keyboard glyphs with vector symbols |
 | [refinement-font-content.js](refinement-font-content.js) | Read-only text inventory for native glyph coverage checks |
+| [refinement-date-numerals.js](refinement-date-numerals.js) | Replace dated calendar badges with transparent numerals while retaining board IDs and links |
+| [refinement-palette.js](refinement-palette.js) | Gray + Teal migration of all active boards, preserving geometry and links |
 | [refinement-verify.js](refinement-verify.js) | Read-only inventory, duplicate and containment audit |
 | [refinement-cleanup.js](refinement-cleanup.js) | Snapshot-guarded removal of old pages and concept boards |
 | [refinement-manifest.json](refinement-manifest.json) | Final audited page/board inventory |

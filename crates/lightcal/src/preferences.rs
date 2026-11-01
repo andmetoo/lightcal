@@ -123,6 +123,70 @@ fn default_microsoft_client_id() -> String {
         .to_string()
 }
 
+fn default_google_client_id() -> String {
+    option_env!("LIGHTCAL_GOOGLE_CLIENT_ID")
+        .unwrap_or("")
+        .to_string()
+}
+
+fn default_google_client_secret() -> String {
+    String::new()
+}
+
+/// Read one assignment from a dotenv file. Values are not logged.
+pub fn env_assignment(text: &str, key: &str) -> Option<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once('='))
+        .find(|(name, _)| name.trim() == key)
+        .map(|(_, value)| {
+            value
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string()
+        })
+        .filter(|value| !value.is_empty())
+}
+
+/// Process environment, then a `.env` file beside the working directory or the executable.
+/// The value is returned in memory and is not written to logs.
+pub fn local_env_value(key: &str) -> String {
+    if let Ok(value) = std::env::var(key) {
+        let value = value
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_string();
+        if !value.is_empty() {
+            return value;
+        }
+    }
+    let mut roots = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        roots.push(cwd);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            roots.push(parent.to_path_buf());
+        }
+    }
+    for mut dir in roots {
+        for _ in 0..6 {
+            if let Ok(text) = std::fs::read_to_string(dir.join(".env")) {
+                if let Some(value) = env_assignment(&text, key) {
+                    return value;
+                }
+            }
+            if !dir.pop() {
+                break;
+            }
+        }
+    }
+    String::new()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Preferences {
     pub schema_version: u32,
@@ -150,6 +214,10 @@ pub struct Preferences {
     pub update_channel: String,
     #[serde(skip, default = "default_microsoft_client_id")]
     pub microsoft_client_id: String,
+    #[serde(skip, default = "default_google_client_id")]
+    pub google_client_id: String,
+    #[serde(skip, default = "default_google_client_secret")]
+    pub google_client_secret: String,
     #[serde(default)]
     pub windows_calendars_enabled: bool,
     #[serde(default)]
@@ -180,6 +248,8 @@ impl Default for Preferences {
             auto_check_updates: false,
             update_channel: "stable".to_string(),
             microsoft_client_id: default_microsoft_client_id(),
+            google_client_id: default_google_client_id(),
+            google_client_secret: default_google_client_secret(),
             windows_calendars_enabled: false,
             auto_install_updates: false,
         }
@@ -471,6 +541,20 @@ mod tests {
         assert!(newer_outcome.recovered_from_error);
         assert!(newer_outcome.warning.unwrap().contains("schema v99"));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn env_assignment_reads_the_named_value_and_ignores_comments() {
+        let text = "\
+OTHER=1
+# LIGHTCAL_GOOGLE_CLIENT_SECRET=commented
+LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
+";
+        assert_eq!(
+            env_assignment(text, "LIGHTCAL_GOOGLE_CLIENT_SECRET").as_deref(),
+            Some("desktop-secret")
+        );
+        assert!(env_assignment(text, "MISSING").is_none());
     }
 
     #[test]

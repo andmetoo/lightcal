@@ -42,12 +42,14 @@ for(const [i,theme] of ['light','dark'].entries()) {
   const t=r[theme],b=r.settingsContent('Calendars',theme,offset+i*512,2544,platform,'ics');
   const scrim=r.rect(b,'Modal scrim',0,0,448,360,'#000000',10);scrim.fills=[{fillColor:'#000000',fillOpacity:theme==='light'?.2:.4}];
   r.rect(b,'ICS dialog',24,92,400,210,t.canvas,12,t.border);
-  r.text(b,'ICS heading','Add a calendar link',40,104,368,28,18,600,t.ink);
-  r.text(b,'ICS privacy explanation','Private links grant access. Keep yours safe.',40,140,368,20,11,400,t.secondary);
+  r.text(b,'ICS heading','Add a calendar link',40,104,320,28,18,600,t.ink);
+  const close=r.rect(b,'Close dialog',384,104,28,28,null,6);r.glyph(b,'Close dialog icon',390,110,'close',t.secondary);
+  close.setPluginData('lightcal-target',platform+'/'+theme+'/Calendars');
+  r.text(b,'ICS privacy explanation','Anyone with the address can read this calendar.',40,140,368,20,11,400,t.secondary);
   r.text(b,'ICS address label','Private ICS address',40,168,368,18,11,500,t.secondary);
   r.rect(b,'ICS URL input',40,192,368,32,t.control,7,t.border);
   r.text(b,'ICS URL placeholder','https://example.com/calendar.ics',50,192,348,32,11,400,t.secondary);
-  r.text(b,'ICS storage explanation','Saved on this computer.',40,234,368,18,10.5,400,t.secondary);
+  r.text(b,'ICS storage explanation','Stays on this computer.',40,234,368,18,10.5,400,t.secondary);
   const cancel=r.button(b,'Cancel ICS','Cancel',208,258,88,t);cancel.setPluginData('lightcal-target',platform+'/'+theme+'/Calendars');
   r.button(b,'Subscribe to ICS','Subscribe',308,258,100,t,true);
 }

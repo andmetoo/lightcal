@@ -14,7 +14,10 @@
       "600": 352,
       "700": 64
     },
-    "violations": []
+    "violations": [],
+    "pending": [
+      "macOS SF Pro team-font import and migration"
+    ]
   },
   "inventory": [
     {

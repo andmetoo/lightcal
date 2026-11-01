@@ -1,7 +1,9 @@
 //! Direct read-only providers; toolkit-independent inputs/outputs.
 pub mod account;
+pub mod google;
 pub mod ics;
 pub mod microsoft;
+pub mod sign_in;
 use crate::{
     platform::{ProviderSnapshot, ProviderStatus},
     secure_store::Credentials,
@@ -11,9 +13,21 @@ use base64::Engine;
 use calendar_core::LocalDate;
 use std::{collections::BTreeSet, path::Path};
 
+pub struct GoogleConfiguration {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
 pub struct CalendarLoad {
     pub snapshot: ProviderSnapshot,
     pub microsoft: MicrosoftAccountState,
+    pub google_connected: bool,
+    pub google_needs_signin: bool,
+    pub google_configuration: Option<GoogleConfiguration>,
+    pub google_label: Option<String>,
+    pub google_error: String,
+    pub google_skipped: usize,
+    pub ics_error: String,
 }
 
 pub fn random_key() -> Result<String, String> {
@@ -38,7 +52,9 @@ pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
 pub fn query(
     anchor: LocalDate,
     dir: &Path,
-    client_id: &str,
+    microsoft_client_id: &str,
+    google_client_id: &str,
+    google_client_secret: &str,
     selected: &BTreeSet<String>,
     legacy_windows: bool,
 ) -> CalendarLoad {
@@ -64,18 +80,61 @@ pub fn query(
         };
         match microsoft::query(
             anchor,
-            client_id,
+            microsoft_client_id,
             selected,
             &mut credentials,
             &store,
             &mut account,
         ) {
-            Ok(data) => {
-                append_provider(&mut snapshot, data, &mut errors);
-            }
+            Ok(data) => append_provider(&mut snapshot, data, &mut errors),
             Err(e) => errors.push(e),
         }
     }
+    // A transport/configuration failure does not disconnect saved credentials.
+    // Keep manual refresh available unless authorization explicitly expired.
+    let mut google_connected = credentials.google_refresh_token.is_some();
+    let google_configuration = google_connected.then(|| GoogleConfiguration {
+        client_id: credentials
+            .google_client_id
+            .clone()
+            .unwrap_or_else(|| google_client_id.to_string()),
+        client_secret: credentials
+            .google_client_secret
+            .clone()
+            .unwrap_or_else(|| google_client_secret.to_string()),
+    });
+    let mut google_needs_signin = false;
+    let mut google_label = None;
+    let mut google_error = String::new();
+    let mut google_skipped = 0;
+    if credentials.google_refresh_token.is_some() {
+        match google::query(
+            anchor,
+            google_client_id,
+            google_client_secret,
+            selected,
+            &mut credentials,
+            &store,
+        ) {
+            Ok(data) => {
+                google_needs_signin = data.needs_signin;
+                google_connected = !data.needs_signin;
+                google_label = data.label;
+                google_skipped = data.skipped;
+                append_provider(&mut snapshot, data.snapshot, &mut errors);
+            }
+            Err(e) => {
+                google_needs_signin = e.contains("sign in again");
+                if google_needs_signin {
+                    google_connected = false;
+                } else {
+                    google_error = e.clone();
+                    errors.push(e);
+                }
+            }
+        }
+    }
+    let mut ics_errors = Vec::new();
     for feed in &credentials.ics {
         snapshot.sources.push(calendar_core::CalendarSource {
             id: feed.id.clone(),
@@ -86,7 +145,11 @@ pub fn query(
         if selected.contains(&feed.id) {
             match ics::fetch(feed, anchor) {
                 Ok(events) => snapshot.occurrences.extend(events),
-                Err(e) => errors.push(format!("{}: {e}", feed.name)),
+                Err(e) => {
+                    let message = format!("{}: {e}", feed.name);
+                    ics_errors.push(message.clone());
+                    errors.push(message);
+                }
             }
         }
     }
@@ -98,6 +161,13 @@ pub fn query(
     CalendarLoad {
         snapshot,
         microsoft: account,
+        google_connected,
+        google_needs_signin,
+        google_configuration,
+        google_label,
+        google_error,
+        google_skipped,
+        ics_error: ics_errors.join("\n"),
     }
 }
 
@@ -120,7 +190,8 @@ fn finish_status(snapshot: &mut ProviderSnapshot, errors: &[String]) {
     if snapshot.status == ProviderStatus::AccessDenied {
         return;
     }
-    snapshot.status = if !errors.is_empty() {
+    // A failure from one provider must not hide calendars another provider already loaded.
+    snapshot.status = if snapshot.sources.is_empty() && !errors.is_empty() {
         ProviderStatus::ProviderUnavailable(errors.join("\n"))
     } else if snapshot.sources.is_empty() {
         ProviderStatus::NoCalendars
@@ -134,6 +205,13 @@ fn failure(error: String) -> CalendarLoad {
         microsoft: MicrosoftAccountState::Unavailable {
             saved_credentials: false,
         },
+        google_connected: false,
+        google_needs_signin: false,
+        google_configuration: None,
+        google_label: None,
+        google_error: String::new(),
+        google_skipped: 0,
+        ics_error: String::new(),
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),
             sources: Vec::new(),
@@ -216,5 +294,55 @@ mod tests {
             snapshot.status,
             ProviderStatus::ProviderUnavailable("offline".into())
         );
+    }
+    #[test]
+    fn a_provider_error_keeps_calendars_already_loaded() {
+        let mut snapshot = empty(ProviderStatus::Available);
+        snapshot.sources.push(calendar_core::CalendarSource {
+            id: "graph:primary".into(),
+            name: "Calendar".into(),
+            account_label: "Outlook".into(),
+            color_hex: "#00796B".into(),
+        });
+        finish_status(
+            &mut snapshot,
+            &["Google calendar request failed (HTTP 500)".into()],
+        );
+        assert_eq!(snapshot.status, ProviderStatus::Available);
+        assert_eq!(snapshot.sources.len(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_saved_google_account_remains_retryable_after_a_query_failure() {
+        let dir =
+            std::env::temp_dir().join(format!("lightcal-google-retry-{}", random_key().unwrap()));
+        let store = crate::secure_store::SecureStore::new(&dir);
+        let credentials = Credentials {
+            google_refresh_token: Some("fixture-refresh-token".into()),
+            // Invalid configuration exercises the failure branch without network traffic.
+            google_client_id: Some("invalid-fixture-client".into()),
+            google_client_secret: Some("fixture-desktop-secret".into()),
+            ..Credentials::default()
+        };
+        store.save(&credentials).unwrap();
+        let result = query(
+            LocalDate::new(2026, 11, 1).unwrap(),
+            &dir,
+            "",
+            "",
+            "",
+            &BTreeSet::new(),
+            false,
+        );
+        assert!(result.google_connected);
+        assert!(!result.google_needs_signin);
+        assert!(!result.google_error.is_empty());
+        let configuration = result.google_configuration.unwrap();
+        assert_eq!(configuration.client_id, "invalid-fixture-client");
+        assert_eq!(configuration.client_secret, "fixture-desktop-secret");
+        assert!(store.load().unwrap().google_refresh_token.is_some());
+        std::fs::remove_file(dir.join("credentials.dpapi")).unwrap();
+        std::fs::remove_dir(dir).unwrap();
     }
 }

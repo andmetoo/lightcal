@@ -21,7 +21,7 @@ const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/to
 const SCOPES: &str = "https://graph.microsoft.com/Calendars.Read offline_access";
 const CALLBACK_PATH: &str = "/lightcalendar/oauth/microsoft";
 
-fn callback_listener() -> Result<TcpListener, String> {
+fn callback_listener(port: u16) -> Result<TcpListener, String> {
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::STREAM,
@@ -49,7 +49,7 @@ fn callback_listener() -> Result<TcpListener, String> {
             return Err("Could not reserve an exclusive Windows sign-in socket".into());
         }
     }
-    let address = std::net::SocketAddr::from(([127, 0, 0, 1], 0));
+    let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     socket
         .bind(&address.into())
         .map_err(|_| "Could not bind local sign-in callback")?;
@@ -78,14 +78,15 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
     if !valid_client_id(client_id) {
         return Err("Configure a Microsoft Entra Desktop app Client ID first (see provider setup documentation)".into());
     }
-    let listener = callback_listener()?;
-    let redirect = format!(
-        "http://localhost:{}{CALLBACK_PATH}",
-        listener
-            .local_addr()
-            .map_err(|_| "Could not configure sign-in port")?
-            .port()
-    );
+    // Entra registers the URI without a port. A desktop client ignores the port,
+    // so the listener uses a free port instead of requiring 127.0.0.1:80.
+    let listener =
+        callback_listener(0).map_err(|_| "Could not listen for Microsoft sign-in".to_string())?;
+    let port = listener
+        .local_addr()
+        .map_err(|_| "Could not configure sign-in port")?
+        .port();
+    let redirect = format!("http://localhost:{port}{CALLBACK_PATH}");
     let verifier = random_key()?;
     let state = random_key()?;
     let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -323,7 +324,7 @@ pub fn query(
             .filter(|s| {
                 s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|b| b.is_ascii_hexdigit())
             })
-            .unwrap_or("#5E6AD2");
+            .unwrap_or("#008573");
         result.sources.push(CalendarSource {
             id: id.clone(),
             name: calendar["name"].as_str().unwrap_or("Outlook").into(),
@@ -446,11 +447,18 @@ mod tests {
         let result = connect("00000000-0000-0000-0000-000000000000", |raw| {
             let auth = url::Url::parse(&raw).unwrap();
             let params = auth.query_pairs().collect::<BTreeMap<_, _>>();
-            let redirect = url::Url::parse(params.get("redirect_uri").unwrap()).unwrap();
+            let redirect_raw = params.get("redirect_uri").unwrap().to_string();
+            let redirect = url::Url::parse(&redirect_raw).unwrap();
+            assert_eq!(redirect.scheme(), "http");
+            assert_eq!(redirect.host_str(), Some("localhost"));
             assert_eq!(redirect.path(), "/lightcalendar/oauth/microsoft");
+            let port = redirect.port().expect("ephemeral redirect port");
+            assert_eq!(
+                redirect_raw,
+                format!("http://localhost:{port}/lightcalendar/oauth/microsoft")
+            );
             assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
             let state = params.get("state").unwrap().to_string();
-            let port = redirect.port().unwrap();
             responder = Some(std::thread::spawn(move || {
                 let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
                 stream
@@ -523,7 +531,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_callback_socket_refuses_competing_reuse_bind() {
-        let listener = callback_listener().unwrap();
+        let listener = callback_listener(0).unwrap();
         let address = listener.local_addr().unwrap();
         assert!(address.ip().is_loopback());
         let competing = socket2::Socket::new(

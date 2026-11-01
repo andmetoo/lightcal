@@ -9,8 +9,8 @@ for(const page of pages) {
     if(s.type==='text'&&s.name==='Today date'){s.x-=s.parentX-20;s.resize(220,s.height);if(!s.parent.name.startsWith('Language')||s.parent.name.startsWith('Language · en'))s.characters='Saturday, 31 October';}
     const color=s.fills?.[0]?.fillColor?.toUpperCase();
     if(s.name.startsWith('Date ')&&color==='#E5484D'){s.fills=[{fillColor:'#D73840',fillOpacity:1}];colors++;}
-    if(color==='#7479E5'){s.fills=[{fillColor:'#5E63D6',fillOpacity:1}];colors++;}
-    if(s.type==='text'&&s.name.startsWith('Day numeral')&&color==='#7C7C87'){s.fills=[{fillColor:'#73737D',fillOpacity:1}];colors++;}
+    if(color==='#00796B'){s.fills=[{fillColor:'#00796B',fillOpacity:1}];colors++;}
+    if(s.type==='text'&&s.name.startsWith('Day numeral')&&color==='#6E6E6E'){s.fills=[{fillColor:'#646464',fillOpacity:1}];colors++;}
   }
   for(const b of page.root.children.filter(s=>s.type==='board')) {
     if(b.name.includes('Calendar · November · 31'))b.name=b.name.replace('November · 31','November · 12');

@@ -1,34 +1,34 @@
-//! High-quality icon rendering using bundled Inter font and anti-aliased squircle.
-//! Matches Penpot `06 · Shell, Dock & Icons` specification.
+//! Native-size calendar date badges with pixel-fitted Onest numerals.
+//! The calendar silhouette remains recognizable beside other Windows tray icons.
 
 use crate::preferences::TrayIconMode;
 use calendar_core::{LocalDate, Weekday};
 use fontdue::{Font, FontSettings};
 use std::sync::OnceLock;
 
-static INTER_FONT: OnceLock<Font> = OnceLock::new();
-static INTER_BOLD_FONT: OnceLock<Font> = OnceLock::new();
+static UI_FONT: OnceLock<Font> = OnceLock::new();
+static UI_BOLD_FONT: OnceLock<Font> = OnceLock::new();
 
 fn get_bold_font() -> &'static Font {
-    INTER_BOLD_FONT.get_or_init(|| {
+    UI_BOLD_FONT.get_or_init(|| {
         Font::from_bytes(
-            include_bytes!("../../../assets/fonts/Inter-Bold.ttf").as_slice(),
+            include_bytes!("../../../assets/fonts/Onest-Bold.ttf").as_slice(),
             FontSettings::default(),
         )
-        .expect("Failed to parse bundled Inter Bold font")
+        .expect("Failed to parse bundled Onest Bold font")
     })
 }
 
 pub fn get_font() -> &'static Font {
-    INTER_FONT.get_or_init(|| {
-        let bytes = include_bytes!("../../../assets/fonts/Inter.ttf");
+    UI_FONT.get_or_init(|| {
+        let bytes = include_bytes!("../../../assets/fonts/Onest-Regular.ttf");
         Font::from_bytes(bytes.as_slice(), FontSettings::default())
-            .expect("Failed to parse bundled Inter font")
+            .expect("Failed to parse bundled Onest font")
     })
 }
 
 /// Renders a 32×32 RGBA system tray icon supporting 3 modes (`DateOnly`, `WeekdayAndDate`, `TimeAndDate`)
-/// and both **Colored (`#E5484D` Coral)** and **Monochrome** styles.
+/// and both coral and system-monochrome styles.
 pub fn render_tray_icon_rgba(day_of_month: u8, dark_taskbar: bool) -> Vec<u8> {
     render_tray_icon_variant_rgba(
         TrayIconMode::DateOnly,
@@ -52,20 +52,231 @@ pub fn render_native_tray_icon(
     #[cfg(windows)]
     let size = unsafe {
         use windows_sys::Win32::UI::{
-            HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi},
-            WindowsAndMessaging::SM_CXSMICON,
+            HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi},
+            WindowsAndMessaging::{FindWindowW, SM_CXSMICON},
         };
-        GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()).clamp(16, 64) as u32
+        // Explorer owns the destination. Its DPI can differ from the app's
+        // current monitor and must determine the raster's physical dimensions.
+        let class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
+        let taskbar = FindWindowW(class.as_ptr(), std::ptr::null());
+        let taskbar_dpi = if taskbar.is_null() {
+            0
+        } else {
+            GetDpiForWindow(taskbar)
+        };
+        let dpi = if taskbar_dpi == 0 {
+            GetDpiForSystem()
+        } else {
+            taskbar_dpi
+        };
+        GetSystemMetricsForDpi(SM_CXSMICON, dpi).clamp(16, 64) as u32
     };
     #[cfg(not(windows))]
     let size = 32;
     (
-        render_squircle_icon_generic(size as usize, mode, monochrome, day, weekday, time, dark),
+        render_squircle_icon_generic(
+            size as usize,
+            mode,
+            monochrome,
+            day,
+            weekday,
+            time,
+            taskbar_prefers_dark_mode(dark),
+        ),
         size,
     )
 }
 
-/// Renders a 32×32 supersampled RGBA squircle icon by 2×2 box-filtering the 64×64 master buffer.
+/// The shell's theme is independent of the selected application theme.
+pub fn taskbar_prefers_dark_mode(fallback: bool) -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Registry::{
+            RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD,
+        };
+        let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+            .encode_utf16()
+            .collect();
+        let name: Vec<u16> = "SystemUsesLightTheme\0".encode_utf16().collect();
+        let mut value: u32 = 0;
+        let mut length = std::mem::size_of::<u32>() as u32;
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                key.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_DWORD,
+                std::ptr::null_mut(),
+                (&mut value as *mut u32).cast(),
+                &mut length,
+            )
+        };
+        if result == 0 {
+            return value == 0;
+        }
+    }
+    fallback
+}
+
+fn render_date_calendar(size: usize, day: u8, monochrome: bool, dark: bool) -> Vec<u8> {
+    let mut pixels = vec![0; size * size * 4];
+    let side = size as f32;
+    // The shell already owns spacing around the icon. Use the full native
+    // canvas; transparent rounded corners provide the optical breathing room.
+    let inset = 0.0;
+    let stroke = (side / 16.0).max(1.0);
+    let radius = (side * 0.16).max(2.0);
+    let cap_bottom = inset + (side * 0.125).max(2.0);
+    let bottom = side - inset;
+    let inverse = monochrome && dark;
+    let paper = if inverse {
+        [32, 32, 32]
+    } else {
+        [255, 255, 255]
+    };
+    let outline = if inverse {
+        [180, 180, 180]
+    } else {
+        [155, 155, 155]
+    };
+    let cap = if monochrome {
+        if dark {
+            [238, 238, 238]
+        } else {
+            [49, 49, 49]
+        }
+    } else {
+        [229, 72, 77]
+    };
+    // Only the silhouette is subpixel sampled. Numerals are rasterized directly
+    // at the shell's native size; downsampling would blur their thin strokes.
+    let half = side * 0.5;
+    let rect_half = half - inset - radius;
+    for y in 0..size {
+        for x in 0..size {
+            let mut rgb = [0u32; 3];
+            let mut covered = 0u32;
+            for sy in 0..4 {
+                for sx in 0..4 {
+                    let fx = x as f32 + (sx as f32 + 0.5) / 4.0;
+                    let fy = y as f32 + (sy as f32 + 0.5) / 4.0;
+                    let qx = (fx - half).abs() - rect_half;
+                    let qy = (fy - half).abs() - rect_half;
+                    let distance =
+                        qx.max(0.0).hypot(qy.max(0.0)) + qx.min(0.0).max(qy.min(0.0)) - radius;
+                    if distance > 0.0 {
+                        continue;
+                    }
+                    let color = if fy < cap_bottom {
+                        cap
+                    } else if distance > -stroke {
+                        outline
+                    } else {
+                        paper
+                    };
+                    for i in 0..3 {
+                        rgb[i] += color[i] as u32;
+                    }
+                    covered += 1;
+                }
+            }
+            if covered > 0 {
+                let index = (y * size + x) * 4;
+                for i in 0..3 {
+                    pixels[index + i] = rgb[i].checked_div(covered).unwrap_or_default() as u8;
+                }
+                pixels[index + 3] = (covered * 255 / 16) as u8;
+            }
+        }
+    }
+    let font = get_bold_font();
+    let available_width = (side - 2.0 * (inset + stroke)).max(1.0);
+    let available_height = (bottom - cap_bottom - 2.0 * stroke).max(1.0);
+    // Fit the entire month at one size: date changes must not change cap height.
+    let em = 1024.0;
+    let mut widest = 1.0f32;
+    let mut tallest = 1.0f32;
+    for date in 1..=31 {
+        let mut advance = 0.0;
+        let mut left = f32::MAX;
+        let mut right = f32::MIN;
+        for character in date.to_string().chars() {
+            let metrics = font.metrics(character, em);
+            left = left.min(advance + metrics.xmin as f32);
+            right = right.max(advance + metrics.xmin as f32 + metrics.width as f32);
+            tallest = tallest.max(metrics.height as f32);
+            advance += metrics.advance_width;
+        }
+        widest = widest.max(right - left);
+    }
+    let mut font_size = em * (available_width / widest).min(available_height / tallest);
+    // Rasterization rounds each glyph independently. Recheck actual pixel
+    // metrics so wide dates such as 30 retain a transparent edge.
+    loop {
+        let fits = (1..=31).all(|date| {
+            let mut advance = 0.0;
+            let mut left = f32::MAX;
+            let mut right = f32::MIN;
+            let mut height = 0;
+            for character in date.to_string().chars() {
+                let metrics = font.metrics(character, font_size);
+                left = left.min(advance + metrics.xmin as f32);
+                right = right.max(advance + metrics.xmin as f32 + metrics.width as f32);
+                height = height.max(metrics.height);
+                advance += metrics.advance_width;
+            }
+            (right - left).ceil() <= available_width && height as f32 <= available_height
+        });
+        if fits || font_size <= 1.0 {
+            break;
+        }
+        font_size -= 0.125;
+    }
+    let ink = if inverse {
+        [238, 238, 238, 255]
+    } else {
+        [20, 20, 20, 255]
+    };
+    let mut date_ink = vec![0; pixels.len()];
+    draw_text_centered(
+        &mut date_ink,
+        size,
+        size,
+        font,
+        &day.clamp(1, 31).to_string(),
+        font_size,
+        side * 0.5,
+        (cap_bottom + bottom) * 0.5,
+        ink,
+    );
+    // Font metrics can include empty columns. Align the visible raster,
+    // including for narrow single digits, to the calendar page.
+    let mut bounds = (size, size, 0usize, 0usize);
+    for (i, pixel) in date_ink.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[3] > 0 {
+            bounds.0 = bounds.0.min(i % size);
+            bounds.1 = bounds.1.min(i / size);
+            bounds.2 = bounds.2.max(i % size);
+            bounds.3 = bounds.3.max(i / size);
+        }
+    }
+    if bounds.0 < size {
+        let dx = ((side - 1.0 - (bounds.0 + bounds.2) as f32) * 0.5).round() as isize;
+        let dy =
+            ((cap_bottom + bottom - 1.0 - (bounds.1 + bounds.3) as f32) * 0.5).round() as isize;
+        for (i, pixel) in date_ink.as_chunks::<4>().0.iter().enumerate() {
+            let x = (i % size) as isize + dx;
+            let y = (i / size) as isize + dy;
+            if x >= 0 && y >= 0 && x < size as isize && y < size as isize {
+                let index = (y as usize * size + x as usize) * 4;
+                blend_over(&mut pixels[index..index + 4], ink, pixel[3] as u32);
+            }
+        }
+    }
+    pixels
+}
+
+/// Renders date glyphs directly at 32×32. Legacy modes use a box-filtered 64×64 master.
 pub fn render_tray_icon_variant_rgba(
     mode: TrayIconMode,
     monochrome: bool,
@@ -74,6 +285,9 @@ pub fn render_tray_icon_variant_rgba(
     hour_min: (u8, u8),
     dark_taskbar: bool,
 ) -> Vec<u8> {
+    if mode == TrayIconMode::DateOnly && day_of_month != 0 {
+        return render_date_calendar(32, day_of_month, monochrome, dark_taskbar);
+    }
     let hi = render_squircle_icon_rgba_64(
         mode,
         monochrome,
@@ -143,6 +357,9 @@ pub fn render_squircle_icon_generic(
     hour_min: (u8, u8),
     dark_taskbar: bool,
 ) -> Vec<u8> {
+    if mode == TrayIconMode::DateOnly && day_of_month != 0 {
+        return render_date_calendar(size, day_of_month, monochrome, dark_taskbar);
+    }
     let w = size;
     let h = size;
     let mut buf = vec![0u8; w * h * 4];
@@ -155,7 +372,7 @@ pub fn render_squircle_icon_generic(
         [255u8, 255, 255, 255] // #FFFFFF crisp light surface
     };
     let fg = if dark_page {
-        [244u8, 244, 246, 255] // #F4F4F6 primary ink
+        [244u8, 244, 246, 255] // #EEEEEE primary ink
     } else {
         [20u8, 20, 22, 255] // #141416 primary ink
     };
@@ -387,6 +604,8 @@ fn draw_text_centered(
     color: [u8; 4],
 ) {
     let mut total_advance = 0.0f32;
+    let mut ink_left = f32::MAX;
+    let mut ink_right = f32::MIN;
     let mut glyphs = Vec::with_capacity(text.len());
     let mut max_top = 0i32;
     let mut min_bottom = 0i32;
@@ -397,11 +616,16 @@ fn draw_text_centered(
         let bottom = metrics.ymin;
         max_top = max_top.max(top);
         min_bottom = min_bottom.min(bottom);
+        ink_left = ink_left.min(total_advance + metrics.xmin as f32);
+        ink_right = ink_right.max(total_advance + metrics.xmin as f32 + metrics.width as f32);
         glyphs.push((metrics, bitmap));
         total_advance += metrics.advance_width;
     }
 
-    let start_x = center_x - total_advance * 0.5;
+    if glyphs.is_empty() {
+        return;
+    }
+    let start_x = center_x - (ink_left + ink_right) * 0.5;
     // Align visual center of font glyphs with center_y
     let baseline_y = (center_y + (max_top + min_bottom) as f32 * 0.5).round() as i32;
 
@@ -591,12 +815,91 @@ mod tests {
     use super::*;
 
     #[test]
+    fn date_badge_has_a_calendar_silhouette_in_both_shell_themes() {
+        for (monochrome, dark) in [(false, false), (false, true), (true, false), (true, true)] {
+            let rgba = render_squircle_icon_generic(
+                32,
+                TrayIconMode::DateOnly,
+                monochrome,
+                31,
+                Weekday::Saturday,
+                (12, 0),
+                dark,
+            );
+            let pixels = rgba.as_chunks::<4>().0;
+            // A continuous page, header and readable ink survive even when the
+            // surrounding shell has the opposite theme to the application.
+            assert_eq!(pixels[16 * 32 + 2][3], 255);
+            assert_eq!(pixels[2 * 32 + 16][3], 255);
+            assert_ne!(pixels[2 * 32 + 16][..3], pixels[16 * 32 + 2][..3]);
+            assert!(pixels.iter().filter(|p| p[3] == 255).count() > 500);
+            assert_eq!(pixels[0][3], 0); // Transparent rounded corner.
+            assert_eq!(pixels[16][3], 255); // No unused top/bottom/side rows.
+            assert_eq!(pixels[31 * 32 + 16][3], 255);
+            assert_eq!(pixels[16 * 32][3], 255);
+            assert_eq!(pixels[16 * 32 + 31][3], 255);
+        }
+    }
+
+    #[test]
+    fn every_date_fits_and_centers_at_native_shell_sizes() {
+        for size in [16, 18, 20, 24, 32, 36, 40, 48, 64] {
+            for day in 1..=31 {
+                let rgba = render_squircle_icon_generic(
+                    size,
+                    TrayIconMode::DateOnly,
+                    false,
+                    day,
+                    Weekday::Saturday,
+                    (12, 0),
+                    false,
+                );
+                let mut left = size;
+                let mut right = 0;
+                let mut top = size;
+                let mut bottom = 0;
+                for (i, _) in rgba
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| p[0] <= 100 && p[1] <= 100 && p[2] <= 100 && p[3] > 160)
+                {
+                    let (x, y) = (i % size, i / size);
+                    left = left.min(x);
+                    right = right.max(x);
+                    top = top.min(y);
+                    bottom = bottom.max(y);
+                }
+                assert!(
+                    left > 0 && top > 0 && right < size - 1 && bottom < size - 1,
+                    "date {day} clips at {size}px: {left},{top}..{right},{bottom}"
+                );
+                assert!(
+                    left.abs_diff(size - 1 - right) <= 2,
+                    "date {day} is horizontally off-center at {size}px: {left}..{right}"
+                );
+                let cap_bottom = (size as f32 * 0.125).max(2.0);
+                let page_bottom = size;
+                assert!(
+                    top as f32 > cap_bottom && bottom < page_bottom - 1,
+                    "date {day} touches the calendar rail or edge at {size}px"
+                );
+                assert!(
+                    ((top as f32 - cap_bottom) - (page_bottom - 1 - bottom) as f32).abs() <= 2.0,
+                    "date {day} is vertically off-center within its page at {size}px"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn tray_icon_renders_valid_32x32_rgba_buffer() {
         let dark = render_tray_icon_rgba(29, true);
         let light = render_tray_icon_rgba(5, false);
         assert_eq!(dark.len(), 32 * 32 * 4);
         assert_eq!(light.len(), 32 * 32 * 4);
-        assert_ne!(dark, light);
+        assert_ne!(dark, light); // Different dates; coral paper stays light in both themes.
     }
 
     #[test]

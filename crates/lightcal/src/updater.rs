@@ -198,11 +198,13 @@ pub const MACOS_CALENDAR_PRIVACY_URL: &str =
 pub fn is_allowed_external_link(url: &str) -> bool {
     if let Ok(uri) = url::Url::parse(url) {
         if uri.scheme() == "https"
-            && uri.host_str() == Some("login.microsoftonline.com")
-            && uri.path() == "/common/oauth2/v2.0/authorize"
             && uri.username().is_empty()
             && uri.password().is_none()
             && uri.port().is_none()
+            && ((uri.host_str() == Some("login.microsoftonline.com")
+                && uri.path() == "/common/oauth2/v2.0/authorize")
+                || (uri.host_str() == Some("accounts.google.com")
+                    && uri.path() == "/o/oauth2/v2/auth"))
         {
             return true;
         }
@@ -288,6 +290,15 @@ mod tests {
         assert!(is_allowed_external_link("https://koona.app"));
         assert!(is_allowed_external_link(
             "https://github.com/andmetoo/lightcal/releases/tag/v0.5.0"
+        ));
+        assert!(is_allowed_external_link(
+            "https://accounts.google.com/o/oauth2/v2/auth?client_id=1234567890-abc.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F127.0.0.1%3A9&response_type=code"
+        ));
+        assert!(!is_allowed_external_link(
+            "https://accounts.google.com/o/oauth2/v2/other"
+        ));
+        assert!(!is_allowed_external_link(
+            "https://evil.accounts.google.com/o/oauth2/v2/auth"
         ));
         assert!(is_allowed_external_link("ms-settings:privacy-calendar"));
         assert!(is_allowed_external_link("ms-settings:emailandaccounts"));

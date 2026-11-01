@@ -2,8 +2,8 @@
   <title>Lightcal, optically adjusted for 32 pixels</title>
   <rect x="2" y="2" width="28" height="28" rx="6" fill="#FFFFFF" stroke="#A0A0AA"/>
   <path d="M8 2H24A6 6 0 0 1 30 8V10H2V8A6 6 0 0 1 8 2Z" fill="#E5484D"/>
-  <rect x="9" y="13" width="5" height="5" rx="1" fill="#34343C"/>
-  <rect x="18" y="13" width="5" height="5" rx="1" fill="#34343C"/>
-  <rect x="9" y="22" width="5" height="5" rx="1" fill="#34343C"/>
+  <rect x="9" y="13" width="5" height="5" rx="1" fill="#313131"/>
+  <rect x="18" y="13" width="5" height="5" rx="1" fill="#313131"/>
+  <rect x="9" y="22" width="5" height="5" rx="1" fill="#313131"/>
   <rect x="18" y="22" width="5" height="5" rx="1" fill="#E5484D"/>
 </svg>

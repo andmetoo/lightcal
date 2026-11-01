@@ -2,18 +2,20 @@
 
 ## Local build configuration
 
-Copy `.env.example` in the repository root to `.env.local`. Git ignores `.env.local` and `.env`. Only public configuration belongs there:
+Copy `.env.example` in the repository root to `.env`. Git ignores `.env`. Public client IDs and the Google Desktop client secret belong there:
 
 ```dotenv
 LIGHTCAL_MICROSOFT_CLIENT_ID=
+LIGHTCAL_GOOGLE_CLIENT_ID=
+LIGHTCAL_GOOGLE_CLIENT_SECRET=
 LIGHTCAL_UPDATE_CERT_SHA256=
 ```
 
-Cargo's build script reads those two keys with precedence: process environment, `.env.local`, then `.env`, including explicitly empty values. The MSIX packaging script uses the same precedence for package identity settings. Both files are ignored by Git. Values may be unquoted or enclosed in single/double quotes. Shell expansion, multiline values, and inline comments are not supported. Rebuild after changing a value. Bun also loads local environment files when running the release script from the repository root.
+Cargo's build script reads those keys from the process environment, then from `.env`, including explicitly empty values. Values may be unquoted or enclosed in single or double quotes. Shell expansion, multiline values, and inline comments are not supported. Rebuild after changing a value. The release script loads the same `.env` file.
 
-The public Microsoft Client ID is build configuration only (`LIGHTCAL_MICROSOFT_CLIENT_ID`, `.env.local`, or `.env`); Settings never displays or edits it. Obsolete per-user Client ID preferences are ignored. A failed/cancelled connection preserves the previous account credentials. Existing OAuth credentials retain their own client association, so changing a build default does not refresh an old token using a different registration.
+The public Microsoft Client ID is build configuration only (`LIGHTCAL_MICROSOFT_CLIENT_ID` in `.env`); Settings never displays or edits it. Obsolete per-user Client ID preferences are ignored. A failed/cancelled connection preserves the previous account credentials. Existing OAuth credentials retain their own client association, so changing a build default does not refresh an old token using a different registration.
 
-Do not put client secrets, refresh/access tokens, account passwords, or private ICS URLs in environment files. The app needs no Microsoft client secret. Windows protects refresh tokens and feed URLs using current-user DPAPI in the application data directory (`credentials.dpapi`). They cannot be carried to another user/computer as ordinary settings. `LIGHTCAL_DATA_DIR` redirects app-owned data during development.
+Do not put refresh/access tokens, account passwords, or private ICS URLs in environment files. The app needs no Microsoft client secret. Google’s Desktop client still requires `LIGHTCAL_GOOGLE_CLIENT_SECRET` on the token exchange; keep that value only in the ignored `.env` file. Windows protects refresh tokens and feed URLs using current-user DPAPI in the application data directory (`credentials.dpapi`). They cannot be carried to another user/computer as ordinary settings. `LIGHTCAL_DATA_DIR` redirects app-owned data during development.
 
 ## Register Microsoft Graph access
 
@@ -23,7 +25,7 @@ The account used for Edge or Microsoft Store publishing is not automatically an 
 2. Open **Entra ID → App registrations → New registration**. Use a recognizable name, for example `Lightcal Desktop`.
 3. Choose **Any Entra ID tenant + personal Microsoft accounts**, or the equivalent label **Accounts in any organizational directory and personal Microsoft accounts**. This matches the app's `common` authority and permits Outlook.com as well as work/school accounts, subject to their administrator policies.
 4. Register the application and copy **Application (client) ID** from Overview. This is a public GUID, not a secret.
-5. Under **Authentication → Add a platform**, choose **Mobile and desktop applications**. Register the system-browser redirect URI **`http://localhost/lightcalendar/oauth/microsoft`**. Use the native/public desktop platform, not Web or SPA. The app listens only on `127.0.0.1` with a temporary port and sends `http://localhost:<port>/lightcalendar/oauth/microsoft`. Microsoft's localhost native redirect matching ignores the port, but the path must match exactly. `lightcalendar` includes the `t`; the earlier `lighcalendar` spelling was a typo. Remove the old root-only redirect if it is no longer needed. Windows socket exclusivity is set before binding to prevent a competing reuse bind; the exact callback path, per-attempt state, and PKCE S256 are all required. The path is routing, not a secret or a replacement for PKCE.
+5. Under **Authentication → Add a platform**, choose **Mobile and desktop applications**. Register the system-browser redirect URI **`http://localhost/lightcalendar/oauth/microsoft`**. Use the native/public desktop platform, not Web or SPA. The desktop platform ignores the port, so the app binds a free loopback port and sends `http://localhost:{port}/lightcalendar/oauth/microsoft`. It does not listen on port 80. The path must match the registered URI. `lightcalendar` includes the `t`; the earlier `lighcalendar` spelling was a typo. Remove the old root-only redirect if it is no longer needed. Windows socket exclusivity is set before binding to prevent a competing reuse bind; the exact callback path, per-attempt state, and PKCE S256 are all required. The path is routing, not a secret or a replacement for PKCE.
 6. Under **API permissions → Add a permission → Microsoft Graph → Delegated permissions**, add **`Calendars.Read`**. Do not add `Calendars.ReadWrite`, application-level calendar permissions, mail access, or a client secret. The app also requests `offline_access` during user consent so it can refresh its read-only access. Remove the default `User.Read` permission if it is not needed by another use of the registration.
 7. If the tenant requires admin consent, have its administrator approve the delegated permission under the organization's policy. Otherwise the user consents in the normal browser flow. Do not turn on implicit token grants or password/device-code flows for this app.
 8. Set `LIGHTCAL_MICROSOFT_CLIENT_ID` in build configuration and rebuild. Click **Connect Outlook**, choose the account in the browser, and inspect/accept the requested read-only calendar permission yourself.
@@ -31,25 +33,38 @@ The account used for Edge or Microsoft Store publishing is not automatically an 
 
 If sign-in fails, retain the error code shown by Microsoft; never share the callback URL, authorization code, or token. `AADSTS50011` usually indicates a redirect/platform mismatch. An organizational account may lack an Exchange Online mailbox or be restricted by policy even though sign-in works. Current implementation connects one Microsoft account at a time; reconnecting successfully replaces it. Disconnect removes local tokens but does not delete remote calendars or revoke the user's entire Microsoft account.
 
-Google sign-in is deferred. This implementation does not use Google OAuth, CalDAV, Windows account settings, or a web container as a substitute for Graph.
+## Register Google Calendar access
+
+Google sign-in is a separate desktop OAuth client. It does not replace Microsoft Graph.
+
+1. In Google Cloud, create an OAuth client of type **Desktop**. Copy the client ID (`….apps.googleusercontent.com`) and the client secret shown for that client.
+2. The app sends `http://127.0.0.1:{port}` with a free port. Google’s desktop loopback accepts that port without registering each one. Scopes are `calendar.calendarlist.readonly` and `calendar.events.readonly` only.
+3. Set `LIGHTCAL_GOOGLE_CLIENT_ID` in `.env` and rebuild so the client id is embedded. Set `LIGHTCAL_GOOGLE_CLIENT_SECRET` in the same ignored `.env` file. The running app reads that secret when it starts and stores it with the refresh token; the build script does not print or embed it. Google requires the secret when exchanging the code, even with PKCE. Restart after changing the secret. In Accounts, choose **Add an account**, then **Google Calendar**. The system browser asks for read-only calendar access. The first connection selects no calendars.
+4. Disconnect removes the local refresh token. It does not delete remote events or revoke the Google account itself.
+
+Windows CI reads the public client ID from the repository variable `LIGHTCAL_GOOGLE_CLIENT_ID`. The runtime client-secret requirement above still applies to an installed copy; the current build does not bundle that value. Do not copy a developer `.env` into a release archive or installer. Transport/configuration errors keep the saved Google account available for manual Refresh; expired authorization instead offers Reconnect.
+
+For an existing account, Reconnect reuses the client ID and secret from its protected credential record after restart, including when the original `.env` is no longer present. Those values stay in memory and the protected store; they are not written to preference JSON. Disconnect removes the protected account record, so a later fresh connection again needs configured client values.
+
+This implementation does not use CalDAV, Windows account settings, or a web container as a substitute for Graph or Google Calendar.
 
 ## Add a private ICS subscription
 
-In Settings → Calendars, enter a calendar name and the provider's direct HTTPS ICS address, then choose **Add ICS**. The address field is masked. The app validates the download and parses it before saving the protected subscription; check the resulting source to display its events. The URL is cleared from the input after successful connection. Remove deletes the local subscription and its selection.
+In Accounts, choose **Add an account**, then **Private ICS link**. Enter a calendar name and the provider's direct HTTPS ICS address, then choose **Subscribe**. The app validates the download and parses it before saving the protected subscription; check the resulting source to display its events. The URL is cleared from the input after successful connection. Remove deletes the local subscription and its selection.
 
 Use a direct UTF-8 `VCALENDAR` response with HTTP 200. Embedded username/password credentials, plain HTTP, fragments, redirects, and non-calendar responses are rejected. A private feed URL grants access to that feed: use the provider's revoke/regenerate operation if it is exposed elsewhere.
 
-Supported: folded lines, escaped text, DATE and DATE-TIME values, UTC/floating/IANA timezones, exclusive `DTEND`, `DURATION`, RRULE expansion, RDATE, EXDATE, cancelled instances, and moved `RECURRENCE-ID` overrides. Unsupported custom VTIMEZONE names, EXRULE, RDATE periods, and `RANGE=THISANDFUTURE` overrides report errors. The parser enforces download and recurrence limits instead of silently showing truncated data. Network/parse errors are shown in Calendars; a successful fixture test does not establish compatibility with every provider's export.
+Supported: folded lines, escaped text, DATE and DATE-TIME values, UTC/floating/IANA timezones, exclusive `DTEND`, `DURATION`, RRULE expansion, RDATE, EXDATE, cancelled instances, and moved `RECURRENCE-ID` overrides. Unsupported custom VTIMEZONE names, EXRULE, RDATE periods, and `RANGE=THISANDFUTURE` overrides report errors. The parser enforces download and recurrence limits instead of silently showing truncated data. Subscription validation progress and errors appear inside the open ICS dialog, which allows retry after a failure and prevents duplicate submissions while busy. Existing-feed refresh errors appear in Accounts. A successful fixture test does not establish compatibility with every provider's export.
 
-Sources refresh when selected, on month navigation and manually, plus every 15 minutes while the app runs. No push notification subscription or remote event-writing operation is used. Windows AppointmentStore remains an optional, off-by-default legacy switch.
+Sources refresh when selected, on month navigation and manually, plus every 15 minutes while the app runs. No push notification subscription or remote event-writing operation is used. Windows AppointmentStore remains an optional, off-by-default legacy switch available in Accounts in both its enabled and disabled states.
 
 ## Enable signed update installation with SimplySign
 
-Update checking and installation have separate settings. Both automatic settings are off by default. Enabling automatic installation also enables startup/daily checking. A manual **Install and restart** action is available when a stable update is found. Publication is not automatic.
+Update checking and installation have separate switches on About, reachable from App → Updates. Both automatic settings are off by default, and saved enabled settings can be disabled there. Enabling automatic installation also enables startup/daily checking. Scroll within About to reach release notes, source, website and license links. A manual **Install and restart** action is available when a stable update is found; builds without a configured signer offer **Download** instead. Installation progress and errors appear in the update card, and installation cannot be submitted twice while busy. Publication is not automatic.
 
-1. Sign in to Certum SimplySign Desktop. Put the code-signing certificate's SHA-1 thumbprint in `SIGN_CERT_SHA1` in `.env.local`. Build with `just build-release`, then sign `target/dist/lightcal.exe` with `just sign-release`. That runs `signtool`. Keep signing keys in SimplySign.
+1. Sign in to Certum SimplySign Desktop. Put the code-signing certificate's SHA-1 thumbprint in `SIGN_CERT_SHA1` in `.env`. Build with `just build-release`, then sign `target/dist/lightcal.exe` with `just sign-release`. That runs `signtool`. Keep signing keys in SimplySign.
 2. Run `just certificate-info`. It first requires a valid Authenticode signature, then prints the public certificate's **SHA-256** fingerprint. A Windows certificate UI may label a SHA-1 value as a thumbprint: that is not the 64-hex-character value required here.
-3. Put the SHA-256 value in `LIGHTCAL_UPDATE_CERT_SHA256` in `.env.local`. Rebuild so the certificate pin is embedded, and sign the final rebuilt executable again. Rebuilding invalidates a previous signature because it produces different bytes.
+3. Put the SHA-256 value in `LIGHTCAL_UPDATE_CERT_SHA256` in `.env`. Rebuild so the certificate pin is embedded, and sign the final rebuilt executable again. Rebuilding invalidates a previous signature because it produces different bytes.
 4. Run `just verify-release` and `just package-release`, or `just release` when SimplySign is signed in. `signtool` returning is not proof of signing; verification must pass after it returns.
 5. When the owner authorizes release publication, tag a newer stable version that is contained in `main`. CI opens an unsigned draft; it does not publish. On the Windows PC where Certum SimplySign Desktop is signed in, run `just sign-draft vX.Y.Z`, then `just publish-release vX.Y.Z`. The updater installs the published asset named exactly `lightcal.exe`, not an installer or ZIP. CI artifacts and the unsigned draft files are review builds and must not be presented as signed releases. A build from a stable `vX.Y.Z` tag reports that version in About and in ProductVersion. Without `LIGHTCAL_UPDATE_CERT_SHA256`, **Install and restart** is replaced by **Download**, which opens the newer GitHub release instead of failing inside the app. See [Sign a draft release from Windows](windows-installer.md#sign-a-draft-release-from-windows).
 6. Validate an update between two disposable, signed portable installations before enabling it for real users. Check wrong signer, modified payload, downgrade, locked/unwritable directory, failed restart, and recovery. Automated tests exercise temporary file replacement/rollback, never the owner's real installed executable.

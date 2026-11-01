@@ -1,0 +1,11 @@
+{
+  "name": "Lightcal Gray + Teal",
+  "basis": "Radix Colors Gray and Teal, with an adapted primary for white small text",
+  "source": "https://github.com/radix-ui/colors",
+  "light": {"canvas":"#FFFFFF","panel":"#F9F9F9","group":"#F0F0F0","line":"#D9D9D9","border":"#BBBBBB","ink":"#202020","secondary":"#646464","control":"#FFFFFF","selected":"#E0E0E0","selectedBorder":"#838383","accent":"#00796B","primary":"#00796B","primaryInk":"#FFFFFF","focus":"#00796B"},
+  "dark": {"canvas":"#111111","panel":"#191919","group":"#222222","line":"#3A3A3A","border":"#606060","ink":"#EEEEEE","secondary":"#B4B4B4","control":"#2A2A2A","selected":"#3A3A3A","selectedBorder":"#7B7B7B","accent":"#53B9AB","primary":"#00796B","primaryInk":"#FFFFFF","focus":"#53B9AB"},
+  "replacements": {
+    "#5E63D6":"#00796B", "#5E6AD2":"#008573", "#666BDD":"#00796B", "#7479E5":"#00796B", "#777BE2":"#00796B", "#5257C4":"#008573", "#A7AAFF":"#53B9AB", "#2B2B49":"#3A3A3A", "#EFEFFC":"#E0E0E0",
+    "#17171A":"#111111", "#131316":"#191919", "#202024":"#222222", "#29292F":"#2A2A2A", "#303036":"#3A3A3A", "#404047":"#606060", "#F5F5F7":"#EEEEEE", "#B0B0BA":"#B4B4B4", "#9B9BA7":"#9B9B9B", "#9999A5":"#9B9B9B", "#F7F7F8":"#F9F9F9", "#F6F6F8":"#F0F0F0", "#E8E8EC":"#D9D9D9", "#DDDDE3":"#BBBBBB", "#202025":"#202020", "#666670":"#646464", "#73737D":"#646464", "#7C7C87":"#6E6E6E", "#F4F4F7":"#F0F0F0", "#ECECF1":"#E8E8E8", "#17171C":"#191919", "#26262C":"#262626", "#34343C":"#313131", "#BCBCC5":"#BBBBBB", "#56565F":"#606060", "#BDBDC7":"#BBBBBB", "#F2F2F5":"#F0F0F0", "#252529":"#222222", "#25252A":"#222222", "#242427":"#222222", "#F2F2F4":"#F0F0F0", "#F4F4F6":"#EEEEEE", "#333339":"#313131", "#3B3B44":"#3A3A3A", "#F0F0F5":"#F0F0F0", "#E5E5ED":"#E0E0E0", "#27272D":"#262626", "#252528":"#222222", "#F1F1F3":"#F0F0F0", "#48484E":"#606060", "#DADAE0":"#D9D9D9", "#2A2A30":"#2A2A2A", "#EDEDF1":"#E8E8E8"
+  }
+}
