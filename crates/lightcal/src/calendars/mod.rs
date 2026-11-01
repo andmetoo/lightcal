@@ -13,11 +13,17 @@ use base64::Engine;
 use calendar_core::LocalDate;
 use std::{collections::BTreeSet, path::Path};
 
+pub struct GoogleConfiguration {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
 pub struct CalendarLoad {
     pub snapshot: ProviderSnapshot,
     pub microsoft: MicrosoftAccountState,
     pub google_connected: bool,
     pub google_needs_signin: bool,
+    pub google_configuration: Option<GoogleConfiguration>,
     pub google_label: Option<String>,
     pub google_error: String,
     pub google_skipped: usize,
@@ -87,6 +93,16 @@ pub fn query(
     // A transport/configuration failure does not disconnect saved credentials.
     // Keep manual refresh available unless authorization explicitly expired.
     let mut google_connected = credentials.google_refresh_token.is_some();
+    let google_configuration = google_connected.then(|| GoogleConfiguration {
+        client_id: credentials
+            .google_client_id
+            .clone()
+            .unwrap_or_else(|| google_client_id.to_string()),
+        client_secret: credentials
+            .google_client_secret
+            .clone()
+            .unwrap_or_else(|| google_client_secret.to_string()),
+    });
     let mut google_needs_signin = false;
     let mut google_label = None;
     let mut google_error = String::new();
@@ -147,6 +163,7 @@ pub fn query(
         microsoft: account,
         google_connected,
         google_needs_signin,
+        google_configuration,
         google_label,
         google_error,
         google_skipped,
@@ -190,6 +207,7 @@ fn failure(error: String) -> CalendarLoad {
         },
         google_connected: false,
         google_needs_signin: false,
+        google_configuration: None,
         google_label: None,
         google_error: String::new(),
         google_skipped: 0,
@@ -304,6 +322,7 @@ mod tests {
             google_refresh_token: Some("fixture-refresh-token".into()),
             // Invalid configuration exercises the failure branch without network traffic.
             google_client_id: Some("invalid-fixture-client".into()),
+            google_client_secret: Some("fixture-desktop-secret".into()),
             ..Credentials::default()
         };
         store.save(&credentials).unwrap();
@@ -319,6 +338,9 @@ mod tests {
         assert!(result.google_connected);
         assert!(!result.google_needs_signin);
         assert!(!result.google_error.is_empty());
+        let configuration = result.google_configuration.unwrap();
+        assert_eq!(configuration.client_id, "invalid-fixture-client");
+        assert_eq!(configuration.client_secret, "fixture-desktop-secret");
         assert!(store.load().unwrap().google_refresh_token.is_some());
         std::fs::remove_file(dir.join("credentials.dpapi")).unwrap();
         std::fs::remove_dir(dir).unwrap();

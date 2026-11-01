@@ -1198,8 +1198,23 @@ where
     });
 }
 
-fn apply_loaded_provider(snapshot: ProviderSnapshot, ui_weak: slint::Weak<AppWindow>) {
+fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint::Weak<AppWindow>) {
+    let snapshot = data.snapshot;
     with_active_controller(&ui_weak, |ctrl, ui| {
+        ctrl.microsoft_account = data.microsoft;
+        ctrl.google_connected = data.google_connected;
+        ctrl.google_needs_signin = data.google_needs_signin;
+        if let Some(configuration) = data.google_configuration {
+            ctrl.prefs.google_client_id = configuration.client_id;
+            ctrl.prefs.google_client_secret = configuration.client_secret;
+        }
+        ctrl.google_label = data.google_label.unwrap_or_default();
+        ctrl.google_error = data.google_error;
+        if data.google_skipped > 0 && ctrl.google_error.is_empty() {
+            ctrl.google_error = skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
+        }
+        ctrl.ics_error = data.ics_error;
+        ctrl.provider_loading = false;
         match &snapshot.status {
             lightcal::platform::ProviderStatus::AccessDenied => {
                 ctrl.calendars_access_denied = true;
@@ -1325,6 +1340,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                     microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
                     google_connected: false,
                     google_needs_signin: false,
+                    google_configuration: None,
                     google_label: None,
                     google_error: String::new(),
                     google_skipped: 0,
@@ -1348,20 +1364,7 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                         && ctrl.cal_state.displayed_month == anchor.year_month();
                 });
                 if still_visible {
-                    with_active_controller(&ui_weak, |ctrl, _| {
-                        ctrl.microsoft_account = data.microsoft;
-                        ctrl.google_connected = data.google_connected;
-                        ctrl.google_needs_signin = data.google_needs_signin;
-                        ctrl.google_label = data.google_label.unwrap_or_default();
-                        ctrl.google_error = data.google_error;
-                        if data.google_skipped > 0 && ctrl.google_error.is_empty() {
-                            ctrl.google_error =
-                                skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
-                        }
-                        ctrl.ics_error = data.ics_error;
-                        ctrl.provider_loading = false;
-                    });
-                    apply_loaded_provider(data.snapshot, ui_weak);
+                    apply_loaded_provider(data, ui_weak);
                 }
             });
         });

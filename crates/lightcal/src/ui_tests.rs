@@ -202,6 +202,53 @@ fn month_navigation_continues_after_today() {
 }
 
 #[test]
+fn expired_google_account_restores_saved_reconnect_configuration() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-google-reconnect-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.prefs.google_client_id.clear();
+    ctrl.prefs.google_client_secret.clear();
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = Some(Rc::downgrade(&ctrl)));
+    apply_loaded_provider(
+        lightcal::calendars::CalendarLoad {
+            snapshot: ProviderSnapshot {
+                status: lightcal::platform::ProviderStatus::NoCalendars,
+                sources: Vec::new(),
+                occurrences: Vec::new(),
+            },
+            microsoft: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
+            google_connected: false,
+            google_needs_signin: true,
+            google_configuration: Some(lightcal::calendars::GoogleConfiguration {
+                client_id: "1234567890-fixture.apps.googleusercontent.com".into(),
+                client_secret: "fixture-desktop-secret".into(),
+            }),
+            google_label: None,
+            google_error: String::new(),
+            google_skipped: 0,
+            ics_error: String::new(),
+        },
+        ui.as_weak(),
+    );
+    assert!(ui.get_google_needs_signin());
+    let ctrl = ctrl.borrow();
+    assert!(lightcal::calendars::google::valid_client_id(
+        &ctrl.prefs.google_client_id
+    ));
+    assert!(lightcal::calendars::google::valid_client_secret(
+        &ctrl.prefs.google_client_secret
+    ));
+    let preferences = serde_json::to_string(&ctrl.prefs).unwrap();
+    assert!(!preferences.contains("fixture-desktop-secret"));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
+}
+
+#[test]
 fn settings_recovery_controls_remain_reachable() {
     let platform = HeadlessPlatform::new();
     let renderer = HeadlessPlatform {

@@ -44,6 +44,8 @@ Google sign-in is a separate desktop OAuth client. It does not replace Microsoft
 
 Windows CI reads the public client ID from the repository variable `LIGHTCAL_GOOGLE_CLIENT_ID`. The runtime client-secret requirement above still applies to an installed copy; the current build does not bundle that value. Do not copy a developer `.env` into a release archive or installer. Transport/configuration errors keep the saved Google account available for manual Refresh; expired authorization instead offers Reconnect.
 
+For an existing account, Reconnect reuses the client ID and secret from its protected credential record after restart, including when the original `.env` is no longer present. Those values stay in memory and the protected store; they are not written to preference JSON. Disconnect removes the protected account record, so a later fresh connection again needs configured client values.
+
 This implementation does not use CalDAV, Windows account settings, or a web container as a substitute for Graph or Google Calendar.
 
 ## Add a private ICS subscription
