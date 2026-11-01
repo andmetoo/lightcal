@@ -1,17 +1,11 @@
 // Minimal client for the owner's already-configured Penpot MCP connection.
 // Never prints the configured URL, which may contain a credential.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 
 const [operation, argument, destination, platform = 'Windows'] = process.argv.slice(2);
-let endpoint = process.env.PENPOT_MCP_URL;
-if (!endpoint) {
-  const config = await readFile(join(homedir(), '.codex', 'config.toml'), 'utf8');
-  const section = config.split(/(?=^\[)/m).find(s => /^\[mcp_servers\.penpot_local\]/.test(s));
-  endpoint = section?.match(/^url\s*=\s*"([^"]+)"/m)?.[1];
-}
-if (!endpoint) throw new Error('Set PENPOT_MCP_URL or configure mcp_servers.penpot_local.');
+const endpoint = process.env.PENPOT_MCP_URL;
+if (!endpoint) throw new Error('Set PENPOT_MCP_URL to your Penpot MCP endpoint.');
 let sequence = 0;
 let session;
 async function rpc(method, params) {

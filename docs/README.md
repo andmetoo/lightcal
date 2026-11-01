@@ -1,6 +1,6 @@
 # Documentation
 
-Planning baseline: October 29, 2026.
+Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented (release 0.3.0).
 
 | Document | Purpose |
 | --- | --- |
@@ -25,4 +25,4 @@ Planning baseline: October 29, 2026.
 | [Open-source readiness](open-source.md) | Contribution, repository settings, licensing, and release gates |
 | [Calendar design concepts](../design/README.md) | Penpot redesign, page structure, source, and review evidence |
 
-These documents describe planned behavior unless explicitly marked as implemented or measured. The Cargo workspace (`crates/calendar-core` and `crates/lightcal`), Penpot design specification (`design/`), and `just` + `bun` release/signing scripts (`justfile`, `scripts/release.ts`) are implemented.
+Decision records, the roadmap, and the validation targets keep their original planning wording. Treat their numbers as proposed targets unless a document marks them as measured. The Cargo workspace (`crates/calendar-core` and `crates/lightcal`), Penpot design specification (`design/`), and `just` + `bun` release/signing scripts (`justfile`, `scripts/release.ts`) are implemented.

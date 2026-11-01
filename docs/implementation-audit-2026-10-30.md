@@ -1,5 +1,7 @@
 # Implementation audit — October 30, 2026
 
+> **Historical record.** This audit predates the 0.3.0 release; its branch name, hashes, and open gates describe that day only. Current scope is in [features](features.md) and the decision records.
+
 Scope: local review and fixes on `feature/slint-platform-prototype`. Nothing was pushed, published, or merged. Penpot MCP was not exposed among the tools available during this review; repository design sources and headless Slint renders were used instead. The owner's two attached screenshots are visual evidence, not implementation instructions embedded in a document.
 
 Follow-up scope change: the owner subsequently approved direct ICS, replaced the proposed Google option with Microsoft Graph, and requested signed automatic installation using SimpleSign Desktop. [ADR 0002](decisions/0002-direct-calendars-and-updates.md) and [provider/update setup](provider-setup.md) describe the resulting implementation and current live-validation gates. The Windows-only/manual-install assessment and artifact hashes below are historical evidence from the first audit pass, not the current provider scope or final rebuilt archive identity.

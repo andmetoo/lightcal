@@ -43,6 +43,14 @@ cargo run -p lightcal --locked -- --render-snapshots target/snapshots
 
 Signing, NSIS, and GitHub publication are described in [Windows installer](docs/windows-installer.md). Copy [.env.example](.env.example) to the ignored `.env` for the public client ids and the update certificate pin.
 
+## Privacy
+
+Lightcal has no telemetry and no account of its own. It contacts the network only when you act: a manual update check reaches GitHub, an Outlook or Google calendar you connect reaches Microsoft or Google with read-only access, and a private ICS URL you add is fetched from that host. Tokens are kept in the Windows protected store. See [required features](docs/features.md) and [provider setup](docs/provider-setup.md).
+
+## Platforms
+
+Windows is the supported platform. CI also compiles and tests the portable calendar logic on Linux and builds an unsigned macOS disk image for review; macOS is not a supported release yet.
+
 ## Documentation
 
 [Documentation index](docs/README.md) · [Required features](docs/features.md) · [Contributing](CONTRIBUTING.md)
