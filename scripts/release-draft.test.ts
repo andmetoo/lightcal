@@ -1,15 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   UNSIGNED_EXE,
   assertChecksum,
   assertFilesExist,
-  assertUnsignedDraft,
+  assertReleaseExists,
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
   missingSignedAssets,
+  matchingBuildRuns,
   parseChecksum,
   parseReleaseView,
   publishedReleaseNotes,
@@ -17,16 +19,18 @@ import {
   requireStableVersion,
   signedAssetNames,
   signedUploadPaths,
+  signingAsset,
   unsignedAssetNames,
   unsignedAssetsPresent,
   uploadArgs,
   versionFromCheckout,
+  verifyReleaseFiles,
 } from "./release-draft.ts";
 
 const root = join(import.meta.dir, "..");
 
 describe("draft signing names", () => {
-  test("keeps the updater asset name for the signed executable only", () => {
+  test("keeps compatibility with older unsigned asset names", () => {
     const unsigned = unsignedAssetNames("v0.2.0");
     const signed = signedAssetNames("0.2.0");
     expect(unsigned).not.toContain("lightcal.exe");
@@ -46,10 +50,31 @@ describe("draft signing names", () => {
   });
 });
 
-describe("draft guards", () => {
-  test("refuses to publish a missing or already public release", () => {
-    expect(() => assertUnsignedDraft(null, "v0.2.0")).toThrow(/unsigned draft/);
-    expect(() => assertUnsignedDraft({ isDraft: false, assets: [] }, "v0.2.0")).toThrow(/already published/);
+describe("release inputs", () => {
+  test("accepts drafts and public releases regardless of their title", () => {
+    expect(() => assertReleaseExists(null, "v0.2.0")).toThrow(/GitHub Actions/);
+    for (const isDraft of [false, true]) {
+      expect(() => assertReleaseExists({ isDraft, assets: [] }, "v0.2.0")).not.toThrow();
+      expect(signingAsset({ isDraft, assets: [{ name: "lightcal.exe" }, { name: "lightcal.exe.sha256" }] })).toBe("lightcal.exe");
+    }
+  });
+
+  test("accepts the old executable name and requires its matching checksum", () => {
+    const assets = [{ name: UNSIGNED_EXE }, { name: `${UNSIGNED_EXE}.sha256` }];
+    expect(signingAsset({ isDraft: false, assets })).toBe(UNSIGNED_EXE);
+    expect(signingAsset({ isDraft: false, assets: [...assets, { name: "lightcal.exe" }, { name: "lightcal.exe.sha256" }] })).toBe("lightcal.exe");
+    expect(() => signingAsset({ isDraft: false, assets: [{ name: "lightcal.exe" }] })).toThrow(/sha256/);
+  });
+
+  test("recovers the CI build when release upload failed, but never from another commit or PR", () => {
+    const failedRelease = { databaseId: 1, headSha: "tag-commit", status: "completed", event: "push" };
+    const runs = [
+      { ...failedRelease, databaseId: 2, headSha: "old-tag-commit" },
+      { ...failedRelease, databaseId: 3, status: "in_progress" },
+      { ...failedRelease, databaseId: 4, event: "pull_request" },
+      failedRelease,
+    ];
+    expect(matchingBuildRuns(runs, "tag-commit")).toEqual([failedRelease]);
   });
 
   test("publishes only after every signed asset is attached", () => {
@@ -104,14 +129,78 @@ describe("checksum and upload", () => {
   });
 });
 
-test("the tag workflow opens a draft and does not publish a prerelease", () => {
+test("CI attaches to existing releases without a checkout, visibility changes, or overwriting signed assets", () => {
   const workflow = readFileSync(join(root, ".github", "workflows", "windows-build.yml"), "utf8");
-  const releaseJob = workflow.slice(workflow.indexOf("name: Open unsigned draft release"));
-  expect(releaseJob.indexOf("actions/checkout@")).toBeGreaterThan(-1);
-  expect(releaseJob.indexOf("actions/checkout@")).toBeLessThan(releaseJob.indexOf("gh release create"));
+  const releaseJob = workflow.slice(workflow.indexOf("\n  release:"));
+  expect(releaseJob).not.toContain("actions/checkout@");
+  expect(releaseJob).not.toContain("--clobber");
+  expect(releaseJob).not.toContain("gh release edit");
+  expect(releaseJob).not.toContain("--json isDraft");
+  expect(releaseJob).toContain("GH_REPO:");
+  expect(releaseJob).toContain("Keeping existing asset");
   expect(workflow).toContain("gh release create");
   expect(workflow).toContain("--draft");
-  expect(workflow).toContain("lightcal-unsigned.exe");
+  expect(releaseJob).toContain('"named/lightcal.exe"');
+  expect(workflow).toContain("release_tag:");
   expect(workflow).not.toContain("prerelease: true");
   expect(workflow).not.toContain("softprops/action-gh-release");
+});
+
+describe("publication verifies contents rather than filenames", () => {
+  const names = ["lightcal.exe", "lightcal-v0.3.0-windows-x64.zip", "lightcal-0.3.0-windows-x64-setup.exe"];
+  function fixture() {
+    const files = new Map<string, Uint8Array>();
+    for (const name of names) {
+      const bytes = new TextEncoder().encode(`unsigned ${name}`);
+      const hash = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+      files.set(join("download", name), bytes);
+      files.set(join("download", `${name}.sha256`), new TextEncoder().encode(`${hash}  ${name}\n`));
+    }
+    return files;
+  }
+
+  test("rejects ordinary CI files even when all six canonical assets exist", () => {
+    const files = fixture();
+    expect(() => verifyReleaseFiles("download", "0.3.0", (path) => files.get(path)!,
+      () => { throw new Error("Authenticode: NotSigned"); },
+      () => { throw new Error("must not reach archive verification"); },
+    )).toThrow(/NotSigned/);
+  });
+
+  test("validates all checksums, both executable signatures, and the embedded portable payload", () => {
+    const files = fixture();
+    const verified: string[] = [];
+    verifyReleaseFiles("download", "0.3.0", (path) => files.get(path)!, (path) => { verified.push(path); },
+      (archive, exe) => { verified.push(archive, exe); });
+    expect(verified).toEqual([join("download", names[0]), join("download", names[2]), join("download", names[1]), join("download", names[0])]);
+    files.set(join("download", names[2]), new Uint8Array([1, 2, 3]));
+    expect(() => verifyReleaseFiles("download", "0.3.0", (path) => files.get(path)!, () => {}, () => {})).toThrow(/SHA-256 mismatch/);
+  });
+});
+
+test.skipIf(!Bun.which("pwsh"))("portable validation rejects a different application and duplicate payloads without extraction", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lightcal-portable-test-"));
+  const exe = join(dir, "lightcal.exe");
+  const zip = join(dir, "portable.zip");
+  const escapedZip = zip.replaceAll("'", "''");
+  const escapedExe = exe.replaceAll("'", "''");
+  const verify = () => Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-File", join(root, "scripts", "verify-portable.ps1"), "-Archive", zip, "-Executable", exe]);
+  try {
+    writeFileSync(exe, "fixture application");
+    const created = Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-Command",
+      `Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [IO.Compression.ZipFile]::Open('${escapedZip}', 'Create'); try { [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, '${escapedExe}', 'lightcal.exe') | Out-Null } finally { $zip.Dispose() }`,
+    ]);
+    expect(created.exitCode).toBe(0);
+    expect(verify().exitCode).toBe(0);
+    writeFileSync(exe, "different application");
+    expect(verify().exitCode).not.toBe(0);
+    writeFileSync(exe, "fixture application");
+    const duplicated = Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-Command",
+      `$zip = [IO.Compression.ZipFile]::Open('${escapedZip}', 'Update'); try { $zip.CreateEntry('nested/lightcal.exe') | Out-Null } finally { $zip.Dispose() }`,
+    ]);
+    expect(duplicated.exitCode).toBe(0);
+    expect(verify().exitCode).not.toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

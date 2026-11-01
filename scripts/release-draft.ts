@@ -1,9 +1,9 @@
 /**
- * Plan the Windows draft-release signing flow.
+ * Plan the Windows release signing flow.
  *
- * CI opens an unsigned GitHub draft. signtool can sign only on the maintainer's
+ * CI attaches an unsigned Windows build. signtool can sign only on the maintainer's
  * PC while SimplySign Desktop is signed in. `just sign-draft vX.Y.Z` downloads that
- * draft, and `just publish-release vX.Y.Z` is the explicit step that makes it public.
+ * release (draft or public); `just publish-release vX.Y.Z` explicitly promotes it.
  */
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -15,6 +15,12 @@ const STABLE_VERSION = /^v?([0-9]+\.[0-9]+\.[0-9]+)$/;
 
 export type ReleaseAsset = { name: string };
 export type ReleaseView = { isDraft: boolean; url?: string; assets: ReleaseAsset[] };
+export type BuildRun = { databaseId: number; headSha: string; status: string; event: string };
+
+export function matchingBuildRuns(runs: BuildRun[], commit: string): BuildRun[] {
+  // A release-upload failure does not invalidate an already uploaded build artifact.
+  return runs.filter((run) => run.headSha === commit && run.status === "completed" && run.event === "push");
+}
 
 export function requireStableVersion(raw: string | undefined): string {
   const match = raw?.trim().match(STABLE_VERSION);
@@ -106,15 +112,39 @@ export function parseReleaseView(json: string): ReleaseView {
   };
 }
 
-export function assertUnsignedDraft(view: ReleaseView | null, tag: string): void {
+export function assertReleaseExists(view: ReleaseView | null, tag: string): asserts view is ReleaseView {
   if (!view) {
     throw new Error(
-      `No GitHub release ${tag} yet. Wait until the Windows workflow opens the unsigned draft.`,
+      `No GitHub release ${tag} yet. Check the Windows workflow in GitHub Actions. ` +
+      `To build an existing tag again with the current workflow: gh workflow run windows-build.yml --ref main -f release_tag=${tag}`,
     );
   }
-  if (!view.isDraft) {
-    throw new Error(`Release ${tag} is already published. A new signed upload needs a new version.`);
+}
+
+export function signingAsset(view: ReleaseView): string {
+  const names = new Set(view.assets.map((asset) => asset.name));
+  // Prefer the ordinary name, but keep older releases signable.
+  for (const name of [SIGNED_EXE, UNSIGNED_EXE]) {
+    if (names.has(name) && names.has(`${name}.sha256`)) return name;
   }
+  throw new Error(`Release needs lightcal.exe and lightcal.exe.sha256 (legacy lightcal-unsigned.exe is also supported). Found: ${[...names].join(", ") || "no assets"}`);
+}
+
+/** Names alone cannot prove signing: CI and the signer use the same names. */
+export function verifyReleaseFiles(
+  directory: string,
+  version: string,
+  read: (path: string) => Uint8Array,
+  verifyExecutable: (path: string) => void,
+  verifyArchive: (path: string, executable: string) => void,
+): void {
+  for (const name of [SIGNED_EXE, signedZipName(version), signedSetupName(version)]) {
+    assertChecksum(read(join(directory, name)), new TextDecoder().decode(read(join(directory, `${name}.sha256`))), name);
+  }
+  const executable = join(directory, SIGNED_EXE);
+  verifyExecutable(executable);
+  verifyExecutable(join(directory, signedSetupName(version)));
+  verifyArchive(join(directory, signedZipName(version)), executable);
 }
 
 export function missingSignedAssets(view: ReleaseView, version: string): string[] {

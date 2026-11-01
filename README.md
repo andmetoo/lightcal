@@ -16,7 +16,7 @@ The Windows capture is the running application on 31 October 2026. The theme ren
 
 Windows builds are published on [GitHub Releases](https://github.com/andmetoo/lightcal/releases). A stable tag `vX.Y.Z` is the version shown in About and in the Windows file properties. Untagged builds keep the Cargo workspace version.
 
-Pushing a stable tag opens an unsigned draft. That draft is not listed as a download, and Lightcal does not install it. Releases already published stay listed. The maintainer signs the draft executable on Windows with `signtool` while Certum SimplySign Desktop is signed in, and publishes the release afterwards. A published release includes a signed `lightcal.exe`. Signed in-place installation is a separate opt-in: it needs a build-configured certificate pin and that signed asset. Without the pin, **Download** opens the newer release page. See [provider and signing setup](docs/provider-setup.md).
+Pushing a stable tag attaches the unsigned Windows build to its GitHub release, creating a draft if needed. Existing draft, prerelease, and public releases are supported. The maintainer runs `just sign-draft vX.Y.Z` on Windows with Certum SimplySign Desktop signed in; it replaces the files with signed builds and preserves release visibility. `just publish-release vX.Y.Z` verifies the attached signatures before explicitly publishing/promoting the release. Signed in-place installation needs a build-configured certificate pin and a valid signed `lightcal.exe`; an unsigned build is never installed in place. Without the pin, **Download** opens the newer release page. See [Windows release instructions](docs/windows-installer.md) and [provider and signing setup](docs/provider-setup.md).
 
 ## Features
 
