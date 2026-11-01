@@ -8,22 +8,20 @@
 <body>
 <x-dc>
 <helmet>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0}
-.h2{font:600 15px Onest,sans-serif;color:#202020;margin:0 0 12px}
-.cap{font:500 12px Onest,sans-serif;color:#646464;text-align:center}
-.t{font:600 17px Onest,sans-serif;color:#202020;letter-spacing:-0.2px}
-.p{font:400 13px/1.5 Onest,sans-serif;color:#646464;margin-top:6px}
+.h2{font:600 15px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020;margin:0 0 12px}
+.cap{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;text-align:center}
+.t{font:600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020;letter-spacing:-0.2px}
+.p{font:400 13px/1.5 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;margin-top:6px}
 .chip{width:88px;height:72px;border-radius:10px;display:flex;align-items:center;justify-content:center}
 .chip.l{background:#F3F3F3;color:#1A1A1A}
 .chip.d{background:#202020;color:#FFFFFF}
 </style>
 </helmet>
-<div style="width: 1200px; height: 760px; box-sizing: border-box; padding: 36px 40px; background: #FFFFFF; font-family: Onest, sans-serif; display: flex; flex-direction: column; gap: 28px">
+<div style="width: 1200px; height: 760px; box-sizing: border-box; padding: 36px 40px; background: #FFFFFF; font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; gap: 28px">
   <div>
-    <div style="font: 600 28px Onest, sans-serif; color: #202020; letter-spacing: -0.5px">One shape, everywhere</div>
+    <div style="font: 600 28px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: #202020; letter-spacing: -0.5px">One shape, everywhere</div>
     <div class="p" style="margin-top: 4px">The coral page with a darker band. It marks Today in the grid, the app in Start, and the date in the tray.</div>
   </div>
   <div style="display: flex; gap: 40px; align-items: center">
@@ -32,11 +30,11 @@ body{margin:0}
       <div><div class="t">App icon</div><div class="p">Start, taskbar, installer, About.<br>Four days, one of them today. Never changes.</div></div>
     </div>
     <div style="display: flex; gap: 20px; align-items: center; flex: 1">
-      <svg width="128" height="128" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing 1"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF">1</text></svg>
+      <svg width="128" height="128" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing 1"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="19" font-weight="700" fill="#FFFFFF">1</text></svg>
       <div><div class="t">Live date · Color</div><div class="p">The tray icon is today’s tile.<br>Coral reads on light and dark taskbars alike.</div></div>
     </div>
     <div style="display: flex; gap: 20px; align-items: center; flex: 1">
-      <div style="width: 128px; height: 128px; border-radius: 20px; background: #202020; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="88" height="88" viewBox="0 0 32 32" role="img" aria-label="Mono tray icon showing 1"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="19" font-weight="700" fill="currentColor">1</text></svg></div>
+      <div style="width: 128px; height: 128px; border-radius: 20px; background: #202020; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="88" height="88" viewBox="0 0 32 32" role="img" aria-label="Mono tray icon showing 1"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="19" font-weight="700" fill="currentColor">1</text></svg></div>
       <div><div class="t">Live date · Mono</div><div class="p">Outline page in the taskbar’s ink.<br>Follows Windows light or dark, not the app theme.</div></div>
     </div>
   </div>
@@ -59,8 +57,8 @@ body{margin:0}
         <sc-for list="{{traySizes}}" as="s" hint-placeholder-count="4">
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div style="display: flex; gap: 4px">
-              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
-              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
+              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
+              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="#FFFFFF">31</text></svg></div>
             </div>
             <div class="cap">{{s.label}}</div>
           </div>
@@ -74,8 +72,8 @@ body{margin:0}
       <div style="display: flex; gap: 14px; align-items: flex-end">
         <sc-for list="{{dates}}" as="n" hint-placeholder-count="5">
           <div style="display: flex; flex-direction: column; gap: 6px; align-items: center">
-            <svg width="48" height="48" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing {{n.n}}"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
-            <svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
+            <svg width="48" height="48" viewBox="0 0 32 32" role="img" aria-label="Tray icon showing {{n.n}}"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
+            <svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="{{n.fs}}" font-weight="700" fill="#FFFFFF">{{n.n}}</text></svg>
           </div>
         </sc-for>
       </div>
@@ -87,8 +85,8 @@ body{margin:0}
         <sc-for list="{{monoSizes}}" as="s" hint-placeholder-count="2">
           <div style="display: flex; flex-direction: column; gap: 6px">
             <div style="display: flex; gap: 4px">
-              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
-              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
+              <div class="chip l" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
+              <div class="chip d" style="width: 64px"><svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="currentColor"></path><text x="16" y="25.8" text-anchor="middle" font-family="'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif" font-size="18" font-weight="700" fill="currentColor">31</text></svg></div>
             </div>
             <div class="cap">{{s.label}}</div>
           </div>

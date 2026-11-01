@@ -30,6 +30,7 @@ At each of 400, 500, 600 and 700, all 223 shared Latin and 104 shared Cyrillic
 glyph advances match between the native TTF and Fontsource WOFF subsets. This
 checks character coverage and widths, not byte identity or rasterization.
 
-The design canvas loads Onest from Google Fonts, which is not guaranteed to be
-byte-identical to the pinned native files. Japanese strings use Noto Sans JP;
-Latin text and numerals use Onest.
+Retired from the design on November 1, 2026: the refresh uses Segoe UI
+Variable from Windows ([ADR 0011](../../../docs/decisions/0011-windows-only-design-refresh.md)).
+The app bundles Onest until the Slint UI is updated; then these files and
+their notice can be removed.

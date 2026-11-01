@@ -8,8 +8,6 @@
 <body>
 <x-dc>
 <helmet>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0}
 a{color:inherit}
@@ -18,22 +16,22 @@ a{color:inherit}
 .cap{width:46px;height:32px;border:0;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .cap.x:hover{background:#C42B1C;color:#FFFFFF}
 .card{background:var(--card);border:1px solid var(--cardline);border-radius:8px}
-.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;gap:6px;font:500 13px Onest,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box}
+.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;gap:6px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box}
 .btn:hover{background:var(--hover)}
-.lk{position:relative;height:40px;padding:0 12px;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);font:400 13px Onest,sans-serif;border-radius:6px}
+.lk{position:relative;height:40px;padding:0 12px;display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;border-radius:6px}
 .lk:hover{background:var(--hover)}
 .lk+.lk::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
 .lk .d{margin-left:auto;font-size:12px;color:var(--ink2)}
 button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.lnk{font:500 12px Onest,sans-serif;color:var(--ink2);text-decoration:none;border-radius:4px;padding:2px 4px;margin-left:-4px}
+.lnk{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:4px;padding:2px 4px;margin-left:-4px}
 .lnk:hover{color:var(--ink);background:var(--hover)}
 </style>
 </helmet>
-<div class="{{rootCls}}" style="width: 448px; height: 360px; box-sizing: border-box; background: var(--page); color: var(--ink); font-family: Onest, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+<div class="{{rootCls}}" style="width: 448px; height: 360px; box-sizing: border-box; background: var(--page); color: var(--ink); font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; overflow: hidden">
   <div style="height: 32px; display: flex; align-items: center; flex-shrink: 0">
     <div style="flex-grow: 1; display: flex; align-items: center; gap: 8px; padding-left: 12px">
       <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
-      <span style="font: 400 12px Onest, sans-serif; color: var(--ink2)">About Lightcal</span>
+      <span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">About Lightcal</span>
     </div>
     <button class="cap x" aria-label="Close"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
   </div>
@@ -41,14 +39,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     <div style="display: flex; align-items: center; gap: 14px; padding: 4px 4px 2px">
       <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
       <div>
-        <div style="font: 600 20px Onest, sans-serif; letter-spacing: -0.3px">Lightcal</div>
-        <div style="font: 400 12px Onest, sans-serif; color: var(--ink2); margin-top: 2px">Version 0.3.0 · A small calendar for the tray</div>
+        <div style="font: 600 20px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.3px">Lightcal</div>
+        <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); margin-top: 2px">Version 0.3.0 · A small calendar for the tray</div>
       </div>
     </div>
     <div class="card" style="height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; box-sizing: border-box">
       <div>
-        <div style="display: flex; align-items: center; gap: 6px; font: 500 13px Onest, sans-serif"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>You’re up to date</div>
-        <div style="font: 400 12px Onest, sans-serif; color: var(--ink2); margin-top: 2px">Lightcal checks only when you ask.</div>
+        <div style="display: flex; align-items: center; gap: 6px; font: 500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>You’re up to date</div>
+        <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); margin-top: 2px">Lightcal checks only when you ask.</div>
       </div>
       <button class="btn">Check now</button>
     </div>

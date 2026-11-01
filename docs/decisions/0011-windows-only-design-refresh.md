@@ -53,6 +53,12 @@ expensive for a one-person project.
   bold white numeral. Mono is an outline in the taskbar's ink and follows the
   Windows shell theme. Vector masters are in
   [assets/icons/canvas](../../assets/icons/canvas/).
+- **Typography.** Segoe UI Variable replaces Onest: Text for UI copy and the
+  tray numeral, Display for large headings, with Segoe UI as the Windows 10
+  fallback and Yu Gothic UI supplied by Windows for Japanese. It matches the
+  taskbar clock and menus, is tuned for small sizes, and ships with Windows,
+  so the app no longer bundles a font. Manrope (too wide, no Japanese),
+  Satoshi (no Cyrillic, non-OFL license) and Geist were considered.
 - **Window chrome.** DWM rounded corners and shadow. A Windows 11 Mica backdrop
   is approved as optional, behind a prototype.
 
@@ -61,6 +67,10 @@ expensive for a one-person project.
 - The Slint UI, the native tray renderer, the application icon and the
   installer icon must be updated to match. The new tray numerals need pixel
   checks at 100/125/150/200 % on real light and dark taskbars before release.
+- Slint must render Segoe UI Variable from the system: confirm whether it
+  selects the Text and Display optical sizes or needs the static Segoe UI.
+  Remove the bundled Onest files and their notice once the UI no longer uses
+  them; Segoe UI is never redistributed.
 - Mica needs a Slint/DWM prototype that keeps idle CPU and memory within the
   [validation](../validation.md) targets.
 - The darker coral band has not had a contrast measurement; white numerals sit

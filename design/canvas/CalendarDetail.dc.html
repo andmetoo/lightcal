@@ -8,8 +8,6 @@
 <body>
 <x-dc>
 <helmet>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0}
 .lc{--bg:#FFFFFF;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--hover:#F0F0F0;--press:#E8E8E8;--sel:#E8E8E8;--band:#F7F7F7;--accent:#00796B;--nowbg:rgba(0,121,107,.10);--coral:#D73840;--coralband:#A92A31;--chip:#F0F0F0}
@@ -18,17 +16,17 @@ body{margin:0}
 .ib:hover,.tb:hover,.row:hover{background:var(--hover)}
 .ib:active,.tb:active{background:var(--press)}
 .ib:focus-visible,.tb:focus-visible,.d:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.tb{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 13px Onest,sans-serif;cursor:pointer}
+.tb{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer}
 .g{display:grid;align-items:center;position:relative}
 .g8{grid-template-columns:24px repeat(7,minmax(0,1fr))}
 .g7{grid-template-columns:repeat(7,minmax(0,1fr))}
 .band{position:absolute;top:0;bottom:0;border-radius:8px;background:var(--band)}
 .band8{left:calc(24px + (100% - 24px) * 5 / 7);width:calc((100% - 24px) * 2 / 7)}
 .band7{left:calc(100% * 5 / 7);width:calc(100% * 2 / 7)}
-.wd{font:500 11px Onest,sans-serif;color:var(--ink3);text-align:center}
-.wk{font:500 10px Onest,sans-serif;color:var(--ink3);text-align:center;font-variant-numeric:tabular-nums}
+.wd{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center}
+.wk{font:500 10px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center;font-variant-numeric:tabular-nums}
 .cell{display:flex;justify-content:center}
-.d{position:relative;width:34px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:500 14px/1 Onest,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;padding:3px 0 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.d{position:relative;width:34px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:500 14px/1 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;padding:3px 0 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .d:hover{background:var(--hover)}
 .d.out{color:var(--ink3);font-weight:400}
 .d.sel{background:var(--sel);font-weight:600}
@@ -43,18 +41,18 @@ body{margin:0}
 .row.open{background:var(--chip);border-radius:6px 6px 0 0}
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .det{margin:0 0 6px;padding:2px 8px 6px 21px;border-radius:0 0 8px 8px;background:var(--chip);display:flex;flex-direction:column;gap:4px}
-.dl{display:flex;align-items:center;gap:6px;min-height:16px;font:400 12px Onest,sans-serif;color:var(--ink2)}
-.gb{height:24px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 12px Onest,sans-serif;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.dl{display:flex;align-items:center;gap:6px;min-height:16px;font:400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2)}
+.gb{height:24px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .gb:hover{background:var(--press)}
 .gb:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.now{height:18px;padding:0 6px;border-radius:4px;display:inline-flex;align-items:center;font:600 11px Onest,sans-serif;color:var(--accent);background:var(--nowbg)}
-.soon{font:500 11px Onest,sans-serif;color:var(--ink2);white-space:nowrap}
-.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:var(--chip);font:500 12px Onest,sans-serif;color:var(--ink)}
+.now{height:18px;padding:0 6px;border-radius:4px;display:inline-flex;align-items:center;font:600 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--accent);background:var(--nowbg)}
+.soon{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:var(--chip);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink)}
 </style>
 </helmet>
-<div class="{{rootCls}}" style="width: 352px; height: 432px; box-sizing: border-box; padding: 0 12px 12px; background: var(--bg); color: var(--ink); font-family: Onest, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+<div class="{{rootCls}}" style="width: 352px; height: 432px; box-sizing: border-box; padding: 0 12px 12px; background: var(--bg); color: var(--ink); font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; overflow: hidden">
   <div style="height: 44px; display: flex; align-items: center; gap: 2px; padding-left: 4px; flex-shrink: 0">
-    <div style="flex-grow: 1; font: 600 17px Onest, sans-serif; letter-spacing: -0.2px; color: var(--ink)">{{monthName}} <span style="font-weight: 400; color: var(--ink2)">{{year}}</span></div>
+    <div style="flex-grow: 1; font: 600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.2px; color: var(--ink)">{{monthName}} <span style="font-weight: 400; color: var(--ink2)">{{year}}</span></div>
     <button class="ib" aria-label="Previous month" onClick="{{prev}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
     <button class="tb" style="visibility: {{todayVis}}" onClick="{{goToday}}">Today</button>
     <button class="ib" aria-label="Next month" onClick="{{next}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
@@ -78,8 +76,8 @@ body{margin:0}
   </div>
   <div style="height: 1px; background: var(--line); margin: 8px 4px 0; flex-shrink: 0"></div>
   <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 10px 4px 6px; flex-shrink: 0">
-    <div style="font: 600 12px Onest, sans-serif; color: var(--ink)">{{agTitle}}</div>
-    <div style="font: 500 12px Onest, sans-serif; color: var(--ink2)">{{agCount}}</div>
+    <div style="font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{agTitle}}</div>
+    <div style="font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{agCount}}</div>
   </div>
   <div class="ag" style="flex-grow: 1; min-height: 0; overflow-y: auto">
     <sc-if value="{{hasAllDay}}" hint-placeholder-val="{{false}}">
@@ -92,8 +90,8 @@ body{margin:0}
     <sc-for list="{{timed}}" as="ev" hint-placeholder-count="1">
       <button class="{{ev.rowCls}}" style="opacity: {{ev.op}}" aria-expanded="{{ev.open}}" onClick="{{ev.toggle}}">
         <span style="width: 3px; height: 16px; border-radius: 1.5px; background: {{ev.color}}; flex-shrink: 0"></span>
-        <span style="width: 80px; flex-shrink: 0; font: 500 12px Onest, sans-serif; color: var(--ink2); font-variant-numeric: tabular-nums">{{ev.time}}</span>
-        <span style="flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: {{ev.weight}} 13px Onest, sans-serif; color: var(--ink)">{{ev.title}}</span>
+        <span style="width: 80px; flex-shrink: 0; font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); font-variant-numeric: tabular-nums">{{ev.time}}</span>
+        <span style="flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: {{ev.weight}} 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{ev.title}}</span>
         <sc-if value="{{ev.hasBadge}}" hint-placeholder-val="{{false}}"><span class="{{ev.badgeCls}}">{{ev.badge}}</span></sc-if>
       </button>
       <sc-if value="{{ev.isOpen}}" hint-placeholder-val="{{true}}">
@@ -111,7 +109,7 @@ body{margin:0}
       </sc-if>
     </sc-for>
     <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
-      <div style="padding: 4px 4px 2px; font: 400 13px Onest, sans-serif; color: var(--ink2)">No events</div>
+      <div style="padding: 4px 4px 2px; font: 400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">No events</div>
       <sc-if value="{{hasNext}}" hint-placeholder-val="{{true}}">
         <button class="tb" style="height: 26px; padding: 0 4px; font-size: 12px" onClick="{{goNext}}">Next: {{nextLabel}} →</button>
       </sc-if>

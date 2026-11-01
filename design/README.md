@@ -26,7 +26,8 @@ month arrows, Today and agenda rows work. Settings tabs link to each other.
 - One compact 352 × 432 calendar and one 448 × 360 settings window.
 - [Gray + Teal](palettes/README.md) surfaces and actions; coral only for
   identity and Today.
-- Onest for Latin, Cyrillic and numerals; Noto Sans JP for Japanese.
+- Segoe UI Variable from Windows (Text for UI, Display for large headings),
+  Segoe UI on Windows 10, and Yu Gothic UI for Japanese. Nothing is bundled.
 - Only solid fills, rounded rectangles, 1–2 px borders and one clip, so every
   board maps to Slint. Window corners and shadow come from DWM; Mica is
   optional.
