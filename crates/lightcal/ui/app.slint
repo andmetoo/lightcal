@@ -20,6 +20,11 @@ export struct DayCellData {
     accessible-label: string,
 }
 
+export struct MonthViewData {
+    title: string,
+    cells: [DayCellData],
+}
+
 export struct CalendarSourceItem {
     id: string,
     name: string,
@@ -408,10 +413,14 @@ component SettingsRow inherits Rectangle {
             }
         }
 
-        HorizontalLayout {
-            spacing: 8px;
+        VerticalLayout {
             alignment: center;
-            @children
+            HorizontalLayout {
+                vertical-stretch: 0;
+                spacing: 8px;
+                alignment: center;
+                @children
+            }
         }
     }
 
@@ -637,7 +646,9 @@ export component AppWindow inherits Window {
     in property <int> settings-tab: 0;
 
     // Calendar Header & Grid Properties
-    in property <string> month-title: "October 2026";
+    // The heading and dates are published as one snapshot of the displayed month.
+    in property <MonthViewData> month-view;
+    out property <string> month-title: root.month-view.title;
     in property <bool> is-current-month: true;
     in property <string> current-month-badge: "Current month";
     in property <string> today-date-line: "Thursday, 29 October";
@@ -648,7 +659,7 @@ export component AppWindow inherits Window {
     in property <[string]> weekday-headers: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
     in property <[bool]> gray-columns: [false, false, false, false, false, true, true];
     in property <[string]> iso-weeks: ["40", "41", "42", "43", "44", "45"];
-    in property <[DayCellData]> cells: [];
+    out property <[DayCellData]> cells: root.month-view.cells;
     in property <string> selected-date-line: "Friday, 30 October";
     in property <string> selected-event-summary: "2 events";
     in property <string> active-calendars-label: "2 calendars";
@@ -722,6 +733,7 @@ export component AppWindow inherits Window {
     in property <string> ics-privacy-text: "Anyone with the address can read this calendar.";
     in property <string> ics-stays-local-text: "Stays on this computer.";
     in property <string> subscribe-label: "Subscribe";
+    in property <string> ics-loading-text: "Checking calendar…";
     in property <string> google-unavailable-text: "Google sign-in is not configured in this build.";
     in property <string> google-status-text;
     in property <string> ics-status-text;
@@ -1047,9 +1059,10 @@ export component AppWindow inherits Window {
 
         month-grid-area := Rectangle {
             x: 0px;
-            y: 0px;
+            y: 84px;
             width: parent.width;
-            height: parent.height;
+            height: 244px;
+            clip: true;
 
             property <length> grid-start-x: root.show-week-numbers ? 40px : 24px;
             property <length> col-width: 42px;
@@ -1057,12 +1070,12 @@ export component AppWindow inherits Window {
             property <length> tile-width: 34px;
             property <length> tile-height: 32px;
             property <length> row-height: 36px;
-            property <length> grid-y: 112px;
+            property <length> grid-y: 28px;
 
             for is-gray[col-idx] in root.gray-columns : Rectangle {
                 if is-gray : Rectangle {
                     x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 2px;
-                    y: 84px;
+                    y: 0px;
                     width: month-grid-area.band-width;
                     height: 242px;
                     border-radius: 8px;
@@ -1071,7 +1084,7 @@ export component AppWindow inherits Window {
             }
 
             if root.show-weekday-header : Rectangle {
-                y: 85px;
+                y: 1px;
                 height: 20px;
                 width: parent.width;
 
@@ -1342,26 +1355,6 @@ export component AppWindow inherits Window {
             vertical-alignment: center;
         }
 
-        Rectangle {
-            x: 376px;
-            y: 10px;
-            width: 28px;
-            height: 28px;
-            border-radius: 7px;
-            background: min-btn.has-hover ? (root.dark-mode ? #2A2A2A : #F0F0F0) : transparent;
-            Text {
-                width: parent.width;
-                height: parent.height;
-                text: "—";
-                font-size: 12px;
-                color: root.dark-mode ? #B4B4B4 : #646464;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-            min-btn := TouchArea {
-                clicked => { root.minimize-window(); }
-            }
-        }
         Rectangle {
             x: 412px;
             y: 10px;
@@ -1672,39 +1665,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                if root.calendars-access-denied && !root.connection-busy : VerticalLayout {
-                    padding: 16px;
-                    spacing: 8px;
-                    Text {
-                        text: root.calendars-denied-title-text;
-                        font-size: 12px;
-                        font-weight: 600;
-                        color: root.dark-mode ? #FF9DA1 : #BC333B;
-                        wrap: word-wrap;
-                    }
-                    Text {
-                        text: root.calendars-denied-desc-text;
-                        font-size: 11px;
-                        color: root.dark-mode ? #B4B4B4 : #646464;
-                        wrap: word-wrap;
-                    }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        SettingsButton {
-                            label: root.open-privacy-settings-label;
-                            dark-mode: root.dark-mode;
-                            clicked => { root.open-privacy-settings(); }
-                        }
-                        SettingsButton {
-                            label: root.retry-sync-label;
-                            kind: "subtle";
-                            dark-mode: root.dark-mode;
-                            clicked => { root.retry-calendar-sync(); }
-                        }
-                    }
-                }
-
-                if !root.connection-busy && !root.calendars-access-denied : ScrollView {
+                if !root.connection-busy : ScrollView {
                     width: parent.width;
                     height: parent.height;
                     VerticalLayout {
@@ -1814,7 +1775,38 @@ export component AppWindow inherits Window {
                             remove-source(id) => { root.remove-calendar-source(id); }
                         }
 
-                        if root.legacy-windows-enabled : HorizontalLayout {
+                        if root.calendars-access-denied : VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: root.calendars-denied-title-text;
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: root.dark-mode ? #FF9DA1 : #BC333B;
+                                wrap: word-wrap;
+                            }
+                            Text {
+                                text: root.calendars-denied-desc-text;
+                                font-size: 11px;
+                                color: root.dark-mode ? #B4B4B4 : #646464;
+                                wrap: word-wrap;
+                            }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                SettingsButton {
+                                    label: root.open-privacy-settings-label;
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.open-privacy-settings(); }
+                                }
+                                SettingsButton {
+                                    label: root.retry-sync-label;
+                                    kind: "subtle";
+                                    dark-mode: root.dark-mode;
+                                    clicked => { root.retry-calendar-sync(); }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
                             height: 28px;
                             spacing: 8px;
                             alignment: space-between;
@@ -1827,13 +1819,13 @@ export component AppWindow inherits Window {
                                 overflow: elide;
                             }
                             SwitchToggle {
-                                checked: true;
+                                checked: root.legacy-windows-enabled;
                                 dark-mode: root.dark-mode;
                                 toggled => { root.toggle-legacy-windows(); }
                             }
                         }
 
-                        if !any-account && !root.sign-in-cancelled : VerticalLayout {
+                        if !any-account && !root.sign-in-cancelled && !root.calendars-access-denied : VerticalLayout {
                             spacing: 8px;
                             Text {
                                 text: root.calendars-empty-title-text;
@@ -1854,29 +1846,6 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if root.calendars-access-denied && root.legacy-windows-enabled : Rectangle {
-                x: 28px;
-                y: 268px;
-                width: 392px;
-                height: 28px;
-                HorizontalLayout {
-                    spacing: 8px;
-                    alignment: space-between;
-                    Text {
-                        text: root.legacy-windows-label;
-                        font-size: 10.5px;
-                        color: root.dark-mode ? #B4B4B4 : #646464;
-                        vertical-alignment: center;
-                        horizontal-stretch: 1;
-                        overflow: elide;
-                    }
-                    SwitchToggle {
-                        checked: true;
-                        dark-mode: root.dark-mode;
-                        toggled => { root.toggle-legacy-windows(); }
-                    }
-                }
-            }
         }
 
         // ===== TAB 2: App =====
@@ -1942,6 +1911,12 @@ export component AppWindow inherits Window {
                         button-width: 84px;
                         dark-mode: root.dark-mode;
                         clicked => { root.cycle-shortcut-preset(); }
+                    }
+                    if root.shortcut-can-clear : SettingsButton {
+                        label: root.shortcut-clear-label;
+                        kind: "subtle";
+                        dark-mode: root.dark-mode;
+                        clicked => { root.clear-shortcut(); }
                     }
                 }
 
@@ -2141,99 +2116,136 @@ export component AppWindow inherits Window {
                 overflow: elide;
             }
 
-            Rectangle {
-                x: 16px;
+            ScrollView {
+                x: 0px;
                 y: 132px;
-                width: 416px;
-                height: 64px;
-                border-radius: 9px;
-                background: root.dark-mode ? #222222 : #F0F0F0;
+                width: parent.width;
+                height: 180px;
+                VerticalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    padding-bottom: 8px;
+                    spacing: 8px;
 
-                Text {
-                    x: 12px;
-                    y: 8px;
-                    width: 264px;
-                    height: 24px;
-                    text: root.update-is-checking
-                        ? root.checking-updates-label
-                        : (root.update-is-available
-                            ? root.update-ready-title-text
-                            : root.update-status-text);
-                    font-size: 12px;
-                    font-weight: 500;
-                    color: root.dark-mode ? #EEEEEE : #202020;
-                    overflow: elide;
-                    vertical-alignment: center;
-                }
-                Text {
-                    x: 12px;
-                    y: 34px;
-                    width: 264px;
-                    height: 18px;
-                    text: root.update-is-checking
-                        ? ""
-                        : (root.update-is-available
-                            ? root.update-ready-notes-text
-                            : root.install-status-text);
-                    font-size: 10.5px;
-                    font-weight: 400;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    overflow: elide;
-                    vertical-alignment: center;
-                }
+                    Rectangle {
+                        height: 64px;
+                        border-radius: 9px;
+                        background: root.dark-mode ? #222222 : #F0F0F0;
 
-                if root.update-is-available : SettingsButton {
-                    x: 300px;
-                    y: 18px;
-                    button-width: 104px;
-                    label: root.release-notes-button-text;
-                    dark-mode: root.dark-mode;
-                    clicked => { root.open-external-url("https://github.com/andmetoo/lightcal/releases"); }
-                }
-                if !root.update-is-available && !root.update-is-checking : SettingsButton {
-                    x: 300px;
-                    y: 18px;
-                    button-width: 104px;
-                    label: root.updates-check-button-text;
-                    dark-mode: root.dark-mode;
-                    clicked => { root.check-updates(); }
-                }
-            }
+                        Text {
+                            x: 12px;
+                            y: 8px;
+                            width: 264px;
+                            height: 24px;
+                            text: root.update-is-checking
+                                ? root.checking-updates-label
+                                : (root.update-is-available
+                                    ? root.update-ready-title-text
+                                    : root.update-status-text);
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: root.dark-mode ? #EEEEEE : #202020;
+                            overflow: elide;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            x: 12px;
+                            y: 34px;
+                            width: 264px;
+                            height: 18px;
+                            text: root.update-is-checking
+                                ? ""
+                                : (root.update-is-available
+                                    ? root.update-ready-notes-text
+                                    : root.install-status-text);
+                            font-size: 10.5px;
+                            font-weight: 400;
+                            color: root.dark-mode ? #B4B4B4 : #646464;
+                            overflow: elide;
+                            vertical-alignment: center;
+                        }
 
-            // Link rows
-            for link[link-idx] in [
-                { title: root.github-button-text, url: "https://github.com/andmetoo/lightcal" },
-                { title: root.koona-button-text, url: "https://koona.app" },
-                { title: root.license-short-text, url: "https://github.com/andmetoo/lightcal/blob/main/LICENSE" }
-            ] : Rectangle {
-                x: 16px;
-                y: 208px + link-idx * 36px;
-                width: 416px;
-                height: 30px;
+                        if root.update-is-available : SettingsButton {
+                            x: 300px;
+                            y: 18px;
+                            button-width: 104px;
+                            label: root.release-notes-button-text;
+                            dark-mode: root.dark-mode;
+                            clicked => { root.open-external-url("https://github.com/andmetoo/lightcal/releases"); }
+                        }
+                        if !root.update-is-available && !root.update-is-checking : SettingsButton {
+                            x: 300px;
+                            y: 18px;
+                            button-width: 104px;
+                            label: root.updates-check-button-text;
+                            dark-mode: root.dark-mode;
+                            clicked => { root.check-updates(); }
+                        }
+                    }
 
-                Text {
-                    x: 12px;
-                    width: 192px;
-                    height: parent.height;
-                    text: link.title;
-                    font-size: 12px;
-                    font-weight: 500;
-                    color: root.dark-mode ? #EEEEEE : #202020;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-                Text {
-                    x: 380px;
-                    width: 24px;
-                    height: parent.height;
-                    text: "↗";
-                    font-size: 12px;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
-                TouchArea {
-                    clicked => { root.open-external-url(link.url); }
+                    Rectangle {
+                        height: 80px;
+                        border-radius: 9px;
+                        background: root.dark-mode ? #222222 : #F0F0F0;
+                        VerticalLayout {
+                            spacing: 0px;
+                            SettingsRow {
+                                title: root.label-auto-updates-text;
+                                dark-mode: root.dark-mode;
+                                title-color: root.dark-mode ? #EEEEEE : #202020;
+                                SwitchToggle {
+                                    checked: root.auto-check-updates;
+                                    dark-mode: root.dark-mode;
+                                    toggled => { root.toggle-auto-check-updates(); }
+                                }
+                            }
+                            SettingsRow {
+                                title: root.auto-install-label;
+                                dark-mode: root.dark-mode;
+                                title-color: root.dark-mode ? #EEEEEE : #202020;
+                                show-divider: false;
+                                SwitchToggle {
+                                    checked: root.auto-install-updates;
+                                    dark-mode: root.dark-mode;
+                                    toggled => { root.toggle-auto-install-updates(); }
+                                }
+                            }
+                        }
+                    }
+
+                    // Link rows remain available by scrolling within the fixed About panel.
+                    for link[link-idx] in [
+                        { title: root.github-button-text, url: "https://github.com/andmetoo/lightcal" },
+                        { title: root.koona-button-text, url: "https://koona.app" },
+                        { title: root.license-short-text, url: "https://github.com/andmetoo/lightcal/blob/main/LICENSE" }
+                    ] : Rectangle {
+                        height: 30px;
+
+                        Text {
+                            x: 12px;
+                            width: 192px;
+                            height: parent.height;
+                            text: link.title;
+                            font-size: 12px;
+                            font-weight: 500;
+                            color: root.dark-mode ? #EEEEEE : #202020;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        Text {
+                            x: 380px;
+                            width: 24px;
+                            height: parent.height;
+                            text: "↗";
+                            font-size: 12px;
+                            color: root.dark-mode ? #B4B4B4 : #646464;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        TouchArea {
+                            clicked => { root.open-external-url(link.url); }
+                        }
+                    }
                 }
             }
         }
@@ -2340,9 +2352,9 @@ export component AppWindow inherits Window {
             background: root.dark-mode ? #00000066 : #00000033;
             Rectangle {
                 x: 24px;
-                y: 72px;
+                y: 56px;
                 width: 400px;
-                height: 220px;
+                height: 252px;
                 border-radius: 12px;
                 border-width: 1px;
                 border-color: root.dark-mode ? #606060 : #BBBBBB;
@@ -2372,6 +2384,7 @@ export component AppWindow inherits Window {
                     y: 12px;
                     width: 28px;
                     height: 28px;
+                    enabled: !root.connection-busy;
                     clicked => { root.close-account-dialogs(); }
                 }
                 Text {
@@ -2391,6 +2404,7 @@ export component AppWindow inherits Window {
                     text <=> root.ics-source-name;
                     placeholder: root.ics-name-placeholder;
                     dark-mode: root.dark-mode;
+                    enabled: !root.connection-busy && !root.provider-loading;
                 }
                 url-field := SettingsField {
                     x: 16px;
@@ -2399,31 +2413,38 @@ export component AppWindow inherits Window {
                     text <=> root.ics-source-url;
                     placeholder: root.ics-url-placeholder;
                     dark-mode: root.dark-mode;
+                    enabled: !root.connection-busy && !root.provider-loading;
                 }
                 Text {
                     x: 16px;
                     y: 152px;
-                    width: 200px;
-                    height: 18px;
-                    text: root.ics-stays-local-text;
+                    width: 368px;
+                    height: 44px;
+                    text: root.connection-busy ? root.ics-loading-text
+                        : (root.connection-message != "" ? root.connection-message : root.ics-stays-local-text);
                     font-size: 10.5px;
-                    color: root.dark-mode ? #B4B4B4 : #646464;
+                    wrap: word-wrap;
+                    color: !root.connection-busy && root.connection-message != ""
+                        ? (root.dark-mode ? #FF9DA1 : #BC333B)
+                        : (root.dark-mode ? #B4B4B4 : #646464);
                 }
                 SettingsButton {
                     x: 196px;
-                    y: 176px;
+                    y: 204px;
                     button-width: 88px;
                     label: root.cancel-sign-in-label;
                     dark-mode: root.dark-mode;
+                    enabled: !root.connection-busy;
                     clicked => { root.close-account-dialogs(); }
                 }
                 SettingsButton {
                     x: 292px;
-                    y: 176px;
+                    y: 204px;
                     button-width: 92px;
                     label: root.subscribe-label;
                     kind: "primary";
-                    enabled: root.ics-source-name != "" && root.ics-source-url != "";
+                    enabled: !root.connection-busy && !root.provider-loading
+                        && root.ics-source-name != "" && root.ics-source-url != "";
                     dark-mode: root.dark-mode;
                     clicked => { root.add-ics-source(root.ics-source-name, root.ics-source-url); }
                 }
@@ -2448,7 +2469,7 @@ export component AppWindow inherits Window {
             height: 40px;
             Text {
                 x: 16px;
-                y: 328px;
+                y: 8px;
                 width: 240px;
                 height: 24px;
                 text: root.about-link-text;
@@ -2461,14 +2482,14 @@ export component AppWindow inherits Window {
             }
             about-touch := TouchArea {
                 x: 16px;
-                y: 328px;
+                y: 8px;
                 width: 240px;
                 height: 24px;
                 clicked => { root.open-settings(3); }
             }
             Text {
                 x: 280px;
-                y: 328px;
+                y: 8px;
                 width: 152px;
                 height: 24px;
                 text: root.app-version-line-text;
@@ -2482,9 +2503,13 @@ export component AppWindow inherits Window {
         }
 
         if root.settings-tab == 3 : Rectangle {
+            x: 0px;
+            y: 320px;
+            width: parent.width;
+            height: 40px;
             Text {
                 x: 16px;
-                y: 328px;
+                y: 8px;
                 width: 416px;
                 height: 24px;
                 text: root.back-to-calendar-text;
@@ -2497,7 +2522,7 @@ export component AppWindow inherits Window {
             }
             back-touch := TouchArea {
                 x: 16px;
-                y: 328px;
+                y: 8px;
                 width: 416px;
                 height: 24px;
                 clicked => { root.open-settings(2); } // App tab (Penpot Back to settings)

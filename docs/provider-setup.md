@@ -42,6 +42,8 @@ Google sign-in is a separate desktop OAuth client. It does not replace Microsoft
 3. Set `LIGHTCAL_GOOGLE_CLIENT_ID` in `.env` and rebuild so the client id is embedded. Set `LIGHTCAL_GOOGLE_CLIENT_SECRET` in the same ignored `.env` file. The running app reads that secret when it starts and stores it with the refresh token; the build script does not print or embed it. Google requires the secret when exchanging the code, even with PKCE. Restart after changing the secret. In Accounts, choose **Add an account**, then **Google Calendar**. The system browser asks for read-only calendar access. The first connection selects no calendars.
 4. Disconnect removes the local refresh token. It does not delete remote events or revoke the Google account itself.
 
+Windows CI reads the public client ID from the repository variable `LIGHTCAL_GOOGLE_CLIENT_ID`. The runtime client-secret requirement above still applies to an installed copy; the current build does not bundle that value. Do not copy a developer `.env` into a release archive or installer. Transport/configuration errors keep the saved Google account available for manual Refresh; expired authorization instead offers Reconnect.
+
 This implementation does not use CalDAV, Windows account settings, or a web container as a substitute for Graph or Google Calendar.
 
 ## Add a private ICS subscription
@@ -50,13 +52,13 @@ In Accounts, choose **Add an account**, then **Private ICS link**. Enter a calen
 
 Use a direct UTF-8 `VCALENDAR` response with HTTP 200. Embedded username/password credentials, plain HTTP, fragments, redirects, and non-calendar responses are rejected. A private feed URL grants access to that feed: use the provider's revoke/regenerate operation if it is exposed elsewhere.
 
-Supported: folded lines, escaped text, DATE and DATE-TIME values, UTC/floating/IANA timezones, exclusive `DTEND`, `DURATION`, RRULE expansion, RDATE, EXDATE, cancelled instances, and moved `RECURRENCE-ID` overrides. Unsupported custom VTIMEZONE names, EXRULE, RDATE periods, and `RANGE=THISANDFUTURE` overrides report errors. The parser enforces download and recurrence limits instead of silently showing truncated data. Network/parse errors are shown in Calendars; a successful fixture test does not establish compatibility with every provider's export.
+Supported: folded lines, escaped text, DATE and DATE-TIME values, UTC/floating/IANA timezones, exclusive `DTEND`, `DURATION`, RRULE expansion, RDATE, EXDATE, cancelled instances, and moved `RECURRENCE-ID` overrides. Unsupported custom VTIMEZONE names, EXRULE, RDATE periods, and `RANGE=THISANDFUTURE` overrides report errors. The parser enforces download and recurrence limits instead of silently showing truncated data. Subscription validation progress and errors appear inside the open ICS dialog, which allows retry after a failure and prevents duplicate submissions while busy. Existing-feed refresh errors appear in Accounts. A successful fixture test does not establish compatibility with every provider's export.
 
-Sources refresh when selected, on month navigation and manually, plus every 15 minutes while the app runs. No push notification subscription or remote event-writing operation is used. Windows AppointmentStore remains an optional, off-by-default legacy switch.
+Sources refresh when selected, on month navigation and manually, plus every 15 minutes while the app runs. No push notification subscription or remote event-writing operation is used. Windows AppointmentStore remains an optional, off-by-default legacy switch available in Accounts in both its enabled and disabled states.
 
 ## Enable signed update installation with SimplySign
 
-Update checking and installation have separate settings. Both automatic settings are off by default. Enabling automatic installation also enables startup/daily checking. A manual **Install and restart** action is available when a stable update is found. Publication is not automatic.
+Update checking and installation have separate switches on About, reachable from App → Updates. Both automatic settings are off by default, and saved enabled settings can be disabled there. Enabling automatic installation also enables startup/daily checking. Scroll within About to reach its source, website and license links. A manual **Install and restart** action is available when a stable update is found. Publication is not automatic.
 
 1. Sign in to Certum SimplySign Desktop. Put the code-signing certificate's SHA-1 thumbprint in `SIGN_CERT_SHA1` in `.env`. Build with `just build-release`, then sign `target/dist/lightcal.exe` with `just sign-release`. That runs `signtool`. Keep signing keys in SimplySign.
 2. Run `just certificate-info`. It first requires a valid Authenticode signature, then prints the public certificate's **SHA-256** fingerprint. A Windows certificate UI may label a SHA-1 value as a thumbprint: that is not the 64-hex-character value required here.

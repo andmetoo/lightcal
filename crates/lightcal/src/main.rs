@@ -17,6 +17,8 @@ use lightcal::preferences::{
     LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 mod snapshot_render;
+#[cfg(test)]
+mod ui_tests;
 use snapshot_render::render_snapshots_to_dir;
 
 use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
@@ -403,7 +405,6 @@ impl AppController {
             &self.prefs.selected_calendar_ids,
         );
 
-        ui.set_month_title(format_month_year(locale, grid.displayed_month).into());
         ui.set_is_current_month(grid.is_current_month);
         ui.set_current_month_badge(strings.current_month_badge.into());
         ui.set_today_date_line(
@@ -470,7 +471,10 @@ impl AppController {
                 }
             })
             .collect();
-        ui.set_cells(ModelRc::new(VecModel::from(cell_items)));
+        ui.set_month_view(MonthViewData {
+            title: format_month_year(locale, grid.displayed_month).into(),
+            cells: ModelRc::new(VecModel::from(cell_items)),
+        });
 
         ui.set_selected_date_line(
             format_date_line(
@@ -736,6 +740,15 @@ impl AppController {
         ui.set_ics_privacy_text(privacy.into());
         ui.set_ics_stays_local_text(stays.into());
         ui.set_subscribe_label(subscribe.into());
+        ui.set_ics_loading_text(
+            match locale {
+                LocaleCode::Ru => "Проверка календаря…",
+                LocaleCode::Es => "Comprobando el calendario…",
+                LocaleCode::Ja => "カレンダーを確認中…",
+                LocaleCode::En => "Checking calendar…",
+            }
+            .into(),
+        );
         ui.set_google_unavailable_text(google_missing.into());
         ui.set_disconnect_google_label(
             match locale {
@@ -747,6 +760,8 @@ impl AppController {
             .into(),
         );
         ui.set_ics_status_text(self.ics_error.clone().into());
+        ui.set_google_connected(self.google_connected);
+        ui.set_google_needs_signin(self.google_needs_signin);
         ui.set_google_status_text(
             google_status_line(
                 locale,
@@ -2628,6 +2643,9 @@ fn main() {
         let weak = ui.as_weak();
         ui.on_close_account_dialogs(move || {
             with_active_controller(&weak, |c, w| {
+                if c.ics_dialog_open && c.connection_busy {
+                    return;
+                }
                 c.add_account_open = false;
                 c.ics_dialog_open = false;
                 c.sync_to_ui(w);
@@ -2724,6 +2742,7 @@ fn main() {
             with_active_controller(&weak, |c, w| {
                 c.add_account_open = false;
                 c.ics_dialog_open = true;
+                c.connection_message.clear();
                 c.sync_to_ui(w);
             });
         });

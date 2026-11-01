@@ -83,7 +83,9 @@ pub fn query(
             Err(e) => errors.push(e),
         }
     }
-    let mut google_connected = false;
+    // A transport/configuration failure does not disconnect saved credentials.
+    // Keep manual refresh available unless authorization explicitly expired.
+    let mut google_connected = credentials.google_refresh_token.is_some();
     let mut google_needs_signin = false;
     let mut google_label = None;
     let mut google_error = String::new();
@@ -289,5 +291,35 @@ mod tests {
         );
         assert_eq!(snapshot.status, ProviderStatus::Available);
         assert_eq!(snapshot.sources.len(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_saved_google_account_remains_retryable_after_a_query_failure() {
+        let dir =
+            std::env::temp_dir().join(format!("lightcal-google-retry-{}", random_key().unwrap()));
+        let store = crate::secure_store::SecureStore::new(&dir);
+        let credentials = Credentials {
+            google_refresh_token: Some("fixture-refresh-token".into()),
+            // Invalid configuration exercises the failure branch without network traffic.
+            google_client_id: Some("invalid-fixture-client".into()),
+            ..Credentials::default()
+        };
+        store.save(&credentials).unwrap();
+        let result = query(
+            LocalDate::new(2026, 11, 1).unwrap(),
+            &dir,
+            "",
+            "",
+            "",
+            &BTreeSet::new(),
+            false,
+        );
+        assert!(result.google_connected);
+        assert!(!result.google_needs_signin);
+        assert!(!result.google_error.is_empty());
+        assert!(store.load().unwrap().google_refresh_token.is_some());
+        std::fs::remove_file(dir.join("credentials.dpapi")).unwrap();
+        std::fs::remove_dir(dir).unwrap();
     }
 }
