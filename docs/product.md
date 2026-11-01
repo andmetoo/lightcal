@@ -31,6 +31,7 @@ Both entry points open the same 352 by 432 logical-pixel compact calendar. Setti
 - Escape and Close minimize the window while preserving its taskbar button. Focus loss does not hide or destroy the window, including when Explorer opens the taskbar context menu.
 - A normal launch opens the calendar. `--background` starts quietly in the tray until the first activation. A second launch forwards activation to the running instance.
 - Windows DWM receives a rendered calendar bitmap for thumbnail and Peek requests, including while minimized. Settings retain the last available calendar preview. Images preserve aspect ratio and fit DWM's requested bounds.
+- Lightcal uses one frameless native window for both views; Slint draws the title bar. On Windows 11 the window asks DWM for rounded corners, which also brings back the system shadow. Windows 10 rejects the request and keeps the previous square, shadowless frame. The settings title bar shows only Close. The native window keeps its minimize and system-menu styles in both views, so taskbar behavior does not change with the view.
 - Portable builds use a stable application ID. Installed MSIX builds retain the identity assigned by Windows. Only explicit Quit terminates the process.
 
 See [ADR 0005](decisions/0005-taskbar-calendar-presence.md) for the regression and verification limits.

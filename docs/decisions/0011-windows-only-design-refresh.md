@@ -71,7 +71,14 @@ expensive for a one-person project.
   Remove the bundled Onest files and their notice once the UI no longer uses
   them; Segoe UI is never redistributed.
 - Mica needs a Slint/DWM prototype that keeps idle CPU and memory within the
-  [validation](../validation.md) targets.
+  [validation](../validation.md) targets. The platform side exists behind
+  `LIGHTCAL_MICA=1` and is off by default; the backdrop stays hidden until the
+  Slint root is made transparent. First app-side numbers and their limits are
+  in [validation](../validation.md).
+- DWM rounds the window with an 8 px radius on Windows 11. The Slint surfaces
+  currently draw their own 12 px (calendar) and 10 px (settings) corners and a
+  1 px border inside it, so the UI should match the DWM radius or fill the
+  window edge to edge.
 - The darker coral band has not had a contrast measurement; white numerals sit
   on `#D73840` (4.64:1), not on the band.
 - Event "Open" links must be built from provider data, opened only on user

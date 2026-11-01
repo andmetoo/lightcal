@@ -235,6 +235,7 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
             unsafe {
                 lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h);
             }
+            apply_window_chrome(ui);
             return;
         }
     }
@@ -357,7 +358,11 @@ impl AppController {
         let managed = lightcal::installer::package_managed();
         ui.set_package_managed_updates(managed);
 
+        let theme_changed = ui.get_dark_mode() != dark_mode;
         ui.set_dark_mode(dark_mode);
+        if theme_changed {
+            apply_window_chrome(ui);
+        }
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
 
@@ -1128,6 +1133,27 @@ fn ensure_taskbar_preview(ui: &AppWindow) {
             *slot.borrow_mut() = Some(preview);
         }
     });
+}
+
+/// Requests DWM rounded corners, the system shadow and, with `LIGHTCAL_MICA=1`, the Mica
+/// backdrop prototype (ADR 0011). Silently does nothing before the native window exists.
+fn apply_window_chrome(ui: &AppWindow) {
+    #[cfg(windows)]
+    {
+        use lightcal::platform::windows::{find_lightcal_hwnd, mica_requested, WindowChrome};
+        let hwnd = find_lightcal_hwnd();
+        if !hwnd.is_null() {
+            let chrome = WindowChrome {
+                dark_mode: ui.get_dark_mode(),
+                mica: mica_requested(),
+            };
+            unsafe {
+                lightcal::platform::windows::apply_window_chrome(hwnd, chrome);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = ui;
 }
 
 #[cfg(windows)]

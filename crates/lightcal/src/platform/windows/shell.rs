@@ -766,6 +766,105 @@ pub unsafe fn show_and_restore_window(
     SetForegroundWindow(hwnd);
 }
 
+/// Environment variable that opts into the Windows 11 Mica backdrop prototype (ADR 0011).
+pub const MICA_ENV_VAR: &str = "LIGHTCAL_MICA";
+
+/// Returns `true` only when the Mica prototype was explicitly requested with `LIGHTCAL_MICA=1`.
+pub fn mica_requested() -> bool {
+    mica_flag_enabled(env::var_os(MICA_ENV_VAR).as_deref())
+}
+
+fn mica_flag_enabled(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|v| v == "1")
+}
+
+/// DWM chrome requested for the Lightcal window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowChrome {
+    /// Follows the resolved app theme; used for the immersive dark-mode frame attribute.
+    pub dark_mode: bool,
+    /// Requests the Windows 11 main-window (Mica) system backdrop.
+    pub mica: bool,
+}
+
+/// Which DWM requests the system accepted. Older Windows builds reject the Windows 11
+/// attributes; callers treat a `false` field as "not available" rather than an error.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WindowChromeOutcome {
+    /// Windows 11 accepted the round-corner preference; DWM then also draws the system shadow.
+    pub rounded_corners: bool,
+    /// Windows 11 22H2+ accepted the Mica backdrop request (only when Mica was requested).
+    pub backdrop: bool,
+}
+
+/// Applies the DWM window chrome from ADR 0011: Windows 11 rounded corners and the system
+/// shadow on the frameless Slint window, plus the optional Mica backdrop prototype.
+///
+/// Every call is idempotent and cheap, so it may be repeated after show, resize and theme
+/// changes. Failures (Windows 10, older Windows 11 builds) are ignored: the window keeps
+/// the square, shadowless frameless look it had before.
+///
+/// # Safety
+///
+/// `hwnd` must be a valid, live Win32 window handle owned by this process.
+#[cfg(windows)]
+pub unsafe fn apply_window_chrome(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    chrome: WindowChrome,
+) -> WindowChromeOutcome {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMSBT_AUTO, DWMSBT_MAINWINDOW,
+        DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE,
+        DWMWCP_ROUND,
+    };
+    use windows_sys::Win32::UI::Controls::MARGINS;
+
+    let mut outcome = WindowChromeOutcome::default();
+    if hwnd.is_null() {
+        return outcome;
+    }
+
+    let set_i32 = |attribute: i32, value: i32| -> bool {
+        DwmSetWindowAttribute(
+            hwnd,
+            attribute as u32,
+            &value as *const i32 as *const _,
+            std::mem::size_of::<i32>() as u32,
+        ) >= 0
+    };
+
+    // Windows 11 (build 22000+) only; Windows 10 returns E_INVALIDARG and keeps square corners.
+    outcome.rounded_corners = set_i32(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
+
+    // Measured on Windows 11: once DWM rounds this frameless winit window it also draws the
+    // system shadow, so no frame extension is needed. Mica only paints in the DWM frame, so
+    // the prototype turns the whole client area into frame ("sheet of glass") for the
+    // backdrop to show through transparent Slint pixels; otherwise the frame stays at zero.
+    let inset = if chrome.mica { -1 } else { 0 };
+    let margins = MARGINS {
+        cxLeftWidth: inset,
+        cxRightWidth: inset,
+        cyTopHeight: inset,
+        cyBottomHeight: inset,
+    };
+    let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+
+    // Keep the frame colors in step with the app theme (supported from Windows 10 20H1).
+    let _ = set_i32(DWMWA_USE_IMMERSIVE_DARK_MODE, i32::from(chrome.dark_mode));
+
+    // Windows 11 22H2+; earlier builds reject the attribute.
+    outcome.backdrop = set_i32(
+        DWMWA_SYSTEMBACKDROP_TYPE,
+        if chrome.mica {
+            DWMSBT_MAINWINDOW
+        } else {
+            DWMSBT_AUTO
+        },
+    ) && chrome.mica;
+
+    outcome
+}
+
 /// Brings this application's active window to the foreground on Windows.
 pub fn bring_to_foreground() {
     #[cfg(windows)]
@@ -842,6 +941,76 @@ mod tests {
             ShowWindow(hwnd, SW_HIDE);
         }
         assert_eq!(main_window_is_open(), Some(false));
+    }
+
+    #[test]
+    fn mica_prototype_needs_an_explicit_one() {
+        use std::ffi::OsStr;
+        assert!(!mica_flag_enabled(None));
+        assert!(!mica_flag_enabled(Some(OsStr::new(""))));
+        assert!(!mica_flag_enabled(Some(OsStr::new("0"))));
+        assert!(!mica_flag_enabled(Some(OsStr::new("true"))));
+        assert!(mica_flag_enabled(Some(OsStr::new("1"))));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn window_chrome_is_best_effort_and_reports_what_dwm_accepted() {
+        use windows_sys::Win32::Graphics::Dwm::{
+            DwmGetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::*;
+
+        let chrome = WindowChrome {
+            dark_mode: true,
+            mica: false,
+        };
+        assert_eq!(
+            unsafe { apply_window_chrome(std::ptr::null_mut(), chrome) },
+            WindowChromeOutcome::default()
+        );
+
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "Lightcal chrome test\0".encode_utf16().collect();
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_OVERLAPPEDWINDOW,
+                -10000,
+                -10000,
+                352,
+                432,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!hwnd.is_null());
+        let outcome = unsafe { apply_window_chrome(hwnd, chrome) };
+        // Without the prototype flag no backdrop is ever reported.
+        assert!(!outcome.backdrop);
+        if outcome.rounded_corners {
+            // Windows 11: DWM stores the preference. Windows 10 rejects it, which is fine.
+            let mut corner = 0i32;
+            let hr = unsafe {
+                DwmGetWindowAttribute(
+                    hwnd,
+                    DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                    &mut corner as *mut i32 as *mut _,
+                    std::mem::size_of::<i32>() as u32,
+                )
+            };
+            assert!(hr >= 0);
+            assert_eq!(corner, DWMWCP_ROUND);
+        }
+        // Repeating the call (show, resize, theme change) must be harmless.
+        assert_eq!(unsafe { apply_window_chrome(hwnd, chrome) }, outcome);
+        unsafe {
+            DestroyWindow(hwnd);
+        }
     }
 
     #[test]
