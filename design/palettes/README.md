@@ -32,10 +32,9 @@ palette check, not a complete accessibility audit. An independent UI review
 passed the native light/dark App, dark Calendar, dropdown-color and compact
 calendar specimens at 1×. Headless popup crops do not prove native popup placement.
 
-The active Penpot file is migrated in stable top-level board batches using
-`refinement-palette.js` (for example `0:16`, through `96:114`). The CLI supplies
-this JSON, preserving board IDs, geometry, text and prototype links. Permanent
-version `Before Gray Teal palette 2026-10-31` preserves the earlier stage.
+The design canvas uses these roles directly. The archived Penpot file was
+migrated to this palette before it was retired; its permanent version
+`Before Gray Teal palette 2026-10-31` preserves the earlier stage.
 
 Real account/calendar colors supplied by providers remain user data. Only
 the application's own sample colors and missing-color fallbacks change.

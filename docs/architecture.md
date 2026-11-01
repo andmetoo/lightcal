@@ -16,7 +16,7 @@ crates/
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
       macos/        # Menu bar and activation behavior, added during probe
-design/             # Penpot source, page manifest, and review evidence
+design/             # Design canvas sources, archived Penpot file, review evidence
 ```
 
 Start with these two crates. Split platform crates only when dependencies or ownership justify it. Keep OS calls and toolkit types out of `calendar-core`. The core accepts an explicit current date and first-weekday preference, allowing deterministic tests without changing the real system clock.
@@ -57,7 +57,9 @@ Store gray-weekday selection as a weekday set; retain a separate first-weekday p
 
 The update checker is a separate bounded HTTPS request to GitHub release metadata, invoked manually. Compare stable semantic versions, exclude drafts/prereleases, preserve OS TLS validation, and handle timeout/rate-limit/offline states. Accept release-page links only from the expected repository on github.com; a response must never become an arbitrary executable or shell command. No background polling, binary installation, or restart is introduced. Document GitHub's receipt of normal connection metadata in the release privacy statement.
 
-## Future macOS port
+## macOS adapter (being removed)
+
+macOS was dropped by [ADR 0011](decisions/0011-windows-only-design-refresh.md). The notes below describe code that remains until a separate removal change.
 
 Reuse date logic, preference schema, and the selected view where practical. Replace tray semantics with a menu-bar status item and review Dock activation separately. Windows taskbar behavior is not a portable abstraction. Signing and notarization are a later distribution gate.
 

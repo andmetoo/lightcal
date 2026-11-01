@@ -33,7 +33,7 @@ Gate: record passing integration/performance evidence in ADR 0001 before buildin
 
 ## 2. Approve the visual design (about 1 day)
 
-Use Penpot through MCP for the redesigned compact view and settings (expanded-view designs are historical). Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
+Superseded on 2026-11-01: the design now lives on the owner's design canvas ([ADR 0011](decisions/0011-windows-only-design-refresh.md)). Historically: use Penpot through MCP for the redesigned compact view and settings (expanded-view designs are historical). Organize Overview, Calendar, Settings, States, Languages, and Design system on separate pages. Commit portable design sources and review evidence under `design/`; document asset provenance.
 
 Acceptance:
 
@@ -83,6 +83,8 @@ Acceptance:
 4. Complete functional, accessibility, and performance evidence is attached to the release candidate.
 5. Owner approves the release before any public binary upload or tag publication.
 
-## 6. macOS product port (after the Windows baseline)
+## 6. macOS product port (cancelled)
+
+Cancelled by [ADR 0011](decisions/0011-windows-only-design-refresh.md); kept for history.
 
 Complete menu-bar activation, appearance, preferences location, accessibility, packaging, signing, and notarization on macOS. Re-run Windows checks throughout. Select macOS versions/architectures from actual testing and publish a separate support matrix. An unsigned review disk image may already be attached to pull requests. Signing, notarization, and a published macOS download remain later gates, and the image does not show that the application launches.

@@ -1,6 +1,10 @@
 # ADR 0008: Read-only Google Calendar and platform-specific design
 
 Date: 2026-10-31. Status: accepted scope from the owner's design request in chat.
+The design, icon artwork and macOS parts are superseded by
+[ADR 0011](0011-windows-only-design-refresh.md) (2026-11-01). Linked Penpot
+scripts and exports were removed; the Penpot file is archived in
+[design/archive](../../design/archive/).
 
 The owner requested a final design pass in `penpot_local`, Windows first and
 macOS second, a clearer application icon, and future Google Calendar access
@@ -84,7 +88,7 @@ design-font decision; the shipped Slint UI remains a separate implementation.
 For macOS the owner then requested a separate system font/SF Pro. Use SF Pro
 Text below 20 px and SF Pro Display at larger design sizes. Native runtime work
 should use the platform system font, without redistributing Apple's font files.
-[The prepared migration](../../design/fonts/macos-system.md) records the
+The prepared migration (removed with ADR 0011) recorded the
 required Penpot font import; it is not yet an applied or reviewed SF Pro claim.
 
 The owner screenshots inform small-size icon legibility and removal of

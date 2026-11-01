@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal account, shortcut and update states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit}
+.st{--page:#F3F3F3;--card:#FFFFFF;--cardline:#E8E8E8;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--hover:#F0F0F0;--accent:#00796B;--key:#F0F0F0;--warn:#8A5300;--warnbg:#FFF4E0;--err:#B3261E;--errbg:#FDECEA}
+.st.dark{--page:#191919;--card:#222222;--cardline:#2A2A2A;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2E2E2E;--ctrl:#2A2A2A;--ctrlline:#333333;--ctrlbottom:#3F3F3F;--hover:#2A2A2A;--accent:#53B9AB;--key:#363636;--warn:#F2B866;--warnbg:#33291A;--err:#FF8A80;--errbg:#3A2220}
+.win{width:448px;height:360px;box-sizing:border-box;background:var(--page);color:var(--ink);font-family:Onest,sans-serif;display:flex;flex-direction:column;overflow:hidden;border-radius:8px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.10)}
+.cap{width:46px;height:32px;border:0;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;padding:0}
+.tab{position:relative;height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;font:500 13px Onest,sans-serif;color:var(--ink2);text-decoration:none}
+.tab.on{color:var(--ink)}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:3px;width:16px;height:3px;margin-left:-8px;border-radius:1.5px;background:var(--accent)}
+.card{background:var(--card);border:1px solid var(--cardline);border-radius:8px}
+.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;gap:6px;font:500 13px Onest,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box;white-space:nowrap;flex-shrink:0}
+.pb{height:28px;padding:0 12px;border:0;border-radius:6px;background:#00796B;color:#FFFFFF;display:inline-flex;align-items:center;gap:6px;font:500 13px Onest,sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.pb:hover{background:#00695C}
+.prov{width:100%;height:44px;border:0;background:transparent;display:flex;align-items:center;gap:12px;padding:0 12px;font:500 13px Onest,sans-serif;color:var(--ink);text-align:left;cursor:pointer;position:relative;box-sizing:border-box}
+.prov:hover{background:var(--hover)}
+.prov+.prov::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.prov small{display:block;font:400 12px Onest,sans-serif;color:var(--ink2);margin-top:1px}
+.pi{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font:700 12px Onest,sans-serif;color:#FFFFFF}
+.lbl{font:500 12px Onest,sans-serif;color:var(--ink2)}
+.inp{height:32px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom:2px solid var(--accent);padding:0 10px;display:flex;align-items:center;font:400 13px Onest,sans-serif;color:var(--ink);box-sizing:border-box}
+.kbd{height:20px;min-width:20px;padding:0 6px;border-radius:4px;background:var(--key);box-shadow:inset 0 -1px 0 var(--ctrlbottom);display:inline-flex;align-items:center;justify-content:center;font:600 11px Onest,sans-serif;color:var(--ink);box-sizing:border-box}
+.r{position:relative;min-height:40px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;font:400 13px Onest,sans-serif;color:var(--ink)}
+.r+.r::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.note{font:400 12px/1.45 Onest,sans-serif;color:var(--ink2)}
+.cap2{font:600 13px Onest,sans-serif;color:#202020}
+.cap3{font:400 12px Onest,sans-serif;color:#646464;margin-top:2px}
+</style>
+</helmet>
+<div style="width: 1504px; height: 940px; box-sizing: border-box; padding: 40px; background: #FAFAFA; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px; row-gap: 36px; align-content: start">
+  <sc-for list="{{wins}}" as="w" hint-placeholder-count="6">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div><div class="cap2">{{w.name}}</div><div class="cap3">{{w.desc}}</div></div>
+      <div class="{{w.cls}}">
+        <div class="win">
+          <div style="height: 32px; display: flex; align-items: center; flex-shrink: 0">
+            <div style="flex-grow: 1; display: flex; align-items: center; gap: 8px; padding-left: 12px">
+              <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+              <span style="font: 400 12px Onest, sans-serif; color: var(--ink2)">{{w.title}}</span>
+            </div>
+            <span class="cap" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></span>
+          </div>
+          <sc-if value="{{w.hasTabs}}" hint-placeholder-val="{{true}}">
+            <div style="height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--cardline); flex-shrink: 0">
+              <span class="tab"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg>Calendar</span>
+              <span class="{{w.tAcc}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Accounts</span>
+              <span class="{{w.tApp}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M8 9h8M8 15h5"></path></svg>App</span>
+            </div>
+          </sc-if>
+          <div style="flex-grow: 1; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box">
+
+            <sc-if value="{{w.empty}}" hint-placeholder-val="{{false}}">
+              <div style="padding: 2px 2px 0">
+                <div style="font: 600 15px Onest, sans-serif">Connect a calendar</div>
+                <div class="note" style="margin-top: 2px">Lightcal reads events. It never changes them.</div>
+              </div>
+              <div class="card" style="overflow: hidden">
+                <button class="prov"><span class="pi" style="background: #3B82C4">G</span><span>Google Calendar<small>Sign in in your browser</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+                <button class="prov"><span class="pi" style="background: #0B6A9E">O</span><span>Microsoft Outlook<small>Work, school or personal account</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+                <button class="prov"><span class="pi" style="background: #646464"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg></span><span>Private ICS link<small>Any calendar that shares a link</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{w.signing}}" hint-placeholder-val="{{false}}">
+              <div class="card" style="padding: 20px 16px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin-top: 8px">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line)" stroke-width="2.5"></circle><path d="M21 12a9 9 0 0 0-9-9" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"></path></svg>
+                <div style="font: 600 14px Onest, sans-serif">Finish signing in to Google</div>
+                <div class="note">We opened your browser. Lightcal asks only<br>for read access to your calendars.</div>
+                <div style="display: flex; gap: 8px; margin-top: 6px"><button class="btn">Cancel</button><button class="btn">Open browser again</button></div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{w.ics}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 8px; padding-top: 2px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink2)"><path d="m15 18-6-6 6-6"></path></svg><span style="font: 600 15px Onest, sans-serif">Add a calendar link</span></div>
+              <div class="card" style="padding: 14px 12px; display: flex; flex-direction: column; gap: 6px">
+                <div class="lbl">Calendar address (.ics)</div>
+                <div class="inp">https://calendar.example.com/private-8f3a/basic.ics</div>
+                <div class="note" style="display: flex; gap: 6px; align-items: center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>Private links work like a password. Stored only on this PC.</div>
+              </div>
+              <div style="display: flex; justify-content: flex-end; gap: 8px"><button class="btn">Cancel</button><button class="pb">Subscribe</button></div>
+            </sc-if>
+
+            <sc-if value="{{w.attention}}" hint-placeholder-val="{{false}}">
+              <div class="card" style="overflow: hidden">
+                <div style="height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 12px">
+                  <span class="pi" style="background: #3B82C4">G</span>
+                  <div style="flex-grow: 1"><div style="font: 600 13px Onest, sans-serif">Google Calendar</div><div class="note">alex@example.com</div></div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--warnbg); color: var(--warn); font: 500 12px Onest, sans-serif">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01"></path></svg>
+                  <span style="flex-grow: 1">Access expired. Events are from yesterday.</span>
+                  <button class="pb" style="height: 26px">Sign in</button>
+                </div>
+              </div>
+              <div class="card" style="overflow: hidden">
+                <div style="height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 12px">
+                  <span class="pi" style="background: #0B6A9E">O</span>
+                  <div style="flex-grow: 1"><div style="font: 600 13px Onest, sans-serif">Microsoft Outlook</div><div class="note">alex@work.example</div></div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--ink2); font: 400 12px Onest, sans-serif">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"></path><path d="M3 3l18 18"></path></svg>
+                  <span>Offline. Showing events saved at 10:42.</span>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{w.conflict}}" hint-placeholder-val="{{false}}">
+              <div class="card">
+                <div class="r"><span>Language</span><span class="btn" style="min-width: 136px; justify-content: space-between">English<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span></div>
+                <div class="r" style="flex-wrap: wrap; padding-top: 8px; padding-bottom: 10px; row-gap: 8px">
+                  <span>Open shortcut</span>
+                  <span class="btn" style="padding: 0 6px; gap: 4px; border-color: var(--err); border-bottom-color: var(--err)"><span class="kbd">Ctrl</span><span class="kbd">Alt</span><span class="kbd">K</span></span>
+                  <div style="width: 100%; display: flex; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--errbg); color: var(--err); font: 400 12px/1.45 Onest, sans-serif; box-sizing: border-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+                    <span>Another app already uses Ctrl+Alt+K. Lightcal kept your previous shortcut, Ctrl+Alt+C.</span>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{w.update}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 14px; padding: 4px 4px 2px">
+                <svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+                <div><div style="font: 600 18px Onest, sans-serif">Lightcal</div><div class="note">Version 0.3.0</div></div>
+              </div>
+              <div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+                  <div style="min-width: 0">
+                    <div style="display: flex; align-items: center; gap: 8px; font: 600 13px Onest, sans-serif"><span style="width: 8px; height: 8px; border-radius: 4px; background: var(--accent); flex-shrink: 0"></span>Version 0.3.1 is available</div>
+                    <div class="note" style="margin-top: 2px">Released 30 October · signed</div>
+                  </div>
+                  <button class="pb">View release<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></button>
+                </div>
+                <div class="note" style="border-top: 1px solid var(--line); padding-top: 8px">Opens the GitHub release page. Nothing downloads until you choose to.</div>
+              </div>
+            </sc-if>
+
+          </div>
+          <div style="height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--cardline); flex-shrink: 0; font: 500 12px Onest, sans-serif; color: var(--ink2)">
+            <span>{{w.footL}}</span><span style="font-weight: 400; color: var(--ink3)">{{w.footR}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1504,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() {
+    function w(o) {
+      var base = { cls: "st", title: "Lightcal settings", hasTabs: true, tAcc: "tab on", tApp: "tab", footL: "About Lightcal", footR: "Version 0.3.0",
+        empty: false, signing: false, ics: false, attention: false, conflict: false, update: false };
+      for (var k in o) base[k] = o[k];
+      return base;
+    }
+    return {
+      wins: [
+        w({ name: "First run · no accounts", desc: "Providers are the empty state. No separate Add dialog.", empty: true }),
+        w({ name: "Signing in", desc: "Browser OAuth. Cancel and reopen are always available.", signing: true }),
+        w({ name: "Private ICS link", desc: "One field, privacy note, primary action last.", ics: true }),
+        w({ name: "Needs attention · light", desc: "Expired access is amber with one fix. Offline is quiet.", attention: true }),
+        w({ name: "Shortcut conflict · dark", desc: "Inline under the field. The old shortcut keeps working.", cls: "st dark", tAcc: "tab", tApp: "tab on", conflict: true }),
+        w({ name: "Update available · dark", desc: "Manual check result in About. Opens the release page.", cls: "st dark", title: "About Lightcal", hasTabs: false, footL: "‹ Back to settings", footR: "", update: true })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

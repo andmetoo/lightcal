@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal on the Windows taskbar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.tb{height:72px;border-radius:12px;display:flex;align-items:center;padding:0 18px;position:relative}
+.tb.l{background:#F3F3F3;color:#1A1A1A;box-shadow:inset 0 0 0 1px #E3E3E3}
+.tb.d{background:#202020;color:#FFFFFF}
+.mid{position:absolute;left:50%;top:0;bottom:0;transform:translateX(-50%);display:flex;align-items:center;gap:8px}
+.slot{width:60px;height:60px;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative}
+.tb.l .slot.on{background:rgba(0,0,0,.05)}
+.tb.d .slot.on{background:rgba(255,255,255,.07)}
+.slot.on::after{content:"";position:absolute;bottom:3px;left:50%;width:18px;height:4px;margin-left:-9px;border-radius:2px;background:#00796B}
+.tb.d .slot.on::after{background:#53B9AB}
+.ph{width:36px;height:36px;border-radius:9px;opacity:.16;background:currentColor}
+.tray{margin-left:auto;display:flex;align-items:center;gap:6px}
+.ti{width:42px;height:48px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.ti.hl{background:rgba(127,127,127,.14)}
+.clk{text-align:right;font:400 16px/1.35 "Segoe UI",Onest,sans-serif;padding:0 6px 0 8px}
+.cap{font:500 13px Onest,sans-serif;color:#202020}
+.sub{font:400 12px Onest,sans-serif;color:#646464}
+</style>
+</helmet>
+<div style="width: 940px; height: 380px; box-sizing: border-box; padding: 28px; background: #FFFFFF; font-family: Onest, sans-serif; display: flex; flex-direction: column; gap: 14px">
+  <div style="display: flex; align-items: baseline; justify-content: space-between">
+    <div style="font: 600 20px Onest, sans-serif; color: #202020; letter-spacing: -0.3px">On the Windows taskbar</div>
+    <div class="sub">Drawn at 150 % display scale: tray icon 24 px, app icon 36 px</div>
+  </div>
+  <sc-for list="{{bars}}" as="b" hint-placeholder-count="2">
+    <div class="{{b.cls}}">
+      <div class="mid">
+        <div class="slot"><div class="ph"></div></div>
+        <div class="slot"><div class="ph"></div></div>
+        <div class="slot on" aria-label="Lightcal, pinned"><svg width="36" height="36" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg></div>
+        <div class="slot"><div class="ph"></div></div>
+      </div>
+      <div class="tray">
+        <div class="ti"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"></path></svg></div>
+        <div class="ti hl" aria-label="Lightcal, Sunday 1 November 2026"><svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="6" fill="#D73840"></rect><path d="M1 7A6 6 0 0 1 7 1H25A6 6 0 0 1 31 7Z" fill="#A92A31"></path><text x="16" y="25.8" text-anchor="middle" font-family="Onest, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF">1</text></svg></div>
+        <div class="ti"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0"></path><path d="M5 12.5a10 10 0 0 1 14 0"></path><path d="M8.5 16a5 5 0 0 1 7 0"></path><circle cx="12" cy="19.5" r="1" fill="currentColor"></circle></svg></div>
+        <div class="ti"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M18.5 5.5a9 9 0 0 1 0 13"></path></svg></div>
+        <div class="clk">14:05<br>01/11/2026</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 40px; padding: 0 6px 6px">
+      <div><div class="cap">App icon · pinned</div><div class="sub">Stable mark in Start and on the taskbar.</div></div>
+      <div style="margin-left: auto; text-align: right"><div class="cap">Live date · Color</div><div class="sub">Coral page, white date. Click opens, right-click shows the menu.</div></div>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":940,"height":380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { bars: [{ cls: "tb l" }, { cls: "tb d" }] };
+  }
+}
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 - Keep all repository documentation in English.
 - Use feature branches and PRs. Never push directly to `main` or `master`. Do not merge or publish without explicit owner permission.
 - The app must use Rust and Slint without a web container. The owner accepted Slint; follow the integration/performance prototype gate in ADR 0001 and obtain owner approval before changing frameworks.
-- Keep calendar logic independent of toolkit and platform APIs. Windows ships first; preserve a macOS port path.
+- Keep calendar logic independent of toolkit and platform APIs. Lightcal targets Windows only; do not add macOS work (see [ADR 0011](docs/decisions/0011-windows-only-design-refresh.md)).
 - Measure resource claims in release builds and label unmeasured targets honestly.
 - Use temporary application data for tests. Never alter real autostart/registry/profile state during automated tests without an isolated, explicit test setup.
 - Follow `docs/features.md`: read-only Windows calendar access, manual GitHub update checking, optional startup/shortcut, and About links are approved scope. Direct account sign-in, other event providers, telemetry, and automatic update installation still require an owner decision.
@@ -19,4 +19,4 @@ Cloud agents run on Linux. The image provides Rust stable with rustfmt and clipp
 
 Headless UI proof, with no Microsoft Graph traffic: `cargo run -p lightcal --locked -- --render-snapshots <directory>`. `just run-demo` needs a display and uses sample events only. NSIS, Authenticode, and SimpleSign recipes are Windows-only.
 
-Penpot uses `.cursor/mcp.json`. Set `PENPOT_MCP_USER_TOKEN` to the MCP key from Penpot account → Integrations → MCP Server. Open the Lightcal file and choose File → MCP Server → Connect before asking an agent to read or change that design. Do not commit the key.
+The design lives on the owner's design canvas; [design/README.md](design/README.md) describes it and the mirrored board sources in `design/canvas/`. The old Penpot file is archived in `design/archive/` for history only.

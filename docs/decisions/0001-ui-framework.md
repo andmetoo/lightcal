@@ -4,6 +4,8 @@ Date: 2026-10-29
 
 Status: **Accepted by the owner on 2026-10-29: Slint selected.** Platform integration and performance validation remain required before full UI implementation. No framework benchmark has been run.
 
+Note (2026-11-01): macOS is no longer a target; see [ADR 0011](0011-windows-only-design-refresh.md). The macOS path below is historical.
+
 ## Requirements
 
 Windows tray and taskbar entry points, a visually polished small calendar, low idle CPU and memory, Rust, no browser container, and a realistic macOS path.

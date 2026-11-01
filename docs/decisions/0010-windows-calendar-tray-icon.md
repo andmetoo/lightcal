@@ -1,6 +1,10 @@
 # ADR 0010: Restore the calendar identity in the Windows tray
 
 Date: 2026-10-31. Status: accepted from the owner's screenshot review in chat.
+The design, icon artwork and macOS parts are superseded by
+[ADR 0011](0011-windows-only-design-refresh.md) (2026-11-01). Linked Penpot
+scripts and exports were removed; the Penpot file is archived in
+[design/archive](../../design/archive/).
 Supersedes [ADR 0009](0009-windows-date-numerals.md).
 
 The owner found the numeral-only Windows icon visually anonymous beside native

@@ -22,7 +22,7 @@ the author's release ZIP SHA-256, the source commit and each local file's SHA-25
 No downloaded package scripts are executed. Recreate the files from the repo root:
 
 ```powershell
-python design/penpot/vendor-onest.py
+python scripts/vendor-onest.py
 ```
 
 FontTools verification on October 31, 2026 found version 2.001 in both sources.
@@ -30,9 +30,6 @@ At each of 400, 500, 600 and 700, all 223 shared Latin and 104 shared Cyrillic
 glyph advances match between the native TTF and Fontsource WOFF subsets. This
 checks character coverage and widths, not byte identity or rasterization.
 
-Penpot uses exact built-in family **Onest**, ID `gfont-onest`. The plugin API
-does not expose that service's binary revision, so the design does not claim
-that Penpot's hosted binary is byte-identical to the pinned native files.
-Japanese strings use Noto Sans JP; Latin text and numerals use Onest.
-The subsequent [macOS system-font decision](../macos-system.md) replaces Onest
-in macOS-specific mockups once SF Pro is imported into the Penpot team.
+The design canvas loads Onest from Google Fonts, which is not guaranteed to be
+byte-identical to the pinned native files. Japanese strings use Noto Sans JP;
+Latin text and numerals use Onest.
