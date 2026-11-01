@@ -6,10 +6,10 @@
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem } from "types.slint";
+import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AccountCardItem, SettingsStrings } from "types.slint";
 
 export { Theme }
-export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem }
+export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
@@ -240,6 +240,16 @@ export component AppWindow inherits Window {
     in property <string> desc-license-source-text: "GPL-3.0-only · Built with Rust, Slint, and zero webview bloat";
     in property <string> app-version-line-text: "Lightcal · Rust + Slint";
 
+    // November 2026 settings refresh (ADR 0011).
+    in property <SettingsStrings> settings-strings;
+    in property <[AccountCardItem]> account-cards: [];
+    // Shortcut parts for key caps, e.g. ["Ctrl", "Alt", "K"]; empty when unset.
+    in property <[string]> shortcut-keys: [];
+    in property <bool> install-configured: false;
+    // Raw key text plus Ctrl, Alt, Shift and Win modifiers from the recorder.
+    callback record-shortcut(string, bool, bool, bool, bool);
+    callback reopen-sign-in-browser();
+
     // Callbacks
     callback prev-month();
     callback next-month();
@@ -381,6 +391,8 @@ export component AppWindow inherits Window {
 
     // ==================== SETTINGS VIEW (448×360) ====================
     if root.settings-open : SettingsView {
+        width: 100%;
+        height: 100%;
         app-name-text: root.app-name-text;
         settings-tab: root.settings-tab;
         nav-about-text: root.nav-about-text;
@@ -406,51 +418,11 @@ export component AppWindow inherits Window {
         weekday-monday-label: root.weekday-monday-label;
         first-weekday-monday: root.first-weekday-monday;
         weekday-sunday-label: root.weekday-sunday-label;
-        provider-heading-text: root.provider-heading-text;
-        add-calendar-account-label: root.add-calendar-account-label;
         add-account-enabled: root.add-account-enabled;
-        account-connected: root.account-connected;
-        account-needs-signin: root.account-needs-signin;
-        outlook-sources: root.outlook-sources;
-        can-disconnect-microsoft: root.can-disconnect-microsoft;
-        google-connected: root.google-connected;
-        google-needs-signin: root.google-needs-signin;
-        google-sources: root.google-sources;
-        google-status-text: root.google-status-text;
-        ics-sources: root.ics-sources;
-        windows-sources: root.windows-sources;
         connection-busy: root.connection-busy;
-        sign-in-title: root.sign-in-title;
-        waiting-browser-text: root.waiting-browser-text;
-        cancel-sign-in-label: root.cancel-sign-in-label;
         sign-in-cancelled: root.sign-in-cancelled;
-        sign-in-cancelled-text: root.sign-in-cancelled-text;
-        try-again-label: root.try-again-label;
         connection-message: root.connection-message;
-        outlook-section-text: root.outlook-section-text;
-        events-stale-text: root.events-stale-text;
-        account-status-text: root.account-status-text;
-        reconnect-label: root.reconnect-label;
-        provider-readonly-tag-text: root.provider-readonly-tag-text;
-        no-calendars-text: root.no-calendars-text;
-        remove-source-label: root.remove-source-label;
-        disconnect-microsoft-label: root.disconnect-microsoft-label;
-        refresh-button-text: root.refresh-button-text;
-        can-refresh-calendars: root.can-refresh-calendars;
         provider-loading: root.provider-loading;
-        google-account-label: root.google-account-label;
-        disconnect-google-label: root.disconnect-google-label;
-        ics-section-text: root.ics-section-text;
-        ics-status-text: root.ics-status-text;
-        legacy-windows-label: root.legacy-windows-label;
-        calendars-access-denied: root.calendars-access-denied;
-        calendars-denied-title-text: root.calendars-denied-title-text;
-        calendars-denied-desc-text: root.calendars-denied-desc-text;
-        open-privacy-settings-label: root.open-privacy-settings-label;
-        retry-sync-label: root.retry-sync-label;
-        legacy-windows-enabled: root.legacy-windows-enabled;
-        calendars-empty-title-text: root.calendars-empty-title-text;
-        calendars-empty-desc-text: root.calendars-empty-desc-text;
         label-language-text: root.label-language-text;
         current-language-display: root.current-language-display;
         language-dropdown-open: root.language-dropdown-open;
@@ -459,19 +431,14 @@ export component AppWindow inherits Window {
         start-with-windows: root.start-with-windows;
         label-shortcut-text: root.label-shortcut-text;
         shortcut-has-conflict: root.shortcut-has-conflict;
-        shortcut-conflict-line: root.shortcut-conflict-line;
-        global-shortcut-display: root.global-shortcut-display;
+        shortcut-keys: root.shortcut-keys;
         shortcut-unset-text: root.shortcut-unset-text;
-        shortcut-record-label: root.shortcut-record-label;
-        shortcut-change-label: root.shortcut-change-label;
         shortcut-can-clear: root.shortcut-can-clear;
-        shortcut-clear-label: root.shortcut-clear-label;
         label-tray-palette-text: root.label-tray-palette-text;
         tray-icon-monochrome: root.tray-icon-monochrome;
-        colored-icon-preview: root.colored-icon-preview;
         palette-colored-text: root.palette-colored-text;
-        monochrome-icon-preview: root.monochrome-icon-preview;
         palette-monochrome-text: root.palette-monochrome-text;
+        live-day-text: root.live-day-text;
         updates-heading-text: root.updates-heading-text;
         lang-en-us-label: root.lang-en-us-label;
         current-language-code: root.current-language-code;
@@ -481,44 +448,23 @@ export component AppWindow inherits Window {
         about-version-text: root.about-version-text;
         update-is-available: root.update-is-available;
         update-is-checking: root.update-is-checking;
-        checking-updates-label: root.checking-updates-label;
-        update-ready-title-text: root.update-ready-title-text;
-        update-status-text: root.update-status-text;
         install-status-text: root.install-status-text;
-        update-ready-notes-text: root.update-ready-notes-text;
         install-busy: root.install-busy;
         install-update-label: root.install-update-label;
+        install-configured: root.install-configured;
         package-managed-updates: root.package-managed-updates;
-        updates-check-button-text: root.updates-check-button-text;
-        label-auto-updates-text: root.label-auto-updates-text;
         auto-check-updates: root.auto-check-updates;
         auto-install-label: root.auto-install-label;
         auto-install-updates: root.auto-install-updates;
-        release-notes-button-text: root.release-notes-button-text;
-        github-button-text: root.github-button-text;
-        koona-button-text: root.koona-button-text;
-        license-short-text: root.license-short-text;
         add-account-open: root.add-account-open;
-        add-account-title: root.add-account-title;
-        add-account-intro: root.add-account-intro;
-        google-account-desc: root.google-account-desc;
-        outlook-account-desc: root.outlook-account-desc;
-        ics-account-label: root.ics-account-label;
-        ics-account-desc: root.ics-account-desc;
         ics-dialog-open: root.ics-dialog-open;
-        ics-dialog-title: root.ics-dialog-title;
-        ics-privacy-text: root.ics-privacy-text;
-        ics-source-name <=> root.ics-source-name;
-        ics-name-placeholder: root.ics-name-placeholder;
         ics-source-url <=> root.ics-source-url;
-        ics-url-placeholder: root.ics-url-placeholder;
         ics-loading-text: root.ics-loading-text;
-        ics-stays-local-text: root.ics-stays-local-text;
-        subscribe-label: root.subscribe-label;
         about-link-text: root.about-link-text;
-        app-version-line-text: root.app-version-line-text;
         back-to-calendar-text: root.back-to-calendar-text;
         current-theme-code: root.current-theme-code;
+        copy: root.settings-strings;
+        account-cards: root.account-cards;
         close-settings() => { root.close-settings(); }
         open-settings(arg0) => { root.open-settings(arg0); }
         dismiss-startup-warning() => { root.dismiss-startup-warning(); }
@@ -530,6 +476,7 @@ export component AppWindow inherits Window {
         select-first-weekday-option(arg0) => { root.select-first-weekday-option(arg0); }
         add-calendar-account() => { root.add-calendar-account(); }
         cancel-account-sign-in() => { root.cancel-account-sign-in(); }
+        reopen-sign-in-browser() => { root.reopen-sign-in-browser(); }
         retry-sign-in() => { root.retry-sign-in(); }
         connect-microsoft() => { root.connect-microsoft(); }
         disconnect-microsoft() => { root.disconnect-microsoft(); }
@@ -539,11 +486,10 @@ export component AppWindow inherits Window {
         choose-google-account() => { root.choose-google-account(); }
         disconnect-google() => { root.disconnect-google(); }
         open-privacy-settings() => { root.open-privacy-settings(); }
-        retry-calendar-sync() => { root.retry-calendar-sync(); }
         toggle-legacy-windows() => { root.toggle-legacy-windows(); }
         toggle-language-dropdown() => { root.toggle-language-dropdown(); }
         toggle-start-with-windows() => { root.toggle-start-with-windows(); }
-        cycle-shortcut-preset() => { root.cycle-shortcut-preset(); }
+        record-shortcut(text, ctrl, alt, shift, meta) => { root.record-shortcut(text, ctrl, alt, shift, meta); }
         clear-shortcut() => { root.clear-shortcut(); }
         toggle-tray-icon-monochrome() => { root.toggle-tray-icon-monochrome(); }
         select-language(arg0) => { root.select-language(arg0); }
