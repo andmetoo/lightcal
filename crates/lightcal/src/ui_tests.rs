@@ -71,6 +71,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         google_error: String::new(),
         ics_error: String::new(),
         agenda: Default::default(),
+        last_refreshed: None,
     }
 }
 
@@ -285,7 +286,7 @@ fn about_offers_manual_updates_without_running_an_installer() {
             )
             .unwrap();
         installed.set(false);
-        click(&ui, 340.0, 164.0);
+        click(&ui, 380.0, 138.0);
         assert!(
             installed.get(),
             "Manual Download/Install is reachable in {}",
@@ -298,7 +299,7 @@ fn about_offers_manual_updates_without_running_an_installer() {
         .render_to_png(&dir.join("install-busy.png"), 448, 360)
         .unwrap();
     installed.set(false);
-    click(&ui, 340.0, 164.0);
+    click(&ui, 380.0, 138.0);
     assert!(
         !installed.get(),
         "A running update cannot be submitted twice"
@@ -312,6 +313,14 @@ fn about_offers_manual_updates_without_running_an_installer() {
     println!("Manual-update snapshots: {}", dir.display());
 }
 
+fn scroll(ui: &AppWindow, delta_y: f32) {
+    ui.window().dispatch_event(WindowEvent::PointerScrolled {
+        position: slint::LogicalPosition::new(220.0, 220.0),
+        delta_x: 0.0,
+        delta_y,
+    });
+}
+
 #[test]
 fn settings_recovery_controls_remain_reachable() {
     let platform = HeadlessPlatform::new();
@@ -322,15 +331,13 @@ fn settings_recovery_controls_remain_reachable() {
     let ui = AppWindow::new().unwrap();
     ui.set_settings_open(true);
     ui.set_settings_tab(1);
-    ui.set_legacy_windows_label("Windows calendars".into());
-    ui.set_calendars_empty_title_text("No accounts connected".into());
-    ui.set_calendars_empty_desc_text("Add an account to show events.".into());
     let dir = std::env::temp_dir().join(format!(
         "lightcal-ui-recovery-{}",
         lightcal::calendars::random_key().unwrap()
     ));
     ui.show().unwrap();
 
+    // Fresh users reach Windows calendars from the provider list (Accounts empty state).
     let weak = ui.as_weak();
     ui.on_toggle_legacy_windows(move || {
         let ui = weak.upgrade().unwrap();
@@ -339,47 +346,31 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("windows-disabled.png"), 448, 360)
         .unwrap();
-    click(&ui, 402.0, 158.0);
+    click(&ui, 220.0, 286.0);
     assert!(
         ui.get_legacy_windows_enabled(),
         "Fresh users can enable Windows calendars"
     );
-    renderer
-        .render_to_png(&dir.join("windows-enabled.png"), 448, 360)
-        .unwrap();
-    click(&ui, 402.0, 158.0);
+    click(&ui, 220.0, 286.0);
     assert!(
         !ui.get_legacy_windows_enabled(),
-        "The same switch can disable them again"
+        "The same provider row toggles them again"
     );
 
+    // Shortcut key caps keep a reachable clear button in every language.
     ui.set_settings_tab(2);
-    ui.set_label_shortcut_text("Global shortcut".into());
-    ui.set_global_shortcut_display("Alt + Shift + C".into());
-    ui.set_shortcut_change_label("Change".into());
-    ui.set_shortcut_clear_label("Clear".into());
+    ui.set_shortcut_keys(ModelRc::new(VecModel::from(vec![
+        SharedString::from("Alt"),
+        SharedString::from("Shift"),
+        SharedString::from("C"),
+    ])));
     ui.set_shortcut_can_clear(true);
     let cleared = Rc::new(Cell::new(false));
     let observed = cleared.clone();
     ui.on_clear_shortcut(move || observed.set(true));
-    renderer
-        .render_to_png(&dir.join("shortcut-clear.png"), 448, 360)
-        .unwrap();
-    click(&ui, 388.0, 196.0);
-    assert!(cleared.get(), "The shortcut clear action is reachable");
     for locale in LocaleCode::ALL {
         let strings = catalog(locale);
         ui.set_label_shortcut_text(strings.label_shortcut.into());
-        ui.set_shortcut_change_label(
-            match locale {
-                LocaleCode::Ru => "Изменить",
-                LocaleCode::Es => "Cambiar",
-                LocaleCode::Ja => "変更",
-                LocaleCode::En => "Change",
-            }
-            .into(),
-        );
-        ui.set_shortcut_clear_label(strings.shortcut_clear.into());
         ui.set_label_tray_palette_text(strings.label_tray_palette.into());
         ui.set_palette_colored_text(strings.palette_colored.into());
         ui.set_palette_monochrome_text(strings.palette_monochrome.into());
@@ -391,7 +382,7 @@ fn settings_recovery_controls_remain_reachable() {
             )
             .unwrap();
         cleared.set(false);
-        click(&ui, 388.0, 196.0);
+        click(&ui, 405.0, 186.0);
         assert!(
             cleared.get(),
             "Clear remains reachable in {}",
@@ -399,7 +390,38 @@ fn settings_recovery_controls_remain_reachable() {
         );
     }
 
+    // Recording a shortcut sends the key and modifiers to Rust.
+    let recorded = Rc::new(RefCell::new(None));
+    let observed = recorded.clone();
+    ui.on_record_shortcut(move |text, ctrl, alt, shift, meta| {
+        *observed.borrow_mut() = shortcut_from_key(text.as_str(), ctrl, alt, shift, meta);
+    });
+    click(&ui, 340.0, 186.0);
+    renderer
+        .render_to_png(&dir.join("shortcut-recording.png"), 448, 360)
+        .unwrap();
+    for (key, pressed) in [
+        (slint::platform::Key::Control, true),
+        (slint::platform::Key::Alt, true),
+    ] {
+        let text = SharedString::from(key);
+        ui.window().dispatch_event(if pressed {
+            WindowEvent::KeyPressed { text }
+        } else {
+            WindowEvent::KeyReleased { text }
+        });
+    }
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: "k".into() });
+    assert_eq!(
+        recorded.borrow().as_deref(),
+        Some("Ctrl + Alt + K"),
+        "The recorder captures Ctrl + Alt + K"
+    );
+
+    // Account cards: refresh, expired sign-in and calendar selection.
     let mut ctrl = controller(&dir);
+    ctrl.settings_tab = 1;
     ctrl.google_connected = true;
     ctrl.google_error = "Network unavailable; try refreshing again".into();
     ctrl.sync_to_ui(&ui);
@@ -411,7 +433,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-retry.png"), 448, 360)
         .unwrap();
-    click(&ui, 272.0, 224.0);
+    click(&ui, 372.0, 146.0);
     assert!(
         refreshed.get(),
         "A failed Google query still offers manual refresh"
@@ -429,10 +451,10 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-expired.png"), 448, 360)
         .unwrap();
-    click(&ui, 364.0, 224.0);
+    click(&ui, 395.0, 193.0);
     assert!(
         reconnected.get(),
-        "An expired Google account offers Reconnect"
+        "An expired Google account offers Sign in"
     );
 
     ctrl.google_connected = true;
@@ -451,33 +473,28 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("mixed-permission-denied.png"), 448, 360)
         .unwrap();
-    click(&ui, 36.0, 194.0);
+    click(&ui, 220.0, 194.0);
     assert!(
         selected.get(),
         "Windows permission denial must not remove a readable calendar's checkbox"
     );
-    ui.window().dispatch_event(WindowEvent::PointerScrolled {
-        position: slint::LogicalPosition::new(220.0, 220.0),
-        delta_x: 0.0,
-        delta_y: -1000.0,
-    });
+    scroll(&ui, -1000.0);
     renderer
         .render_to_png(&dir.join("mixed-permission-recovery.png"), 448, 360)
         .unwrap();
     let privacy_opened = Rc::new(Cell::new(false));
     let observed = privacy_opened.clone();
     ui.on_open_privacy_settings(move || observed.set(true));
-    let retried = Rc::new(Cell::new(false));
-    let observed = retried.clone();
-    ui.on_retry_calendar_sync(move || observed.set(true));
-    click(&ui, 100.0, 236.0);
+    refreshed.set(false);
+    click(&ui, 366.0, 238.0);
     assert!(
         privacy_opened.get(),
         "Permission recovery remains reachable"
     );
-    click(&ui, 220.0, 236.0);
-    assert!(retried.get(), "Permission recovery still offers Retry Sync");
+    click(&ui, 372.0, 187.0);
+    assert!(refreshed.get(), "Permission recovery still offers a retry");
 
+    // About: links first, then both automatic update switches.
     ctrl.settings_tab = 3;
     ctrl.prefs.auto_check_updates = true;
     ctrl.prefs.auto_install_updates = true;
@@ -492,43 +509,15 @@ fn settings_recovery_controls_remain_reachable() {
         let ui = weak.upgrade().unwrap();
         ui.set_auto_install_updates(!ui.get_auto_install_updates());
     });
-    for locale in LocaleCode::ALL {
-        ctrl.prefs.set_locale(locale);
-        ctrl.sync_to_ui(&ui);
-        renderer
-            .render_to_png(
-                &dir.join(format!("about-updates-{}.png", locale.as_str())),
-                448,
-                360,
-            )
-            .unwrap();
-        click(&ui, 402.0, 224.0);
-        assert!(
-            !ui.get_auto_check_updates(),
-            "Automatic checking can be disabled in {}",
-            locale.as_str()
-        );
-        click(&ui, 402.0, 264.0);
-        assert!(
-            !ui.get_auto_install_updates(),
-            "Automatic installation can be disabled in {}",
-            locale.as_str()
-        );
-    }
-    ui.window().dispatch_event(WindowEvent::PointerScrolled {
-        position: slint::LogicalPosition::new(220.0, 220.0),
-        delta_x: 0.0,
-        delta_y: -1000.0,
-    });
-    renderer
-        .render_to_png(&dir.join("about-links.png"), 448, 360)
-        .unwrap();
     let opened = Rc::new(RefCell::new(Vec::new()));
     let observed = opened.clone();
     ui.on_open_external_url(move |url| observed.borrow_mut().push(url.to_string()));
-    click(&ui, 220.0, 212.0);
-    click(&ui, 220.0, 250.0);
-    click(&ui, 220.0, 288.0);
+    renderer
+        .render_to_png(&dir.join("about-links.png"), 448, 360)
+        .unwrap();
+    click(&ui, 220.0, 195.0);
+    click(&ui, 220.0, 235.0);
+    click(&ui, 220.0, 275.0);
     assert_eq!(
         *opened.borrow(),
         [
@@ -536,19 +525,42 @@ fn settings_recovery_controls_remain_reachable() {
             "https://koona.app",
             "https://github.com/andmetoo/lightcal/blob/main/LICENSE",
         ],
-        "About links remain reachable below the restored update preferences"
+        "About links are reachable without scrolling"
     );
+    for locale in LocaleCode::ALL {
+        ctrl.prefs.set_locale(locale);
+        ctrl.prefs.auto_check_updates = true;
+        ctrl.prefs.auto_install_updates = true;
+        ctrl.sync_to_ui(&ui);
+        scroll(&ui, -1000.0);
+        renderer
+            .render_to_png(
+                &dir.join(format!("about-updates-{}.png", locale.as_str())),
+                448,
+                360,
+            )
+            .unwrap();
+        click(&ui, 400.0, 250.0);
+        assert!(
+            !ui.get_auto_check_updates(),
+            "Automatic checking can be disabled in {}",
+            locale.as_str()
+        );
+        click(&ui, 400.0, 290.0);
+        assert!(
+            !ui.get_auto_install_updates(),
+            "Automatic installation can be disabled in {}",
+            locale.as_str()
+        );
+        scroll(&ui, 1000.0);
+    }
 
+    // Private ICS link: one field; a pending subscription cannot be sent twice.
+    ctrl.prefs.set_locale(LocaleCode::En);
     ctrl.settings_tab = 1;
+    ctrl.ics_dialog_open = true;
     ctrl.sync_to_ui(&ui);
-    ui.set_ics_dialog_open(true);
-    ui.set_ics_dialog_title("Add a calendar link".into());
-    ui.set_ics_privacy_text("Anyone with the address can read this calendar.".into());
-    ui.set_ics_source_name("Fixture calendar".into());
     ui.set_ics_source_url("http://example.invalid/calendar.ics".into());
-    ui.set_subscribe_label("Subscribe".into());
-    ui.set_cancel_sign_in_label("Cancel".into());
-    ui.set_ics_loading_text("Checking calendar…".into());
     let subscribed = Rc::new(Cell::new(false));
     let observed = subscribed.clone();
     ui.on_add_ics_source(move |_, _| observed.set(true));
@@ -556,7 +568,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("ics-loading.png"), 448, 360)
         .unwrap();
-    click(&ui, 362.0, 274.0);
+    click(&ui, 392.0, 249.0);
     assert!(
         !subscribed.get(),
         "A pending subscription cannot be submitted twice"
@@ -568,7 +580,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("ics-error.png"), 448, 360)
         .unwrap();
-    click(&ui, 362.0, 274.0);
+    click(&ui, 392.0, 249.0);
     assert!(
         subscribed.get(),
         "A failed subscription can be corrected and retried"
@@ -674,4 +686,28 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
     });
     assert_eq!(ui.get_month_title(), "October 2026");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn recorded_keys_become_registrable_shortcuts() {
+    assert_eq!(
+        shortcut_from_key("k", true, true, false, false).as_deref(),
+        Some("Ctrl + Alt + K")
+    );
+    // Ctrl+K may arrive as the ASCII control character 0x0B.
+    assert_eq!(
+        shortcut_from_key("\u{b}", true, false, true, false).as_deref(),
+        Some("Ctrl + Shift + K")
+    );
+    let f5 = SharedString::from(slint::platform::Key::F5);
+    assert_eq!(
+        shortcut_from_key(f5.as_str(), false, true, false, false).as_deref(),
+        Some("Alt + F5")
+    );
+    assert_eq!(shortcut_from_key("k", false, false, true, false), None);
+    assert_eq!(shortcut_from_key("-", true, false, false, false), None);
+    assert_eq!(
+        ics_name_from_address("https://user@calendar.example.com:443/private/basic.ics"),
+        "calendar.example.com"
+    );
 }

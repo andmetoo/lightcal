@@ -21,6 +21,17 @@ canvas runtime to render; they are not application code.
 Every board has a light/dark switch. Calendar boards are interactive: days,
 month arrows, Today and agenda rows work. Settings tabs link to each other.
 
+The Slint settings view (`crates/lightcal/ui/settings.slint`) follows the
+Settings, States, About and Languages boards. Two additions are not on the
+boards: a fourth provider row, **Windows calendars**, for the optional legacy
+Windows provider, and on About a **Release notes** link plus a card with the
+two automatic-update switches below the links (reached by scrolling).
+Account notices map every controller state onto the board patterns: expired
+Outlook or Google access and Windows calendar access denied use the amber strip
+with one action; offline Outlook, Google query errors, ICS refresh errors and
+provider-wide failures use the quiet line; connection errors use the red
+message box; a cancelled sign-in is a quiet line with **Try again**.
+
 ## Principles
 
 - One compact 352 × 432 calendar and one 448 × 360 settings window.
