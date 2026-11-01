@@ -138,6 +138,7 @@ pub fn parse(
     if text.len() > MAX_BYTES as usize {
         return Err("Calendar exceeds the 8 MiB limit".into());
     }
+    let text = text.strip_prefix('﻿').unwrap_or(text);
     let mut parser = ical::IcalParser::new(BufReader::new(text.as_bytes()));
     let calendar = parser
         .next()
@@ -165,52 +166,63 @@ pub fn parse(
     let (from, to) = range(anchor);
     let mut groups: BTreeMap<String, Vec<IcalEvent>> = BTreeMap::new();
     for event in calendar.events {
-        let uid = value(&event, "UID")
-            .ok_or("An ICS event is missing its UID")?
-            .to_string();
+        // An event without a UID cannot be identified; skip it instead of failing the feed.
+        let Some(uid) = value(&event, "UID").map(str::to_string) else {
+            continue;
+        };
         groups.entry(uid).or_default().push(event);
     }
+    let sequence = |event: &IcalEvent| {
+        value(event, "SEQUENCE")
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0)
+    };
     let mut output = Vec::new();
     for (uid, events) in groups {
-        let mut overrides = BTreeMap::new();
+        let mut overrides: BTreeMap<i64, &IcalEvent> = BTreeMap::new();
         for event in &events {
-            if let Some(id) = property(event, "RECURRENCE-ID") {
-                if param(id, "RANGE").is_some() {
-                    return Err("ICS RANGE recurrence overrides are not supported".into());
+            let Some(id) = property(event, "RECURRENCE-ID") else {
+                continue;
+            };
+            if param(id, "RANGE").is_some() {
+                continue;
+            }
+            let Some(raw) = id.value.as_deref() else {
+                continue;
+            };
+            let Ok((date, _)) = stamp(id, raw, floating) else {
+                continue;
+            };
+            let key = date.timestamp();
+            match overrides.get(&key) {
+                Some(existing) if sequence(existing) > sequence(event) => {}
+                _ => {
+                    overrides.insert(key, event);
                 }
-                let (date, _) = stamp(
-                    id,
-                    id.value.as_deref().ok_or("Empty recurrence ID")?,
-                    floating,
-                )?;
-                overrides.insert(date.timestamp(), event);
             }
         }
         let master = events
             .iter()
             .filter(|e| property(e, "RECURRENCE-ID").is_none())
-            .max_by_key(|e| {
-                value(e, "SEQUENCE")
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(0)
-            });
+            .max_by_key(|e| sequence(e));
         if let Some(master) = master {
             if value(master, "STATUS") != Some("CANCELLED") {
-                let (starts, length, all_day) = instances(master, floating, from, to)?;
-                for start in starts {
-                    if !overrides.contains_key(&start.timestamp()) {
-                        emit(
-                            &mut output,
-                            feed,
-                            &uid,
-                            master,
-                            start,
-                            length,
-                            all_day,
-                            display_zone,
-                            from,
-                            to,
-                        )?;
+                if let Ok((starts, length, all_day)) = instances(master, floating, from, to) {
+                    for start in starts {
+                        if !overrides.contains_key(&start.timestamp()) {
+                            let _ = emit(
+                                &mut output,
+                                feed,
+                                &uid,
+                                master,
+                                start,
+                                length,
+                                all_day,
+                                display_zone,
+                                from,
+                                to,
+                            );
+                        }
                     }
                 }
             }
@@ -219,9 +231,11 @@ pub fn parse(
             if value(event, "STATUS") == Some("CANCELLED") {
                 continue;
             }
-            let (starts, length, all_day) = instances(event, floating, from, to)?;
+            let Ok((starts, length, all_day)) = instances(event, floating, from, to) else {
+                continue;
+            };
             for start in starts {
-                emit(
+                let _ = emit(
                     &mut output,
                     feed,
                     &uid,
@@ -232,7 +246,7 @@ pub fn parse(
                     display_zone,
                     from,
                     to,
-                )?;
+                );
             }
         }
         if output.len() > 20_000 {
@@ -460,8 +474,46 @@ mod tests {
             LocalDate::new(2026, 10, 31).unwrap()
         );
     }
+    fn parse_raw(body: &str) -> Result<Vec<CalendarOccurrence>, String> {
+        parse(
+            body,
+            &feed(),
+            LocalDate::new(2026, 10, 30).unwrap(),
+            Tz::UTC,
+        )
+    }
     #[test]
-    fn unknown_timezone_fails_instead_of_silently_moving_events() {
-        assert!(parse("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART;TZID=MadeUp/Zone:20261030T090000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",&feed(),LocalDate::new(2026,10,30).unwrap(),Tz::UTC).is_err());
+    fn unknown_timezone_skips_event_instead_of_moving_or_failing() {
+        let events = parse_events("BEGIN:VEVENT\r\nUID:bad\r\nDTSTART;TZID=MadeUp/Zone:20261030T090000\r\nSUMMARY:Bad\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:20261030T090000Z\r\nSUMMARY:Good\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "Good");
+    }
+    #[test]
+    fn missing_uid_bad_duration_and_bad_rule_are_skipped() {
+        let events = parse_events("BEGIN:VEVENT\r\nDTSTART:20261030T090000Z\r\nSUMMARY:NoUid\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:d\r\nDTSTART:20261030T090000Z\r\nDURATION:garbage\r\nSUMMARY:BadDuration\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:r\r\nDTSTART:20261030T090000Z\r\nRRULE:FREQ=NOPE\r\nSUMMARY:BadRule\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ok\r\nDTSTART:20261030T090000Z\r\nSUMMARY:Good\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "Good");
+    }
+    #[test]
+    fn dst_gap_event_is_skipped_and_all_skipped_feed_is_empty_ok() {
+        let events = parse_events("BEGIN:VEVENT\r\nUID:gap\r\nDTSTART;TZID=Europe/Belgrade:20260329T023000\r\nSUMMARY:Gap\r\nEND:VEVENT\r\n");
+        assert!(events.is_empty());
+    }
+    #[test]
+    fn structural_errors_remain_hard() {
+        assert!(parse_raw("garbage").is_err());
+        let one = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n";
+        assert!(parse_raw(&format!("{one}{one}")).is_err());
+    }
+    #[test]
+    fn leading_bom_is_ignored() {
+        let body = "\u{feff}BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nSUMMARY:Bom\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        assert_eq!(parse_raw(body).unwrap().len(), 1);
+    }
+    #[test]
+    fn highest_sequence_override_wins_regardless_of_order() {
+        let events = parse_events("BEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261030T090000Z\r\nRRULE:FREQ=DAILY;COUNT=1\r\nSUMMARY:Master\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a\r\nRECURRENCE-ID:20261030T090000Z\r\nSEQUENCE:5\r\nDTSTART:20261030T100000Z\r\nSUMMARY:New\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:a\r\nRECURRENCE-ID:20261030T090000Z\r\nSEQUENCE:2\r\nDTSTART:20261030T110000Z\r\nSUMMARY:Old\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].title, "New");
     }
 }

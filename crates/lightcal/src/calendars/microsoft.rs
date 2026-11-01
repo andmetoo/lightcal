@@ -112,6 +112,8 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
+                // An accepted socket can inherit the listener's non-blocking flag on Windows.
+                let _ = stream.set_nonblocking(false);
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
                 let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
                 let mut line = String::new();
@@ -314,6 +316,7 @@ pub fn query(
         sources: Vec::new(),
         occurrences: Vec::new(),
     };
+    let mut errors: Vec<String> = Vec::new();
     for calendar in calendars {
         let remote_id = calendar["id"]
             .as_str()
@@ -353,14 +356,61 @@ pub fn query(
                 &format!("{:04}-{:02}-{:02}T00:00:00Z", to.year, to.month, to.day),
             )
             .append_pair("$top", "1000");
-        for event in graph_pages(uri.as_str(), token, account)? {
-            if event["isCancelled"].as_bool() == Some(true) {
-                continue;
-            }
-            result.occurrences.push(parse_event(&event, &id, color)?);
-        }
+        let outcome = graph_pages(uri.as_str(), token, account);
+        let hard = matches!(account, MicrosoftAccountState::NeedsSignIn);
+        let name = calendar["name"].as_str().unwrap_or("Outlook");
+        merge_calendar(&mut result, &mut errors, outcome, name, &id, color, hard)?;
+    }
+    if !errors.is_empty() {
+        result.status = ProviderStatus::ProviderUnavailable(errors.join("\n"));
     }
     Ok(result)
+}
+
+/// Returns the readable events of one calendar and how many were skipped as unparsable.
+fn collect_events(
+    events: Vec<Value>,
+    source: &str,
+    color: &str,
+) -> (Vec<CalendarOccurrence>, usize) {
+    let mut occurrences = Vec::new();
+    let mut skipped = 0;
+    for event in events {
+        if event["isCancelled"].as_bool() == Some(true) {
+            continue;
+        }
+        match parse_event(&event, source, color) {
+            Ok(occurrence) => occurrences.push(occurrence),
+            Err(_) => skipped += 1,
+        }
+    }
+    (occurrences, skipped)
+}
+
+/// Folds one calendar's outcome into the snapshot. A sign-in failure (`hard`) aborts the
+/// provider; any other failure is recorded and the remaining calendars still load.
+fn merge_calendar(
+    result: &mut ProviderSnapshot,
+    errors: &mut Vec<String>,
+    outcome: Result<Vec<Value>, String>,
+    name: &str,
+    source: &str,
+    color: &str,
+    hard: bool,
+) -> Result<(), String> {
+    match outcome {
+        Ok(events) => {
+            result
+                .occurrences
+                .extend(collect_events(events, source, color).0);
+            Ok(())
+        }
+        Err(error) if hard => Err(error),
+        Err(error) => {
+            errors.push(format!("{name}: {error}"));
+            Ok(())
+        }
+    }
 }
 
 fn graph_datetime(value: &Value) -> Result<chrono::DateTime<chrono::Utc>, String> {
@@ -559,5 +609,69 @@ mod tests {
             event.end_date_exclusive,
             LocalDate::new(2026, 10, 31).unwrap()
         );
+    }
+
+    fn empty_snapshot() -> ProviderSnapshot {
+        ProviderSnapshot {
+            status: ProviderStatus::Available,
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        }
+    }
+    #[test]
+    fn unparsable_event_is_skipped_and_sibling_events_survive() {
+        let events = vec![
+            serde_json::json!({"id":"bad","isAllDay":true,"start":{"dateTime":"nonsense","timeZone":"UTC"},"end":{"dateTime":"2026-11-02T00:00:00","timeZone":"UTC"}}),
+            serde_json::json!({"id":"ok","isAllDay":true,"start":{"dateTime":"2026-10-30T00:00:00","timeZone":"UTC"},"end":{"dateTime":"2026-10-31T00:00:00","timeZone":"UTC"}}),
+        ];
+        let (occurrences, skipped) = collect_events(events, "graph:a", "#008573");
+        assert_eq!(occurrences.len(), 1);
+        assert_eq!(skipped, 1);
+    }
+    #[test]
+    fn failing_calendar_is_recorded_and_other_calendars_still_load() {
+        let mut result = empty_snapshot();
+        let mut errors = Vec::new();
+        let ok = vec![
+            serde_json::json!({"id":"ok","isAllDay":true,"start":{"dateTime":"2026-10-30T00:00:00","timeZone":"UTC"},"end":{"dateTime":"2026-10-31T00:00:00","timeZone":"UTC"}}),
+        ];
+        merge_calendar(
+            &mut result,
+            &mut errors,
+            Err("HTTP 500".into()),
+            "Work",
+            "graph:a",
+            "#008573",
+            false,
+        )
+        .unwrap();
+        merge_calendar(
+            &mut result,
+            &mut errors,
+            Ok(ok),
+            "Home",
+            "graph:b",
+            "#008573",
+            false,
+        )
+        .unwrap();
+        assert_eq!(result.occurrences.len(), 1);
+        assert_eq!(errors, vec!["Work: HTTP 500".to_string()]);
+    }
+    #[test]
+    fn sign_in_failure_stays_a_hard_error() {
+        let mut result = empty_snapshot();
+        let mut errors = Vec::new();
+        let outcome = merge_calendar(
+            &mut result,
+            &mut errors,
+            Err("HTTP 401".into()),
+            "Work",
+            "graph:a",
+            "#008573",
+            true,
+        );
+        assert_eq!(outcome, Err("HTTP 401".to_string()));
+        assert!(errors.is_empty());
     }
 }
