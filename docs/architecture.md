@@ -13,10 +13,18 @@ crates/
   calendar-core/     # Pure calendar calculations and navigation state
   lightcal/          # Application lifecycle, UI, preferences, platform adapters
     ui/             # Slint views, selected in ADR 0001
+      app.slint       # AppWindow: the Rust-facing properties and callbacks
+      theme.slint     # Theme global: colors, radii, metrics, type scale, font
+      controls.slint  # Shared controls (switch, segmented, select, buttons, rows)
+      types.slint     # Structs exchanged with Rust
+      calendar.slint  # CalendarView, the compact popup
+      settings.slint  # SettingsView with the About page
     src/platform/
       windows/      # Tray, window styles, shell identity, system events
 design/             # Design canvas sources, archived Penpot file, review evidence
 ```
+
+`AppWindow` keeps the whole Rust API and forwards data and callbacks to the view components. `AppWindow.dark-mode` is an alias of `Theme.dark`, so every module reads design tokens from `Theme` instead of taking a dark-mode input. Text uses the Windows system font Segoe UI Variable through `Theme.font-family`; nothing is bundled for the UI.
 
 Start with these two crates. Split platform crates only when dependencies or ownership justify it. Keep OS calls and toolkit types out of `calendar-core`. The core accepts an explicit current date and first-weekday preference, allowing deterministic tests without changing the real system clock.
 

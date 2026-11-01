@@ -42,6 +42,29 @@ use std::rc::Rc;
 
 slint::include_modules!();
 
+/// Keeps the UI on Segoe UI when Segoe UI Variable is missing (Windows 10).
+/// Slint 1.18 falls back to the generic sans-serif family (Arial on Windows)
+/// for an unknown name, so the static face is selected explicitly.
+pub(crate) fn apply_system_font(ui: &AppWindow) {
+    if !segoe_ui_variable_installed() {
+        ui.global::<Theme>().set_font_family("Segoe UI".into());
+    }
+}
+
+#[cfg(windows)]
+fn segoe_ui_variable_installed() -> bool {
+    let windows_dir = env::var_os("WINDIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "C:\\Windows".into());
+    windows_dir.join("Fonts").join("SegUIVar.ttf").is_file()
+}
+
+/// Off Windows the named family is absent and Slint uses its sans-serif fallback.
+#[cfg(not(windows))]
+fn segoe_ui_variable_installed() -> bool {
+    true
+}
+
 pub(crate) struct AppController {
     pub(crate) store: PreferencesStore,
     pub(crate) prefs: Preferences,
@@ -1948,6 +1971,7 @@ fn main() {
     }
 
     let ui = AppWindow::new().expect("Failed to create Lightcal window");
+    apply_system_font(&ui);
 
     ACTIVE_UI.with(|u| {
         *u.borrow_mut() = Some(ui.as_weak());

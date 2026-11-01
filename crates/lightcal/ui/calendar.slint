@@ -1,0 +1,348 @@
+// Compact calendar popup, 352 × 432. AppWindow forwards its data and callbacks.
+
+import { Theme } from "theme.slint";
+import { Button, IconButton } from "controls.slint";
+import { DayCellData, AgendaEventItem } from "types.slint";
+
+export component CalendarView inherits Rectangle {
+    in property <string> month-title;
+    in property <string> today-date-line;
+    in property <string> today-button-label;
+    in property <bool> show-week-numbers;
+    in property <[bool]> gray-columns;
+    in property <bool> show-weekday-header;
+    in property <string> week-header-label;
+    in property <[string]> weekday-headers;
+    in property <[string]> iso-weeks;
+    in property <[DayCellData]> cells;
+    in property <bool> show-event-dots;
+    in property <string> selected-date-line;
+    in property <string> selected-event-summary;
+    in property <[AgendaEventItem]> selected-day-events;
+    in property <string> active-calendars-label;
+    in property <string> nav-calendars-text;
+    callback prev-month();
+    callback next-month();
+    callback open-settings(int);
+    callback return-to-today();
+    callback select-cell(int);
+
+    border-radius: Theme.radius-window;
+    border-width: 1px;
+    border-color: Theme.card-line;
+    background: Theme.popup;
+    clip: true;
+
+    // Month title
+    Text {
+        x: 20px;
+        y: 16px;
+        width: 214px;
+        height: 28px;
+        text: root.month-title;
+        font-size: Theme.type-title;
+        font-weight: Theme.weight-semibold;
+        color: Theme.ink;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+
+    IconButton {
+        x: 244px;
+        y: 16px;
+        icon: "chevron-left";
+        clicked => { root.prev-month(); }
+    }
+    IconButton {
+        x: 276px;
+        y: 16px;
+        icon: "chevron-right";
+        clicked => { root.next-month(); }
+    }
+    IconButton {
+        x: 308px;
+        y: 16px;
+        icon: "gear";
+        icon-weight: 1.75;
+        clicked => { root.open-settings(0); }
+    }
+
+    Text {
+        x: 20px;
+        y: 52px;
+        width: 220px;
+        height: 22px;
+        text: root.today-date-line;
+        font-size: 11.5px;
+        font-weight: 400;
+        color: Theme.ink2;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    Button {
+        x: 260px;
+        y: 49px;
+        button-width: 76px;
+        label: root.today-button-label;
+        clicked => { root.return-to-today(); }
+    }
+
+    month-grid-area := Rectangle {
+        x: 0px;
+        y: 84px;
+        width: parent.width;
+        height: 244px;
+        clip: true;
+
+        property <length> grid-start-x: root.show-week-numbers ? 40px : 24px;
+        property <length> col-width: 42px;
+        property <length> band-width: 38px;
+        property <length> tile-width: 34px;
+        property <length> tile-height: 32px;
+        property <length> row-height: 36px;
+        property <length> grid-y: 28px;
+
+        for is-gray[col-idx] in root.gray-columns : Rectangle {
+            if is-gray : Rectangle {
+                x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 2px;
+                y: 0px;
+                width: month-grid-area.band-width;
+                height: 242px;
+                border-radius: Theme.radius-day;
+                background: Theme.weekend-band;
+            }
+        }
+
+        if root.show-weekday-header : Rectangle {
+            y: 1px;
+            height: 20px;
+            width: parent.width;
+
+            if root.show-week-numbers : Text {
+                x: 8px;
+                y: 0px;
+                width: 26px;
+                height: 20px;
+                text: root.week-header-label;
+                font-size: 9.5px;
+                font-weight: 500;
+                color: Theme.ink3;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            for wd[col-idx] in root.weekday-headers : Text {
+                x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width;
+                y: 0px;
+                width: month-grid-area.col-width;
+                height: 20px;
+                text: wd;
+                font-size: 11px;
+                font-weight: 500;
+                color: Theme.ink2;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        for row-idx in [0, 1, 2, 3, 4, 5] : Rectangle {
+            y: month-grid-area.grid-y + row-idx * month-grid-area.row-height;
+            height: month-grid-area.row-height;
+            width: parent.width;
+
+            if root.show-week-numbers : Text {
+                x: 8px;
+                y: 0px;
+                width: 26px;
+                height: 32px;
+                text: root.iso-weeks[row-idx];
+                font-size: 9.5px;
+                font-weight: 400;
+                color: Theme.ink3;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            for col-idx in [0, 1, 2, 3, 4, 5, 6] : cell-box := Rectangle {
+                property <int> cell-index: row-idx * 7 + col-idx;
+                property <DayCellData> cell: root.cells[self.cell-index];
+                property <bool> today-mark: self.cell.is-today;
+
+                x: month-grid-area.grid-start-x + col-idx * month-grid-area.col-width + 4px;
+                y: 0px;
+                width: month-grid-area.tile-width;
+                height: month-grid-area.tile-height;
+                border-radius: Theme.radius-day;
+                accessible-role: button;
+                accessible-label: self.cell.accessible-label;
+
+                background: self.today-mark
+                    ? Theme.coral
+                    : (self.cell.is-selected
+                        ? Theme.selected
+                        : (cell-touch.has-hover && self.cell.in-month
+                            ? Theme.hover
+                            : transparent));
+                border-width: (self.cell.is-selected && !self.today-mark) ? 1.5px : 0px;
+                border-color: Theme.toggle-off;
+
+                Text {
+                    width: parent.width;
+                    height: (cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots)
+                        ? 25px
+                        : parent.height;
+                    y: 1px;
+                    text: cell-box.cell.day-number;
+                    font-size: Theme.type-day;
+                    font-weight: (cell-box.cell.is-today || cell-box.cell.is-selected)
+                        ? 600
+                        : 500;
+                    color: cell-box.cell.is-today
+                        ? Theme.on-coral
+                        : (!cell-box.cell.in-month
+                            ? Theme.ink3
+                            : Theme.ink);
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                if cell-box.cell.dot-count > 0 && (cell-box.cell.in-month || cell-box.cell.is-today) && root.show-event-dots : HorizontalLayout {
+                    x: 0px;
+                    width: parent.width;
+                    y: 26px;
+                    height: 3px;
+                    spacing: 3px;
+                    alignment: center;
+
+                    if cell-box.cell.dot-count >= 1 : Rectangle {
+                        width: 3px;
+                        height: 3px;
+                        border-radius: 1.5px;
+                        background: cell-box.cell.is-today ? Theme.on-coral : cell-box.cell.dot1;
+                    }
+                    if cell-box.cell.dot-count >= 2 : Rectangle {
+                        width: 3px;
+                        height: 3px;
+                        border-radius: 1.5px;
+                        background: cell-box.cell.is-today ? Theme.on-coral : cell-box.cell.dot2;
+                    }
+                    if cell-box.cell.dot-count >= 3 : Rectangle {
+                        width: 3px;
+                        height: 3px;
+                        border-radius: 1.5px;
+                        background: cell-box.cell.is-today ? Theme.on-coral : cell-box.cell.dot3;
+                    }
+                }
+
+                cell-touch := TouchArea {
+                    clicked => { root.select-cell(cell-box.cell-index); }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        x: 16px;
+        y: 338px;
+        width: 320px;
+        height: 1px;
+        background: Theme.popup-line;
+    }
+
+    Text {
+        x: 20px;
+        y: 347px;
+        width: 246px;
+        height: 22px;
+        text: root.selected-date-line;
+        font-size: 12px;
+        font-weight: 600;
+        color: Theme.ink;
+        overflow: elide;
+        vertical-alignment: center;
+    }
+    Text {
+        x: 268px;
+        y: 349px;
+        width: 64px;
+        height: 18px;
+        text: root.selected-event-summary;
+        font-size: 10.5px;
+        font-weight: 400;
+        color: Theme.ink2;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+    }
+
+    if root.selected-day-events.length > 0 : VerticalLayout {
+        x: 20px;
+        y: 376px;
+        width: 312px;
+        spacing: 2px;
+
+        for ev in root.selected-day-events : HorizontalLayout {
+            height: 22px;
+            spacing: 9px;
+
+            Rectangle {
+                width: 3px;
+                height: 14px;
+                border-radius: 1.5px;
+                background: ev.swatch;
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: ev.time-label;
+                font-size: 11px;
+                font-weight: 500;
+                color: Theme.ink2;
+                vertical-alignment: center;
+                min-width: 42px;
+            }
+            Text {
+                text: ev.title;
+                font-size: 12px;
+                font-weight: 400;
+                color: Theme.ink;
+                horizontal-stretch: 1;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    if root.selected-day-events.length == 0 : HorizontalLayout {
+        x: 20px;
+        y: 381px;
+        width: 312px;
+        height: 24px;
+        spacing: 8px;
+        alignment: space-between;
+
+        Text {
+            text: root.active-calendars-label;
+            font-size: 12px;
+            font-weight: 400;
+            color: Theme.ink2;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            overflow: elide;
+        }
+        calendars-link := TouchArea {
+            width: 88px;
+            height: 18px;
+            clicked => { root.open-settings(1); }
+            Text {
+                width: parent.width;
+                height: parent.height;
+                text: root.nav-calendars-text;
+                font-size: 11px;
+                font-weight: 600;
+                color: calendars-link.has-hover ? Theme.accent : Theme.ink2;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

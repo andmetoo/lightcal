@@ -1,0 +1,108 @@
+// Lightcal design tokens (ADR 0011, design canvas "Lightcal Refresh").
+// Values come from the `.lc` (calendar) and `.st` (settings) variables in
+// design/canvas/*.dc.html. `AppWindow.dark-mode` is two-way bound to
+// `Theme.dark`, so every component reads the active palette from here.
+
+export global Theme {
+    // Switched by AppWindow.dark-mode.
+    in-out property <bool> dark: true;
+
+    // Segoe UI Variable Text is the family name Slint 1.18 resolves on Windows 11
+    // ("Segoe UI Variable" alone does not resolve). Rust switches this to
+    // "Segoe UI" when the variable font is missing (Windows 10). Elsewhere
+    // Slint falls back to the generic sans-serif and system-ui families.
+    in-out property <string> font-family: "Segoe UI Variable Text";
+
+    // ---- Surfaces ----
+    // Calendar popup background (.lc --bg).
+    out property <color> popup: dark ? #191919 : #FFFFFF;
+    // Settings and About window background (.st --page).
+    out property <color> page: dark ? #191919 : #F3F3F3;
+    out property <color> card: dark ? #222222 : #FFFFFF;
+    out property <color> card-line: dark ? #2A2A2A : #E8E8E8;
+
+    // ---- Text ----
+    out property <color> ink: dark ? #EEEEEE : #202020;
+    out property <color> ink2: dark ? #B4B4B4 : #646464;
+    out property <color> ink3: dark ? #8A8A8A : #707070;
+
+    // ---- Lines and states ----
+    // Inset row divider in settings cards (.st --line).
+    out property <color> line: dark ? #2E2E2E : #F0F0F0;
+    // Calendar header and agenda divider (.lc --line).
+    out property <color> popup-line: dark ? #2A2A2A : #F0F0F0;
+    out property <color> hover: dark ? #2A2A2A : #F0F0F0;
+    out property <color> press: dark ? #313131 : #E8E8E8;
+    out property <color> selected: dark ? #313131 : #E8E8E8;
+    // Flat shaded-weekday band behind calendar columns.
+    out property <color> weekend-band: dark ? #1F1F1F : #F7F7F7;
+    // Modal scrim behind in-window dialogs.
+    out property <color> scrim: dark ? #00000066 : #00000033;
+
+    // ---- Accent (Gray + Teal) ----
+    out property <color> accent: dark ? #53B9AB : #00796B;
+    out property <color> accent-soft: dark ? #53B9AB24 : #00796B1A;
+    // Primary button fill is the same teal in both themes.
+    out property <color> primary: #00796B;
+    out property <color> primary-hover: #00695C;
+    out property <color> on-primary: #FFFFFF;
+
+    // ---- Identity coral (app icon and Today only) ----
+    out property <color> coral: #D73840;
+    out property <color> coral-band: dark ? #B02E35 : #A92A31;
+    out property <color> on-coral: #FFFFFF;
+
+    // ---- Chips, controls, segmented track ----
+    out property <color> chip: dark ? #2A2A2A : #F0F0F0;
+    out property <color> control: dark ? #2A2A2A : #FFFFFF;
+    out property <color> control-line: dark ? #333333 : #E0E0E0;
+    out property <color> control-bottom-line: dark ? #3F3F3F : #CECECE;
+    out property <color> track: dark ? #161616 : #EBEBEB;
+    out property <color> thumb: dark ? #3A3A3A : #FFFFFF;
+    out property <color> toggle-off: dark ? #7B7B7B : #838383;
+    out property <color> key: dark ? #363636 : #F0F0F0;
+    out property <color> avatar: dark ? #1C2E2B : #E6F4F1;
+    // Windows caption Close hover.
+    out property <color> close-hover: #C42B1C;
+    out property <color> on-close-hover: #FFFFFF;
+
+    // ---- Status ----
+    out property <color> warn: dark ? #F2B866 : #8A5300;
+    out property <color> warn-bg: dark ? #33291A : #FFF4E0;
+    out property <color> err: dark ? #FF8A80 : #B3261E;
+    out property <color> err-bg: dark ? #3A2220 : #FDECEA;
+
+    // ---- Radii ----
+    out property <length> radius-window: 8px;
+    out property <length> radius-card: 8px;
+    out property <length> radius-control: 6px;
+    out property <length> radius-day: 8px;
+    out property <length> radius-key: 4px;
+
+    // ---- Metrics ----
+    out property <length> row-height: 40px;
+    out property <length> control-height: 28px;
+    out property <length> header-height: 44px;
+    out property <length> caption-height: 32px;
+    out property <length> tab-height: 40px;
+
+    // ---- Type scale (size / usual weight) ----
+    // About heading, 600.
+    out property <length> type-display: 20px;
+    // Month heading, 600.
+    out property <length> type-title: 17px;
+    // Day numerals, 500 (today and selected 600).
+    out property <length> type-day: 14px;
+    // Body: settings rows, buttons, agenda titles, 400/500.
+    out property <length> type-body: 13px;
+    // Secondary: agenda times, notes, footer, 400/500.
+    out property <length> type-caption: 12px;
+    // Weekday header, badges, key caps, 500/600.
+    out property <length> type-small: 11px;
+    // Week numbers, 500.
+    out property <length> type-tiny: 10px;
+    out property <int> weight-regular: 400;
+    out property <int> weight-medium: 500;
+    out property <int> weight-semibold: 600;
+    out property <int> weight-bold: 700;
+}
