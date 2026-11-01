@@ -67,6 +67,9 @@ fn main() {
     for key in [
         "LIGHTCAL_MICROSOFT_CLIENT_ID",
         "LIGHTCAL_GOOGLE_CLIENT_ID",
+        // Google treats a Desktop client secret as non-confidential; release builds
+        // embed it so installed copies can sign in. It is never printed.
+        "LIGHTCAL_GOOGLE_CLIENT_SECRET",
         "LIGHTCAL_UPDATE_CERT_SHA256",
     ] {
         println!("cargo:rerun-if-env-changed={key}");

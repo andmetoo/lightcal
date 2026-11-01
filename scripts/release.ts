@@ -34,6 +34,7 @@ import {
   verifyReleaseFiles,
   versionFromCheckout,
 } from "./release-draft.ts";
+import { ensureGh as ensureGhAt } from "./gh.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const SCRIPTS = join(ROOT, "scripts");
@@ -66,15 +67,7 @@ function output(cmd: string[]): string {
 const gh = (...args: string[]) => output(["gh", ...args]);
 const ghRun = (args: string[], failure: string) => run(["gh", ...args], failure);
 
-function ensureGh(): void {
-  let signedIn: boolean;
-  try {
-    signedIn = Bun.spawnSync(["gh", "auth", "status"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" }).exitCode === 0;
-  } catch {
-    throw new Error("gh is not installed. Install GitHub CLI (https://cli.github.com) and run gh auth login.");
-  }
-  if (!signedIn) throw new Error("gh is not signed in. Run gh auth login, then repeat this command.");
-}
+const ensureGh = () => ensureGhAt(ROOT);
 
 function requireWindows(message: string): void {
   if (process.platform !== "win32") throw new Error(message);
