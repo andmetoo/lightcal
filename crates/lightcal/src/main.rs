@@ -135,7 +135,7 @@ fn forget_sign_in_url() {
 
 /// Builds a normalized shortcut ("Ctrl + Alt + K") from a recorded key press.
 /// Returns `None` for keys Lightcal cannot register or presses without Ctrl, Alt or Win.
-#[cfg_attr(windows, allow(dead_code))]
+#[cfg(test)]
 fn shortcut_from_key(text: &str, ctrl: bool, alt: bool, shift: bool, meta: bool) -> Option<String> {
     shortcut_from_press(None, text, ctrl, alt, shift, meta)
 }
