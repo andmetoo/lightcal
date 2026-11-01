@@ -22,12 +22,21 @@ export function matchingBuildRuns(runs: BuildRun[], commit: string): BuildRun[] 
   return runs.filter((run) => run.headSha === commit && run.status === "completed" && run.event === "push");
 }
 
+/** Returns X.Y.Z from "X.Y.Z" or "vX.Y.Z", or null for anything else. */
+export function parseStableVersion(raw: string | undefined): string | null {
+  return raw?.trim().match(STABLE_VERSION)?.[1] ?? null;
+}
+
 export function requireStableVersion(raw: string | undefined): string {
-  const match = raw?.trim().match(STABLE_VERSION);
-  if (!match) {
+  const version = parseStableVersion(raw);
+  if (!version) {
     throw new Error(`Expected a stable version such as v0.2.0${raw?.trim() ? `: ${raw.trim()}` : ""}`);
   }
-  return match[1];
+  return version;
+}
+
+export function sha256Hex(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 export function versionFromCheckout(explicit: string | undefined): string {
@@ -173,7 +182,7 @@ export function assertChecksum(bytes: Uint8Array, checksumText: string, fileName
   if (parsed.name !== fileName) {
     throw new Error(`Checksum names ${parsed.name}, expected ${fileName}`);
   }
-  const actual = createHash("sha256").update(bytes).digest("hex");
+  const actual = sha256Hex(bytes);
   if (actual !== parsed.hash) throw new Error(`SHA-256 mismatch for ${fileName}`);
   return actual;
 }

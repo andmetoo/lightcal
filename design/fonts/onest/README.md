@@ -22,7 +22,7 @@ the author's release ZIP SHA-256, the source commit and each local file's SHA-25
 No downloaded package scripts are executed. Recreate the files from the repo root:
 
 ```powershell
-python scripts/vendor-onest.py
+bun scripts/vendor-onest.ts
 ```
 
 FontTools verification on October 31, 2026 found version 2.001 in both sources.
