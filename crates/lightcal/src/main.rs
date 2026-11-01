@@ -56,6 +56,8 @@ pub(crate) struct AppController {
     pub(crate) startup_warning: String,
     pub(crate) microsoft_account: lightcal::calendars::account::MicrosoftAccountState,
     pub(crate) provider_loading: bool,
+    /// Account state to restore if a load ends without a successful result.
+    pub(crate) account_before_check: Option<lightcal::calendars::account::MicrosoftAccountState>,
     pub(crate) install_busy: bool,
     pub(crate) install_status: String,
     pub(crate) startup_mgr: StartupManager,
@@ -593,6 +595,7 @@ impl AppController {
         ui.set_connection_busy(self.connection_busy);
         ui.set_connection_message(self.connection_message.clone().into());
         ui.set_startup_warning(self.startup_warning.clone().into());
+        ui.set_dismiss_label_text(catalog(self.prefs.locale()).dismiss_label.into());
         let account_idle = !self.connection_busy && !self.provider_loading;
         ui.set_provider_loading(self.provider_loading);
         ui.set_account_status_text(self.microsoft_account.status_text(locale).into());
@@ -1206,6 +1209,7 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
     let snapshot = data.snapshot;
     with_active_controller(&ui_weak, |ctrl, ui| {
         ctrl.microsoft_account = data.microsoft;
+        ctrl.account_before_check = None;
         ctrl.google_connected = data.google_connected;
         ctrl.google_needs_signin = data.google_needs_signin;
         if let Some(configuration) = data.google_configuration {
@@ -1247,16 +1251,22 @@ fn request_update_check(ui_weak: slint::Weak<AppWindow>) {
         return;
     }
     let mut start = false;
+    let mut failure_text = "";
     with_active_controller(&ui_weak, |ctrl, ui| {
         if ctrl.update_state != UpdateCheckState::Checking {
             ctrl.update_state = UpdateCheckState::Checking;
+            failure_text = catalog(ctrl.prefs.locale()).worker_failed_error;
             ctrl.sync_to_ui(ui);
             start = true;
         }
     });
     if start {
         std::thread::spawn(move || {
-            let state = lightcal::updater::check_latest_release(lightcal::version::VERSION);
+            let state =
+                run_guarded(|| lightcal::updater::check_latest_release(lightcal::version::VERSION))
+                    .unwrap_or_else(|_| {
+                        UpdateCheckState::InvalidResponse(failure_text.to_string())
+                    });
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_weak, |ctrl, ui| {
                     ctrl.update_state = state;
@@ -1280,8 +1290,10 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
         return;
     }
     let mut directory = None;
+    let mut failure_text = "";
     with_active_controller(&ui_weak, |ctrl, ui| {
         if !ctrl.install_busy {
+            failure_text = catalog(ctrl.prefs.locale()).worker_failed_error;
             ctrl.install_busy = true;
             ctrl.install_status = "Downloading and verifying the signed update…".into();
             directory = Some(ctrl.store.dir().to_path_buf());
@@ -1292,8 +1304,11 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
         return;
     };
     std::thread::spawn(move || {
-        let result = lightcal::installer::stage(&directory)
-            .and_then(|path| lightcal::installer::launch_helper(&path));
+        let result = run_guarded(|| {
+            lightcal::installer::stage(&directory)
+                .and_then(|path| lightcal::installer::launch_helper(&path))
+        })
+        .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
             Ok(()) => {
                 let _ = slint::quit_event_loop();
@@ -1320,14 +1335,62 @@ thread_local! {
     static RELOAD_SYNTHETIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// Runs a worker closure, converting a panic into an error so the completion callback
+/// always runs and the busy flags it owns are always cleared.
+fn run_guarded<T>(f: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .map_err(|_| "worker panicked".to_string())
+}
+
 /// Runs a calendar load, converting a panic into an error message so the completion path
 /// always runs and `provider_loading` is always cleared.
 fn run_load_guarded<F>(load: F) -> Result<lightcal::calendars::CalendarLoad, String>
 where
     F: FnOnce() -> lightcal::calendars::CalendarLoad,
 {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(load))
+    run_guarded(load)
         .map_err(|_| "Calendar refresh failed unexpectedly. It will be retried.".to_string())
+}
+
+/// Restores the account state saved before a check began. Only a still-`Checking` state is
+/// replaced, so a state set by another operation is never overwritten.
+fn restore_account_after_check(
+    account: &mut lightcal::calendars::account::MicrosoftAccountState,
+    before: &mut Option<lightcal::calendars::account::MicrosoftAccountState>,
+) {
+    let saved = before.take();
+    if matches!(
+        account,
+        lightcal::calendars::account::MicrosoftAccountState::Checking
+    ) {
+        if let Some(previous) = saved {
+            *account = previous;
+        }
+    }
+}
+
+/// A load result is applied only while its request is still current and the displayed month
+/// is the one that was loaded. Watchdog expiry does not change the request, so a healthy slow
+/// result still qualifies.
+fn result_is_visible(current_request: u64, request_id: u64, month_matches: bool) -> bool {
+    current_request == request_id && month_matches
+}
+
+/// Applies watchdog expiry to the shared state. The request id is left alone so a late result
+/// is still accepted. Returns true when the expiry applied.
+fn expire_load(
+    current_request: u64,
+    request_id: u64,
+    loading: &mut bool,
+    account: &mut lightcal::calendars::account::MicrosoftAccountState,
+    before: &mut Option<lightcal::calendars::account::MicrosoftAccountState>,
+) -> bool {
+    if !watchdog_should_expire(current_request, request_id, *loading) {
+        return false;
+    }
+    *loading = false;
+    restore_account_after_check(account, before);
+    true
 }
 
 /// Returns true when a load may start now; otherwise records that one reload is pending.
@@ -1383,19 +1446,23 @@ fn start_load_watchdog(ui_weak: slint::Weak<AppWindow>, request_id: u64) {
         move || {
             let mut expired = false;
             with_active_controller(&weak, |ctrl, ui| {
-                if watchdog_should_expire(ctrl.provider_request, request_id, ctrl.provider_loading)
-                {
+                if expire_load(
+                    ctrl.provider_request,
+                    request_id,
+                    &mut ctrl.provider_loading,
+                    &mut ctrl.microsoft_account,
+                    &mut ctrl.account_before_check,
+                ) {
                     expired = true;
-                    ctrl.provider_loading = false;
-                    // Make the late original result stale.
-                    ctrl.provider_request += 1;
+                    // The request stays alive: a late result for it is still applied.
                     ctrl.provider.status = lightcal::platform::ProviderStatus::ProviderUnavailable(
-                        "Calendar refresh timed out".to_string(),
+                        catalog(ctrl.prefs.locale()).refresh_slow_status.to_string(),
                     );
                     ctrl.sync_to_ui(ui);
                 }
             });
             if expired {
+                // Only replays when a reload is actually pending.
                 replay_pending_reload(weak.clone());
             }
         },
@@ -1415,7 +1482,6 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
     let mut anchor = None;
     let mut request_id = 0;
     let mut config = None;
-    let mut previous_account = None;
     with_active_controller(&ui_weak, |ctrl, ui| {
         if !start_or_defer_reload(ctrl.connection_busy || ctrl.provider_loading) {
             return;
@@ -1425,13 +1491,14 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
         let month = ctrl.cal_state.displayed_month;
         anchor = LocalDate::new(month.year, month.month, 1);
         config = Some((ctrl.store.dir().to_path_buf(), ctrl.prefs.clone()));
-        previous_account = Some(ctrl.microsoft_account.clone());
         ctrl.provider_loading = true;
         if !matches!(
             ctrl.microsoft_account,
             lightcal::calendars::account::MicrosoftAccountState::Disconnected
                 | lightcal::calendars::account::MicrosoftAccountState::Connected { .. }
+                | lightcal::calendars::account::MicrosoftAccountState::Checking
         ) {
+            ctrl.account_before_check = Some(ctrl.microsoft_account.clone());
             ctrl.microsoft_account = lightcal::calendars::account::MicrosoftAccountState::Checking;
         }
         ctrl.sync_to_ui(ui);
@@ -1469,14 +1536,22 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                 cancel_load_watchdog(request_id);
                 let mut still_visible = false;
                 with_active_controller(&ui_weak, |ctrl, _| {
-                    still_visible = ctrl.provider_request == request_id
-                        && ctrl.cal_state.displayed_month == anchor.year_month();
+                    still_visible = result_is_visible(
+                        ctrl.provider_request,
+                        request_id,
+                        ctrl.cal_state.displayed_month == anchor.year_month(),
+                    );
                     if !still_visible
                         && stale_result_releases_guard(ctrl.provider_request, request_id)
                     {
                         // A stale result is dropped, but this request's in-flight guard must
-                        // be released. A newer request owns its own flag.
+                        // be released and its account check ended. A newer request owns its
+                        // own flag and saved state.
                         ctrl.provider_loading = false;
+                        restore_account_after_check(
+                            &mut ctrl.microsoft_account,
+                            &mut ctrl.account_before_check,
+                        );
                     }
                 });
                 match result {
@@ -1485,14 +1560,10 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                     Err(_) if !still_visible => {}
                     Err(message) => with_active_controller(&ui_weak, |ctrl, ui| {
                         ctrl.provider_loading = false;
-                        if matches!(
-                            ctrl.microsoft_account,
-                            lightcal::calendars::account::MicrosoftAccountState::Checking
-                        ) {
-                            if let Some(previous) = previous_account {
-                                ctrl.microsoft_account = previous;
-                            }
-                        }
+                        restore_account_after_check(
+                            &mut ctrl.microsoft_account,
+                            &mut ctrl.account_before_check,
+                        );
                         ctrl.provider.status =
                             lightcal::platform::ProviderStatus::ProviderUnavailable(message);
                         ctrl.sync_to_ui(ui);
@@ -1556,6 +1627,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 ctrl.cal_state.today,
                 ctrl.microsoft_account.clone(),
                 sign_in_epoch,
+                ctrl.prefs.locale(),
             ));
             if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
                 ctrl.held_microsoft = ctrl.microsoft_account.clone();
@@ -1580,7 +1652,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             ctrl.sync_to_ui(ui);
         }
     });
-    let Some((dir, anchor, previous_account, sign_in_epoch)) = config else {
+    let Some((dir, anchor, previous_account, sign_in_epoch, worker_locale)) = config else {
         return;
     };
     std::thread::spawn(move || {
@@ -1613,6 +1685,21 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 }
                 _ => {}
             }
+            if let CalendarAction::AddIcs(name, address) = &action {
+                // Validate and download without holding the credential lock; the lock is
+                // taken only briefly to read the current subscriptions.
+                let mut probe = {
+                    let _guard = lightcal::secure_store::credential_lock()?;
+                    lightcal::secure_store::SecureStore::new(&dir).load()?
+                };
+                let id = lightcal::calendars::add_feed(&mut probe, name, address)?;
+                let feed = probe
+                    .ics
+                    .iter()
+                    .find(|f| f.id == id)
+                    .ok_or("Could not prepare ICS subscription")?;
+                lightcal::calendars::ics::fetch(feed, anchor)?;
+            }
             let _guard = lightcal::secure_store::credential_lock()?;
             let save = || -> Result<Option<String>, String> {
                 let store = lightcal::secure_store::SecureStore::new(&dir);
@@ -1643,13 +1730,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                         removed = Some("google:".to_string());
                     }
                     CalendarAction::AddIcs(name, address) => {
-                        let id = lightcal::calendars::add_feed(&mut credentials, name, address)?;
-                        let feed = credentials
-                            .ics
-                            .iter()
-                            .find(|f| f.id == id)
-                            .ok_or("Could not prepare ICS subscription")?;
-                        lightcal::calendars::ics::fetch(feed, anchor)?;
+                        // The feed was already downloaded and validated without the lock.
+                        lightcal::calendars::add_feed(&mut credentials, name, address)?;
                     }
                     CalendarAction::Remove(id) => {
                         if id.starts_with("graph:") {
@@ -1678,7 +1760,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 save()
             }
         };
-        let result = operation();
+        let result = run_guarded(operation)
+            .unwrap_or_else(|_| Err(catalog(worker_locale).worker_failed_error.to_string()));
         let added_ics = matches!(action, CalendarAction::AddIcs(..));
         let (connected_client, connected_google) = match action {
             CalendarAction::ConnectMicrosoft(client) => (Some(client), None),
@@ -1935,6 +2018,7 @@ fn main() {
         startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Checking,
         provider_loading: false,
+        account_before_check: None,
         install_busy: false,
         install_status: String::new(),
         startup_mgr,
@@ -3011,6 +3095,75 @@ mod tests {
     fn stale_result_never_releases_a_newer_requests_guard() {
         assert!(stale_result_releases_guard(4, 4));
         assert!(!stale_result_releases_guard(5, 4));
+    }
+
+    fn unavailable() -> lightcal::calendars::account::MicrosoftAccountState {
+        lightcal::calendars::account::MicrosoftAccountState::Unavailable {
+            saved_credentials: true,
+        }
+    }
+
+    #[test]
+    fn expiry_unlocks_restores_account_and_keeps_the_request_alive() {
+        use lightcal::calendars::account::MicrosoftAccountState as S;
+        let mut loading = true;
+        let mut account = S::Checking;
+        let mut before = Some(unavailable());
+        let request = 7;
+        assert!(expire_load(
+            request,
+            request,
+            &mut loading,
+            &mut account,
+            &mut before
+        ));
+        assert!(!loading);
+        assert_eq!(account, unavailable());
+        assert!(before.is_none());
+        // Late result after expiry: the request id is unchanged, so it is still applied.
+        assert!(result_is_visible(request, request, true));
+        // A second expiry for the same request is a no-op.
+        assert!(!expire_load(
+            request,
+            request,
+            &mut loading,
+            &mut account,
+            &mut before
+        ));
+    }
+
+    #[test]
+    fn late_result_is_dropped_when_a_newer_request_exists() {
+        // Request 7 expired, then request 8 started: 7's late result is stale and must not
+        // release request 8's guard.
+        assert!(!result_is_visible(8, 7, true));
+        assert!(!stale_result_releases_guard(8, 7));
+        // Same request but the user moved to another month: dropped, guard released.
+        assert!(!result_is_visible(7, 7, false));
+        assert!(stale_result_releases_guard(7, 7));
+    }
+
+    #[test]
+    fn restore_only_replaces_a_checking_account() {
+        use lightcal::calendars::account::MicrosoftAccountState as S;
+        let mut account = S::Checking;
+        let mut before = Some(unavailable());
+        restore_account_after_check(&mut account, &mut before);
+        assert_eq!(account, unavailable());
+        assert!(before.is_none());
+
+        let mut account = S::Disconnected;
+        let mut before = Some(unavailable());
+        restore_account_after_check(&mut account, &mut before);
+        assert_eq!(account, S::Disconnected);
+        assert!(before.is_none());
+    }
+
+    #[test]
+    fn panicking_worker_yields_an_error() {
+        let result: Result<(), String> = run_guarded(|| panic!("worker exploded"));
+        assert!(result.is_err());
+        assert_eq!(run_guarded(|| 5).unwrap(), 5);
     }
 
     #[test]

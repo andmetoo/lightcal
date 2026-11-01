@@ -37,6 +37,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
         provider_loading: false,
+        account_before_check: None,
         install_busy: false,
         install_status: String::new(),
         startup_mgr: StartupManager::from_env(dir),
