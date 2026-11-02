@@ -166,7 +166,7 @@
     "slint": {
       "fill": "gray",
       "size": 24,
-      "text": "Owner decisions, 1 Nov 2026\n• Approved: darker coral band on Today and the icons (#A92A31 / #B02E35).\n• Approved: Mica backdrop on Windows 11 as optional; needs a Slint/DWM prototype.\n• Approved: expandable event details with Copy and Open in provider (Google / Outlook web; hidden for ICS).\n• Windows only: macOS dropped from the design.\n• Approved 2 Nov: a − button after Settings hides the popup to the tray, like Escape.\nBuild notes: solid fills, rounded rects, one clip, 1–2 px borders, no blur. Window corners and shadow come from DWM.",
+      "text": "Owner decisions, 1 Nov 2026\n• Approved: darker coral band on Today and the icons (#A92A31 / #B02E35).\n• Approved: Mica backdrop on Windows 11 as optional; needs a Slint/DWM prototype.\n• Approved: expandable event details with Copy and Open in provider (Google / Outlook web; hidden for ICS).\n• Windows only: macOS dropped from the design.\n• Approved 2 Nov: a − button after Settings hides the popup to the tray, like Escape.\n• Approved 2 Nov: on the current day the month arrows sit together (‹ ›); leaving it slides them apart and fades Today in between (180 ms, ease-in-out).\nBuild notes: solid fills, rounded rects, one clip, 1–2 px borders, no blur. Window corners and shadow come from DWM.",
       "w": 520,
       "x": 1940,
       "y": 552,

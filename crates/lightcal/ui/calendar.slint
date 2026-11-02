@@ -373,11 +373,22 @@ export component CalendarView inherits Rectangle {
             label: root.prev-label;
             clicked => { root.prev-month(); }
         }
-        TextButton {
-            label: root.today-button-label;
-            visible: !root.today-hidden;
-            enabled: !root.today-hidden;
-            clicked => { root.return-to-today(); }
+        // On the current day the arrows sit together; leaving it slides them apart and
+        // fades Today in between.
+        today-slot := Rectangle {
+            width: root.today-hidden ? 0px : today-button.preferred-width;
+            opacity: root.today-hidden ? 0 : 1;
+            clip: true;
+            animate width, opacity { duration: 180ms; easing: ease-in-out; }
+
+            today-button := TextButton {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                label: root.today-button-label;
+                visible: today-slot.width > 0px;
+                enabled: !root.today-hidden;
+                clicked => { root.return-to-today(); }
+            }
         }
         IconButton {
             icon: "chevron-right";

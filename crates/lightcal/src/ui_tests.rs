@@ -232,7 +232,8 @@ fn month_navigation_continues_after_today() {
         (255.0, 22.0, "January 2027", true),
         (170.0, 22.0, "December 2026", true),
         (170.0, 22.0, "November 2026", true),
-        (170.0, 22.0, "October 2026", true),
+        // On today Today folds away, so the arrows sit together and previous moves right.
+        (225.0, 22.0, "October 2026", true),
         (187.0, 200.0, "October 2026", false),
         (255.0, 22.0, "November 2026", true),
         (145.0, 212.0, "November 2026", false),
@@ -260,7 +261,7 @@ fn month_navigation_continues_after_today() {
             );
         }
         assert_eq!(ui.get_month_title(), month, "navigation step {step}");
-        slint::platform::update_timers_and_animations();
+        lightcal::snapshot::settle_animations();
         window.draw_if_needed(|renderer| {
             renderer.render(&mut pixels, 528);
         });
