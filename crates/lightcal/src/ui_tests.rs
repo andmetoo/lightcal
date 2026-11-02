@@ -99,6 +99,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         ics_error: String::new(),
         agenda: Default::default(),
         last_refreshed: None,
+        // Off screen unless a test says otherwise; never the process-wide native window.
+        on_screen: || false,
     }
 }
 
@@ -1147,14 +1149,9 @@ fn today_folds_between_the_arrows_on_the_current_day() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-#[cfg(windows)]
 #[test]
-fn header_animates_only_while_the_native_popup_is_on_screen() {
-    use lightcal::platform::windows::test_window::TestWindow;
+fn header_animates_only_while_the_popup_is_on_screen() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        ShowWindow, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOWNOACTIVATE,
-    };
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
     slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
     let ui = AppWindow::new().unwrap();
@@ -1164,32 +1161,27 @@ fn header_animates_only_while_the_native_popup_is_on_screen() {
     ));
     let mut ctrl = controller(&dir);
     ctrl.settings_open = false;
-    let sync_after = |ctrl: &mut AppController, months: i32| {
-        ctrl.cal_state.navigate_months(months);
-        ctrl.sync_to_ui(&ui);
-        ui.get_header_motion()
-    };
-
-    // Snapshots: a visible headless window but no native popup, so nothing animates.
     ui.show().unwrap();
-    assert!(!sync_after(&mut ctrl, 1));
 
-    // A native "Lightcal" window stands in for the popup, read the same way the tray does.
-    let native = TestWindow::new("Lightcal");
-    assert!(
-        !sync_after(&mut ctrl, 1),
-        "hidden: tray Today syncs before showing"
-    );
-    unsafe { ShowWindow(native.0, SW_SHOWNOACTIVATE) };
-    assert!(sync_after(&mut ctrl, 1), "on screen: navigation animates");
-    unsafe { ShowWindow(native.0, SW_MINIMIZE) };
-    assert!(!sync_after(&mut ctrl, 1), "minimized from the taskbar");
-    unsafe { ShowWindow(native.0, SW_RESTORE) };
-    assert!(sync_after(&mut ctrl, 1), "restored");
-    unsafe { ShowWindow(native.0, SW_HIDE) };
-    assert!(
-        !sync_after(&mut ctrl, 1),
-        "hidden by −, Escape or the tray toggle"
-    );
+    // Off screen (hidden, taskbar-minimized, snapshots; the tray Today item syncs before
+    // showing): the header settles. main_window_is_open's native states are covered by
+    // shell.rs's native_window_state_follows_taskbar_minimize_restore_and_hide.
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert!(!ui.get_header_motion());
+
+    // On screen: every change synced animates, whatever triggered it (arrows, wheel,
+    // keys, the agenda's Next link).
+    ctrl.on_screen = || true;
+    ctrl.cal_state.return_to_today();
+    ctrl.sync_to_ui(&ui);
+    assert!(ui.get_header_motion());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_app_reads_the_native_window_for_header_motion() {
+    // main() wires the controller to the native probe; headless there is no native
+    // "Lightcal" window in this process, so it reports off screen.
+    assert!(!popup_on_screen());
 }

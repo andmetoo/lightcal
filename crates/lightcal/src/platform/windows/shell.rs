@@ -635,7 +635,8 @@ fn is_lightcal_hwnd(hwnd: windows_sys::Win32::Foundation::HWND) -> bool {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindow, GW_OWNER,
     };
-    // SAFETY: these calls only read window state; a stale handle fails IsWindow first.
+    // SAFETY: these calls only read window state. A destroyed handle fails IsWindow; one
+    // that Windows has recycled for another window fails the process, owner or title check.
     unsafe {
         if IsWindow(hwnd) == 0 {
             return false;
@@ -647,12 +648,17 @@ fn is_lightcal_hwnd(hwnd: windows_sys::Win32::Foundation::HWND) -> bool {
         }
         let mut title_buf = [0u16; 64];
         let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 64);
-        len > 0 && String::from_utf16_lossy(&title_buf[..len as usize]) == "Lightcal"
+        len > 0
+            && title_buf[..len as usize]
+                .iter()
+                .copied()
+                .eq("Lightcal".encode_utf16())
     }
 }
 
-/// Finds the main application HWND owned by this process. The handle is cached and
-/// re-checked on each call, so the top-level windows are enumerated only when it changes.
+/// Finds the main application HWND owned by this process. A handle is cached only when it
+/// is the one match, and re-checked on each call, so the top-level windows are enumerated
+/// only when it changes; with several matches (native tests) every call looks again.
 #[cfg(windows)]
 pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
     use std::sync::atomic::{AtomicPtr, Ordering};
@@ -661,10 +667,19 @@ pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
 
     static CACHED: AtomicPtr<core::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
 
+    // The first match and how many there are.
+    struct Found {
+        hwnd: HWND,
+        count: usize,
+    }
+
     unsafe extern "system" fn find(hwnd: HWND, data: LPARAM) -> i32 {
         if is_lightcal_hwnd(hwnd) {
-            *(data as *mut HWND) = hwnd;
-            return 0; // stop enumeration
+            let found = &mut *(data as *mut Found);
+            if found.count == 0 {
+                found.hwnd = hwnd;
+            }
+            found.count += 1;
         }
         1
     }
@@ -673,12 +688,20 @@ pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
     if !cached.is_null() && is_lightcal_hwnd(cached) {
         return cached;
     }
-    let mut hwnd: HWND = std::ptr::null_mut();
+    let mut found = Found {
+        hwnd: std::ptr::null_mut(),
+        count: 0,
+    };
     unsafe {
-        EnumWindows(Some(find), &mut hwnd as *mut HWND as LPARAM);
+        EnumWindows(Some(find), &mut found as *mut Found as LPARAM);
     }
-    CACHED.store(hwnd, Ordering::Relaxed);
-    hwnd
+    let unique = if found.count == 1 {
+        found.hwnd
+    } else {
+        std::ptr::null_mut()
+    };
+    CACHED.store(unique, Ordering::Relaxed);
+    found.hwnd
 }
 
 /// Reads the actual native state, including taskbar minimization outside Slint callbacks.

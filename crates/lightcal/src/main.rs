@@ -119,6 +119,10 @@ pub(crate) struct AppController {
     pub(crate) agenda: calendar_view::AgendaUiState,
     /// When calendars last loaded successfully; drives "Updated … ago" in Accounts.
     pub(crate) last_refreshed: Option<chrono::DateTime<chrono::Local>>,
+    /// Whether the popup is on screen right now, so header changes animate. The app reads
+    /// the native window (`popup_on_screen`); snapshots and tests pass a fixed answer so
+    /// process-wide native state cannot leak between them.
+    pub(crate) on_screen: fn() -> bool,
 }
 
 thread_local! {
@@ -2744,6 +2748,7 @@ fn main() {
         ics_error: String::new(),
         agenda: Default::default(),
         last_refreshed: None,
+        on_screen: popup_on_screen,
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;
