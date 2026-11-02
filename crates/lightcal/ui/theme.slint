@@ -3,6 +3,8 @@
 // design/canvas/*.dc.html. `AppWindow.dark-mode` is two-way bound to
 // `Theme.dark`, so every component reads the active palette from here.
 
+import { MarkColor } from "types.slint";
+
 export global Theme {
     // Switched by AppWindow.dark-mode.
     in-out property <bool> dark: true;
@@ -71,6 +73,12 @@ export global Theme {
     out property <color> warn-bg: dark ? #33291A : #FFF4E0;
     out property <color> err: dark ? #FF8A80 : #B3261E;
     out property <color> err-bg: dark ? #3A2220 : #FDECEA;
+
+    // ---- Calendar marks ----
+    // Day dots, agenda marks and swatches switch with the palette.
+    public pure function mark(c: MarkColor) -> color {
+        return dark ? c.dark : c.light;
+    }
 
     // ---- Radii ----
     out property <length> radius-window: 8px;

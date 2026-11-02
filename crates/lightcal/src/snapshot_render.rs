@@ -568,7 +568,12 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             ctrl.calendars_is_empty = !partial;
             ctrl.sync_to_ui(&ui);
             assert!(ui.get_calendars_access_denied());
-            assert_eq!(ui.get_calendar_sources().row_count() > 0, partial);
+            let listed_sources = ui
+                .get_account_cards()
+                .iter()
+                .map(|card| card.sources.row_count())
+                .sum::<usize>();
+            assert_eq!(listed_sources > 0, partial);
             helper.render_to_png(
                 &out_dir.join(format!(
                     "21-permission-{}-{}.png",
