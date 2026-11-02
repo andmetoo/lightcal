@@ -1581,26 +1581,30 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
             .is_some_and(|hooks| hooks.is_attached_to(hwnd));
         if !attached {
             let restore_ui = ui.as_weak();
+            let snapshot_ui = ui.as_weak();
             // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
             let hooks = unsafe {
-                lightcal::platform::windows::taskbar::WindowHooks::install(hwnd, move || {
-                    // Runs before the restored window paints, so its first frame is complete.
-                    if let Some(ui) = restore_ui.upgrade() {
-                        request_full_repaint(&ui);
-                    }
-                })
+                lightcal::platform::windows::taskbar::WindowHooks::install(
+                    hwnd,
+                    move || {
+                        // Runs before the restored window paints, so its first frame is complete.
+                        if let Some(ui) = restore_ui.upgrade() {
+                            request_full_repaint(&ui);
+                        }
+                    },
+                    move || {
+                        let ui = snapshot_ui.upgrade()?;
+                        if ui.get_settings_open() {
+                            return None;
+                        }
+                        ui.window().take_snapshot().ok()
+                    },
+                )
             };
             *slot.borrow_mut() = hooks.ok();
         }
         if let Some(hooks) = slot.borrow().as_ref() {
-            let snapshot_ui = ui.as_weak();
-            hooks.enable_preview(move || {
-                let ui = snapshot_ui.upgrade()?;
-                if ui.get_settings_open() {
-                    return None;
-                }
-                ui.window().take_snapshot().ok()
-            });
+            hooks.request_previews();
         }
     });
 }
