@@ -1160,20 +1160,30 @@ fn header_animates_only_for_changes_made_while_the_popup_is_shown() {
     let mut ctrl = controller(&dir);
     ctrl.settings_open = false;
 
-    // Hidden (startup, tray Today before the window opens): no motion.
+    // Never opened (startup, snapshots): no motion even though the window exists.
+    ui.show().unwrap();
     ctrl.cal_state.navigate_months(1);
     ctrl.sync_to_ui(&ui);
     assert!(!ui.get_header_motion());
 
-    // On screen: every change synced from now on animates, whatever triggered it
-    // (arrows, wheel, keys, the agenda's Next link).
-    ui.set_popup_shown(true);
+    // Opened through the production path: every change synced from now on animates,
+    // whatever triggered it (arrows, wheel, keys, the agenda's Next link).
+    show_application_window(&ui);
     ctrl.cal_state.return_to_today();
     ctrl.sync_to_ui(&ui);
     assert!(ui.get_header_motion());
 
-    // Hidden again: settled for the next show.
-    ui.set_popup_shown(false);
+    // Minimized from the taskbar: changes wait, settled, for the restore.
+    ui.window().set_minimized(true);
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert!(!ui.get_header_motion());
+    ui.window().set_minimized(false);
+
+    // Hidden (− button, Escape, tray toggle): the tray Today item syncs before showing,
+    // so the popup opens settled.
+    hide_application_window(&ui);
+    ctrl.cal_state.return_to_today();
     ctrl.sync_to_ui(&ui);
     assert!(!ui.get_header_motion());
     let _ = std::fs::remove_dir_all(&dir);

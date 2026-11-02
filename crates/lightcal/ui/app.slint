@@ -52,10 +52,9 @@ export component AppWindow inherits Window {
     in property <string> next-month-label: "Next month";
     in property <[ShadedBand]> shaded-bands: [];
     in-out property <bool> calendar-keyboard-nav: false;
-    // Set by Rust: the header animates only for changes made while the popup is on
-    // screen (popup-shown), never for ones applied just before it opens.
+    // Set by Rust with the header data: the header animates only for changes made while
+    // the popup is on screen, never for ones applied just before it opens.
     in property <bool> header-motion: false;
-    in-out property <bool> popup-shown: false;
     in property <string> agenda-title: "";
     in property <string> agenda-count: "";
     in property <[AgendaChipRow]> agenda-chip-rows: [];

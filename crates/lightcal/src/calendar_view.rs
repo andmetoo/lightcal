@@ -234,7 +234,7 @@ impl AppController {
             ui.set_year_first(false);
         }
         // Animate the Today slot only when this change happens in front of the user.
-        ui.set_header_motion(ui.get_popup_shown());
+        ui.set_header_motion(crate::popup_on_screen(ui));
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());

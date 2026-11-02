@@ -38,7 +38,7 @@ use slint::{
     ComponentHandle, Image, LogicalSize, ModelRc, PhysicalPosition, Rgba8Pixel, SharedPixelBuffer,
     SharedString, VecModel,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::env;
 use std::path::Path;
 use std::rc::Rc;
@@ -1579,9 +1579,21 @@ impl AppController {
     }
 }
 
+thread_local! {
+    // Set by show_application_window, cleared by hide_application_window. Snapshots and
+    // tests that never "open" the popup keep it false, so their header never animates.
+    static POPUP_SHOWN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Whether a header change synced now happens in front of the user: the popup was opened,
+/// has not been hidden since, and is not minimized from the taskbar.
+fn popup_on_screen(ui: &AppWindow) -> bool {
+    POPUP_SHOWN.with(Cell::get) && application_window_is_open(ui)
+}
+
 fn show_application_window(ui: &AppWindow) {
     // Header changes synced from now on happen in front of the user and animate.
-    ui.set_popup_shown(true);
+    POPUP_SHOWN.with(|shown| shown.set(true));
     let _ = ui.show();
     #[cfg(windows)]
     {
@@ -1600,7 +1612,7 @@ fn show_application_window(ui: &AppWindow) {
 
 fn hide_application_window(ui: &AppWindow) {
     // Changes made while hidden (tray Today, midnight) appear settled on the next show.
-    ui.set_popup_shown(false);
+    POPUP_SHOWN.with(|shown| shown.set(false));
     // The window hides under the pointer (the header − button); without this the button
     // keeps its hover fill when the calendar opens again.
     ui.window()
