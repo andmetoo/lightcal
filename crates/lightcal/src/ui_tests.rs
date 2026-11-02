@@ -691,6 +691,58 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
 }
 
 #[test]
+fn past_agenda_rows_keep_their_calendar_bar_at_full_color() {
+    use slint::platform::software_renderer::{
+        MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,
+    };
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-past-bar-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.provider = crate::snapshot_render::canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    let today = ctrl.cal_state.today;
+    ctrl.agenda.now_override = Some(calendar_core::local_minutes(today, 14 * 60 + 5));
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    window.set_size(slint::PhysicalSize::new(352, 432));
+
+    let past = ui.get_agenda_events().row_data(0).unwrap();
+    assert!(past.dimmed);
+    let mut pixels = vec![PremultipliedRgbaColor::default(); 352 * 432];
+    slint::platform::update_timers_and_animations();
+    window.draw_if_needed(|renderer| {
+        renderer.render(&mut pixels, 352);
+    });
+    // The first timed row is centred at y = 344, its 3 px bar near the left edge.
+    let swatch = [past.swatch.red(), past.swatch.green(), past.swatch.blue()];
+    let bar_drawn = (334..354)
+        .flat_map(|y| (0..60).map(move |x| y * 352 + x))
+        .any(|index| {
+            let pixel = pixels[index];
+            [pixel.red, pixel.green, pixel.blue] == swatch
+        });
+    assert!(
+        bar_drawn,
+        "the past row's bar is drawn in its full color {swatch:?}, not faded with the text"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn recorded_keys_become_registrable_shortcuts() {
     // The physical key wins over the produced text: Ctrl+Alt+M types "\r", Shift+2 types "@".
     assert_eq!(

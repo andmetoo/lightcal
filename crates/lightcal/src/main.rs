@@ -17,9 +17,11 @@ use lightcal::preferences::{
     LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 mod calendar_view;
+mod event_colors;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
+use event_colors::event_color;
 use snapshot_render::render_snapshots_to_dir;
 
 use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
@@ -369,20 +371,6 @@ fn current_local_date() -> LocalDate {
         .unwrap_or_else(|| LocalDate::new(2026, 10, 29).unwrap())
 }
 
-fn parse_hex_color(hex: &str) -> Color {
-    let h = hex.trim().trim_start_matches('#');
-    if h.len() == 6 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            u8::from_str_radix(&h[0..2], 16),
-            u8::from_str_radix(&h[2..4], 16),
-            u8::from_str_radix(&h[4..6], 16),
-        ) {
-            return Color::from_rgb_u8(r, g, b);
-        }
-    }
-    Color::from_rgb_u8(94, 106, 210)
-}
-
 fn resolve_dark_mode(theme: ThemePreference) -> bool {
     match theme {
         ThemePreference::Dark => true,
@@ -615,21 +603,13 @@ impl AppController {
                 if c.is_selected {
                     selected_total_events = c.total_event_count;
                 }
-                let d1 = c
-                    .dot_colors
-                    .first()
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
-                let d2 = c
-                    .dot_colors
-                    .get(1)
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
-                let d3 = c
-                    .dot_colors
-                    .get(2)
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
+                let dot = |i: usize| {
+                    c.dot_colors
+                        .get(i)
+                        .map(|hex| event_color(hex, dark_mode))
+                        .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0))
+                };
+                let (d1, d2, d3) = (dot(0), dot(1), dot(2));
                 let date_desc = format_date_line(locale, c.date, true);
                 let ev_desc = format_event_count(locale, c.total_event_count);
                 DayCellData {
@@ -1146,13 +1126,16 @@ impl AppController {
                 id: s.id.clone().into(),
                 name: s.name.clone().into(),
                 account: s.account_label.clone().into(),
-                swatch: parse_hex_color(&s.color_hex),
+                swatch: event_color(&s.color_hex, dark_mode),
                 checked: self.prefs.selected_calendar_ids.contains(&s.id),
                 removable: s.id.starts_with("ics:"),
             })
             .collect();
         let (outlook_items, google_items, ics_items, windows_items) = split_sources(&cal_items);
-        ui.set_calendar_sources(publish_sources(ui.get_calendar_sources(), cal_items));
+        ui.set_calendar_sources(publish_sources(
+            ui.get_calendar_sources(),
+            cal_items.clone(),
+        ));
         ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), outlook_items));
         ui.set_google_sources(publish_sources(ui.get_google_sources(), google_items));
         ui.set_ics_sources(publish_sources(ui.get_ics_sources(), ics_items));
@@ -1176,7 +1159,7 @@ impl AppController {
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
-        self.sync_settings_view(ui);
+        self.sync_settings_view(ui, &cal_items);
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
@@ -1212,7 +1195,7 @@ impl AppController {
 
 /// Settings and About (ADR 0011): copy, account cards and update status.
 impl AppController {
-    fn sync_settings_view(&self, ui: &AppWindow) {
+    fn sync_settings_view(&self, ui: &AppWindow, items: &[CalendarSourceItem]) {
         use lightcal::calendars::account::MicrosoftAccountState as Ms;
         use lightcal::i18n::{settings_text, updated_ago};
         let locale = self.prefs.locale();
@@ -1245,20 +1228,7 @@ impl AppController {
                 .unwrap_or_else(|| fallback.to_string())
         };
 
-        let items: Vec<CalendarSourceItem> = self
-            .provider
-            .sources
-            .iter()
-            .map(|s| CalendarSourceItem {
-                id: s.id.clone().into(),
-                name: s.name.clone().into(),
-                account: s.account_label.clone().into(),
-                swatch: parse_hex_color(&s.color_hex),
-                checked: self.prefs.selected_calendar_ids.contains(&s.id),
-                removable: s.id.starts_with("ics:"),
-            })
-            .collect();
-        let (outlook, google, ics, windows) = split_sources(&items);
+        let (outlook, google, ics, windows) = split_sources(items);
         let can_refresh = ui.get_can_refresh_calendars();
         let idle = !self.connection_busy && !self.provider_loading;
         let model = |list: Vec<CalendarSourceItem>| ModelRc::new(VecModel::from(list));

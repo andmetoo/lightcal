@@ -163,8 +163,8 @@ component AgendaRow inherits Rectangle {
         padding-left: 4px;
         padding-right: 4px;
         spacing: 10px;
-        opacity: root.event.dimmed ? 0.55 : 1;
 
+        // Past rows dim their text only: a faded bar would lose its contrast.
         VerticalLayout {
             alignment: center;
             Rectangle {
@@ -176,6 +176,7 @@ component AgendaRow inherits Rectangle {
         }
         Text {
             width: 80px;
+            opacity: root.event.dimmed ? 0.55 : 1;
             text: root.event.time-label;
             font-size: Theme.type-caption;
             font-weight: Theme.weight-medium;
@@ -185,6 +186,7 @@ component AgendaRow inherits Rectangle {
         }
         Text {
             horizontal-stretch: 1;
+            opacity: root.event.dimmed ? 0.55 : 1;
             text: root.event.title;
             font-size: Theme.type-body;
             font-weight: root.event.is-now ? Theme.weight-semibold : Theme.weight-regular;
@@ -210,6 +212,7 @@ component AgendaRow inherits Rectangle {
             }
         }
         if !root.event.is-now && root.event.badge != "" : Text {
+            opacity: root.event.dimmed ? 0.55 : 1;
             text: root.event.badge;
             font-size: Theme.type-small;
             font-weight: Theme.weight-medium;
