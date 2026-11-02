@@ -79,6 +79,79 @@ fn controller(dir: &std::path::Path) -> AppController {
 }
 
 #[test]
+fn full_repaint_redraws_a_surface_windows_discarded() {
+    use slint::platform::software_renderer::{
+        MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,
+    };
+    // winit's software surface reports a reused buffer, as it does after a taskbar restore.
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-full-repaint-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.prefs.theme = ThemePreference::Dark;
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    ui.window()
+        .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
+    let (width, height) = (528, 648);
+    window.set_size(slint::PhysicalSize::new(width, height));
+    let mut pixels = vec![PremultipliedRgbaColor::default(); (width * height) as usize];
+    let render = |pixels: &mut [PremultipliedRgbaColor]| {
+        slint::platform::update_timers_and_animations();
+        let mut region = None;
+        window.draw_if_needed(|renderer| region = Some(renderer.render(pixels, width as usize)));
+        region.map_or(0, |region| {
+            let size = region.bounding_box_size();
+            size.width * size.height
+        })
+    };
+    assert_eq!(render(&mut pixels), width * height);
+
+    // Windows dropped the pixels while minimized; nothing in the UI changed.
+    let discarded = |pixel: &PremultipliedRgbaColor| {
+        (pixel.red, pixel.green, pixel.blue, pixel.alpha) == (255, 0, 255, 255)
+    };
+    pixels.iter_mut().for_each(|pixel| {
+        *pixel = PremultipliedRgbaColor {
+            red: 255,
+            green: 0,
+            blue: 255,
+            alpha: 255,
+        }
+    });
+    ui.window().request_redraw();
+    assert_eq!(
+        render(&mut pixels),
+        0,
+        "A plain redraw presents nothing, which left the restored window blank"
+    );
+
+    request_full_repaint(&ui);
+    assert_eq!(render(&mut pixels), width * height);
+    assert!(
+        !pixels.iter().any(discarded),
+        "Every pixel of the restored window is painted again"
+    );
+    // The layer is never visible: the window looks the same as before the request.
+    let before = pixels.clone();
+    request_full_repaint(&ui);
+    render(&mut pixels);
+    assert!(pixels
+        .iter()
+        .zip(&before)
+        .all(|(a, b)| (a.red, a.green, a.blue, a.alpha) == (b.red, b.green, b.blue, b.alpha)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn month_navigation_continues_after_today() {
     use slint::platform::software_renderer::{
         MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,

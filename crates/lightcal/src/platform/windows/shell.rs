@@ -894,34 +894,8 @@ mod tests {
     #[test]
     fn native_window_state_follows_taskbar_minimize_restore_and_hide() {
         use windows_sys::Win32::UI::WindowsAndMessaging::*;
-        struct TestWindow(windows_sys::Win32::Foundation::HWND);
-        impl Drop for TestWindow {
-            fn drop(&mut self) {
-                unsafe {
-                    DestroyWindow(self.0);
-                }
-            }
-        }
-        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
-        let title: Vec<u16> = "Lightcal\0".encode_utf16().collect();
-        let hwnd = unsafe {
-            CreateWindowExW(
-                0,
-                class.as_ptr(),
-                title.as_ptr(),
-                WS_OVERLAPPEDWINDOW,
-                -10000,
-                -10000,
-                352,
-                432,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null(),
-            )
-        };
-        assert!(!hwnd.is_null());
-        let _window = TestWindow(hwnd);
+        let window = crate::platform::windows::test_window::TestWindow::new("Lightcal");
+        let hwnd = window.0;
         assert_eq!(main_window_is_open(), Some(false));
         unsafe {
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -959,7 +933,6 @@ mod tests {
         use windows_sys::Win32::Graphics::Dwm::{
             DwmGetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
         };
-        use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
         let chrome = WindowChrome {
             dark_mode: true,
@@ -970,25 +943,8 @@ mod tests {
             WindowChromeOutcome::default()
         );
 
-        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
-        let title: Vec<u16> = "Lightcal chrome test\0".encode_utf16().collect();
-        let hwnd = unsafe {
-            CreateWindowExW(
-                0,
-                class.as_ptr(),
-                title.as_ptr(),
-                WS_OVERLAPPEDWINDOW,
-                -10000,
-                -10000,
-                352,
-                432,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null(),
-            )
-        };
-        assert!(!hwnd.is_null());
+        let window = crate::platform::windows::test_window::TestWindow::new("Lightcal chrome test");
+        let hwnd = window.0;
         let outcome = unsafe { apply_window_chrome(hwnd, chrome) };
         // Without the prototype flag no backdrop is ever reported.
         assert!(!outcome.backdrop);
@@ -1008,9 +964,6 @@ mod tests {
         }
         // Repeating the call (show, resize, theme change) must be harmless.
         assert_eq!(unsafe { apply_window_chrome(hwnd, chrome) }, outcome);
-        unsafe {
-            DestroyWindow(hwnd);
-        }
     }
 
     #[test]

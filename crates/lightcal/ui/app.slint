@@ -167,7 +167,7 @@ export component AppWindow inherits Window {
     in property <string> updates-heading-text: "Updates";
     in property <string> about-link-text: "About Lightcal";
     in property <string> app-name-text: "Lightcal";
-    in property <string> about-version-text: "Version 1.0.0";
+    in property <string> about-version-text: "Version 1.0.2";
     in property <string> provider-readonly-tag-text: "Read-only";
     in property <string> shortcut-unset-text: "Not set";
     in property <string> license-short-text: "GPL-3.0-only";
@@ -326,7 +326,16 @@ export component AppWindow inherits Window {
     preferred-width: root.settings-open ? 448px : 352px;
     preferred-height: root.settings-open ? 360px : 432px;
     background: transparent;
+    // Bumped by the app when Windows has discarded the window's pixels (restore from
+    // minimized). The software renderer only presents dirty regions, so this window-sized,
+    // never-visible layer makes the next frame repaint and present the whole window.
+    in property <int> repaint-generation: 0;
 
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: root.repaint-generation < 0 ? black : transparent;
+    }
 
     key-handler := FocusScope {
         key-pressed(event) => {

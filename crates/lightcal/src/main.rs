@@ -1535,8 +1535,8 @@ fn show_application_window(ui: &AppWindow) {
             unsafe {
                 lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh);
             }
+            ensure_window_hooks(ui, hwnd);
         }
-        ensure_taskbar_preview(ui);
     }
     sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
@@ -1567,25 +1567,42 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
     ui.window().is_visible() && !ui.window().is_minimized()
 }
 
+/// Attaches the restore repaint and the taskbar preview (`WindowHooks`) to the native window,
+/// and asks DWM for custom previews again on each show in case it refused or forgot them.
 #[cfg(windows)]
-fn ensure_taskbar_preview(ui: &AppWindow) {
-    TASKBAR_PREVIEW.with(|slot| {
-        if slot.borrow().is_some() {
-            return;
+fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWND) {
+    let restore_ui = ui.as_weak();
+    let snapshot_ui = ui.as_weak();
+    let install = |hwnd| {
+        // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
+        unsafe {
+            lightcal::platform::windows::taskbar::WindowHooks::install(
+                hwnd,
+                move || {
+                    // Runs before the restored window paints, so its first frame is complete.
+                    if let Some(ui) = restore_ui.upgrade() {
+                        request_full_repaint(&ui);
+                    }
+                },
+                move || {
+                    let ui = snapshot_ui.upgrade()?;
+                    if ui.get_settings_open() {
+                        return None;
+                    }
+                    ui.window().take_snapshot().ok()
+                },
+            )
         }
-        let weak = ui.as_weak();
-        if let Ok(preview) =
-            lightcal::platform::windows::taskbar::TaskbarPreview::install(move || {
-                let ui = weak.upgrade()?;
-                if ui.get_settings_open() {
-                    return None;
-                }
-                ui.window().take_snapshot().ok()
-            })
-        {
-            *slot.borrow_mut() = Some(preview);
-        }
-    });
+    };
+    // SAFETY: as above; `ensure` ignores a null handle.
+    WINDOW_HOOKS.with(|slot| unsafe { slot.borrow_mut().ensure(hwnd, install) });
+}
+
+/// Makes the next frame repaint and present every pixel, not only the dirty regions.
+#[cfg(any(windows, test))]
+fn request_full_repaint(ui: &AppWindow) {
+    ui.set_repaint_generation(ui.get_repaint_generation().wrapping_add(1) & i32::MAX);
+    ui.window().request_redraw();
 }
 
 /// Requests DWM rounded corners, the system shadow and, with `LIGHTCAL_MICA=1`, the Mica
@@ -1628,11 +1645,7 @@ fn apply_window_chrome(ui: &AppWindow) {
 
 #[cfg(windows)]
 fn invalidate_taskbar_preview() {
-    TASKBAR_PREVIEW.with(|slot| {
-        if let Some(preview) = slot.borrow().as_ref() {
-            preview.invalidate();
-        }
-    });
+    WINDOW_HOOKS.with(|slot| slot.borrow().invalidate_preview());
 }
 
 fn ctrl_release_url(ui_weak: &slint::Weak<AppWindow>) -> String {
@@ -1714,7 +1727,7 @@ impl TrayMenuItems {
 
 thread_local! {
     #[cfg(windows)]
-    static TASKBAR_PREVIEW: RefCell<Option<lightcal::platform::windows::taskbar::TaskbarPreview>> = const { RefCell::new(None) };
+    static WINDOW_HOOKS: RefCell<lightcal::platform::windows::taskbar::WindowHookSlot> = const { RefCell::new(lightcal::platform::windows::taskbar::WindowHookSlot::new()) };
     static ACTIVE_CONTROLLER: std::cell::RefCell<Option<std::rc::Weak<std::cell::RefCell<AppController>>>> = const { std::cell::RefCell::new(None) };
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }
@@ -2725,7 +2738,7 @@ fn main() {
                             sync_window_geometry(&w, c.settings_open);
                         }
                         #[cfg(windows)]
-                        ensure_taskbar_preview(&w);
+                        ensure_window_hooks(&w, lightcal::platform::windows::find_lightcal_hwnd());
                     }
                 }
             },

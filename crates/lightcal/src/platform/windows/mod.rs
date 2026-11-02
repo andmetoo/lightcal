@@ -18,6 +18,47 @@ pub mod shell;
 pub mod taskbar;
 pub mod timezone;
 
+/// An off-screen, initially hidden top-level window for native tests, destroyed on drop.
+#[cfg(all(test, windows))]
+pub(crate) mod test_window {
+    use windows_sys::Win32::{Foundation::HWND, UI::WindowsAndMessaging::*};
+
+    pub struct TestWindow(pub HWND);
+
+    impl TestWindow {
+        pub fn new(title: &str) -> Self {
+            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            let title: Vec<u16> = title.encode_utf16().chain([0]).collect();
+            let hwnd = unsafe {
+                CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    title.as_ptr(),
+                    WS_OVERLAPPEDWINDOW,
+                    -10000,
+                    -10000,
+                    352,
+                    432,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                )
+            };
+            assert!(!hwnd.is_null());
+            Self(hwnd)
+        }
+    }
+
+    impl Drop for TestWindow {
+        fn drop(&mut self) {
+            unsafe {
+                DestroyWindow(self.0);
+            }
+        }
+    }
+}
+
 pub use icon::{
     encode_ico_from_pngs, generate_multi_size_ico, render_native_tray_icon,
     render_squircle_icon_generic, render_squircle_icon_rgba_64, render_tray_icon_rgba,

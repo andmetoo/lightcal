@@ -131,7 +131,7 @@ a{color:inherit}
             <sc-if value="{{w.update}}" hint-placeholder-val="{{false}}">
               <div style="display: flex; align-items: center; gap: 14px; padding: 4px 4px 2px">
                 <svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
-                <div><div style="font: 600 18px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif">Lightcal</div><div class="note">Version 1.0.0</div></div>
+                <div><div style="font: 600 18px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif">Lightcal</div><div class="note">Version 1.0.2</div></div>
               </div>
               <div class="card" style="padding: 12px; display: flex; flex-direction: column; gap: 10px">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
@@ -159,7 +159,7 @@ a{color:inherit}
 class Component extends DCLogic {
   renderVals() {
     function w(o) {
-      var base = { cls: "st", title: "Lightcal settings", hasTabs: true, tAcc: "tab on", tApp: "tab", footL: "About Lightcal", footR: "Version 1.0.0",
+      var base = { cls: "st", title: "Lightcal settings", hasTabs: true, tAcc: "tab on", tApp: "tab", footL: "About Lightcal", footR: "Version 1.0.2",
         empty: false, signing: false, ics: false, attention: false, conflict: false, update: false };
       for (var k in o) base[k] = o[k];
       return base;
