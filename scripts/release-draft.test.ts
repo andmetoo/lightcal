@@ -10,6 +10,7 @@ import {
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
+  embedsCertificatePin,
   missingSignedAssets,
   matchingBuildRuns,
   parseChecksum,
@@ -215,5 +216,24 @@ describe("signer thumbprint pin", () => {
     expect(thumbprintMatches("ABCDEF", "ABCDE0")).toBe(false);
     expect(thumbprintMatches(undefined, "ABCDEF")).toBe(false);
     expect(thumbprintMatches("  ", "")).toBe(false);
+  });
+});
+
+describe("embedded update pin", () => {
+  const cert = "538eff7282ec191b33b46e26daa09ae756f022bae467d2736aca01f69dd9cad6";
+  const binary = (embedded: string) => new TextEncoder().encode(`MZ\0\0${embedded}Running application did not exit`);
+  test("finds the signer fingerprint in any accepted spelling", () => {
+    expect(embedsCertificatePin(binary(cert), cert.toUpperCase())).toBe(true);
+    expect(embedsCertificatePin(binary(cert.toUpperCase()), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(cert.match(/../g)!.join(":")), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(`${"a".repeat(64)},${cert}`), cert)).toBe(true);
+  });
+  test("rejects a build pinned to something else, such as a file checksum", () => {
+    const fileChecksum = "f37b579af600613e4b2c54a89ab4395d1e1ad983ecd573e0ad33b49e3e56e678";
+    expect(embedsCertificatePin(binary(fileChecksum), cert)).toBe(false);
+    expect(embedsCertificatePin(binary(""), cert)).toBe(false);
+  });
+  test("refuses a malformed fingerprint", () => {
+    expect(() => embedsCertificatePin(binary(cert), "F0BBA075C11AFBD3E2798BF517A8F4C3CE74AF6B")).toThrow();
   });
 });

@@ -225,10 +225,13 @@ export function publishedReleaseNotes(version: string): string {
   return [
     `Lightcal ${tag}.`,
     "",
-    "Signed on the maintainer's Windows PC with signtool while Certum SimplySign Desktop is signed in. Signing keys stay in that tool.",
-    "Automatic installation uses the asset named exactly lightcal.exe.",
-    `NSIS setup: lightcal-${version}-windows-x64-setup.exe.`,
-    `Portable archive: lightcal-${tag}-windows-x64.zip.`,
+    "Downloads:",
+    "",
+    `- \`lightcal-${version}-windows-x64-setup.exe\`: installer (recommended).`,
+    `- \`lightcal-${tag}-windows-x64.zip\`: portable version, no installation needed.`,
+    "- `lightcal.exe`: the app on its own. Lightcal's automatic updates install this file.",
+    "",
+    "Every file is digitally signed, and each has a `.sha256` checksum next to it.",
     "",
   ].join("\n");
 }
@@ -241,4 +244,17 @@ export function normalizeThumbprint(raw: string): string {
 export function thumbprintMatches(expected: string | undefined, actual: string): boolean {
   const pin = normalizeThumbprint(expected ?? "");
   return pin.length > 0 && pin === normalizeThumbprint(actual);
+}
+
+/**
+ * Whether an executable embeds `certSha256` as its update pin. The app compiles
+ * LIGHTCAL_UPDATE_CERT_SHA256 in verbatim, so the fingerprint appears as ASCII hex in either
+ * case, optionally colon-separated, and possibly inside a comma-separated list.
+ */
+export function embedsCertificatePin(executable: Uint8Array, certSha256: string): boolean {
+  const hex = certSha256.replace(/[\s:]/g, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error(`Not a SHA-256 certificate fingerprint: ${certSha256}`);
+  const colons = hex.match(/../g)!.join(":");
+  const text = Buffer.from(executable).toString("latin1");
+  return [hex, hex.toUpperCase(), colons, colons.toUpperCase()].some((form) => text.includes(form));
 }

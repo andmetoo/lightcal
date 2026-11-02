@@ -18,6 +18,7 @@ import {
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
+  embedsCertificatePin,
   matchingBuildRuns,
   missingSignedAssets,
   parseReleaseView,
@@ -182,13 +183,31 @@ function verify(target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN, requireP
   if (writeSum) writeChecksum(target);
 }
 
+/** SHA-256 of the signer certificate's raw bytes: the fingerprint the app's update pin must hold. */
+function signerCertificateSha256(target: string): string {
+  return output(pwsh("-Command",
+    `$sig = Get-AuthenticodeSignature -LiteralPath ${psQuote(target)}; ` +
+    `[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($sig.SignerCertificate.RawData))`,
+  )).split(/\r?\n/).at(-1)!.trim();
+}
+
 function showCertificateFingerprint(): void {
   const target = existsSync(DIST_BIN) ? DIST_BIN : RELEASE_BIN;
   verify(target);
-  run(pwsh("-Command",
-    `$sig = Get-AuthenticodeSignature -LiteralPath ${psQuote(target)}; ` +
-    `[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($sig.SignerCertificate.RawData))`,
-  ));
+  console.log(signerCertificateSha256(target));
+}
+
+/**
+ * Fails unless a signed executable embeds its own signer's fingerprint as the update pin.
+ * Otherwise every installed copy of it would reject all later updates.
+ */
+function assertUpdatePinMatchesSigner(target: string): void {
+  const certSha256 = signerCertificateSha256(target);
+  if (!embedsCertificatePin(readFileSync(target), certSha256)) {
+    throw new Error(`${basename(target)} is not pinned to the certificate that signed it (SHA-256 ${certSha256}), ` +
+      "so installed copies would reject every update. Set LIGHTCAL_UPDATE_CERT_SHA256 to that value in .env " +
+      "(just release certificate-info prints it), push it with just github-env, and release a new tag.");
+  }
 }
 
 function packagePortableArchive(): void {
@@ -295,6 +314,7 @@ function signDraft(): void {
   process.env.LIGHTCAL_RELEASE_VERSION = version;
   sign(DIST_BIN);
   verify(DIST_BIN);
+  assertUpdatePinMatchesSigner(DIST_BIN);
   packagePortableArchive();
   signInstaller();
 
@@ -303,7 +323,7 @@ function signDraft(): void {
   // Only an explicit publish-release changes visibility.
   if (!loadRelease(tag)) {
     ghRun(["release", "create", tag, "--verify-tag", "--draft", "--title", publishedReleaseTitle(version),
-      "--notes", "Signed Windows build. Awaiting explicit publication."],
+      "--notes", `Lightcal ${tag} is being prepared and has not been published yet.`],
       `Could not create draft ${tag}; signed files remain in target/dist and target/nsis.`);
   }
   console.log(`=== Uploading signed files to release ${tag} ===`);
@@ -328,6 +348,7 @@ function publishDraft(): void {
   verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false), (archive, executable) =>
     run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable)));
   assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
+  assertUpdatePinMatchesSigner(join(downloaded, "lightcal.exe"));
   assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);
 
   for (const name of unsignedAssetsPresent(view, tag)) {
