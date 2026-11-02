@@ -1594,9 +1594,8 @@ fn show_application_window(ui: &AppWindow) {
             unsafe {
                 lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh);
             }
+            ensure_window_hooks(ui, hwnd);
         }
-        ensure_taskbar_preview(ui);
-        ensure_restore_watcher(ui);
     }
     sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
@@ -1627,50 +1626,42 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
     ui.window().is_visible() && !ui.window().is_minimized()
 }
 
+/// Attaches the taskbar preview and the restore repaint (`WindowHooks`) to the native window.
 #[cfg(windows)]
-fn ensure_taskbar_preview(ui: &AppWindow) {
-    TASKBAR_PREVIEW.with(|slot| {
-        if slot.borrow().is_some() {
-            return;
-        }
-        let weak = ui.as_weak();
-        if let Ok(preview) =
-            lightcal::platform::windows::taskbar::TaskbarPreview::install(move || {
-                let ui = weak.upgrade()?;
-                if ui.get_settings_open() {
-                    return None;
-                }
-                ui.window().take_snapshot().ok()
-            })
-        {
-            *slot.borrow_mut() = Some(preview);
-        }
-    });
-}
-
-/// Repaints the whole window after the taskbar restores it from minimized, which bypasses
-/// the full repaint Slint's own `show()` requests (see `RestoreWatcher`).
-#[cfg(windows)]
-fn ensure_restore_watcher(ui: &AppWindow) {
-    RESTORE_WATCHER.with(|slot| {
+fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWND) {
+    if hwnd.is_null() {
+        return;
+    }
+    WINDOW_HOOKS.with(|slot| {
         if slot
             .borrow()
             .as_ref()
-            .is_some_and(|watcher| watcher.watches_application_window())
+            .is_some_and(|hooks| hooks.is_attached_to(hwnd))
         {
             return;
         }
-        let weak = ui.as_weak();
-        let watcher = lightcal::platform::windows::taskbar::RestoreWatcher::install(move || {
-            let weak = weak.clone();
-            // Called from the window procedure; repaint from the event loop instead.
-            slint::Timer::single_shot(std::time::Duration::ZERO, move || {
-                if let Some(ui) = weak.upgrade() {
-                    request_full_repaint(&ui);
-                }
-            });
-        });
-        *slot.borrow_mut() = watcher.ok();
+        let snapshot_ui = ui.as_weak();
+        let restore_ui = ui.as_weak();
+        // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
+        let hooks = unsafe {
+            lightcal::platform::windows::taskbar::WindowHooks::install(
+                hwnd,
+                move || {
+                    let ui = snapshot_ui.upgrade()?;
+                    if ui.get_settings_open() {
+                        return None;
+                    }
+                    ui.window().take_snapshot().ok()
+                },
+                // Runs before the restored window paints, so its first frame is complete.
+                move || {
+                    if let Some(ui) = restore_ui.upgrade() {
+                        request_full_repaint(&ui);
+                    }
+                },
+            )
+        };
+        *slot.borrow_mut() = hooks.ok();
     });
 }
 
@@ -1721,9 +1712,9 @@ fn apply_window_chrome(ui: &AppWindow) {
 
 #[cfg(windows)]
 fn invalidate_taskbar_preview() {
-    TASKBAR_PREVIEW.with(|slot| {
-        if let Some(preview) = slot.borrow().as_ref() {
-            preview.invalidate();
+    WINDOW_HOOKS.with(|slot| {
+        if let Some(hooks) = slot.borrow().as_ref() {
+            hooks.invalidate_preview();
         }
     });
 }
@@ -1807,9 +1798,7 @@ impl TrayMenuItems {
 
 thread_local! {
     #[cfg(windows)]
-    static TASKBAR_PREVIEW: RefCell<Option<lightcal::platform::windows::taskbar::TaskbarPreview>> = const { RefCell::new(None) };
-    #[cfg(windows)]
-    static RESTORE_WATCHER: RefCell<Option<lightcal::platform::windows::taskbar::RestoreWatcher>> = const { RefCell::new(None) };
+    static WINDOW_HOOKS: RefCell<Option<lightcal::platform::windows::taskbar::WindowHooks>> = const { RefCell::new(None) };
     static ACTIVE_CONTROLLER: std::cell::RefCell<Option<std::rc::Weak<std::cell::RefCell<AppController>>>> = const { std::cell::RefCell::new(None) };
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }
@@ -2820,10 +2809,7 @@ fn main() {
                             sync_window_geometry(&w, c.settings_open);
                         }
                         #[cfg(windows)]
-                        {
-                            ensure_taskbar_preview(&w);
-                            ensure_restore_watcher(&w);
-                        }
+                        ensure_window_hooks(&w, lightcal::platform::windows::find_lightcal_hwnd());
                     }
                 }
             },

@@ -24,138 +24,106 @@ struct PreviewState {
     last_calendar: RefCell<Option<SharedPixelBuffer<Rgba8Pixel>>>,
 }
 
-pub struct TaskbarPreview {
-    hwnd: HWND,
-    // The subclass reference points into this stable allocation until Drop.
-    _state: Box<PreviewState>,
+struct HookState {
+    /// `None` when DWM refuses custom previews; the restore report still works.
+    preview: Option<PreviewState>,
+    minimized: Cell<bool>,
+    on_restore: Box<dyn Fn()>,
+    /// Cleared on `WM_NCDESTROY`, so a destroyed window whose handle is reused never counts.
+    attached: Cell<bool>,
 }
 
-impl TaskbarPreview {
-    pub fn install(
-        snapshot: impl Fn() -> Option<SharedPixelBuffer<Rgba8Pixel>> + 'static,
-    ) -> Result<Self, String> {
-        let hwnd = application_window();
-        Self::install_for_window(hwnd, snapshot)
-    }
+/// One subclass on the application window for two jobs: calendar snapshots for taskbar
+/// thumbnails and Peek (ADR 0005), and a report when the window leaves the minimized state.
+///
+/// Windows discards a minimized window's pixels, but Slint's software renderer keeps its
+/// buffer, believes it is still on screen and presents only dirty regions. Neither Slint's
+/// `show()` (a no-op for a window that is only minimized) nor its winit backend repaints
+/// everything when the taskbar restores the window, so `on_restore` must request that.
+/// The root cause is upstream (Slint 1.18): on Windows the winit software renderer's
+/// `occluded(true)` reset is overwritten by the next frame's softbuffer buffer-age check,
+/// which does not know the pixels were discarded. Drop the restore report and the
+/// `repaint-generation` layer in `app.slint` once Slint repaints fully after a restore.
+pub struct WindowHooks {
+    hwnd: HWND,
+    // The subclass reference points into this stable allocation until Drop.
+    state: Box<HookState>,
+}
 
-    fn install_for_window(
+impl WindowHooks {
+    /// `on_restore` runs inside the window procedure, before the restored window paints.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` must be null or a live window owned by this thread.
+    pub unsafe fn install(
         hwnd: HWND,
         snapshot: impl Fn() -> Option<SharedPixelBuffer<Rgba8Pixel>> + 'static,
+        on_restore: impl Fn() + 'static,
     ) -> Result<Self, String> {
         if hwnd.is_null() {
             return Err("No native application window".into());
         }
-        let mut state = Box::new(PreviewState {
-            last_calendar: RefCell::new(snapshot()),
-            snapshot: Box::new(snapshot),
-        });
-        unsafe {
-            if SetWindowSubclass(
-                hwnd,
-                Some(preview_proc),
-                SUBCLASS_ID,
-                (&mut *state as *mut PreviewState) as usize,
-            ) == 0
-            {
-                return Err("Could not attach taskbar preview".into());
-            }
-            let enabled: i32 = 1;
-            if DwmSetWindowAttribute(
+        let enabled: i32 = 1;
+        let previews = unsafe {
+            DwmSetWindowAttribute(
                 hwnd,
                 DWMWA_HAS_ICONIC_BITMAP as u32,
                 &enabled as *const _ as _,
                 4,
-            ) < 0
-            {
-                RemoveWindowSubclass(hwnd, Some(preview_proc), SUBCLASS_ID);
-                return Err("DWM custom previews are unavailable".into());
-            }
-        }
-        Ok(Self {
-            hwnd,
-            _state: state,
-        })
-    }
-
-    pub fn invalidate(&self) {
-        unsafe {
-            DwmInvalidateIconicBitmaps(self.hwnd);
-        }
-    }
-}
-
-impl Drop for TaskbarPreview {
-    fn drop(&mut self) {
-        unsafe {
-            if IsWindow(self.hwnd) != 0 {
-                RemoveWindowSubclass(self.hwnd, Some(preview_proc), SUBCLASS_ID);
-            }
-        }
-    }
-}
-
-fn application_window() -> HWND {
-    crate::platform::windows::shell::find_lightcal_hwnd()
-}
-
-const RESTORE_SUBCLASS_ID: usize = 0x4c435253;
-
-struct RestoreState {
-    minimized: Cell<bool>,
-    on_restore: Box<dyn Fn()>,
-}
-
-/// Reports when the window comes back from the minimized state, for example when the taskbar
-/// button restores it. Windows discards a minimized window's pixels, but Slint's software
-/// renderer still treats its buffer as on screen and presents only dirty regions, so the
-/// caller must request a full repaint. Restores through Slint's own `show()` already do that.
-pub struct RestoreWatcher {
-    hwnd: HWND,
-    // The subclass reference points into this stable allocation until Drop.
-    _state: Box<RestoreState>,
-}
-
-impl RestoreWatcher {
-    pub fn install(on_restore: impl Fn() + 'static) -> Result<Self, String> {
-        Self::install_for_window(application_window(), on_restore)
-    }
-
-    fn install_for_window(hwnd: HWND, on_restore: impl Fn() + 'static) -> Result<Self, String> {
-        if hwnd.is_null() {
-            return Err("No native application window".into());
-        }
-        let mut state = Box::new(RestoreState {
+            )
+        } >= 0;
+        let state = Box::new(HookState {
+            preview: previews.then(|| PreviewState {
+                last_calendar: RefCell::new(snapshot()),
+                snapshot: Box::new(snapshot),
+            }),
             minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
             on_restore: Box::new(on_restore),
+            attached: Cell::new(false),
         });
-        unsafe {
-            if SetWindowSubclass(
-                hwnd,
-                Some(restore_proc),
-                RESTORE_SUBCLASS_ID,
-                (&mut *state as *mut RestoreState) as usize,
-            ) == 0
-            {
-                return Err("Could not watch window restores".into());
+        let hooks = Self { hwnd, state };
+        if unsafe { SetWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID, hooks.reference()) } == 0
+        {
+            let disabled: i32 = 0;
+            unsafe {
+                DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_HAS_ICONIC_BITMAP as u32,
+                    &disabled as *const _ as _,
+                    4,
+                );
             }
+            return Err("Could not attach to the application window".into());
         }
-        Ok(Self {
-            hwnd,
-            _state: state,
-        })
+        hooks.state.attached.set(true);
+        Ok(hooks)
     }
 
-    /// Whether this watcher is attached to the current application window.
-    pub fn watches_application_window(&self) -> bool {
-        self.hwnd == application_window()
+    fn reference(&self) -> usize {
+        &*self.state as *const HookState as usize
+    }
+
+    /// Whether these hooks are still attached to `hwnd` (not to a destroyed window whose
+    /// handle was reused).
+    pub fn is_attached_to(&self, hwnd: HWND) -> bool {
+        self.hwnd == hwnd && self.state.attached.get()
+    }
+
+    pub fn invalidate_preview(&self) {
+        if self.state.preview.is_some() {
+            unsafe {
+                DwmInvalidateIconicBitmaps(self.hwnd);
+            }
+        }
     }
 }
 
-impl Drop for RestoreWatcher {
+impl Drop for WindowHooks {
     fn drop(&mut self) {
-        unsafe {
-            if IsWindow(self.hwnd) != 0 {
-                RemoveWindowSubclass(self.hwnd, Some(restore_proc), RESTORE_SUBCLASS_ID);
+        if self.state.attached.get() {
+            unsafe {
+                RemoveWindowSubclass(self.hwnd, Some(hook_proc), SUBCLASS_ID);
             }
         }
     }
@@ -173,7 +141,7 @@ fn leaves_minimized(minimized: &Cell<bool>, size_kind: u32) -> bool {
     }
 }
 
-unsafe extern "system" fn restore_proc(
+unsafe extern "system" fn hook_proc(
     hwnd: HWND,
     message: u32,
     wp: WPARAM,
@@ -181,32 +149,29 @@ unsafe extern "system" fn restore_proc(
     _id: usize,
     data: usize,
 ) -> LRESULT {
-    if message == WM_NCDESTROY {
-        RemoveWindowSubclass(hwnd, Some(restore_proc), RESTORE_SUBCLASS_ID);
-    } else if message == WM_SIZE {
-        let state = &*(data as *const RestoreState);
-        if leaves_minimized(&state.minimized, wp as u32) {
-            (state.on_restore)();
+    let state = &*(data as *const HookState);
+    match message {
+        WM_NCDESTROY => {
+            RemoveWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID);
+            state.attached.set(false);
         }
+        WM_SIZE => {
+            if leaves_minimized(&state.minimized, wp as u32) {
+                (state.on_restore)();
+            }
+        }
+        WM_DWMSENDICONICTHUMBNAIL | WM_DWMSENDICONICLIVEPREVIEWBITMAP => {
+            if let Some(preview) = &state.preview {
+                send_preview(hwnd, message, lp, preview);
+                return 0;
+            }
+        }
+        _ => {}
     }
     DefSubclassProc(hwnd, message, wp, lp)
 }
 
-unsafe extern "system" fn preview_proc(
-    hwnd: HWND,
-    message: u32,
-    wp: WPARAM,
-    lp: LPARAM,
-    _id: usize,
-    data: usize,
-) -> LRESULT {
-    if message == WM_NCDESTROY {
-        RemoveWindowSubclass(hwnd, Some(preview_proc), SUBCLASS_ID);
-    }
-    if message != WM_DWMSENDICONICTHUMBNAIL && message != WM_DWMSENDICONICLIVEPREVIEWBITMAP {
-        return DefSubclassProc(hwnd, message, wp, lp);
-    }
-    let state = &*(data as *const PreviewState);
+unsafe fn send_preview(hwnd: HWND, message: u32, lp: LPARAM, state: &PreviewState) {
     // A nested DWM request must not borrow the cache recursively or panic across FFI.
     if let Ok(mut cached) = state.last_calendar.try_borrow_mut() {
         if let Some(image) = (state.snapshot)() {
@@ -230,7 +195,6 @@ unsafe extern "system" fn preview_proc(
             }
         }
     }
-    0
 }
 
 fn preview_pixels(
@@ -363,40 +327,16 @@ mod tests {
         assert!(!leaves_minimized(&minimized, SIZE_MAXSHOW));
     }
     #[test]
-    fn restore_watcher_reports_native_restores_from_minimized() {
-        struct TestWindow(HWND);
-        impl Drop for TestWindow {
-            fn drop(&mut self) {
-                unsafe {
-                    DestroyWindow(self.0);
-                }
-            }
-        }
-        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
-        let title: Vec<u16> = "Lightcal restore test\0".encode_utf16().collect();
-        let hwnd = unsafe {
-            CreateWindowExW(
-                0,
-                class.as_ptr(),
-                title.as_ptr(),
-                WS_OVERLAPPEDWINDOW,
-                -10000,
-                -10000,
-                352,
-                432,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                std::ptr::null(),
-            )
-        };
-        assert!(!hwnd.is_null());
-        let window = TestWindow(hwnd);
+    fn hooks_report_native_restores_from_minimized() {
+        let window =
+            crate::platform::windows::test_window::TestWindow::new("Lightcal restore test");
+        let hwnd = window.0;
         let restores = std::rc::Rc::new(Cell::new(0));
         let counter = restores.clone();
-        let watcher =
-            RestoreWatcher::install_for_window(hwnd, move || counter.set(counter.get() + 1))
+        let hooks =
+            unsafe { WindowHooks::install(hwnd, || None, move || counter.set(counter.get() + 1)) }
                 .unwrap();
+        assert!(hooks.is_attached_to(hwnd));
         unsafe {
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
             SetWindowPos(
@@ -419,12 +359,15 @@ mod tests {
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
         assert_eq!(restores.get(), 1);
-        drop(watcher);
+        drop(hooks);
         unsafe {
             ShowWindow(hwnd, SW_MINIMIZE);
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
         assert_eq!(restores.get(), 1);
+        // A destroyed window detaches the hooks, even if Windows reuses its handle later.
+        let hooks = unsafe { WindowHooks::install(hwnd, || None, || {}) }.unwrap();
         drop(window);
+        assert!(!hooks.is_attached_to(hwnd));
     }
 }
