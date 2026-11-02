@@ -1526,6 +1526,8 @@ impl AppController {
 }
 
 fn show_application_window(ui: &AppWindow) {
+    // Open with the header already settled; it animates again once the user navigates.
+    ui.set_header_motion(false);
     let _ = ui.show();
     #[cfg(windows)]
     {
@@ -1543,6 +1545,10 @@ fn show_application_window(ui: &AppWindow) {
 }
 
 fn hide_application_window(ui: &AppWindow) {
+    // The window hides under the pointer (the header − button); without this the button
+    // keeps its hover fill when the calendar opens again.
+    ui.window()
+        .dispatch_event(slint::platform::WindowEvent::PointerExited);
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]

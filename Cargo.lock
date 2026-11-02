@@ -2387,6 +2387,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "getrandom 0.4.3",
+ "i-slint-backend-testing",
  "ical",
  "muda 0.21.2",
  "rrule",

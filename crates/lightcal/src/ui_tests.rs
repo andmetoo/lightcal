@@ -1,5 +1,6 @@
 //! Headless interaction checks. No native shortcut, shell, or provider callbacks run here.
 use super::*;
+use i_slint_backend_testing::ElementHandle;
 use lightcal::snapshot::HeadlessPlatform;
 use slint::platform::{PointerEventButton, WindowEvent};
 use slint::Model;
@@ -15,6 +16,29 @@ fn click(ui: &AppWindow, x: f32, y: f32) {
         position,
         button: PointerEventButton::Left,
     });
+}
+
+/// Centre of the element with this accessible label, wherever the layout puts it.
+fn labelled_center(ui: &AppWindow, label: &str) -> slint::LogicalPosition {
+    let element = ElementHandle::find_by_accessible_label(ui, label)
+        .next()
+        .unwrap_or_else(|| panic!("no element labelled {label:?}"));
+    let (position, size) = (element.absolute_position(), element.size());
+    slint::LogicalPosition::new(
+        position.x + size.width / 2.0,
+        position.y + size.height / 2.0,
+    )
+}
+
+fn click_label(ui: &AppWindow, label: &str) {
+    let center = labelled_center(ui, label);
+    click(ui, center.x, center.y);
+}
+
+/// A navigation step: a header control by accessible label, or a point in the grid.
+enum Target {
+    Label(&'static str),
+    Point(f32, f32),
 }
 
 fn controller(dir: &std::path::Path) -> AppController {
@@ -226,34 +250,40 @@ fn month_navigation_continues_after_today() {
     let mut previous_title = header_pixels(&pixels);
     let mut rendered_titles =
         std::collections::BTreeMap::from([("November 2026", previous_title.clone())]);
-    // Header buttons from the right: hide (−), settings, divider, next, Today, previous.
-    for (step, (x, y, month, changed_title)) in [
-        (255.0, 22.0, "December 2026", true),
-        (255.0, 22.0, "January 2027", true),
-        (170.0, 22.0, "December 2026", true),
-        (170.0, 22.0, "November 2026", true),
-        // On today Today folds away, so the arrows sit together and previous moves right.
-        (225.0, 22.0, "October 2026", true),
-        (187.0, 200.0, "October 2026", false),
-        (255.0, 22.0, "November 2026", true),
-        (145.0, 212.0, "November 2026", false),
-        (213.0, 22.0, "November 2026", false),
-        (187.0, 200.0, "November 2026", false),
-        (255.0, 22.0, "December 2026", true),
-        (255.0, 22.0, "January 2027", true),
-        (170.0, 22.0, "December 2026", true),
-        (213.0, 22.0, "November 2026", true),
-        (145.0, 212.0, "November 2026", false),
-        (170.0, 22.0, "October 2026", true),
+    use Target::{Label, Point};
+    const PREV: Target = Label("Previous month");
+    const NEXT: Target = Label("Next month");
+    const TODAY: Target = Label("Today");
+    for (step, (target, month, changed_title)) in [
+        (NEXT, "December 2026", true),
+        (NEXT, "January 2027", true),
+        (PREV, "December 2026", true),
+        (PREV, "November 2026", true),
+        // On today Today is folded away and the arrows sit together.
+        (PREV, "October 2026", true),
+        (Point(187.0, 200.0), "October 2026", false),
+        (NEXT, "November 2026", true),
+        (Point(145.0, 212.0), "November 2026", false),
+        (TODAY, "November 2026", false),
+        (Point(187.0, 200.0), "November 2026", false),
+        (NEXT, "December 2026", true),
+        (NEXT, "January 2027", true),
+        (PREV, "December 2026", true),
+        (TODAY, "November 2026", true),
+        (Point(145.0, 212.0), "November 2026", false),
+        (PREV, "October 2026", true),
     ]
     .into_iter()
     .enumerate()
     {
-        ui.window().dispatch_event(WindowEvent::PointerMoved {
-            position: slint::LogicalPosition::new(x, y),
-        });
-        click(&ui, x, y);
-        if y > 100.0 {
+        let position = match target {
+            Label(label) => labelled_center(&ui, label),
+            Point(x, y) => slint::LogicalPosition::new(x, y),
+        };
+        ui.window()
+            .dispatch_event(WindowEvent::PointerMoved { position });
+        click(&ui, position.x, position.y);
+        if matches!(target, Point(..)) {
             assert_ne!(
                 ctrl.borrow().cal_state.selected_date,
                 ctrl.borrow().cal_state.today,
@@ -986,11 +1016,68 @@ fn header_hide_button_hides_the_calendar_like_escape() {
     window.set_size(slint::PhysicalSize::new(352, 432));
     window.draw_if_needed(|_| {});
 
-    // The last header button: 12 px side padding, 28 px button, 44 px header.
-    click(&ui, 352.0 - 12.0 - 14.0, 22.0);
+    click_label(&ui, "Hide to tray");
     assert_eq!(hidden.get(), 1);
-    // Settings, just left of it, does not hide the calendar.
-    click(&ui, 352.0 - 12.0 - 28.0 - 2.0 - 14.0, 22.0);
+    // Settings, next to it, does not hide the calendar.
+    click_label(&ui, "Settings");
     assert_eq!(hidden.get(), 1);
+    // The − button sits after Settings, at the end of the header.
+    assert!(labelled_center(&ui, "Hide to tray").x > labelled_center(&ui, "Settings").x);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn today_folds_between_the_arrows_on_the_current_day() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-today-fold-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ui.show().unwrap();
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    let arrow_gap = |ui: &AppWindow| {
+        let prev = ElementHandle::find_by_accessible_label(ui, "Previous month")
+            .next()
+            .unwrap();
+        let next = ElementHandle::find_by_accessible_label(ui, "Next month")
+            .next()
+            .unwrap();
+        next.absolute_position().x - (prev.absolute_position().x + prev.size().width)
+    };
+    let today = |ui: &AppWindow| {
+        ElementHandle::find_by_accessible_label(ui, "Today")
+            .next()
+            .unwrap()
+    };
+
+    // On today: Today is folded to nothing and leaves the element tree.
+    ctrl.sync_to_ui(&ui);
+    window.draw_if_needed(|_| {});
+    assert!(ui.get_today_hidden());
+    assert_eq!(arrow_gap(&ui), 4.0, "only the two 2 px layout gaps remain");
+    assert!(
+        ElementHandle::find_by_accessible_label(&ui, "Today")
+            .next()
+            .is_none(),
+        "a folded Today is hidden from clicks and screen readers"
+    );
+
+    // A month away: the arrows move apart and Today sits between them.
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    window.draw_if_needed(|_| {});
+    assert!(!ui.get_today_hidden());
+    let today_width = today(&ui).size().width;
+    assert!(today_width > 0.0);
+    assert_eq!(arrow_gap(&ui), 4.0 + today_width);
+    assert_eq!(today(&ui).computed_opacity(), 1.0);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -17,7 +17,8 @@ thread_local! {
 }
 
 /// Moves the headless clock past running animations so the next frame shows their end
-/// state. Real time keeps flowing too; nothing waits.
+/// state. Real time keeps flowing too; nothing waits. Slint timers run on the same clock,
+/// so only tests that animate on purpose call this; `render_to_png` does not.
 pub fn settle_animations() {
     CLOCK_SKIPPED.with(|skipped| skipped.set(skipped.get() + ANIMATION_SETTLE));
     slint::platform::update_timers_and_animations();
@@ -45,7 +46,7 @@ impl HeadlessPlatform {
         self.window
             .set_size(slint::PhysicalSize::new(width, height));
         self.window.request_redraw();
-        settle_animations();
+        slint::platform::update_timers_and_animations();
         let mut pixels = vec![
             slint::platform::software_renderer::PremultipliedRgbaColor::default();
             (width * height) as usize

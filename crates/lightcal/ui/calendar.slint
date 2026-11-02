@@ -308,6 +308,9 @@ export component CalendarView inherits Rectangle {
     callback open-settings(int);
     // Hides the popup to the notification area, like Escape.
     callback hide-to-tray();
+    // True after the user navigates in this popup; Rust clears it before showing the
+    // window so it opens settled instead of animating the header.
+    in-out property <bool> header-motion: false;
     callback return-to-today();
     callback select-cell(int);
     callback toggle-event(string);
@@ -371,7 +374,7 @@ export component CalendarView inherits Rectangle {
         IconButton {
             icon: "chevron-left";
             label: root.prev-label;
-            clicked => { root.prev-month(); }
+            clicked => { root.header-motion = true; root.prev-month(); }
         }
         // On the current day the arrows sit together; leaving it slides them apart and
         // fades Today in between.
@@ -379,7 +382,10 @@ export component CalendarView inherits Rectangle {
             width: root.today-hidden ? 0px : today-button.preferred-width;
             opacity: root.today-hidden ? 0 : 1;
             clip: true;
-            animate width, opacity { duration: 180ms; easing: ease-in-out; }
+            animate width, opacity {
+                duration: root.header-motion ? 180ms : 0ms;
+                easing: ease-in-out;
+            }
 
             today-button := TextButton {
                 x: (parent.width - self.width) / 2;
@@ -387,13 +393,13 @@ export component CalendarView inherits Rectangle {
                 label: root.today-button-label;
                 visible: today-slot.width > 0px;
                 enabled: !root.today-hidden;
-                clicked => { root.return-to-today(); }
+                clicked => { root.header-motion = true; root.return-to-today(); }
             }
         }
         IconButton {
             icon: "chevron-right";
             label: root.next-label;
-            clicked => { root.next-month(); }
+            clicked => { root.header-motion = true; root.next-month(); }
         }
         HorizontalLayout {
             padding-left: 4px;
@@ -591,7 +597,7 @@ export component CalendarView inherits Rectangle {
                 }
 
                 touch := TouchArea {
-                    clicked => { root.select-cell(pill.index); }
+                    clicked => { root.header-motion = true; root.select-cell(pill.index); }
                 }
             }
         }
