@@ -116,6 +116,66 @@
       "x": 0,
       "y": 0,
       "page": "languages"
+    },
+    "DateSize.dc.html": {
+      "h": 432,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Date size · Standard · 14 px",
+      "w": 352,
+      "x": 0,
+      "y": 0,
+      "page": "datesize"
+    },
+    "DateSizeLarge.dc.html": {
+      "h": 432,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Date size · Large · 16 px",
+      "w": 352,
+      "x": 432,
+      "y": 0,
+      "page": "datesize"
+    },
+    "DateSizeLarger.dc.html": {
+      "h": 444,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Date size · Larger · 18 px",
+      "w": 352,
+      "x": 864,
+      "y": 0,
+      "page": "datesize"
+    },
+    "DateSizeLargerDark.dc.html": {
+      "h": 444,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Date size · Larger · dark",
+      "w": 352,
+      "x": 1296,
+      "y": 0,
+      "page": "datesize"
+    },
+    "DateSizeScale150.dc.html": {
+      "h": 648,
+      "is_interactive": true,
+      "radius": 12,
+      "title": "Date size · Large at 150 %",
+      "w": 528,
+      "x": 0,
+      "y": 564,
+      "page": "datesize"
+    },
+    "SettingsDateSize.dc.html": {
+      "h": 360,
+      "is_interactive": true,
+      "radius": 8,
+      "title": "Settings · Calendar · Date size",
+      "w": 448,
+      "x": 608,
+      "y": 564,
+      "page": "datesize"
     }
   },
   "createdOnFiles": {
@@ -143,6 +203,10 @@
     {
       "id": "languages",
       "name": "Languages"
+    },
+    {
+      "id": "datesize",
+      "name": "Date size"
     }
   ],
   "noteOrder": [
@@ -151,7 +215,9 @@
     "slint",
     "title-icons",
     "title-states",
-    "title-languages"
+    "title-languages",
+    "title-datesize",
+    "datesize-spec"
   ],
   "notes": {
     "changes": {
@@ -207,6 +273,24 @@
       "x": 0,
       "y": -300,
       "page": "languages"
+    },
+    "title-datesize": {
+      "kind": "title1",
+      "maxW": 1648,
+      "text": "Date size",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "datesize"
+    },
+    "datesize-spec": {
+      "fill": "teal",
+      "size": 24,
+      "w": 512,
+      "x": 1136,
+      "y": 564,
+      "page": "datesize",
+      "text": "Owner decision, 2 Nov 2026: Date size setting\n• Standard 14 px: 34 × 28 tile, 32 px rows, popup 352 × 432.\n• Large 16 px: same tile, rows and popup.\n• Larger 18 px: 30 px tile, 34 px rows, popup 352 × 444; the agenda keeps its height.\n• Only day numbers grow; dots stay 2 px above the tile bottom and the number keeps a 3 px gap above them.\n• Windows display scale multiplies all of it: Large at 150 % draws 24 px dates.\n• The boards place digits with browser text metrics; Slint draws them about a pixel lower. The app snapshots (calendar-large-light.png, calendar-larger-*.png) are the pixel reference."
     }
   },
   "order": [
@@ -221,7 +305,13 @@
     "WinTrayMenu.dc.html",
     "Icons.dc.html",
     "States.dc.html",
-    "Languages.dc.html"
+    "Languages.dc.html",
+    "DateSize.dc.html",
+    "DateSizeLarge.dc.html",
+    "DateSizeLarger.dc.html",
+    "DateSizeLargerDark.dc.html",
+    "DateSizeScale150.dc.html",
+    "SettingsDateSize.dc.html"
   ],
   "title": "Lightcal Refresh"
 }

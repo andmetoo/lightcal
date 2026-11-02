@@ -14,7 +14,7 @@ use lightcal::platform::windows::{
 };
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
-    LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
+    DateSize, LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 mod calendar_view;
 mod event_colors;
@@ -355,16 +355,56 @@ fn resolve_dark_mode(theme: ThemePreference) -> bool {
     }
 }
 
-fn target_logical_size(settings_open: bool) -> (f32, f32) {
+fn target_logical_size(settings_open: bool, calendar_height: f32) -> (f32, f32) {
     if settings_open {
         (448.0, 360.0)
     } else {
-        (352.0, 432.0)
+        (352.0, calendar_height)
     }
 }
 
+impl From<DateSize> for CalendarDateSize {
+    fn from(size: DateSize) -> Self {
+        match size {
+            DateSize::Standard => Self::Standard,
+            DateSize::Large => Self::Large,
+            DateSize::Larger => Self::Larger,
+        }
+    }
+}
+
+impl From<CalendarDateSize> for DateSize {
+    fn from(size: CalendarDateSize) -> Self {
+        match size {
+            CalendarDateSize::Standard => Self::Standard,
+            CalendarDateSize::Large => Self::Large,
+            CalendarDateSize::Larger => Self::Larger,
+        }
+    }
+}
+
+/// Settings › Calendar › Date size: store the choice and refresh the UI. Shared with the
+/// headless test so it exercises the production handler.
+fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_select_date_size(move |size| {
+        let mut c = ctrl.borrow_mut();
+        c.select_date_size(size.into());
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
+}
+
+/// Logical calendar height for the current date size, from the Slint Theme metrics.
+fn calendar_height(ui: &AppWindow) -> f32 {
+    ui.global::<Theme>()
+        .invoke_calendar_height(ui.get_date_size())
+}
+
 fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
-    let (logical_w, logical_h) = target_logical_size(settings_open);
+    let (logical_w, logical_h) = target_logical_size(settings_open, calendar_height(ui));
     ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     #[cfg(windows)]
@@ -664,6 +704,10 @@ impl AppController {
         ui.set_desc_highlight_current_month_text(strings.desc_highlight_current_month.into());
         ui.set_label_show_event_dots_text(strings.label_show_event_dots.into());
         ui.set_desc_show_event_dots_text(strings.desc_show_event_dots.into());
+        ui.set_label_date_size_text(strings.label_date_size.into());
+        ui.set_date_size_standard_label(strings.date_size_standard.into());
+        ui.set_date_size_large_label(strings.date_size_large.into());
+        ui.set_date_size_larger_label(strings.date_size_larger.into());
         ui.set_label_tray_mode_text(strings.label_tray_mode.into());
         ui.set_desc_tray_mode_text(strings.desc_tray_mode.into());
         ui.set_label_tray_palette_text(strings.label_tray_palette.into());
@@ -924,6 +968,7 @@ impl AppController {
         ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
+        ui.set_date_size(self.prefs.date_size.into());
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
             LocaleCode::En => (
@@ -1139,6 +1184,15 @@ impl AppController {
 
         #[cfg(windows)]
         invalidate_taskbar_preview();
+    }
+
+    /// Settings › Calendar › Date size. The window resizes when Settings closes.
+    fn select_date_size(&mut self, size: DateSize) {
+        if self.prefs.date_size == size {
+            return;
+        }
+        self.prefs.date_size = size;
+        self.persist();
     }
 
     fn persist(&self) {
@@ -1529,7 +1583,7 @@ fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
     #[cfg(windows)]
     {
-        let (lw, lh) = target_logical_size(ui.get_settings_open());
+        let (lw, lh) = target_logical_size(ui.get_settings_open(), calendar_height(ui));
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
         if !hwnd.is_null() {
             unsafe {
@@ -3471,6 +3525,7 @@ fn main() {
             }
         });
     }
+    wire_date_size(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
@@ -3800,8 +3855,9 @@ mod tests {
 
     #[test]
     fn target_logical_size_matches_compact_and_settings_specs() {
-        assert_eq!(target_logical_size(false), (352.0, 432.0));
-        assert_eq!(target_logical_size(true), (448.0, 360.0));
+        assert_eq!(target_logical_size(false, 432.0), (352.0, 432.0));
+        assert_eq!(target_logical_size(false, 444.0), (352.0, 444.0));
+        assert_eq!(target_logical_size(true, 444.0), (448.0, 360.0));
     }
 
     #[test]
@@ -3813,7 +3869,7 @@ mod tests {
             height: 1032,
         };
         for settings in [false, true] {
-            let (lw, lh) = target_logical_size(settings);
+            let (lw, lh) = target_logical_size(settings, 444.0);
             let pw = (lw as i32) + 16;
             let ph = (lh as i32) + 44;
             let (x, y) = area.anchor_above_tray(pw, ph, 12);

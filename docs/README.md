@@ -4,6 +4,7 @@ Documentation baseline: October 29, 2026; updated for the public repository on N
 
 | Document | Purpose |
 | --- | --- |
+| [Date size setting](decisions/0012-date-size.md) | Standard, Large and Larger day numbers; the 352 × 444 popup for Larger |
 | [Windows-only design refresh](decisions/0011-windows-only-design-refresh.md) | November 1 redesign, new icons, event details, design canvas, macOS dropped |
 | [Gray + Teal palette](../design/palettes/README.md) | Owner-selected neutral surfaces, Teal actions, and removal of violet |
 | [Calendar status icon](decisions/0010-windows-calendar-tray-icon.md) | Calendar-page tray icon and native raster checks; artwork superseded by ADR 0011 |

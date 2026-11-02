@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal calendar, date size</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lc{--bg:#FFFFFF;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--hover:#F0F0F0;--press:#E8E8E8;--sel:#E8E8E8;--band:#F7F7F7;--accent:#00796B;--nowbg:rgba(0,121,107,.10);--coral:#D73840;--coralband:#A92A31;--chip:#F0F0F0}
+.lc.dark{--bg:#191919;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2A2A2A;--hover:#2A2A2A;--press:#313131;--sel:#313131;--band:#1F1F1F;--accent:#53B9AB;--nowbg:rgba(83,185,171,.14);--coralband:#B02E35;--chip:#2A2A2A}
+.ib{width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ib:hover,.tb:hover,.row:hover{background:var(--hover)}
+.ib:active,.tb:active{background:var(--press)}
+.ib:focus-visible,.tb:focus-visible,.d:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tb{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer}
+.g{display:grid;align-items:center;position:relative}
+.g8{grid-template-columns:24px repeat(7,minmax(0,1fr))}
+.g7{grid-template-columns:repeat(7,minmax(0,1fr))}
+.band{position:absolute;top:0;bottom:0;border-radius:8px;background:var(--band)}
+.band8{left:calc(24px + (100% - 24px) * 5 / 7);width:calc((100% - 24px) * 2 / 7)}
+.band7{left:calc(100% * 5 / 7);width:calc(100% * 2 / 7)}
+.wd{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center}
+.wk{font:500 10px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center;font-variant-numeric:tabular-nums}
+.cell{display:flex;justify-content:center}
+.d{position:relative;width:34px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:500 14px/1 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;padding:3px 0 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.d:hover{background:var(--hover)}
+.d.out{color:var(--ink3);font-weight:400}
+.d.sel{background:var(--sel);font-weight:600}
+.d.today{background:var(--coral);color:#FFFFFF;font-weight:600;overflow:visible;padding-top:6px}
+.d.today::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;border-radius:8px 8px 0 0;background:var(--coralband)}
+.d.today.sel{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--coral)}
+.dots{display:flex;gap:3px;height:4px}
+.dot{width:4px;height:4px;border-radius:2px}
+.d.today .dot{background:rgba(255,255,255,.85) !important}
+.d,.d.today{display:block;padding:0}
+.num{position:absolute;left:0;right:0;text-align:center}
+.d .dots{position:absolute;left:0;right:0;justify-content:center}
+.ag{scrollbar-width:none}
+.row{display:flex;align-items:center;gap:10px;width:100%;height:30px;padding:0 4px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit;box-sizing:border-box}
+.now{height:18px;padding:0 6px;border-radius:4px;display:inline-flex;align-items:center;font:600 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--accent);background:var(--nowbg)}
+.soon{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:var(--chip);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink)}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="width: 352px; height: {{popH}}; box-sizing: border-box; padding: 0 12px 12px; background: var(--bg); color: var(--ink); font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 44px; display: flex; align-items: center; gap: 2px; padding-left: 4px; flex-shrink: 0">
+    <div style="flex-grow: 1; font: 600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.2px; color: var(--ink)">{{monthName}} <span style="font-weight: 400; color: var(--ink2)">{{year}}</span></div>
+    <button class="ib" aria-label="Previous month" onClick="{{prev}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+    <button class="tb" style="visibility: {{todayVis}}" onClick="{{goToday}}">Today</button>
+    <button class="ib" aria-label="Next month" onClick="{{next}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+    <div style="width: 1px; height: 16px; background: var(--line); margin: 0 4px"></div>
+    <button class="ib" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+  </div>
+  <div style="position: relative; flex-shrink: 0">
+    <div class="{{bandCls}}"></div>
+    <div class="{{gridCls}}" style="height: 24px">
+      <sc-if value="{{showWeeks}}" hint-placeholder-val="{{true}}"><div></div></sc-if>
+      <div class="wd">Mo</div><div class="wd">Tu</div><div class="wd">We</div><div class="wd">Th</div><div class="wd">Fr</div><div class="wd">Sa</div><div class="wd">Su</div>
+    </div>
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+      <div class="{{r.cls}}" style="height: {{rowH}}">
+        <sc-if value="{{r.showWeeks}}" hint-placeholder-val="{{true}}"><div class="wk" aria-label="Week {{r.wk}}">{{r.wk}}</div></sc-if>
+        <sc-for list="{{r.days}}" as="d" hint-placeholder-count="7">
+          <div class="cell"><button class="{{d.cls}}" style="height: {{tileH}}; font-size: {{fs}}" aria-label="{{d.label}}" onClick="{{d.pick}}"><span class="num" style="top: {{d.numTop}}; line-height: {{lineH}}">{{d.n}}</span><span class="dots" style="top: {{d.dotsTop}}; height: 4px"><sc-for list="{{d.dots}}" as="c" hint-placeholder-count="0"><span class="dot" style="background: {{c.color}}"></span></sc-for></span></button></div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+  <div style="height: 1px; background: var(--line); margin: 8px 4px 0; flex-shrink: 0"></div>
+  <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 10px 4px 6px; flex-shrink: 0">
+    <div style="font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{agTitle}}</div>
+    <div style="font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{agCount}}</div>
+  </div>
+  <div class="ag" style="flex-grow: 1; min-height: 0; overflow-y: auto">
+    <sc-if value="{{hasAllDay}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 6px">
+        <sc-for list="{{allDay}}" as="a" hint-placeholder-count="1">
+          <span class="chip"><span style="width: 6px; height: 6px; border-radius: 3px; background: {{a.color}}"></span>{{a.title}}</span>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-for list="{{timed}}" as="ev" hint-placeholder-count="3">
+      <button class="row" style="opacity: {{ev.op}}">
+        <span style="width: 3px; height: 16px; border-radius: 1.5px; background: {{ev.color}}; flex-shrink: 0"></span>
+        <span style="width: 80px; flex-shrink: 0; font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); font-variant-numeric: tabular-nums">{{ev.time}}</span>
+        <span style="flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: {{ev.weight}} 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{ev.title}}</span>
+        <sc-if value="{{ev.hasBadge}}" hint-placeholder-val="{{false}}"><span class="{{ev.badgeCls}}">{{ev.badge}}</span></sc-if>
+      </button>
+    </sc-for>
+    <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+      <div style="padding: 4px 4px 2px; font: 400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">No events</div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"size":{"editor":"enum","options":["standard","large","larger"],"default":"standard"},"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"showWeeks":{"editor":"boolean","default":true},"$preview":{"width":352,"height":432}}'>
+var LC_TODAY = "2026-11-01";
+var LC_NOW = 14 * 60 + 5;
+var LC_CAL = { p: "#D9822B", w: "#3B82C4", f: "#2E9D5B" };
+var LC_SIZES = {
+  standard: { fs: 14, tile: 28, row: 32, pop: 432 },
+  large: { fs: 16, tile: 28, row: 32, pop: 432 },
+  larger: { fs: 18, tile: 30, row: 34, pop: 444 }
+};
+var LC_EV = {
+  "2026-10-27": [["09:30", "09:45", "Standup", "w"]],
+  "2026-10-29": [["12:00", "13:00", "Lunch with Leo", "p"]],
+  "2026-10-30": [["09:30", "09:45", "Standup", "w"], ["16:00", "17:00", "Retro", "w"]],
+  "2026-11-01": [[null, null, "Book fair", "f"], ["10:00", "11:00", "Coffee with Maya", "p"], ["13:30", "15:00", "Weekend walk", "f"], ["18:00", "19:30", "Dinner at Ana’s", "p"]],
+  "2026-11-03": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-04": [["08:40", "09:20", "Dentist", "p"], ["11:00", "12:00", "Sprint planning", "w"]],
+  "2026-11-06": [[null, null, "Release 0.3.1", "w"]],
+  "2026-11-10": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-13": [["15:00", "16:00", "Design review", "w"]],
+  "2026-11-17": [["09:30", "09:45", "Standup", "w"], ["14:00", "14:30", "1:1 with Sam", "w"], ["19:00", "20:00", "Gym", "p"]],
+  "2026-11-19": [["19:00", "20:00", "Gym", "p"]],
+  "2026-11-21": [["20:00", "22:30", "Concert", "p"]],
+  "2026-11-24": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-26": [["10:00", "11:00", "Sprint review", "w"], ["12:30", "13:30", "Team lunch", "w"], ["16:30", "17:00", "School pickup", "f"]],
+  "2026-11-28": [[null, null, "Hike", "f"]],
+  "2026-12-01": [["09:30", "09:45", "Standup", "w"]]
+};
+function lcIso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function lcParse(k) { var a = k.split("-"); return new Date(+a[0], +a[1] - 1, +a[2]); }
+function lcWeek(d) { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+function lcMins(s) { var a = s.split(":"); return +a[0] * 60 + +a[1]; }
+function lcLong(d) { return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }); }
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var sz = LC_SIZES[this.props.size] || LC_SIZES.standard;
+    var sel = st.sel || LC_TODAY;
+    var init = lcParse(LC_TODAY);
+    var y = st.y != null ? st.y : init.getFullYear();
+    var m = st.m != null ? st.m : init.getMonth();
+    var dark = (this.props.theme || "light") === "dark";
+    var showWeeks = this.props.showWeeks != null ? this.props.showWeeks : true;
+    var first = new Date(y, m, 1);
+    var off = (first.getDay() + 6) % 7;
+    var rows = [];
+    for (var r = 0; r < 6; r++) {
+      var days = [];
+      var wk = 0;
+      for (var c = 0; c < 7; c++) {
+        (function (d) {
+          if (c === 0) wk = lcWeek(d);
+          var k = lcIso(d);
+          var out = d.getMonth() !== m;
+          var evs = LC_EV[k] || [];
+          var cls = "d" + (out ? " out" : "") + (k === LC_TODAY ? " today" : "") + (k === sel ? " sel" : "");
+          var dots = out ? [] : evs.slice(0, 3).map(function (e) { return { color: LC_CAL[e[3]] }; });
+          var n = evs.length;
+          // Same rule as calendar.slint: dots 2 px above the tile bottom (1 px on Today),
+          // the number 3 px (2.5 px) above them. Browser digit metrics differ from Slint's by
+          // about a pixel; the app snapshots are the pixel reference.
+          var today = k === LC_TODAY;
+          var dotsTop = sz.tile - (today ? 5 : 6);
+          var center = dotsTop - (today ? 2.5 : 3) - sz.fs / 2;
+          days.push({
+            n: d.getDate(), cls: cls, dots: dots,
+            numTop: (center - (sz.fs + 2) / 2) + "px", dotsTop: dotsTop + "px",
+            label: lcLong(d) + (n ? ", " + n + (n === 1 ? " event" : " events") : ""),
+            pick: function () { self.setState({ sel: k, y: d.getFullYear(), m: d.getMonth() }); }
+          });
+        })(new Date(y, m, 1 - off + r * 7 + c));
+      }
+      rows.push({ wk: wk, days: days, cls: "g " + (showWeeks ? "g8" : "g7"), showWeeks: showWeeks });
+    }
+    var sd = lcParse(sel);
+    var evs = LC_EV[sel] || [];
+    var isToday = sel === LC_TODAY;
+    var allDay = evs.filter(function (e) { return !e[0]; }).map(function (e) { return { title: e[2], color: LC_CAL[e[3]] }; });
+    var nextDone = false;
+    var timed = evs.filter(function (e) { return e[0]; }).map(function (e) {
+      var s = lcMins(e[0]), en = lcMins(e[1]);
+      var op = "1", badge = "", badgeCls = "", weight = "400";
+      if (isToday) {
+        if (en <= LC_NOW) op = "0.55";
+        else if (s <= LC_NOW) { badge = "Now"; badgeCls = "now"; weight = "600"; }
+        else if (!nextDone) {
+          nextDone = true;
+          var dm = s - LC_NOW, h = Math.floor(dm / 60), mm = dm % 60;
+          badge = "in " + (h ? h + " h" : "") + (h && mm ? " " : "") + (mm ? mm + " min" : "");
+          badgeCls = "soon";
+        }
+      }
+      return { time: e[0] + "–" + e[1], title: e[2], color: LC_CAL[e[3]], op: op, badge: badge, badgeCls: badgeCls, hasBadge: !!badge, weight: weight };
+    });
+    var n = evs.length;
+    var onToday = sel === LC_TODAY && y === init.getFullYear() && m === init.getMonth();
+    return {
+      rootCls: "lc" + (dark ? " dark" : ""),
+      popH: sz.pop + "px",
+      rowH: sz.row + "px",
+      tileH: sz.tile + "px", fs: sz.fs + "px", lineH: (sz.fs + 2) + "px",
+      monthName: first.toLocaleDateString("en-GB", { month: "long" }),
+      year: String(y),
+      todayVis: onToday ? "hidden" : "visible",
+      showWeeks: showWeeks,
+      gridCls: "g " + (showWeeks ? "g8" : "g7"),
+      bandCls: "band " + (showWeeks ? "band8" : "band7"),
+      rows: rows,
+      agTitle: (isToday ? "Today · " : "") + lcLong(sd),
+      agCount: n ? n + (n === 1 ? " event" : " events") : "",
+      allDay: allDay, hasAllDay: allDay.length > 0,
+      timed: timed,
+      isEmpty: n === 0,
+      prev: function () { self.setState({ y: m === 0 ? y - 1 : y, m: (m + 11) % 12 }); },
+      next: function () { self.setState({ y: m === 11 ? y + 1 : y, m: (m + 1) % 12 }); },
+      goToday: function () { self.setState({ sel: LC_TODAY, y: init.getFullYear(), m: init.getMonth() }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -17,6 +17,7 @@ canvas runtime to render; they are not application code.
 | States | First run, signing in, private ICS link, needs attention, shortcut conflict, update available |
 | Icons | App icon, live tray date in Color and Mono, real-size specimens and two-digit dates |
 | Languages | Russian App, Spanish Calendar and Japanese App settings |
+| Date size | Calendar at Standard, Large and Larger dates (light and dark), Large at 150 %, and the Settings Calendar tab with the Date size control |
 
 Every board has a light/dark switch. Calendar boards are interactive: days,
 month arrows, Today and agenda rows work. Settings tabs link to each other.
@@ -34,7 +35,8 @@ message box; a cancelled sign-in is a quiet line with **Try again**.
 
 ## Principles
 
-- One compact 352 × 432 calendar and one 448 × 360 settings window.
+- One compact 352 × 432 calendar (352 × 444 with Larger dates) and one 448 × 360
+  settings window.
 - [Gray + Teal](palettes/README.md) surfaces and actions; coral only for
   identity and Today.
 - Segoe UI Variable from Windows (Text for UI, Display for large headings),

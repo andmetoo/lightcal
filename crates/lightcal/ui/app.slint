@@ -1,15 +1,15 @@
 // Lightcal — native desktop calendar UI (Slint).
-// November 2026 design refresh (ADR 0011) · Segoe UI Variable · Calendar 352×432 · Settings 448×360
+// November 2026 design refresh (ADR 0011) · Segoe UI Variable · Calendar 352×432 (352×444 with Larger dates) · Settings 448×360
 // Modules: theme.slint (tokens), controls.slint (shared controls), types.slint (Rust structs),
 // calendar.slint (CalendarView), settings.slint (SettingsView with About).
 
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
 
 export { Theme }
-export { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
+export { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
@@ -197,6 +197,12 @@ export component AppWindow inherits Window {
     // Redesigned Settings View State & Dropdowns
     in property <bool> highlight-current-month: true;
     in property <bool> show-event-dots: true;
+    // Standard 14 px, Large 16 px, Larger 18 px (week rows 34 px, popup 444 px tall).
+    in property <CalendarDateSize> date-size: CalendarDateSize.standard;
+    in property <string> label-date-size-text: "Date size";
+    in property <string> date-size-standard-label: "Standard";
+    in property <string> date-size-large-label: "Large";
+    in property <string> date-size-larger-label: "Larger";
     in property <bool> language-dropdown-open: false;
     in property <bool> theme-dropdown-open: false;
     in property <bool> first-day-dropdown-open: false;
@@ -307,6 +313,7 @@ export component AppWindow inherits Window {
     callback select-update-channel(string);
     callback toggle-highlight-current-month();
     callback toggle-show-event-dots();
+    callback select-date-size(CalendarDateSize);
     callback toggle-auto-check-updates();
     callback reset-shortcut();
     callback open-privacy-settings();
@@ -321,10 +328,11 @@ export component AppWindow inherits Window {
     callback retry-sign-in();
     callback dismiss-startup-warning();
 
+    property <length> calendar-height: Theme.calendar-height(root.date-size);
     width: root.settings-open ? 448px : 352px;
-    height: root.settings-open ? 360px : 432px;
+    height: root.settings-open ? 360px : root.calendar-height;
     preferred-width: root.settings-open ? 448px : 352px;
-    preferred-height: root.settings-open ? 360px : 432px;
+    preferred-height: root.settings-open ? 360px : root.calendar-height;
     background: transparent;
     // Bumped by the app when Windows has discarded the window's pixels (restore from
     // minimized). The software renderer only presents dirty regions, so this window-sized,
@@ -392,7 +400,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ==================== CALENDAR VIEW (352×432) ====================
+    // ==================== CALENDAR VIEW (352×432, or 352×444) ====================
     if !root.settings-open : CalendarView {
         width: 100%;
         height: 100%;
@@ -410,6 +418,7 @@ export component AppWindow inherits Window {
         iso-weeks: root.iso-weeks;
         cells: root.cells;
         show-event-dots: root.show-event-dots;
+        date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
         agenda-title: root.agenda-title;
         agenda-count: root.agenda-count;
@@ -461,6 +470,11 @@ export component AppWindow inherits Window {
         show-week-numbers: root.show-week-numbers;
         label-show-event-dots-text: root.label-show-event-dots-text;
         show-event-dots: root.show-event-dots;
+        label-date-size-text: root.label-date-size-text;
+        date-size-standard-label: root.date-size-standard-label;
+        date-size-large-label: root.date-size-large-label;
+        date-size-larger-label: root.date-size-larger-label;
+        date-size: root.date-size;
         weekday-monday-label: root.weekday-monday-label;
         first-weekday-monday: root.first-weekday-monday;
         weekday-sunday-label: root.weekday-sunday-label;
@@ -519,6 +533,7 @@ export component AppWindow inherits Window {
         toggle-gray-weekday(arg0) => { root.toggle-gray-weekday(arg0); }
         toggle-show-week-numbers() => { root.toggle-show-week-numbers(); }
         toggle-show-event-dots() => { root.toggle-show-event-dots(); }
+        select-date-size(arg0) => { root.select-date-size(arg0); }
         select-first-weekday-option(arg0) => { root.select-first-weekday-option(arg0); }
         add-calendar-account() => { root.add-calendar-account(); }
         cancel-account-sign-in() => { root.cancel-account-sign-in(); }
