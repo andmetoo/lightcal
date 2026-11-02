@@ -1,6 +1,7 @@
 //! Process-owned taskbar integration; never subclasses Explorer or changes pinning.
 use slint::{Rgba8Pixel, SharedPixelBuffer};
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     Graphics::{Dwm::*, Gdi::*},
@@ -25,11 +26,16 @@ struct PreviewState {
 }
 
 struct HookState {
-    /// `None` when DWM refuses custom previews; the restore report still works.
-    preview: Option<PreviewState>,
+    /// Answers DWM thumbnail and Peek requests once `enable_preview` has run.
+    preview: OnceCell<PreviewState>,
+    /// Whether DWM accepted custom previews; `enable_preview` retries until it does.
+    previews_enabled: Cell<bool>,
     minimized: Cell<bool>,
     on_restore: Box<dyn Fn()>,
-    /// Cleared on `WM_NCDESTROY`, so a destroyed window whose handle is reused never counts.
+    /// Set once the subclass is registered and cleared on `WM_NCDESTROY`, so a destroyed
+    /// window whose handle is reused never counts. comctl32's `GetWindowSubclass` could
+    /// answer this, but the comctl32 that unmanifested test binaries load exports it only by
+    /// ordinal.
     attached: Cell<bool>,
 }
 
@@ -51,57 +57,56 @@ pub struct WindowHooks {
 }
 
 impl WindowHooks {
-    /// `on_restore` runs inside the window procedure, before the restored window paints.
+    /// Attaches the subclass. `on_restore` runs inside the window procedure, before the
+    /// restored window paints; a panic in it is caught there.
     ///
     /// # Safety
     ///
     /// `hwnd` must be null or a live window owned by this thread.
-    pub unsafe fn install(
-        hwnd: HWND,
-        snapshot: impl Fn() -> Option<SharedPixelBuffer<Rgba8Pixel>> + 'static,
-        on_restore: impl Fn() + 'static,
-    ) -> Result<Self, String> {
+    pub unsafe fn install(hwnd: HWND, on_restore: impl Fn() + 'static) -> Result<Self, String> {
         if hwnd.is_null() {
             return Err("No native application window".into());
         }
+        let state = Box::new(HookState {
+            preview: OnceCell::new(),
+            previews_enabled: Cell::new(false),
+            minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
+            on_restore: Box::new(on_restore),
+            attached: Cell::new(false),
+        });
+        let reference = &*state as *const HookState as usize;
+        if unsafe { SetWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID, reference) } == 0 {
+            return Err("Could not attach to the application window".into());
+        }
+        state.attached.set(true);
+        Ok(Self { hwnd, state })
+    }
+
+    /// Asks DWM for custom thumbnails and Peek, answered with `snapshot` (the first one
+    /// passed is kept). DWM can refuse while composition restarts, so call this again until
+    /// it returns `true`. The subclass is attached first, so no request goes unanswered.
+    pub fn enable_preview(
+        &self,
+        snapshot: impl Fn() -> Option<SharedPixelBuffer<Rgba8Pixel>> + 'static,
+    ) -> bool {
+        if self.state.previews_enabled.get() {
+            return true;
+        }
+        self.state.preview.get_or_init(|| PreviewState {
+            last_calendar: RefCell::new(snapshot()),
+            snapshot: Box::new(snapshot),
+        });
         let enabled: i32 = 1;
-        let previews = unsafe {
+        let accepted = unsafe {
             DwmSetWindowAttribute(
-                hwnd,
+                self.hwnd,
                 DWMWA_HAS_ICONIC_BITMAP as u32,
                 &enabled as *const _ as _,
                 4,
             )
         } >= 0;
-        let state = Box::new(HookState {
-            preview: previews.then(|| PreviewState {
-                last_calendar: RefCell::new(snapshot()),
-                snapshot: Box::new(snapshot),
-            }),
-            minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
-            on_restore: Box::new(on_restore),
-            attached: Cell::new(false),
-        });
-        let hooks = Self { hwnd, state };
-        if unsafe { SetWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID, hooks.reference()) } == 0
-        {
-            let disabled: i32 = 0;
-            unsafe {
-                DwmSetWindowAttribute(
-                    hwnd,
-                    DWMWA_HAS_ICONIC_BITMAP as u32,
-                    &disabled as *const _ as _,
-                    4,
-                );
-            }
-            return Err("Could not attach to the application window".into());
-        }
-        hooks.state.attached.set(true);
-        Ok(hooks)
-    }
-
-    fn reference(&self) -> usize {
-        &*self.state as *const HookState as usize
+        self.state.previews_enabled.set(accepted);
+        accepted
     }
 
     /// Whether these hooks are still attached to `hwnd` (not to a destroyed window whose
@@ -111,7 +116,7 @@ impl WindowHooks {
     }
 
     pub fn invalidate_preview(&self) {
-        if self.state.preview.is_some() {
+        if self.state.previews_enabled.get() {
             unsafe {
                 DwmInvalidateIconicBitmaps(self.hwnd);
             }
@@ -150,6 +155,8 @@ unsafe extern "system" fn hook_proc(
     data: usize,
 ) -> LRESULT {
     let state = &*(data as *const HookState);
+    // A panic cannot unwind out of a window procedure (it would abort), so app callbacks
+    // are caught here and the message is still handled.
     match message {
         WM_NCDESTROY => {
             RemoveWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID);
@@ -157,12 +164,14 @@ unsafe extern "system" fn hook_proc(
         }
         WM_SIZE => {
             if leaves_minimized(&state.minimized, wp as u32) {
-                (state.on_restore)();
+                let _ = catch_unwind(AssertUnwindSafe(|| (state.on_restore)()));
             }
         }
         WM_DWMSENDICONICTHUMBNAIL | WM_DWMSENDICONICLIVEPREVIEWBITMAP => {
-            if let Some(preview) = &state.preview {
-                send_preview(hwnd, message, lp, preview);
+            if let Some(preview) = state.preview.get() {
+                let _ = catch_unwind(AssertUnwindSafe(|| {
+                    send_preview(hwnd, message, lp, preview)
+                }));
                 return 0;
             }
         }
@@ -172,7 +181,7 @@ unsafe extern "system" fn hook_proc(
 }
 
 unsafe fn send_preview(hwnd: HWND, message: u32, lp: LPARAM, state: &PreviewState) {
-    // A nested DWM request must not borrow the cache recursively or panic across FFI.
+    // A nested DWM request must not borrow the cache recursively.
     if let Ok(mut cached) = state.last_calendar.try_borrow_mut() {
         if let Some(image) = (state.snapshot)() {
             *cached = Some(image);
@@ -334,8 +343,7 @@ mod tests {
         let restores = std::rc::Rc::new(Cell::new(0));
         let counter = restores.clone();
         let hooks =
-            unsafe { WindowHooks::install(hwnd, || None, move || counter.set(counter.get() + 1)) }
-                .unwrap();
+            unsafe { WindowHooks::install(hwnd, move || counter.set(counter.get() + 1)) }.unwrap();
         assert!(hooks.is_attached_to(hwnd));
         unsafe {
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -366,8 +374,57 @@ mod tests {
         }
         assert_eq!(restores.get(), 1);
         // A destroyed window detaches the hooks, even if Windows reuses its handle later.
-        let hooks = unsafe { WindowHooks::install(hwnd, || None, || {}) }.unwrap();
+        let hooks = unsafe { WindowHooks::install(hwnd, || {}) }.unwrap();
         drop(window);
         assert!(!hooks.is_attached_to(hwnd));
+    }
+    #[test]
+    fn hooks_answer_dwm_preview_requests_once_enabled() {
+        let window =
+            crate::platform::windows::test_window::TestWindow::new("Lightcal preview test");
+        let hwnd = window.0;
+        let hooks = unsafe { WindowHooks::install(hwnd, || {}) }.unwrap();
+        let thumbnail_size = ((200 << 16) | 150) as LPARAM;
+        // Before previews are enabled, DWM requests go on to the window's own procedure.
+        unsafe { SendMessageW(hwnd, WM_DWMSENDICONICTHUMBNAIL, 0, thumbnail_size) };
+        let snapshots = std::rc::Rc::new(Cell::new(0));
+        let counter = snapshots.clone();
+        let snapshot = move || {
+            counter.set(counter.get() + 1);
+            Some(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
+                &[240u8, 40, 50, 255].repeat(352 * 432),
+                352,
+                432,
+            ))
+        };
+        hooks.enable_preview(snapshot.clone());
+        // The first snapshot is cached at once, so settings never show an empty preview.
+        assert_eq!(snapshots.get(), 1);
+        assert_eq!(
+            unsafe { SendMessageW(hwnd, WM_DWMSENDICONICTHUMBNAIL, 0, thumbnail_size) },
+            0
+        );
+        assert_eq!(snapshots.get(), 2);
+        assert_eq!(
+            unsafe { SendMessageW(hwnd, WM_DWMSENDICONICLIVEPREVIEWBITMAP, 0, 0) },
+            0
+        );
+        assert_eq!(snapshots.get(), 3);
+        // A retry keeps the first snapshot source and takes no extra snapshot.
+        hooks.enable_preview(|| panic!("the first snapshot source is kept"));
+        assert_eq!(snapshots.get(), 3);
+    }
+    #[test]
+    fn a_panicking_restore_callback_is_contained_in_the_window_procedure() {
+        let window = crate::platform::windows::test_window::TestWindow::new("Lightcal panic test");
+        let hwnd = window.0;
+        let _hooks = unsafe { WindowHooks::install(hwnd, || panic!("restore callback")) }.unwrap();
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            ShowWindow(hwnd, SW_MINIMIZE);
+            // Without the guard the panic would abort the whole test process here.
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        assert_eq!(unsafe { IsIconic(hwnd) }, 0);
     }
 }
