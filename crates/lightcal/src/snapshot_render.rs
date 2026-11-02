@@ -810,7 +810,7 @@ fn render_calendar_boards(
         helper.render_to_png(
             &out_dir.join(format!("calendar-{}-{}.png", size.as_str(), theme.as_str())),
             352,
-            size.calendar_height() as u32,
+            crate::calendar_height(ui) as u32,
         )?;
     }
     ctrl.prefs.date_size = DateSize::Standard;

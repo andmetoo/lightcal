@@ -1,10 +1,10 @@
-// Compact calendar popup, 352 × 432 (design/canvas Main, CalendarDetail and
+// Compact calendar popup, 352 × 432, or 352 × 444 with Larger dates (design/canvas Main, CalendarDetail and
 // CalendarDark boards, `.lc` styles). AppWindow forwards its data and callbacks.
 //
 // Layout: 12 px side and bottom padding; a 44 px header; a 24 px weekday row;
 // six 32 px week rows; a hairline; the agenda header; a scrolling agenda.
-// Date size (design/canvas DateSize boards): Standard 14 px and Large 16 px dates use
-// the 32 px rows; Larger 18 px dates use 30 px tiles in 34 px rows and a 444 px popup.
+// Date size (Theme.day-font and friends): Standard 14 px and Large 16 px dates use the
+// 32 px rows; Larger 18 px dates use 30 px tiles in 34 px rows and a 444 px popup.
 
 import { Theme } from "theme.slint";
 import { Icon, IconButton, TextButton } from "controls.slint";
@@ -320,9 +320,12 @@ export component CalendarView inherits Rectangle {
     property <length> wheel-travel: 0px;
     property <length> content-x: 12px;
     property <length> content-width: root.width - 24px;
-    property <length> day-font: root.date-size == 2 ? 18px : root.date-size == 1 ? 16px : Theme.type-day;
-    property <length> tile-height: root.date-size == 2 ? 30px : 28px;
-    property <length> row-height: root.date-size == 2 ? 34px : 32px;
+    property <length> day-font: Theme.day-font(root.date-size);
+    property <length> tile-height: Theme.day-tile-height(root.date-size);
+    property <length> row-height: Theme.week-row-height(root.date-size);
+    // Centre of a plain (not Today) day number within its row; see the pill below.
+    property <length> number-center-in-row: (root.row-height - root.tile-height) / 2
+        + root.tile-height - 6px - 3px - root.day-font / 2;
 
     border-radius: Theme.radius-window;
     border-width: 1px;
@@ -465,11 +468,12 @@ export component CalendarView inherits Rectangle {
             width: grid.width;
             height: root.row-height;
 
+            // Week numbers sit 2 px below the day-number centre, as on the Standard board.
             if root.show-week-numbers : Text {
                 x: 0px;
-                y: 0px;
+                y: root.number-center-in-row + 2px - 8px;
                 width: 24px;
-                height: root.row-height;
+                height: 16px;
                 text: root.iso-weeks[row];
                 font-size: Theme.type-tiny;
                 font-weight: Theme.weight-medium;

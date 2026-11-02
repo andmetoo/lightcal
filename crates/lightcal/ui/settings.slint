@@ -899,7 +899,9 @@ export component SettingsView inherits Rectangle {
     in property <string> label-show-event-dots-text;
     in property <bool> show-event-dots;
     in property <string> label-date-size-text;
-    in property <[string]> date-size-labels;
+    in property <string> date-size-standard-label;
+    in property <string> date-size-large-label;
+    in property <string> date-size-larger-label;
     in property <int> date-size;
     in property <string> weekday-monday-label;
     in property <bool> first-weekday-monday;
@@ -1118,7 +1120,7 @@ export component SettingsView inherits Rectangle {
                         divider: false;
                         Centered {
                             Track {
-                                for opt[idx] in root.date-size-labels : Segment {
+                                for opt[idx] in [root.date-size-standard-label, root.date-size-large-label, root.date-size-larger-label] : Segment {
                                     label: opt;
                                     sample-size: idx == 2 ? 13px : idx == 1 ? 11.5px : 10px;
                                     on: root.date-size == idx;

@@ -36,6 +36,9 @@ body{margin:0}
 .dots{display:flex;gap:3px;height:4px}
 .dot{width:4px;height:4px;border-radius:2px}
 .d.today .dot{background:rgba(255,255,255,.85) !important}
+.d,.d.today{display:block;padding:0}
+.num{position:absolute;left:0;right:0;text-align:center}
+.d .dots{position:absolute;left:0;right:0;justify-content:center}
 .ag{scrollbar-width:none}
 .row{display:flex;align-items:center;gap:10px;width:100%;height:30px;padding:0 4px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit;box-sizing:border-box}
 .now{height:18px;padding:0 6px;border-radius:4px;display:inline-flex;align-items:center;font:600 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--accent);background:var(--nowbg)}
@@ -62,7 +65,7 @@ body{margin:0}
       <div class="{{r.cls}}" style="height: {{rowH}}">
         <sc-if value="{{r.showWeeks}}" hint-placeholder-val="{{true}}"><div class="wk" aria-label="Week {{r.wk}}">{{r.wk}}</div></sc-if>
         <sc-for list="{{r.days}}" as="d" hint-placeholder-count="7">
-          <div class="cell"><button class="{{d.cls}}" style="height: {{tileH}}; font-size: {{fs}}; gap: {{gap}}" aria-label="{{d.label}}" onClick="{{d.pick}}"><span>{{d.n}}</span><span class="dots" style="height: 4px"><sc-for list="{{d.dots}}" as="c" hint-placeholder-count="0"><span class="dot" style="background: {{c.color}}"></span></sc-for></span></button></div>
+          <div class="cell"><button class="{{d.cls}}" style="height: {{tileH}}; font-size: {{fs}}" aria-label="{{d.label}}" onClick="{{d.pick}}"><span class="num" style="top: {{d.numTop}}; line-height: {{lineH}}">{{d.n}}</span><span class="dots" style="top: {{d.dotsTop}}; height: 4px"><sc-for list="{{d.dots}}" as="c" hint-placeholder-count="0"><span class="dot" style="background: {{c.color}}"></span></sc-for></span></button></div>
         </sc-for>
       </div>
     </sc-for>
@@ -99,9 +102,9 @@ var LC_TODAY = "2026-11-01";
 var LC_NOW = 14 * 60 + 5;
 var LC_CAL = { p: "#D9822B", w: "#3B82C4", f: "#2E9D5B" };
 var LC_SIZES = {
-  standard: { fs: 14, tile: 28, row: 32, gap: 3, pop: 432 },
-  large: { fs: 16, tile: 28, row: 32, gap: 2, pop: 432 },
-  larger: { fs: 18, tile: 30, row: 34, gap: 2, pop: 444 }
+  standard: { fs: 14, tile: 28, row: 32, pop: 432 },
+  large: { fs: 16, tile: 28, row: 32, pop: 432 },
+  larger: { fs: 18, tile: 30, row: 34, pop: 444 }
 };
 var LC_EV = {
   "2026-10-27": [["09:30", "09:45", "Standup", "w"]],
@@ -152,8 +155,14 @@ class Component extends DCLogic {
           var cls = "d" + (out ? " out" : "") + (k === LC_TODAY ? " today" : "") + (k === sel ? " sel" : "");
           var dots = out ? [] : evs.slice(0, 3).map(function (e) { return { color: LC_CAL[e[3]] }; });
           var n = evs.length;
+          // Same rule as calendar.slint: dots 2 px above the tile bottom (1 px on Today),
+          // the number 3 px (2.5 px) above them.
+          var today = k === LC_TODAY;
+          var dotsTop = sz.tile - (today ? 5 : 6);
+          var center = dotsTop - (today ? 2.5 : 3) - sz.fs / 2;
           days.push({
             n: d.getDate(), cls: cls, dots: dots,
+            numTop: (center - (sz.fs + 2) / 2) + "px", dotsTop: dotsTop + "px",
             label: lcLong(d) + (n ? ", " + n + (n === 1 ? " event" : " events") : ""),
             pick: function () { self.setState({ sel: k, y: d.getFullYear(), m: d.getMonth() }); }
           });
@@ -187,7 +196,7 @@ class Component extends DCLogic {
       rootCls: "lc" + (dark ? " dark" : ""),
       popH: sz.pop + "px",
       rowH: sz.row + "px",
-      tileH: sz.tile + "px", fs: sz.fs + "px", gap: sz.gap + "px",
+      tileH: sz.tile + "px", fs: sz.fs + "px", lineH: (sz.fs + 2) + "px",
       monthName: first.toLocaleDateString("en-GB", { month: "long" }),
       year: String(y),
       todayVis: onToday ? "hidden" : "visible",

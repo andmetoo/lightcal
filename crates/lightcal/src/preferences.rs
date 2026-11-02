@@ -172,14 +172,6 @@ impl DateSize {
             _ => Self::Standard,
         }
     }
-
-    /// Logical height of the calendar popup; Larger adds 2 px to each of the six week rows.
-    pub fn calendar_height(self) -> f32 {
-        match self {
-            Self::Standard | Self::Large => 432.0,
-            Self::Larger => 444.0,
-        }
-    }
 }
 
 /// Supported UI locales (`en` is always the default and fallback).
@@ -1020,15 +1012,12 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
     }
 
     #[test]
-    fn date_size_round_trips_and_sets_calendar_height() {
+    fn date_size_round_trips_and_loads_case_insensitively() {
         for size in [DateSize::Standard, DateSize::Large, DateSize::Larger] {
             assert_eq!(DateSize::from_index(size.index()), size);
             assert_eq!(DateSize::from_str_lossy(size.as_str()), size);
         }
         assert_eq!(DateSize::from_index(7), DateSize::Standard);
-        assert_eq!(DateSize::Standard.calendar_height(), 432.0);
-        assert_eq!(DateSize::Large.calendar_height(), 432.0);
-        assert_eq!(DateSize::Larger.calendar_height(), 444.0);
 
         let dir = unique_temp_dir("date-size");
         fs::create_dir_all(&dir).unwrap();

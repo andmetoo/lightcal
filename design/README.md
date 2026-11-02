@@ -35,7 +35,8 @@ message box; a cancelled sign-in is a quiet line with **Try again**.
 
 ## Principles
 
-- One compact 352 × 432 calendar and one 448 × 360 settings window.
+- One compact 352 × 432 calendar (352 × 444 with Larger dates) and one 448 × 360
+  settings window.
 - [Gray + Teal](palettes/README.md) surfaces and actions; coral only for
   identity and Today.
 - Segoe UI Variable from Windows (Text for UI, Display for large headings),

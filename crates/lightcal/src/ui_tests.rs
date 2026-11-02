@@ -959,3 +959,32 @@ fn agenda_actions_use_the_row_that_was_rendered() {
     assert_eq!(expanded, ["Weekend walk"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn date_size_sets_calendar_height_from_theme_metrics() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-date-size-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    for (size, height) in [
+        (DateSize::Standard, 432.0),
+        (DateSize::Large, 432.0),
+        (DateSize::Larger, 444.0),
+    ] {
+        ctrl.prefs.date_size = size;
+        ctrl.sync_to_ui(&ui);
+        assert_eq!(ui.get_date_size(), size.index());
+        assert_eq!(calendar_height(&ui), height);
+        assert_eq!(
+            target_logical_size(false, calendar_height(&ui)),
+            (352.0, height)
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

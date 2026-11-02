@@ -355,17 +355,22 @@ fn resolve_dark_mode(theme: ThemePreference) -> bool {
     }
 }
 
-fn target_logical_size(settings_open: bool, date_size: DateSize) -> (f32, f32) {
+fn target_logical_size(settings_open: bool, calendar_height: f32) -> (f32, f32) {
     if settings_open {
         (448.0, 360.0)
     } else {
-        (352.0, date_size.calendar_height())
+        (352.0, calendar_height)
     }
 }
 
+/// Logical calendar height for the current date size, from the Slint Theme metrics.
+fn calendar_height(ui: &AppWindow) -> f32 {
+    ui.global::<Theme>()
+        .invoke_calendar_height(ui.get_date_size())
+}
+
 fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
-    let date_size = DateSize::from_index(ui.get_date_size());
-    let (logical_w, logical_h) = target_logical_size(settings_open, date_size);
+    let (logical_w, logical_h) = target_logical_size(settings_open, calendar_height(ui));
     ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     #[cfg(windows)]
@@ -666,11 +671,9 @@ impl AppController {
         ui.set_label_show_event_dots_text(strings.label_show_event_dots.into());
         ui.set_desc_show_event_dots_text(strings.desc_show_event_dots.into());
         ui.set_label_date_size_text(strings.label_date_size.into());
-        ui.set_date_size_labels(slint::ModelRc::new(slint::VecModel::from(vec![
-            SharedString::from(strings.date_size_standard),
-            SharedString::from(strings.date_size_large),
-            SharedString::from(strings.date_size_larger),
-        ])));
+        ui.set_date_size_standard_label(strings.date_size_standard.into());
+        ui.set_date_size_large_label(strings.date_size_large.into());
+        ui.set_date_size_larger_label(strings.date_size_larger.into());
         ui.set_label_tray_mode_text(strings.label_tray_mode.into());
         ui.set_desc_tray_mode_text(strings.desc_tray_mode.into());
         ui.set_label_tray_palette_text(strings.label_tray_palette.into());
@@ -1537,10 +1540,7 @@ fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
     #[cfg(windows)]
     {
-        let (lw, lh) = target_logical_size(
-            ui.get_settings_open(),
-            DateSize::from_index(ui.get_date_size()),
-        );
+        let (lw, lh) = target_logical_size(ui.get_settings_open(), calendar_height(ui));
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
         if !hwnd.is_null() {
             unsafe {
@@ -3823,13 +3823,9 @@ mod tests {
 
     #[test]
     fn target_logical_size_matches_compact_and_settings_specs() {
-        assert_eq!(
-            target_logical_size(false, DateSize::Standard),
-            (352.0, 432.0)
-        );
-        assert_eq!(target_logical_size(false, DateSize::Large), (352.0, 432.0));
-        assert_eq!(target_logical_size(false, DateSize::Larger), (352.0, 444.0));
-        assert_eq!(target_logical_size(true, DateSize::Larger), (448.0, 360.0));
+        assert_eq!(target_logical_size(false, 432.0), (352.0, 432.0));
+        assert_eq!(target_logical_size(false, 444.0), (352.0, 444.0));
+        assert_eq!(target_logical_size(true, 444.0), (448.0, 360.0));
     }
 
     #[test]
@@ -3841,7 +3837,7 @@ mod tests {
             height: 1032,
         };
         for settings in [false, true] {
-            let (lw, lh) = target_logical_size(settings, DateSize::Larger);
+            let (lw, lh) = target_logical_size(settings, 444.0);
             let pw = (lw as i32) + 16;
             let ph = (lh as i32) + 44;
             let (x, y) = area.anchor_above_tray(pw, ph, 12);

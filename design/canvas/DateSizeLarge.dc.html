@@ -11,12 +11,12 @@
 <style>body{margin:0}</style>
 </helmet>
 <div style="width: 352px; height: 432px">
-  <dc-import name="DateSize" size="large" theme="light" hint-size="352px,432px"></dc-import>
+  <dc-import name="DateSize" size="large" theme="{{theme}}" hint-size="352px,432px"></dc-import>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":352,"height":432}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":352,"height":432}}'>
 class Component extends DCLogic {
-  renderVals() { return {}; }
+  renderVals() { return { theme: this.props.theme || "light" }; }
 }
 </script>
 </body>
