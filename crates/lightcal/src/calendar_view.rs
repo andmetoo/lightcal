@@ -2,7 +2,7 @@
 //! selected day's agenda with now/next state, details, Copy and Open.
 //! Calendar rules live in `calendar_core`; this module only formats them for Slint.
 
-use crate::{event_color, AppController, AppWindow};
+use crate::{mark_color, AppController, AppWindow};
 use crate::{AgendaChipRow, AgendaEventItem, ShadedBand};
 use calendar_core::{
     agenda_timings, local_minutes, next_occurrence_after, sort_agenda, split_local_minutes,
@@ -278,7 +278,7 @@ impl AppController {
                     .map(|source| source.name.as_str())
                     .unwrap_or(strings.agenda_calendar_fallback)
                     .into(),
-                swatch: event_color(&event.color_hex, ui.get_dark_mode()),
+                swatch: mark_color(&event.color_hex),
                 all_day: event.is_all_day,
                 dimmed: timing == AgendaTiming::Past,
                 is_now: timing == AgendaTiming::Now,

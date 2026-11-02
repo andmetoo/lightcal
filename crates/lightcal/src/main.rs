@@ -21,7 +21,7 @@ mod event_colors;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
-use event_colors::event_color;
+use event_colors::mark_color;
 use snapshot_render::render_snapshots_to_dir;
 
 use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
@@ -35,7 +35,7 @@ pub(crate) enum ActiveSignIn {
     Google,
 }
 use slint::{
-    Color, ComponentHandle, Image, LogicalSize, Model, ModelRc, PhysicalPosition, Rgba8Pixel,
+    ComponentHandle, Image, LogicalSize, Model, ModelRc, PhysicalPosition, Rgba8Pixel,
     SharedPixelBuffer, SharedString, VecModel,
 };
 use std::cell::RefCell;
@@ -339,30 +339,30 @@ fn publish_sources(
     ModelRc::new(VecModel::from(next))
 }
 
-fn split_sources(
-    items: &[CalendarSourceItem],
-) -> (
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-) {
-    let mut outlook = Vec::new();
-    let mut google = Vec::new();
-    let mut ics = Vec::new();
-    let mut windows = Vec::new();
+/// Calendar sources by provider, as Settings lists them.
+#[derive(Default)]
+struct SourceGroups {
+    outlook: Vec<CalendarSourceItem>,
+    google: Vec<CalendarSourceItem>,
+    ics: Vec<CalendarSourceItem>,
+    windows: Vec<CalendarSourceItem>,
+}
+
+fn split_sources(items: &[CalendarSourceItem]) -> SourceGroups {
+    let mut groups = SourceGroups::default();
     for item in items {
-        if item.id.starts_with("graph:") {
-            outlook.push(item.clone());
+        let group = if item.id.starts_with("graph:") {
+            &mut groups.outlook
         } else if item.id.starts_with("google:") {
-            google.push(item.clone());
+            &mut groups.google
         } else if item.id.starts_with("ics:") {
-            ics.push(item.clone());
+            &mut groups.ics
         } else {
-            windows.push(item.clone());
-        }
+            &mut groups.windows
+        };
+        group.push(item.clone());
     }
-    (outlook, google, ics, windows)
+    groups
 }
 
 fn current_local_date() -> LocalDate {
@@ -606,8 +606,8 @@ impl AppController {
                 let dot = |i: usize| {
                     c.dot_colors
                         .get(i)
-                        .map(|hex| event_color(hex, dark_mode))
-                        .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0))
+                        .map(|hex| mark_color(hex))
+                        .unwrap_or_default()
                 };
                 let (d1, d2, d3) = (dot(0), dot(1), dot(2));
                 let date_desc = format_date_line(locale, c.date, true);
@@ -1126,20 +1126,12 @@ impl AppController {
                 id: s.id.clone().into(),
                 name: s.name.clone().into(),
                 account: s.account_label.clone().into(),
-                swatch: event_color(&s.color_hex, dark_mode),
+                swatch: mark_color(&s.color_hex),
                 checked: self.prefs.selected_calendar_ids.contains(&s.id),
                 removable: s.id.starts_with("ics:"),
             })
             .collect();
-        let (outlook_items, google_items, ics_items, windows_items) = split_sources(&cal_items);
-        ui.set_calendar_sources(publish_sources(
-            ui.get_calendar_sources(),
-            cal_items.clone(),
-        ));
-        ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), outlook_items));
-        ui.set_google_sources(publish_sources(ui.get_google_sources(), google_items));
-        ui.set_ics_sources(publish_sources(ui.get_ics_sources(), ics_items));
-        ui.set_windows_sources(publish_sources(ui.get_windows_sources(), windows_items));
+        let groups = split_sources(&cal_items);
 
         let mut upd_text = format_update_status(locale, &self.update_state);
         if self.update_state == UpdateCheckState::Idle {
@@ -1159,7 +1151,12 @@ impl AppController {
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
-        self.sync_settings_view(ui, &cal_items);
+        self.sync_settings_view(ui, &cal_items, &groups);
+        ui.set_calendar_sources(publish_sources(ui.get_calendar_sources(), cal_items));
+        ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), groups.outlook));
+        ui.set_google_sources(publish_sources(ui.get_google_sources(), groups.google));
+        ui.set_ics_sources(publish_sources(ui.get_ics_sources(), groups.ics));
+        ui.set_windows_sources(publish_sources(ui.get_windows_sources(), groups.windows));
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
@@ -1195,7 +1192,12 @@ impl AppController {
 
 /// Settings and About (ADR 0011): copy, account cards and update status.
 impl AppController {
-    fn sync_settings_view(&self, ui: &AppWindow, items: &[CalendarSourceItem]) {
+    fn sync_settings_view(
+        &self,
+        ui: &AppWindow,
+        items: &[CalendarSourceItem],
+        groups: &SourceGroups,
+    ) {
         use lightcal::calendars::account::MicrosoftAccountState as Ms;
         use lightcal::i18n::{settings_text, updated_ago};
         let locale = self.prefs.locale();
@@ -1228,7 +1230,12 @@ impl AppController {
                 .unwrap_or_else(|| fallback.to_string())
         };
 
-        let (outlook, google, ics, windows) = split_sources(items);
+        let SourceGroups {
+            outlook,
+            google,
+            ics,
+            windows,
+        } = groups;
         let can_refresh = ui.get_can_refresh_calendars();
         let idle = !self.connection_busy && !self.provider_loading;
         let model = |list: Vec<CalendarSourceItem>| ModelRc::new(VecModel::from(list));

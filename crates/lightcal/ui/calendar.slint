@@ -115,7 +115,7 @@ component EventDetails inherits Rectangle {
                     width: 8px;
                     height: 8px;
                     border-radius: 4px;
-                    background: root.event.swatch;
+                    background: Theme.mark(root.event.swatch);
                 }
             }
             Text {
@@ -171,7 +171,7 @@ component AgendaRow inherits Rectangle {
                 width: 3px;
                 height: 16px;
                 border-radius: 1.5px;
-                background: root.event.swatch;
+                background: Theme.mark(root.event.swatch);
             }
         }
         Text {
@@ -249,7 +249,7 @@ component AllDayChip inherits Rectangle {
                 width: 6px;
                 height: 6px;
                 border-radius: 3px;
-                background: root.event.swatch;
+                background: Theme.mark(root.event.swatch);
             }
         }
         Text {
@@ -555,19 +555,19 @@ export component CalendarView inherits Rectangle {
                         width: 4px;
                         height: 4px;
                         border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot1;
+                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot1);
                     }
                     if pill.cell.dot-count >= 2 : Rectangle {
                         width: 4px;
                         height: 4px;
                         border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot2;
+                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot2);
                     }
                     if pill.cell.dot-count >= 3 : Rectangle {
                         width: 4px;
                         height: 4px;
                         border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : pill.cell.dot3;
+                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot3);
                     }
                 }
 

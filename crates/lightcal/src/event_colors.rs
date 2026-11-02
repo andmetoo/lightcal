@@ -8,25 +8,43 @@
 //! in dark mode, which also covers the #2A2A2A chips and the #191919 popup.
 //! Only OKLCH lightness moves, so the hue stays and pastels keep their chroma
 //! instead of turning muddy.
+//!
+//! Both variants travel to Slint as a `MarkColor`, and `Theme.mark()` picks
+//! one, so marks switch with the rest of the palette.
 
+use crate::MarkColor;
 use slint::Color;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-/// A calendar's color for the given theme. The UI syncs every minute, but
-/// calendar colors rarely change, so results are kept per theme.
-pub(crate) fn event_color(hex: &str, dark_mode: bool) -> Color {
-    thread_local! {
-        static CACHE: RefCell<[HashMap<String, Color>; 2]> = Default::default();
-    }
+/// More distinct colors than any calendar list shows; past it the cache
+/// starts over, so recolored or removed calendars don't pile up in a tray app
+/// that runs for weeks.
+const CACHE_LIMIT: usize = 64;
+
+thread_local! {
+    /// Adjusted colors by source hex: the UI syncs every minute, but calendar
+    /// colors rarely change.
+    static CACHE: RefCell<HashMap<String, MarkColor>> = RefCell::default();
+}
+
+/// A calendar's color for both themes.
+pub(crate) fn mark_color(hex: &str) -> MarkColor {
     CACHE.with(|cache| {
-        let map = &mut cache.borrow_mut()[usize::from(dark_mode)];
-        if let Some(color) = map.get(hex) {
-            return *color;
+        let mut cache = cache.borrow_mut();
+        if let Some(mark) = cache.get(hex) {
+            return mark.clone();
         }
-        let color = legible_event_color(parse_hex_color(hex), dark_mode);
-        map.insert(hex.to_string(), color);
-        color
+        if cache.len() >= CACHE_LIMIT {
+            cache.clear();
+        }
+        let source = parse_hex_color(hex);
+        let mark = MarkColor {
+            light: legible_event_color(source, false),
+            dark: legible_event_color(source, true),
+        };
+        cache.insert(hex.to_string(), mark.clone());
+        mark
     })
 }
 
@@ -192,15 +210,15 @@ mod tests {
             "#2E9D5B", "#CCCCCC",
         ] {
             let source = parse_hex_color(hex);
-            let out = event_color(hex, false);
+            let out = mark_color(hex).light;
             assert!(contrast(out, selected) >= 3.0, "{hex} -> {out:?}");
             assert!(lch(out)[0] <= lch(source)[0], "{hex} -> {out:?}");
             assert_same_hue_and_chroma(hex, source, out);
             // Dark mode keeps colors that already stand out there.
-            assert_eq!(event_color(hex, true), source, "{hex}");
+            assert_eq!(mark_color(hex).dark, source, "{hex}");
         }
         // Colors that already reach 3:1 on the selected day stay as is.
-        assert_eq!(event_color("#3B82C4", false), parse_hex_color("#3B82C4"));
+        assert_eq!(mark_color("#3B82C4").light, parse_hex_color("#3B82C4"));
     }
 
     #[test]
@@ -211,24 +229,44 @@ mod tests {
             "#1F4E8C", "#123456", "#5B1A1A", "#3F51B5", "#008573", "#5E6AD2", "#000000",
         ] {
             let source = parse_hex_color(hex);
-            let out = event_color(hex, true);
+            let out = mark_color(hex).dark;
             for fill in fills {
                 assert!(contrast(out, fill) >= 3.0, "{hex} -> {out:?} on {fill:?}");
             }
             assert!(lch(out)[0] >= lch(source)[0], "{hex} -> {out:?}");
             assert_same_hue_and_chroma(hex, source, out);
             // Light mode keeps colors that already stand out on white.
-            assert_eq!(event_color(hex, false), source, "{hex}");
+            assert_eq!(mark_color(hex).light, source, "{hex}");
         }
     }
 
     #[test]
-    fn colors_are_cached_per_theme() {
-        let light = event_color("#9FE1E7", false);
-        let dark = event_color("#9FE1E7", true);
-        assert_ne!(light, dark);
-        assert_eq!(event_color("#9FE1E7", false), light);
-        assert_eq!(event_color("#9FE1E7", true), dark);
+    fn marks_come_from_a_cache_that_starts_over_when_full() {
+        let cached = |hex: &str| CACHE.with(|cache| cache.borrow().get(hex).cloned());
+        // A planted entry comes back as is, so lookups are served from the cache.
+        let planted = MarkColor {
+            light: Color::from_rgb_u8(1, 2, 3),
+            dark: Color::from_rgb_u8(4, 5, 6),
+        };
+        CACHE.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            cache.clear();
+            cache.insert("#9FE1E7".into(), planted.clone());
+        });
+        assert_eq!(mark_color("#9FE1E7"), planted);
+
+        // A new color is computed once and kept.
+        let fresh = mark_color("#FAD165");
+        assert_eq!(cached("#FAD165"), Some(fresh));
+
+        // Filling the cache starts it over instead of growing it.
+        for i in 0..CACHE_LIMIT {
+            mark_color(&format!("#{i:06X}"));
+        }
+        assert!(CACHE.with(|cache| cache.borrow().len()) <= CACHE_LIMIT);
+        assert_eq!(cached("#9FE1E7"), None);
+        assert_ne!(mark_color("#9FE1E7"), planted);
+
         // Unparseable values fall back to the default calendar color.
         assert_eq!(parse_hex_color("teal"), Color::from_rgb_u8(94, 106, 210));
     }

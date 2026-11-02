@@ -720,24 +720,75 @@ fn past_agenda_rows_keep_their_calendar_bar_at_full_color() {
     ui.show().unwrap();
     window.set_size(slint::PhysicalSize::new(352, 432));
 
-    let past = ui.get_agenda_events().row_data(0).unwrap();
-    assert!(past.dimmed);
-    let mut pixels = vec![PremultipliedRgbaColor::default(); 352 * 432];
+    let rows = ui.get_agenda_events();
+    let (past, upcoming) = (rows.row_data(0).unwrap(), rows.row_data(2).unwrap());
+    assert!(past.dimmed && !upcoming.dimmed);
+    let (width, height) = (352, 432);
+    let mut pixels = vec![PremultipliedRgbaColor::default(); width * height];
     slint::platform::update_timers_and_animations();
     window.draw_if_needed(|renderer| {
-        renderer.render(&mut pixels, 352);
+        renderer.render(&mut pixels, width);
     });
-    // The first timed row is centred at y = 344, its 3 px bar near the left edge.
-    let swatch = [past.swatch.red(), past.swatch.green(), past.swatch.blue()];
-    let bar_drawn = (334..354)
-        .flat_map(|y| (0..60).map(move |x| y * 352 + x))
-        .any(|index| {
-            let pixel = pixels[index];
-            [pixel.red, pixel.green, pixel.blue] == swatch
-        });
+    let rgb = |x: usize, y: usize| {
+        let pixel = pixels[y * width + x];
+        [pixel.red, pixel.green, pixel.blue]
+    };
+
+    // Find the timed rows' 3 × 16 px bars wherever the layout puts them: tall
+    // runs of one saturated color near the left edge. Day dots and the
+    // all-day chip dot are too short to qualify.
+    let mut bars: Vec<(usize, usize, [u8; 3])> = Vec::new();
+    for x in 0..48 {
+        let mut y = 0;
+        while y < height {
+            let color = rgb(x, y);
+            let saturated = color.iter().max().unwrap() - color.iter().min().unwrap() > 40;
+            let mut end = y + 1;
+            while saturated && end < height && rgb(x, end) == color {
+                end += 1;
+            }
+            if saturated
+                && end - y >= 12
+                && !bars
+                    .iter()
+                    .any(|(top, _, c)| top.abs_diff(y) <= 2 && *c == color)
+            {
+                bars.push((y, end, color));
+            }
+            y = end;
+        }
+    }
+    bars.sort_by_key(|(top, _, _)| *top);
+    let mut rows_found: Vec<(usize, usize)> = Vec::new();
+    for (top, bottom, _) in &bars {
+        if rows_found.last().is_none_or(|(t, _)| top.abs_diff(*t) > 4) {
+            rows_found.push((*top, *bottom));
+        }
+    }
+    assert_eq!(rows_found.len(), 3, "one bar per timed row: {bars:?}");
+
+    let swatch = past.swatch.light;
+    let swatch = [swatch.red(), swatch.green(), swatch.blue()];
+    let (past_top, past_bottom) = rows_found[0];
     assert!(
-        bar_drawn,
-        "the past row's bar is drawn in its full color {swatch:?}, not faded with the text"
+        bars.iter()
+            .any(|(top, _, color)| *top == past_top && *color == swatch),
+        "the past row's bar is drawn in its full color {swatch:?}, not faded: {bars:?}"
+    );
+
+    // The past row's title is still dimmed: its darkest text pixel is much
+    // lighter than the upcoming row's.
+    let darkest = |(top, bottom): (usize, usize)| {
+        (top..bottom)
+            .flat_map(|y| (110..width - 16).map(move |x| (x, y)))
+            .map(|(x, y)| rgb(x, y).iter().map(|&c| u32::from(c)).sum::<u32>() / 3)
+            .min()
+            .unwrap()
+    };
+    let (past_ink, upcoming_ink) = (darkest((past_top, past_bottom)), darkest(rows_found[2]));
+    assert!(
+        past_ink > upcoming_ink + 40,
+        "past text is dimmed: darkest {past_ink} vs {upcoming_ink}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

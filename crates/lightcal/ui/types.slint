@@ -1,5 +1,12 @@
 // Data structures shared between the Rust controller and the Slint views.
 
+// A calendar's color, adjusted in Rust for contrast on each theme
+// (event_colors.rs). Views draw it with `Theme.mark()`.
+export struct MarkColor {
+    light: color,
+    dark: color,
+}
+
 export struct DayCellData {
     day-number: string,
     in-month: bool,
@@ -7,9 +14,9 @@ export struct DayCellData {
     is-selected: bool,
     is-gray-weekday: bool,
     dot-count: int,
-    dot1: color,
-    dot2: color,
-    dot3: color,
+    dot1: MarkColor,
+    dot2: MarkColor,
+    dot3: MarkColor,
     accessible-label: string,
 }
 
@@ -22,7 +29,7 @@ export struct CalendarSourceItem {
     id: string,
     name: string,
     account: string,
-    swatch: color,
+    swatch: MarkColor,
     checked: bool,
     removable: bool,
 }
@@ -42,9 +49,9 @@ export struct AgendaEventItem {
     time-label: string,
     title: string,
     calendar-name: string,
-    swatch: color,
+    swatch: MarkColor,
     all-day: bool,
-    // Past events on today, drawn at 55 percent opacity.
+    // Past events on today: text at 55 percent opacity, color bar unchanged.
     dimmed: bool,
     // In progress on today: Now badge and a semibold title.
     is-now: bool,
