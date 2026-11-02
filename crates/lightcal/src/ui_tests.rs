@@ -2,6 +2,7 @@
 use super::*;
 use lightcal::snapshot::HeadlessPlatform;
 use slint::platform::{PointerEventButton, WindowEvent};
+use slint::Model;
 use std::cell::Cell;
 
 fn click(ui: &AppWindow, x: f32, y: f32) {
@@ -687,6 +688,118 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
         delta_y: 60.0,
     });
     assert_eq!(ui.get_month_title(), "October 2026");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn past_agenda_rows_keep_their_calendar_bar_at_full_color() {
+    use slint::platform::software_renderer::{
+        MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,
+    };
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-past-bar-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.provider = crate::snapshot_render::canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    let today = ctrl.cal_state.today;
+    ctrl.agenda.now_override = Some(calendar_core::local_minutes(today, 14 * 60 + 5));
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    window.set_size(slint::PhysicalSize::new(352, 432));
+
+    let rows = ui.get_agenda_events();
+    let (past, now, upcoming) = (
+        rows.row_data(0).unwrap(),
+        rows.row_data(1).unwrap(),
+        rows.row_data(2).unwrap(),
+    );
+    assert!(past.dimmed && !now.dimmed && !upcoming.dimmed);
+    let (width, height) = (352, 432);
+    let mut pixels = vec![PremultipliedRgbaColor::default(); width * height];
+    slint::platform::update_timers_and_animations();
+    window.draw_if_needed(|renderer| {
+        renderer.render(&mut pixels, width);
+    });
+    let rgb = |x: usize, y: usize| {
+        let pixel = pixels[y * width + x];
+        [pixel.red, pixel.green, pixel.blue]
+    };
+
+    // Find a row's 3 × 16 px bar wherever the layout puts it: the vertical
+    // runs, at least 12 px tall, of exactly that row's color. Day dots and the
+    // all-day chip dot in the same colors are too short to qualify.
+    let bars_of = |item: &AgendaEventItem| {
+        let swatch = item.swatch.light;
+        let swatch = [swatch.red(), swatch.green(), swatch.blue()];
+        let mut bars: Vec<(usize, usize)> = Vec::new();
+        for x in 0..width {
+            let mut y = 0;
+            while y < height {
+                let mut end = y;
+                while end < height && rgb(x, end) == swatch {
+                    end += 1;
+                }
+                if end - y >= 12 && !bars.iter().any(|&(top, _)| top.abs_diff(y) <= 2) {
+                    bars.push((y, end));
+                }
+                y = end.max(y + 1);
+            }
+        }
+        bars.sort_unstable();
+        (swatch, bars)
+    };
+
+    // The current and upcoming rows are never dimmed, so their bars set the
+    // row pitch and, one pitch above the current row, where the past row is.
+    let (_, now_bars) = bars_of(&now);
+    let &[now_bar] = now_bars.as_slice() else {
+        panic!("one bar in the current row's color: {now_bars:?}");
+    };
+    let (_, upcoming_bars) = bars_of(&upcoming);
+    let upcoming_bar = *upcoming_bars
+        .iter()
+        .find(|&&(top, _)| top > now_bar.0)
+        .unwrap_or_else(|| {
+            panic!("the upcoming row's bar sits below the current one: {upcoming_bars:?}")
+        });
+    let pitch = upcoming_bar.0 - now_bar.0;
+    let past_band = (now_bar.0 - pitch, now_bar.1 - pitch);
+
+    let (swatch, past_bars) = bars_of(&past);
+    assert!(
+        past_bars.iter().any(|&(top, _)| top.abs_diff(past_band.0) <= 1),
+        "the past row's bar is drawn in its full color {swatch:?} at y = {}, not faded: {past_bars:?}",
+        past_band.0
+    );
+
+    // The past row's title is still dimmed: its darkest text pixel is much
+    // lighter than the upcoming row's.
+    let darkest = |(top, bottom): (usize, usize)| {
+        (top..bottom)
+            .flat_map(|y| (110..width - 16).map(move |x| (x, y)))
+            .map(|(x, y)| rgb(x, y).iter().map(|&c| u32::from(c)).sum::<u32>() / 3)
+            .min()
+            .unwrap()
+    };
+    let (past_ink, upcoming_ink) = (darkest(past_band), darkest(upcoming_bar));
+    assert!(
+        past_ink > upcoming_ink + 40,
+        "past text is dimmed: darkest {past_ink} vs {upcoming_ink}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

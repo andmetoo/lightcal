@@ -17,9 +17,11 @@ use lightcal::preferences::{
     LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 mod calendar_view;
+mod event_colors;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
+use event_colors::mark_color;
 use snapshot_render::render_snapshots_to_dir;
 
 use lightcal::updater::{is_allowed_external_link, UpdateCheckState};
@@ -33,8 +35,8 @@ pub(crate) enum ActiveSignIn {
     Google,
 }
 use slint::{
-    Color, ComponentHandle, Image, LogicalSize, Model, ModelRc, PhysicalPosition, Rgba8Pixel,
-    SharedPixelBuffer, SharedString, VecModel,
+    ComponentHandle, Image, LogicalSize, ModelRc, PhysicalPosition, Rgba8Pixel, SharedPixelBuffer,
+    SharedString, VecModel,
 };
 use std::cell::RefCell;
 use std::env;
@@ -313,74 +315,36 @@ fn google_status_line(
     }
 }
 
-fn publish_sources(
-    existing: ModelRc<CalendarSourceItem>,
-    next: Vec<CalendarSourceItem>,
-) -> ModelRc<CalendarSourceItem> {
-    if let Some(model) = existing
-        .as_any()
-        .downcast_ref::<VecModel<CalendarSourceItem>>()
-    {
-        if model.row_count() == next.len()
-            && (0..next.len()).all(|index| {
-                model
-                    .row_data(index)
-                    .is_some_and(|row| row.id == next[index].id)
-            })
-        {
-            for (index, item) in next.into_iter().enumerate() {
-                model.set_row_data(index, item);
-            }
-            return existing;
-        }
-    }
-    ModelRc::new(VecModel::from(next))
+/// Calendar sources by provider, as Settings lists them.
+#[derive(Default)]
+struct SourceGroups {
+    outlook: Vec<CalendarSourceItem>,
+    google: Vec<CalendarSourceItem>,
+    ics: Vec<CalendarSourceItem>,
+    windows: Vec<CalendarSourceItem>,
 }
 
-fn split_sources(
-    items: &[CalendarSourceItem],
-) -> (
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-    Vec<CalendarSourceItem>,
-) {
-    let mut outlook = Vec::new();
-    let mut google = Vec::new();
-    let mut ics = Vec::new();
-    let mut windows = Vec::new();
+fn split_sources(items: &[CalendarSourceItem]) -> SourceGroups {
+    let mut groups = SourceGroups::default();
     for item in items {
-        if item.id.starts_with("graph:") {
-            outlook.push(item.clone());
+        let group = if item.id.starts_with("graph:") {
+            &mut groups.outlook
         } else if item.id.starts_with("google:") {
-            google.push(item.clone());
+            &mut groups.google
         } else if item.id.starts_with("ics:") {
-            ics.push(item.clone());
+            &mut groups.ics
         } else {
-            windows.push(item.clone());
-        }
+            &mut groups.windows
+        };
+        group.push(item.clone());
     }
-    (outlook, google, ics, windows)
+    groups
 }
 
 fn current_local_date() -> LocalDate {
     let now = chrono::Local::now().date_naive();
     LocalDate::new(now.year(), now.month() as u8, now.day() as u8)
         .unwrap_or_else(|| LocalDate::new(2026, 10, 29).unwrap())
-}
-
-fn parse_hex_color(hex: &str) -> Color {
-    let h = hex.trim().trim_start_matches('#');
-    if h.len() == 6 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            u8::from_str_radix(&h[0..2], 16),
-            u8::from_str_radix(&h[2..4], 16),
-            u8::from_str_radix(&h[4..6], 16),
-        ) {
-            return Color::from_rgb_u8(r, g, b);
-        }
-    }
-    Color::from_rgb_u8(94, 106, 210)
 }
 
 fn resolve_dark_mode(theme: ThemePreference) -> bool {
@@ -615,21 +579,13 @@ impl AppController {
                 if c.is_selected {
                     selected_total_events = c.total_event_count;
                 }
-                let d1 = c
-                    .dot_colors
-                    .first()
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
-                let d2 = c
-                    .dot_colors
-                    .get(1)
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
-                let d3 = c
-                    .dot_colors
-                    .get(2)
-                    .map(|s| parse_hex_color(s))
-                    .unwrap_or_else(|| Color::from_argb_u8(0, 0, 0, 0));
+                let dot = |i: usize| {
+                    c.dot_colors
+                        .get(i)
+                        .map(|hex| mark_color(hex))
+                        .unwrap_or_default()
+                };
+                let (d1, d2, d3) = (dot(0), dot(1), dot(2));
                 let date_desc = format_date_line(locale, c.date, true);
                 let ev_desc = format_event_count(locale, c.total_event_count);
                 DayCellData {
@@ -1138,26 +1094,6 @@ impl AppController {
 
         ui.set_start_with_windows(self.prefs.start_with_windows);
 
-        let cal_items: Vec<CalendarSourceItem> = self
-            .provider
-            .sources
-            .iter()
-            .map(|s| CalendarSourceItem {
-                id: s.id.clone().into(),
-                name: s.name.clone().into(),
-                account: s.account_label.clone().into(),
-                swatch: parse_hex_color(&s.color_hex),
-                checked: self.prefs.selected_calendar_ids.contains(&s.id),
-                removable: s.id.starts_with("ics:"),
-            })
-            .collect();
-        let (outlook_items, google_items, ics_items, windows_items) = split_sources(&cal_items);
-        ui.set_calendar_sources(publish_sources(ui.get_calendar_sources(), cal_items));
-        ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), outlook_items));
-        ui.set_google_sources(publish_sources(ui.get_google_sources(), google_items));
-        ui.set_ics_sources(publish_sources(ui.get_ics_sources(), ics_items));
-        ui.set_windows_sources(publish_sources(ui.get_windows_sources(), windows_items));
-
         let mut upd_text = format_update_status(locale, &self.update_state);
         if self.update_state == UpdateCheckState::Idle {
             upd_text=match locale {
@@ -1253,12 +1189,17 @@ impl AppController {
                 id: s.id.clone().into(),
                 name: s.name.clone().into(),
                 account: s.account_label.clone().into(),
-                swatch: parse_hex_color(&s.color_hex),
+                swatch: mark_color(&s.color_hex),
                 checked: self.prefs.selected_calendar_ids.contains(&s.id),
                 removable: s.id.starts_with("ics:"),
             })
             .collect();
-        let (outlook, google, ics, windows) = split_sources(&items);
+        let SourceGroups {
+            outlook,
+            google,
+            ics,
+            windows,
+        } = split_sources(&items);
         let can_refresh = ui.get_can_refresh_calendars();
         let idle = !self.connection_busy && !self.provider_loading;
         let model = |list: Vec<CalendarSourceItem>| ModelRc::new(VecModel::from(list));

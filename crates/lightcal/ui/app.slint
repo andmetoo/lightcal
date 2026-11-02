@@ -6,10 +6,10 @@
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
+import { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
 
 export { Theme }
-export { DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
+export { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
@@ -143,10 +143,6 @@ export component AppWindow inherits Window {
     in property <string> disconnect-google-label: "Disconnect Google";
     in property <string> sign-in-title: "Outlook";
     in property <bool> add-account-enabled: true;
-    in property <[CalendarSourceItem]> outlook-sources: [];
-    in property <[CalendarSourceItem]> google-sources: [];
-    in property <[CalendarSourceItem]> ics-sources: [];
-    in property <[CalendarSourceItem]> windows-sources: [];
     in property <bool> can-connect-microsoft;
     in property <bool> can-disconnect-microsoft;
     in property <bool> can-refresh-calendars;
@@ -195,7 +191,6 @@ export component AppWindow inherits Window {
     in property <bool> start-with-windows: false;
     in property <string> global-shortcut-display: "Alt + C";
     in property <string> shortcut-error-message: "";
-    in property <[CalendarSourceItem]> calendar-sources: [];
     in property <string> update-status-text: "Checks GitHub Releases only when you ask. Never auto-installs.";
     in property <bool> update-is-available: false;
 
