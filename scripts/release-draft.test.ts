@@ -227,6 +227,9 @@ describe("embedded update pin", () => {
     expect(embedsCertificatePin(binary(cert.toUpperCase()), cert)).toBe(true);
     expect(embedsCertificatePin(binary(cert.match(/../g)!.join(":")), cert)).toBe(true);
     expect(embedsCertificatePin(binary(`${"a".repeat(64)},${cert}`), cert)).toBe(true);
+    // The app also strips spaces and accepts mixed case.
+    expect(embedsCertificatePin(binary(cert.match(/../g)!.join(" ")), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(`538EFF${cert.slice(6)}`), cert)).toBe(true);
   });
   test("rejects a build pinned to something else, such as a file checksum", () => {
     const fileChecksum = "f37b579af600613e4b2c54a89ab4395d1e1ad983ecd573e0ad33b49e3e56e678";

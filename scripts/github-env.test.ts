@@ -4,6 +4,7 @@ import {
   ghArgs,
   parseArgs,
   parseDotenv,
+  pinMismatch,
   plan,
   validCertificatePins,
   validGoogleClientId,
@@ -95,5 +96,21 @@ describe("github-env", () => {
     expect(ghArgs(secret, "o/r", "GOCSPX-value")).not.toContain("GOCSPX-value");
     const variable = ENTRIES.find((e) => e.key === "LIGHTCAL_GOOGLE_CLIENT_ID")!;
     expect(ghArgs(variable, "o/r", GOOGLE_ID)).toEqual(["gh", "variable", "set", variable.key, "--repo", "o/r", "--body", GOOGLE_ID]);
+  });
+});
+
+describe("pin against the signing certificate", () => {
+  const cert = "538EFF7282EC191B33B46E26DAA09AE756F022BAE467D2736ACA01F69DD9CAD6";
+  test("refuses a pin that leaves out the signing certificate", () => {
+    const fileChecksum = "f37b579af600613e4b2c54a89ab4395d1e1ad983ecd573e0ad33b49e3e56e678";
+    expect(pinMismatch(fileChecksum, cert)).toContain(cert);
+  });
+  test("accepts the certificate, also inside a renewal list", () => {
+    expect(pinMismatch(cert.toLowerCase(), cert)).toBeUndefined();
+    expect(pinMismatch(`${"a".repeat(64)},${cert}`, cert)).toBeUndefined();
+  });
+  test("says nothing without a pin or a certificate to compare", () => {
+    expect(pinMismatch(undefined, cert)).toBeUndefined();
+    expect(pinMismatch(cert, null)).toBeUndefined();
   });
 });

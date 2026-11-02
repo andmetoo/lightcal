@@ -35,6 +35,7 @@ import {
   verifyReleaseFiles,
   versionFromCheckout,
 } from "./release-draft.ts";
+import { storeCertificateSha256 } from "./certificate.ts";
 import { ensureGh as ensureGhAt } from "./gh.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -198,16 +199,27 @@ function showCertificateFingerprint(): void {
 }
 
 /**
- * Fails unless a signed executable embeds its own signer's fingerprint as the update pin.
- * Otherwise every installed copy of it would reject all later updates.
+ * Fails unless an executable embeds `certSha256` as its update pin. Otherwise every installed
+ * copy of it would reject all later updates.
  */
-function assertUpdatePinMatchesSigner(target: string): void {
-  const certSha256 = signerCertificateSha256(target);
+function assertPinnedTo(target: string, certSha256: string, certificate: string): void {
   if (!embedsCertificatePin(readFileSync(target), certSha256)) {
-    throw new Error(`${basename(target)} is not pinned to the certificate that signed it (SHA-256 ${certSha256}), ` +
-      "so installed copies would reject every update. Set LIGHTCAL_UPDATE_CERT_SHA256 to that value in .env " +
-      "(just release certificate-info prints it), push it with just github-env, and release a new tag.");
+    throw new Error(`${basename(target)} is not pinned to ${certificate} (SHA-256 ${certSha256}), ` +
+      "so installed copies would reject every update. Set LIGHTCAL_UPDATE_CERT_SHA256 to that value in .env, " +
+      "push it with just github-env, and release a new tag.");
   }
+}
+
+/** Checks a signed executable against the certificate that actually signed it. */
+function assertUpdatePinMatchesSigner(target: string): void {
+  assertPinnedTo(target, signerCertificateSha256(target), "the certificate that signed it");
+}
+
+/** Checks an executable before signing, against the SIGN_CERT_SHA1 certificate it will be signed with. */
+function assertUpdatePinMatchesSigningCertificate(target: string): void {
+  const certSha256 = storeCertificateSha256(process.env.SIGN_CERT_SHA1 ?? "");
+  if (!certSha256) throw new Error("The SIGN_CERT_SHA1 certificate is not in the current-user store. Sign in to SimplySign Desktop.");
+  assertPinnedTo(target, certSha256, "the SIGN_CERT_SHA1 signing certificate");
 }
 
 function packagePortableArchive(): void {
@@ -312,6 +324,8 @@ function signDraft(): void {
     throw error;
   }
   process.env.LIGHTCAL_RELEASE_VERSION = version;
+  // Fail before SimplySign is asked to sign a build that could never update itself.
+  assertUpdatePinMatchesSigningCertificate(DIST_BIN);
   sign(DIST_BIN);
   verify(DIST_BIN);
   assertUpdatePinMatchesSigner(DIST_BIN);

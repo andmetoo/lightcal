@@ -15,6 +15,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pinListIncludes, storeCertificateSha256 } from "./certificate.ts";
 import { ensureGh } from "./gh.ts";
 
 export type Kind = "variable" | "secret";
@@ -48,6 +49,17 @@ export function validGoogleClientSecret(raw: string): boolean {
 /** Mirrors `installer::parse_pins` / `normalize_pin`. */
 export function validCertificatePins(raw: string): boolean {
   return raw.split(",").every((pin) => /^[0-9a-f]{64}$/i.test(pin.replace(/[ :]/g, "")));
+}
+
+/**
+ * Error when the pin list leaves out the signing certificate (`certSha256`), such as a file
+ * checksum pasted by mistake. Installed builds with such a pin reject every update. Without
+ * a certificate to compare against (not Windows, or SimplySign signed out) nothing is said.
+ */
+export function pinMismatch(pins: string | undefined, certSha256: string | null): string | undefined {
+  if (!pins || !certSha256 || pinListIncludes(pins, certSha256)) return undefined;
+  return `does not include the SHA-256 of the SIGN_CERT_SHA1 signing certificate (${certSha256}); ` +
+    "installed builds would reject every update";
 }
 
 export const ENTRIES: Entry[] = [
@@ -161,6 +173,16 @@ function main(argv: string[]): void {
   const dotenv = existsSync(envPath) ? parseDotenv(readFileSync(envPath, "utf8")) : new Map<string, string>();
   const planned = plan(process.env, dotenv);
 
+  const pin = planned.find((p) => p.entry.key === "LIGHTCAL_UPDATE_CERT_SHA256");
+  if (pin?.value && !pin.error) {
+    const thumbprint = process.env.SIGN_CERT_SHA1 ?? dotenv.get("SIGN_CERT_SHA1") ?? "";
+    const certSha256 = storeCertificateSha256(thumbprint);
+    pin.error = pinMismatch(pin.value, certSha256);
+    if (!certSha256) {
+      console.log("  note   LIGHTCAL_UPDATE_CERT_SHA256 not compared with the signing certificate " +
+        "(needs Windows, SIGN_CERT_SHA1 and SimplySign Desktop signed in)");
+    }
+  }
   const invalid = planned.filter((p) => p.error);
   if (invalid.length > 0) {
     throw new Error(invalid.map((p) => `${p.entry.key}: ${p.error}.`).join("\n") + "\nNothing was changed.");

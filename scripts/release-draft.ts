@@ -7,6 +7,7 @@
  */
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { normalizeFingerprint } from "./certificate.ts";
 
 export const UNSIGNED_EXE = "lightcal-unsigned.exe";
 export const SIGNED_EXE = "lightcal.exe";
@@ -231,7 +232,7 @@ export function publishedReleaseNotes(version: string): string {
     `- \`lightcal-${tag}-windows-x64.zip\`: portable version, no installation needed.`,
     "- `lightcal.exe`: the app on its own. Lightcal's automatic updates install this file.",
     "",
-    "Every file is digitally signed, and each has a `.sha256` checksum next to it.",
+    "The installer and `lightcal.exe` are digitally signed, and the ZIP contains that same signed `lightcal.exe`. Each download has a `.sha256` checksum next to it.",
     "",
   ].join("\n");
 }
@@ -248,13 +249,16 @@ export function thumbprintMatches(expected: string | undefined, actual: string):
 
 /**
  * Whether an executable embeds `certSha256` as its update pin. The app compiles
- * LIGHTCAL_UPDATE_CERT_SHA256 in verbatim, so the fingerprint appears as ASCII hex in either
- * case, optionally colon-separated, and possibly inside a comma-separated list.
+ * LIGHTCAL_UPDATE_CERT_SHA256 in verbatim, so the pin is an ASCII run of hex digits, spaces
+ * and colons in any case; each run is normalized the way the app normalizes a pin. Commas
+ * end a run, so each entry of a pin list is checked on its own.
  */
 export function embedsCertificatePin(executable: Uint8Array, certSha256: string): boolean {
-  const hex = certSha256.replace(/[\s:]/g, "").toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error(`Not a SHA-256 certificate fingerprint: ${certSha256}`);
-  const colons = hex.match(/../g)!.join(":");
+  const cert = normalizeFingerprint(certSha256);
+  if (!/^[0-9a-f]{64}$/.test(cert)) throw new Error(`Not a SHA-256 certificate fingerprint: ${certSha256}`);
   const text = Buffer.from(executable).toString("latin1");
-  return [hex, hex.toUpperCase(), colons, colons.toUpperCase()].some((form) => text.includes(form));
+  for (const [run] of text.matchAll(/[0-9A-Fa-f][0-9A-Fa-f :]{62,}[0-9A-Fa-f]/g)) {
+    if (normalizeFingerprint(run).includes(cert)) return true;
+  }
+  return false;
 }
