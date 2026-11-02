@@ -19,8 +19,10 @@ pub mod taskbar;
 pub mod timezone;
 
 /// An off-screen, initially hidden top-level window for native tests, destroyed on drop.
-#[cfg(all(test, windows))]
-pub(crate) mod test_window {
+/// Public so the application's UI tests can stand in for the real popup window.
+#[cfg(windows)]
+#[doc(hidden)]
+pub mod test_window {
     use windows_sys::Win32::{Foundation::HWND, UI::WindowsAndMessaging::*};
 
     pub struct TestWindow(pub HWND);

@@ -1147,9 +1147,14 @@ fn today_folds_between_the_arrows_on_the_current_day() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(windows)]
 #[test]
-fn header_animates_only_for_changes_made_while_the_popup_is_shown() {
+fn header_animates_only_while_the_native_popup_is_on_screen() {
+    use lightcal::platform::windows::test_window::TestWindow;
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        ShowWindow, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOWNOACTIVATE,
+    };
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
     slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
     let ui = AppWindow::new().unwrap();
@@ -1159,32 +1164,32 @@ fn header_animates_only_for_changes_made_while_the_popup_is_shown() {
     ));
     let mut ctrl = controller(&dir);
     ctrl.settings_open = false;
+    let sync_after = |ctrl: &mut AppController, months: i32| {
+        ctrl.cal_state.navigate_months(months);
+        ctrl.sync_to_ui(&ui);
+        ui.get_header_motion()
+    };
 
-    // Never opened (startup, snapshots): no motion even though the window exists.
+    // Snapshots: a visible headless window but no native popup, so nothing animates.
     ui.show().unwrap();
-    ctrl.cal_state.navigate_months(1);
-    ctrl.sync_to_ui(&ui);
-    assert!(!ui.get_header_motion());
+    assert!(!sync_after(&mut ctrl, 1));
 
-    // Opened through the production path: every change synced from now on animates,
-    // whatever triggered it (arrows, wheel, keys, the agenda's Next link).
-    show_application_window(&ui);
-    ctrl.cal_state.return_to_today();
-    ctrl.sync_to_ui(&ui);
-    assert!(ui.get_header_motion());
-
-    // Minimized from the taskbar: changes wait, settled, for the restore.
-    ui.window().set_minimized(true);
-    ctrl.cal_state.navigate_months(1);
-    ctrl.sync_to_ui(&ui);
-    assert!(!ui.get_header_motion());
-    ui.window().set_minimized(false);
-
-    // Hidden (− button, Escape, tray toggle): the tray Today item syncs before showing,
-    // so the popup opens settled.
-    hide_application_window(&ui);
-    ctrl.cal_state.return_to_today();
-    ctrl.sync_to_ui(&ui);
-    assert!(!ui.get_header_motion());
+    // A native "Lightcal" window stands in for the popup, read the same way the tray does.
+    let native = TestWindow::new("Lightcal");
+    assert!(
+        !sync_after(&mut ctrl, 1),
+        "hidden: tray Today syncs before showing"
+    );
+    unsafe { ShowWindow(native.0, SW_SHOWNOACTIVATE) };
+    assert!(sync_after(&mut ctrl, 1), "on screen: navigation animates");
+    unsafe { ShowWindow(native.0, SW_MINIMIZE) };
+    assert!(!sync_after(&mut ctrl, 1), "minimized from the taskbar");
+    unsafe { ShowWindow(native.0, SW_RESTORE) };
+    assert!(sync_after(&mut ctrl, 1), "restored");
+    unsafe { ShowWindow(native.0, SW_HIDE) };
+    assert!(
+        !sync_after(&mut ctrl, 1),
+        "hidden by −, Escape or the tray toggle"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

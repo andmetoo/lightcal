@@ -628,36 +628,56 @@ impl SingleInstance {
     }
 }
 
-/// Finds the main application HWND owned by this process.
+/// Whether `hwnd` is a live, unowned top-level window of this process titled "Lightcal".
 #[cfg(windows)]
-pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
-    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+fn is_lightcal_hwnd(hwnd: windows_sys::Win32::Foundation::HWND) -> bool {
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindow, GetWindowTextW, GetWindowThreadProcessId, GW_OWNER,
+        GetWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindow, GW_OWNER,
     };
-
-    unsafe extern "system" fn find(hwnd: HWND, data: LPARAM) -> i32 {
+    // SAFETY: these calls only read window state; a stale handle fails IsWindow first.
+    unsafe {
+        if IsWindow(hwnd) == 0 {
+            return false;
+        }
         let mut pid = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
-        if pid == GetCurrentProcessId() && GetWindow(hwnd, GW_OWNER).is_null() {
-            let mut title_buf = [0u16; 64];
-            let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 64);
-            if len > 0 {
-                let title = String::from_utf16_lossy(&title_buf[..len as usize]);
-                if title == "Lightcal" {
-                    *(data as *mut HWND) = hwnd;
-                    return 0; // stop enumeration
-                }
-            }
+        if pid != GetCurrentProcessId() || !GetWindow(hwnd, GW_OWNER).is_null() {
+            return false;
+        }
+        let mut title_buf = [0u16; 64];
+        let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 64);
+        len > 0 && String::from_utf16_lossy(&title_buf[..len as usize]) == "Lightcal"
+    }
+}
+
+/// Finds the main application HWND owned by this process. The handle is cached and
+/// re-checked on each call, so the top-level windows are enumerated only when it changes.
+#[cfg(windows)]
+pub fn find_lightcal_hwnd() -> windows_sys::Win32::Foundation::HWND {
+    use std::sync::atomic::{AtomicPtr, Ordering};
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows;
+
+    static CACHED: AtomicPtr<core::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
+
+    unsafe extern "system" fn find(hwnd: HWND, data: LPARAM) -> i32 {
+        if is_lightcal_hwnd(hwnd) {
+            *(data as *mut HWND) = hwnd;
+            return 0; // stop enumeration
         }
         1
     }
 
+    let cached = CACHED.load(Ordering::Relaxed);
+    if !cached.is_null() && is_lightcal_hwnd(cached) {
+        return cached;
+    }
     let mut hwnd: HWND = std::ptr::null_mut();
     unsafe {
         EnumWindows(Some(find), &mut hwnd as *mut HWND as LPARAM);
     }
+    CACHED.store(hwnd, Ordering::Relaxed);
     hwnd
 }
 
