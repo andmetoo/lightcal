@@ -9,7 +9,10 @@ import {
   assertReleaseExists,
   assertWindowsExecutable,
   deleteAssetArgs,
+  PUBLISH_STEPS,
+  SIGN_STEPS,
   editReleaseArgs,
+  embedsCertificatePin,
   missingSignedAssets,
   matchingBuildRuns,
   parseChecksum,
@@ -17,6 +20,7 @@ import {
   publishedReleaseNotes,
   publishedReleaseTitle,
   requireStableVersion,
+  runSteps,
   signedAssetNames,
   signedUploadPaths,
   signingAsset,
@@ -215,5 +219,47 @@ describe("signer thumbprint pin", () => {
     expect(thumbprintMatches("ABCDEF", "ABCDE0")).toBe(false);
     expect(thumbprintMatches(undefined, "ABCDEF")).toBe(false);
     expect(thumbprintMatches("  ", "")).toBe(false);
+  });
+});
+
+describe("embedded update pin", () => {
+  const cert = "538eff7282ec191b33b46e26daa09ae756f022bae467d2736aca01f69dd9cad6";
+  const binary = (embedded: string) => new TextEncoder().encode(`MZ\0\0${embedded}Running application did not exit`);
+  test("finds the signer fingerprint in any accepted spelling", () => {
+    expect(embedsCertificatePin(binary(cert), cert.toUpperCase())).toBe(true);
+    expect(embedsCertificatePin(binary(cert.toUpperCase()), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(cert.match(/../g)!.join(":")), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(`${"a".repeat(64)},${cert}`), cert)).toBe(true);
+    // The app also strips spaces and accepts mixed case.
+    expect(embedsCertificatePin(binary(cert.match(/../g)!.join(" ")), cert)).toBe(true);
+    expect(embedsCertificatePin(binary(`538EFF${cert.slice(6)}`), cert)).toBe(true);
+  });
+  test("rejects a build pinned to something else, such as a file checksum", () => {
+    const fileChecksum = "f37b579af600613e4b2c54a89ab4395d1e1ad983ecd573e0ad33b49e3e56e678";
+    expect(embedsCertificatePin(binary(fileChecksum), cert)).toBe(false);
+    expect(embedsCertificatePin(binary(""), cert)).toBe(false);
+  });
+  test("refuses a malformed fingerprint", () => {
+    expect(() => embedsCertificatePin(binary(cert), "F0BBA075C11AFBD3E2798BF517A8F4C3CE74AF6B")).toThrow();
+  });
+});
+
+describe("release step order", () => {
+  const before = <S extends string>(order: readonly S[], a: S, b: S) => order.indexOf(a) < order.indexOf(b);
+  test("sign-draft checks the pin before signing and against the signer before packaging", () => {
+    expect(before(SIGN_STEPS, "check-pin-before-signing", "sign")).toBe(true);
+    expect(before(SIGN_STEPS, "verify", "check-pin-after-signing")).toBe(true);
+    expect(before(SIGN_STEPS, "check-pin-after-signing", "package")).toBe(true);
+  });
+  test("publish-release finishes every check before changing the release", () => {
+    for (const check of ["verify-files", "check-app-version", "check-pin", "check-setup-version"] as const) {
+      expect(before(PUBLISH_STEPS, check, "remove-unsigned")).toBe(true);
+    }
+    expect(PUBLISH_STEPS.at(-1)).toBe("publish");
+  });
+  test("runSteps runs every step once, in order", () => {
+    const ran: string[] = [];
+    runSteps(["b", "a"] as const, { a: () => ran.push("a"), b: () => ran.push("b") });
+    expect(ran).toEqual(["b", "a"]);
   });
 });

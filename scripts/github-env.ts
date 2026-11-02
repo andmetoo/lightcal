@@ -2,28 +2,37 @@
 /**
  * Copies Lightcal build configuration into GitHub Actions for the release build.
  *
- *   just github-env [--dry-run] [--repo owner/name]
- *   bun --no-env-file run scripts/github-env.ts [--dry-run] [--repo owner/name]
+ *   just github-env [--dry-run] [--skip-pin-check] [--repo owner/name]
+ *   bun --no-env-file run scripts/github-env.ts [--dry-run] [--skip-pin-check] [--repo owner/name]
  *
  * Values are resolved exactly as crates/lightcal/build.rs does: the process environment
  * first (an explicitly empty value wins), then the repository `.env`. `--no-env-file` is
  * required so Bun does not inject `.env.local` or `.env.<NODE_ENV>` values the build never
  * reads. Public values become repository variables; the Google client secret becomes an
  * encrypted repository secret, sent to gh on stdin. Each value is checked with the app's
- * own validation rules. Empty values are skipped, so an unset key never clears what
- * GitHub already holds. Values are never printed.
+ * own validation rules. On Windows the update pin must also include the SIGN_CERT_SHA1
+ * certificate's fingerprint (pass --skip-pin-check to sync without SimplySign signed in).
+ * Empty values are skipped, so an unset key never clears what GitHub already holds.
+ * Values are never printed.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { type CertificateLookup, lookupStoreCertificate, pinListIncludes } from "./certificate.ts";
 import { ensureGh } from "./gh.ts";
 
 export type Kind = "variable" | "secret";
+
+/** What values are checked against beyond the app's own rules. */
+export interface CheckContext {
+  /** SHA-256 of the SIGN_CERT_SHA1 signing certificate, when it could be read. */
+  signingCertSha256?: string;
+}
 
 export interface Entry {
   key: string;
   kind: Kind;
   /** Returns an error message when the app would reject the value. */
-  check: (value: string) => string | undefined;
+  check: (value: string, context: CheckContext) => string | undefined;
 }
 
 /** Mirrors `calendars::microsoft::valid_client_id`. */
@@ -50,6 +59,17 @@ export function validCertificatePins(raw: string): boolean {
   return raw.split(",").every((pin) => /^[0-9a-f]{64}$/i.test(pin.replace(/[ :]/g, "")));
 }
 
+/**
+ * Error when the pin list leaves out the signing certificate (`certSha256`), such as a file
+ * checksum pasted by mistake. Installed builds with such a pin reject every update. Without
+ * a certificate to compare against (not Windows, or SimplySign signed out) nothing is said.
+ */
+export function pinMismatch(pins: string | undefined, certSha256: string | null): string | undefined {
+  if (!pins || !certSha256 || pinListIncludes(pins, certSha256)) return undefined;
+  return `does not include the SHA-256 of the SIGN_CERT_SHA1 signing certificate (${certSha256}); ` +
+    "installed builds would reject every update";
+}
+
 export const ENTRIES: Entry[] = [
   {
     key: "LIGHTCAL_MICROSOFT_CLIENT_ID",
@@ -65,8 +85,10 @@ export const ENTRIES: Entry[] = [
   {
     key: "LIGHTCAL_UPDATE_CERT_SHA256",
     kind: "variable",
-    check: (v) =>
-      validCertificatePins(v) ? undefined : "expected one or more comma-separated 64-hex SHA-256 fingerprints",
+    check: (v, context) =>
+      validCertificatePins(v)
+        ? pinMismatch(v, context.signingCertSha256 ?? null)
+        : "expected one or more comma-separated 64-hex SHA-256 fingerprints",
   },
   {
     key: "LIGHTCAL_GOOGLE_CLIENT_SECRET",
@@ -109,27 +131,60 @@ export interface Planned {
 }
 
 /** Process environment (even when empty) wins over `.env`, matching build.rs. */
-export function plan(env: Record<string, string | undefined>, dotenv: Map<string, string>): Planned[] {
+export function plan(
+  env: Record<string, string | undefined>,
+  dotenv: Map<string, string>,
+  context: CheckContext = {},
+): Planned[] {
   return ENTRIES.map((entry) => {
     const value = env[entry.key] ?? dotenv.get(entry.key) ?? "";
     if (!value) return { entry };
-    return { entry, value, error: entry.check(value) };
+    return { entry, value, error: entry.check(value, context) };
   });
+}
+
+/**
+ * Turns the signing-certificate lookup into a check context. Where a comparison is possible
+ * but failed, it is an error unless skipped explicitly, so a wrong pin cannot slip through
+ * while SimplySign is signed out. Where none is possible (not Windows, no SIGN_CERT_SHA1)
+ * it only notes that the pin was not compared.
+ */
+export function resolvePinCheck(
+  lookup: CertificateLookup,
+  skip: boolean,
+): { context: CheckContext; note?: string; error?: string } {
+  const unchecked = "LIGHTCAL_UPDATE_CERT_SHA256 not compared with the signing certificate";
+  if (skip) return { context: {}, note: `${unchecked} (--skip-pin-check)` };
+  switch (lookup.kind) {
+    case "found":
+      return { context: { signingCertSha256: lookup.sha256 } };
+    case "unsupported":
+      return { context: {}, note: `${unchecked}: ${lookup.reason}` };
+    case "absent":
+      return { context: {}, error: "The SIGN_CERT_SHA1 certificate is not in the current-user store, so " +
+        "LIGHTCAL_UPDATE_CERT_SHA256 cannot be compared with it. Sign in to SimplySign Desktop, or pass --skip-pin-check." };
+    case "failed":
+      return { context: {}, error: `Could not read the SIGN_CERT_SHA1 certificate (${lookup.reason}). ` +
+        "Fix that, or pass --skip-pin-check." };
+  }
 }
 
 export interface Options {
   dryRun: boolean;
+  skipPinCheck: boolean;
   repo?: string;
 }
 
-const USAGE = "Usage: just github-env [--dry-run] [--repo owner/name]";
+const USAGE = "Usage: just github-env [--dry-run] [--skip-pin-check] [--repo owner/name]";
 
 export function parseArgs(argv: string[]): Options {
-  const options: Options = { dryRun: false };
+  const options: Options = { dryRun: false, skipPinCheck: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--dry-run") {
       options.dryRun = true;
+    } else if (arg === "--skip-pin-check") {
+      options.skipPinCheck = true;
     } else if (arg === "--repo") {
       const repo = argv[++i];
       if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error(`--repo needs owner/name. ${USAGE}`);
@@ -159,7 +214,16 @@ function main(argv: string[]): void {
 
   const envPath = join(root, ".env");
   const dotenv = existsSync(envPath) ? parseDotenv(readFileSync(envPath, "utf8")) : new Map<string, string>();
-  const planned = plan(process.env, dotenv);
+  const hasPin = Boolean(process.env.LIGHTCAL_UPDATE_CERT_SHA256 ?? dotenv.get("LIGHTCAL_UPDATE_CERT_SHA256"));
+  const pinCheck: ReturnType<typeof resolvePinCheck> = hasPin
+    ? resolvePinCheck(
+        lookupStoreCertificate(process.env.SIGN_CERT_SHA1 ?? dotenv.get("SIGN_CERT_SHA1") ?? ""),
+        options.skipPinCheck,
+      )
+    : { context: {} };
+  if (pinCheck.error) throw new Error(`${pinCheck.error}\nNothing was changed.`);
+  if (pinCheck.note) console.log(`  note   ${pinCheck.note}`);
+  const planned = plan(process.env, dotenv, pinCheck.context);
 
   const invalid = planned.filter((p) => p.error);
   if (invalid.length > 0) {

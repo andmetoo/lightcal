@@ -7,6 +7,7 @@
  */
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { normalizeFingerprint } from "./certificate.ts";
 
 export const UNSIGNED_EXE = "lightcal-unsigned.exe";
 export const SIGNED_EXE = "lightcal.exe";
@@ -225,10 +226,13 @@ export function publishedReleaseNotes(version: string): string {
   return [
     `Lightcal ${tag}.`,
     "",
-    "Signed on the maintainer's Windows PC with signtool while Certum SimplySign Desktop is signed in. Signing keys stay in that tool.",
-    "Automatic installation uses the asset named exactly lightcal.exe.",
-    `NSIS setup: lightcal-${version}-windows-x64-setup.exe.`,
-    `Portable archive: lightcal-${tag}-windows-x64.zip.`,
+    "Downloads:",
+    "",
+    `- \`lightcal-${version}-windows-x64-setup.exe\`: installer (recommended).`,
+    `- \`lightcal-${tag}-windows-x64.zip\`: portable version, no installation needed.`,
+    "- `lightcal.exe`: the app on its own. Lightcal's automatic updates install this file.",
+    "",
+    "The installer and `lightcal.exe` are digitally signed, and the ZIP contains that same signed `lightcal.exe`. Each download has a `.sha256` checksum next to it.",
     "",
   ].join("\n");
 }
@@ -241,4 +245,50 @@ export function normalizeThumbprint(raw: string): string {
 export function thumbprintMatches(expected: string | undefined, actual: string): boolean {
   const pin = normalizeThumbprint(expected ?? "");
   return pin.length > 0 && pin === normalizeThumbprint(actual);
+}
+
+/**
+ * Whether an executable embeds `certSha256` as its update pin. The app compiles
+ * LIGHTCAL_UPDATE_CERT_SHA256 in verbatim, so the pin is an ASCII run of hex digits, spaces
+ * and colons in any case; each run is normalized the way the app normalizes a pin. Commas
+ * end a run, so each entry of a pin list is checked on its own.
+ */
+export function embedsCertificatePin(executable: Uint8Array, certSha256: string): boolean {
+  const cert = normalizeFingerprint(certSha256);
+  if (!/^[0-9a-f]{64}$/.test(cert)) throw new Error(`Not a SHA-256 certificate fingerprint: ${certSha256}`);
+  const text = Buffer.from(executable).toString("latin1");
+  for (const [run] of text.matchAll(/[0-9A-Fa-f][0-9A-Fa-f :]{62,}[0-9A-Fa-f]/g)) {
+    if (normalizeFingerprint(run).includes(cert)) return true;
+  }
+  return false;
+}
+
+/**
+ * Signing steps of `just sign-draft`, in order. The update pin is checked against the signing
+ * certificate before SimplySign signs anything, and against the actual signer before packaging.
+ */
+export const SIGN_STEPS = [
+  "check-pin-before-signing",
+  "sign",
+  "verify",
+  "check-pin-after-signing",
+  "package",
+  "sign-installer",
+] as const;
+export type SignStep = (typeof SIGN_STEPS)[number];
+
+/** Steps of `just publish-release`, in order: every check passes before anything changes on GitHub. */
+export const PUBLISH_STEPS = [
+  "verify-files",
+  "check-app-version",
+  "check-pin",
+  "check-setup-version",
+  "remove-unsigned",
+  "publish",
+] as const;
+export type PublishStep = (typeof PUBLISH_STEPS)[number];
+
+/** Runs steps in the given order; the record type makes every step need an implementation. */
+export function runSteps<S extends string>(order: readonly S[], steps: Record<S, () => void>): void {
+  for (const step of order) steps[step]();
 }

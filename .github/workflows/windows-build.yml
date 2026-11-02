@@ -160,13 +160,9 @@ jobs:
           )
           notes="${RUNNER_TEMP}/lightcal-draft-notes.md"
           cat > "$notes" <<EOF
-          Windows build for ${tag}.
+          Lightcal ${tag} is being prepared.
 
-          These files are not Authenticode-signed. SimpleSign Desktop runs only on the maintainer's Windows PC, so this workflow does not sign them.
-
-          On that PC, run just sign-draft ${tag}. It downloads the application, checks SHA-256, signs it, rebuilds NSIS with the signed payload, signs the setup, and replaces the attached files.
-
-          Signing preserves draft/prerelease/public status. Run just publish-release ${tag} to explicitly publish/promote the verified signed release.
+          These files are not signed yet. They are replaced with signed files before the release is published.
           EOF
           title="Lightcal ${tag}"
           files=(
