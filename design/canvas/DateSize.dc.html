@@ -156,7 +156,8 @@ class Component extends DCLogic {
           var dots = out ? [] : evs.slice(0, 3).map(function (e) { return { color: LC_CAL[e[3]] }; });
           var n = evs.length;
           // Same rule as calendar.slint: dots 2 px above the tile bottom (1 px on Today),
-          // the number 3 px (2.5 px) above them.
+          // the number 3 px (2.5 px) above them. Browser digit metrics differ from Slint's by
+          // about a pixel; the app snapshots are the pixel reference.
           var today = k === LC_TODAY;
           var dotsTop = sz.tile - (today ? 5 : 6);
           var center = dotsTop - (today ? 2.5 : 3) - sz.fs / 2;

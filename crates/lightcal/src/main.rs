@@ -363,20 +363,38 @@ fn target_logical_size(settings_open: bool, calendar_height: f32) -> (f32, f32) 
     }
 }
 
-fn ui_date_size(size: DateSize) -> CalendarDateSize {
-    match size {
-        DateSize::Standard => CalendarDateSize::Standard,
-        DateSize::Large => CalendarDateSize::Large,
-        DateSize::Larger => CalendarDateSize::Larger,
+impl From<DateSize> for CalendarDateSize {
+    fn from(size: DateSize) -> Self {
+        match size {
+            DateSize::Standard => Self::Standard,
+            DateSize::Large => Self::Large,
+            DateSize::Larger => Self::Larger,
+        }
     }
 }
 
-fn pref_date_size(size: CalendarDateSize) -> DateSize {
-    match size {
-        CalendarDateSize::Standard => DateSize::Standard,
-        CalendarDateSize::Large => DateSize::Large,
-        CalendarDateSize::Larger => DateSize::Larger,
+impl From<CalendarDateSize> for DateSize {
+    fn from(size: CalendarDateSize) -> Self {
+        match size {
+            CalendarDateSize::Standard => Self::Standard,
+            CalendarDateSize::Large => Self::Large,
+            CalendarDateSize::Larger => Self::Larger,
+        }
     }
+}
+
+/// Settings › Calendar › Date size: store the choice and refresh the UI. Shared with the
+/// headless test so it exercises the production handler.
+fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_select_date_size(move |size| {
+        let mut c = ctrl.borrow_mut();
+        c.select_date_size(size.into());
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
 }
 
 /// Logical calendar height for the current date size, from the Slint Theme metrics.
@@ -950,7 +968,7 @@ impl AppController {
         ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
-        ui.set_date_size(ui_date_size(self.prefs.date_size));
+        ui.set_date_size(self.prefs.date_size.into());
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
             LocaleCode::En => (
@@ -1170,6 +1188,9 @@ impl AppController {
 
     /// Settings › Calendar › Date size. The window resizes when Settings closes.
     fn select_date_size(&mut self, size: DateSize) {
+        if self.prefs.date_size == size {
+            return;
+        }
         self.prefs.date_size = size;
         self.persist();
     }
@@ -3504,17 +3525,7 @@ fn main() {
             }
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_select_date_size(move |size| {
-            let mut c = ctrl.borrow_mut();
-            c.select_date_size(pref_date_size(size));
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
+    wire_date_size(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();

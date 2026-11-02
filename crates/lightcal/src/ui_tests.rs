@@ -979,7 +979,7 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
     ] {
         ctrl.prefs.date_size = size;
         ctrl.sync_to_ui(&ui);
-        assert_eq!(ui.get_date_size(), ui_date_size(size));
+        assert_eq!(ui.get_date_size(), CalendarDateSize::from(size));
         assert_eq!(calendar_height(&ui), height);
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -1003,21 +1003,21 @@ fn date_size_control_saves_the_choice_and_grows_the_calendar() {
     ctrl.settings_open = true;
     ctrl.settings_tab = 0;
     let ctrl = Rc::new(RefCell::new(ctrl));
-    let weak = ui.as_weak();
-    let observed = ctrl.clone();
-    // Same handler body as main(): store the choice, then refresh the UI.
-    ui.on_select_date_size(move |size| {
-        let mut c = observed.borrow_mut();
-        c.select_date_size(pref_date_size(size));
-        c.sync_to_ui(&weak.upgrade().unwrap());
-    });
+    wire_date_size(&ui, &ctrl);
     ui.show().unwrap();
     ctrl.borrow().sync_to_ui(&ui);
     window.set_size(slint::PhysicalSize::new(448, 360));
     window.draw_if_needed(|_| {});
 
-    // "28 Larger", the last segment of the Date size row in the first card.
-    click(&ui, 385.0, 147.0);
+    // Date size is the second 40 px row of the first card: 73 px tab bar, 12 px padding,
+    // 1 px card border, 40 px Theme row, then half a row. Walk in from the right edge
+    // so the first segment hit is the last one, Larger, whatever the label widths.
+    let row_y = 73.0 + 12.0 + 1.0 + 40.0 + 20.0;
+    let mut x = 440.0;
+    while x > 224.0 && ctrl.borrow().prefs.date_size == DateSize::Standard {
+        click(&ui, x, row_y);
+        x -= 2.0;
+    }
     assert_eq!(ctrl.borrow().prefs.date_size, DateSize::Larger);
     assert_eq!(ui.get_date_size(), CalendarDateSize::Larger);
     let saved = PreferencesStore::new(dir.clone()).load();

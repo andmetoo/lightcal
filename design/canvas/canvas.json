@@ -290,7 +290,7 @@
       "x": 1136,
       "y": 564,
       "page": "datesize",
-      "text": "Owner decision, 2 Nov 2026: Date size setting\n• Standard 14 px: 34 × 28 tile, 32 px rows, popup 352 × 432.\n• Large 16 px: same tile, rows and popup.\n• Larger 18 px: 30 px tile, 34 px rows, popup 352 × 444; the agenda keeps its height.\n• Only day numbers grow; dots stay 2 px above the tile bottom and the number keeps a 3 px gap above them.\n• Windows display scale multiplies all of it: Large at 150 % draws 24 px dates."
+      "text": "Owner decision, 2 Nov 2026: Date size setting\n• Standard 14 px: 34 × 28 tile, 32 px rows, popup 352 × 432.\n• Large 16 px: same tile, rows and popup.\n• Larger 18 px: 30 px tile, 34 px rows, popup 352 × 444; the agenda keeps its height.\n• Only day numbers grow; dots stay 2 px above the tile bottom and the number keeps a 3 px gap above them.\n• Windows display scale multiplies all of it: Large at 150 % draws 24 px dates.\n• The boards place digits with browser text metrics; Slint draws them about a pixel lower. The app snapshots (calendar-large-light.png, calendar-larger-*.png) are the pixel reference."
     }
   },
   "order": [
