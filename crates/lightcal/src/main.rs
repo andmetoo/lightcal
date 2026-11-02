@@ -1596,6 +1596,7 @@ fn show_application_window(ui: &AppWindow) {
             }
         }
         ensure_taskbar_preview(ui);
+        ensure_restore_watcher(ui);
     }
     sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
@@ -1645,6 +1646,39 @@ fn ensure_taskbar_preview(ui: &AppWindow) {
             *slot.borrow_mut() = Some(preview);
         }
     });
+}
+
+/// Repaints the whole window after the taskbar restores it from minimized, which bypasses
+/// the full repaint Slint's own `show()` requests (see `RestoreWatcher`).
+#[cfg(windows)]
+fn ensure_restore_watcher(ui: &AppWindow) {
+    RESTORE_WATCHER.with(|slot| {
+        if slot
+            .borrow()
+            .as_ref()
+            .is_some_and(|watcher| watcher.watches_application_window())
+        {
+            return;
+        }
+        let weak = ui.as_weak();
+        let watcher = lightcal::platform::windows::taskbar::RestoreWatcher::install(move || {
+            let weak = weak.clone();
+            // Called from the window procedure; repaint from the event loop instead.
+            slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                if let Some(ui) = weak.upgrade() {
+                    request_full_repaint(&ui);
+                }
+            });
+        });
+        *slot.borrow_mut() = watcher.ok();
+    });
+}
+
+/// Makes the next frame repaint and present every pixel, not only the dirty regions.
+#[cfg(any(windows, test))]
+fn request_full_repaint(ui: &AppWindow) {
+    ui.set_repaint_generation(ui.get_repaint_generation().wrapping_add(1) & i32::MAX);
+    ui.window().request_redraw();
 }
 
 /// Requests DWM rounded corners, the system shadow and, with `LIGHTCAL_MICA=1`, the Mica
@@ -1774,6 +1808,8 @@ impl TrayMenuItems {
 thread_local! {
     #[cfg(windows)]
     static TASKBAR_PREVIEW: RefCell<Option<lightcal::platform::windows::taskbar::TaskbarPreview>> = const { RefCell::new(None) };
+    #[cfg(windows)]
+    static RESTORE_WATCHER: RefCell<Option<lightcal::platform::windows::taskbar::RestoreWatcher>> = const { RefCell::new(None) };
     static ACTIVE_CONTROLLER: std::cell::RefCell<Option<std::rc::Weak<std::cell::RefCell<AppController>>>> = const { std::cell::RefCell::new(None) };
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }
@@ -2784,7 +2820,10 @@ fn main() {
                             sync_window_geometry(&w, c.settings_open);
                         }
                         #[cfg(windows)]
-                        ensure_taskbar_preview(&w);
+                        {
+                            ensure_taskbar_preview(&w);
+                            ensure_restore_watcher(&w);
+                        }
                     }
                 }
             },

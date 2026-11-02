@@ -331,7 +331,16 @@ export component AppWindow inherits Window {
     preferred-width: root.settings-open ? 448px : 352px;
     preferred-height: root.settings-open ? 360px : 432px;
     background: transparent;
+    // Bumped by the app when Windows has discarded the window's pixels (restore from
+    // minimized). The software renderer only presents dirty regions, so this window-sized,
+    // never-visible layer makes the next frame repaint and present the whole window.
+    in property <int> repaint-generation: 0;
 
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: root.repaint-generation < 0 ? black : transparent;
+    }
 
     key-handler := FocusScope {
         key-pressed(event) => {

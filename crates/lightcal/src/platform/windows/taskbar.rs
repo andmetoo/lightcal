@@ -1,6 +1,6 @@
 //! Process-owned taskbar integration; never subclasses Explorer or changes pinning.
 use slint::{Rgba8Pixel, SharedPixelBuffer};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     Graphics::{Dwm::*, Gdi::*},
@@ -96,6 +96,100 @@ impl Drop for TaskbarPreview {
 
 fn application_window() -> HWND {
     crate::platform::windows::shell::find_lightcal_hwnd()
+}
+
+const RESTORE_SUBCLASS_ID: usize = 0x4c435253;
+
+struct RestoreState {
+    minimized: Cell<bool>,
+    on_restore: Box<dyn Fn()>,
+}
+
+/// Reports when the window comes back from the minimized state, for example when the taskbar
+/// button restores it. Windows discards a minimized window's pixels, but Slint's software
+/// renderer still treats its buffer as on screen and presents only dirty regions, so the
+/// caller must request a full repaint. Restores through Slint's own `show()` already do that.
+pub struct RestoreWatcher {
+    hwnd: HWND,
+    // The subclass reference points into this stable allocation until Drop.
+    _state: Box<RestoreState>,
+}
+
+impl RestoreWatcher {
+    pub fn install(on_restore: impl Fn() + 'static) -> Result<Self, String> {
+        Self::install_for_window(application_window(), on_restore)
+    }
+
+    fn install_for_window(hwnd: HWND, on_restore: impl Fn() + 'static) -> Result<Self, String> {
+        if hwnd.is_null() {
+            return Err("No native application window".into());
+        }
+        let mut state = Box::new(RestoreState {
+            minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
+            on_restore: Box::new(on_restore),
+        });
+        unsafe {
+            if SetWindowSubclass(
+                hwnd,
+                Some(restore_proc),
+                RESTORE_SUBCLASS_ID,
+                (&mut *state as *mut RestoreState) as usize,
+            ) == 0
+            {
+                return Err("Could not watch window restores".into());
+            }
+        }
+        Ok(Self {
+            hwnd,
+            _state: state,
+        })
+    }
+
+    /// Whether this watcher is attached to the current application window.
+    pub fn watches_application_window(&self) -> bool {
+        self.hwnd == application_window()
+    }
+}
+
+impl Drop for RestoreWatcher {
+    fn drop(&mut self) {
+        unsafe {
+            if IsWindow(self.hwnd) != 0 {
+                RemoveWindowSubclass(self.hwnd, Some(restore_proc), RESTORE_SUBCLASS_ID);
+            }
+        }
+    }
+}
+
+/// Tracks the minimized state from a `WM_SIZE` kind and reports a restore from it.
+fn leaves_minimized(minimized: &Cell<bool>, size_kind: u32) -> bool {
+    match size_kind {
+        SIZE_MINIMIZED => {
+            minimized.set(true);
+            false
+        }
+        SIZE_RESTORED | SIZE_MAXIMIZED => minimized.replace(false),
+        _ => false,
+    }
+}
+
+unsafe extern "system" fn restore_proc(
+    hwnd: HWND,
+    message: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _id: usize,
+    data: usize,
+) -> LRESULT {
+    if message == WM_NCDESTROY {
+        RemoveWindowSubclass(hwnd, Some(restore_proc), RESTORE_SUBCLASS_ID);
+    } else if message == WM_SIZE {
+        let state = &*(data as *const RestoreState);
+        if leaves_minimized(&state.minimized, wp as u32) {
+            (state.on_restore)();
+        }
+    }
+    DefSubclassProc(hwnd, message, wp, lp)
 }
 
 unsafe extern "system" fn preview_proc(
@@ -254,5 +348,83 @@ mod tests {
         assert_eq!(&bytes[..4], &[16, 32, 128, 128]);
         assert!(preview_pixels(&image, 0, 2).is_none());
         assert_eq!(preview_pixels(&image, 100, 100).unwrap().0, 4);
+    }
+    #[test]
+    fn only_leaving_the_minimized_state_counts_as_a_restore() {
+        let minimized = Cell::new(false);
+        // Resizing a visible window (opening settings) keeps its pixels.
+        assert!(!leaves_minimized(&minimized, SIZE_RESTORED));
+        assert!(!leaves_minimized(&minimized, SIZE_MINIMIZED));
+        assert!(minimized.get());
+        assert!(leaves_minimized(&minimized, SIZE_RESTORED));
+        assert!(!leaves_minimized(&minimized, SIZE_RESTORED));
+        assert!(!leaves_minimized(&minimized, SIZE_MINIMIZED));
+        assert!(leaves_minimized(&minimized, SIZE_MAXIMIZED));
+        assert!(!leaves_minimized(&minimized, SIZE_MAXSHOW));
+    }
+    #[test]
+    fn restore_watcher_reports_native_restores_from_minimized() {
+        struct TestWindow(HWND);
+        impl Drop for TestWindow {
+            fn drop(&mut self) {
+                unsafe {
+                    DestroyWindow(self.0);
+                }
+            }
+        }
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "Lightcal restore test\0".encode_utf16().collect();
+        let hwnd = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_OVERLAPPEDWINDOW,
+                -10000,
+                -10000,
+                352,
+                432,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!hwnd.is_null());
+        let window = TestWindow(hwnd);
+        let restores = std::rc::Rc::new(Cell::new(0));
+        let counter = restores.clone();
+        let watcher =
+            RestoreWatcher::install_for_window(hwnd, move || counter.set(counter.get() + 1))
+                .unwrap();
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                0,
+                0,
+                448,
+                360,
+                SWP_NOMOVE | SWP_NOZORDER,
+            );
+        }
+        assert_eq!(restores.get(), 0);
+        // The taskbar button minimizes and restores the window without any app code.
+        unsafe {
+            ShowWindow(hwnd, SW_MINIMIZE);
+        }
+        assert_eq!(restores.get(), 0);
+        unsafe {
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        assert_eq!(restores.get(), 1);
+        drop(watcher);
+        unsafe {
+            ShowWindow(hwnd, SW_MINIMIZE);
+            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        assert_eq!(restores.get(), 1);
+        drop(window);
     }
 }

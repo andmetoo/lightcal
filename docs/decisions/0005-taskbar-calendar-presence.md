@@ -12,6 +12,7 @@ Removing the expanded agenda must preserve both tray and taskbar entry points. T
 - Explicitly disable the tray library's default menu-on-left-click behavior. Left clicks only toggle the calendar; right clicks keep the standard context menu.
 - Set a stable portable application ID before creating the window. Do not replace an installed MSIX application's Windows-assigned identity.
 - Handle Windows DWM thumbnail and Peek requests with calendar snapshots, resized to the requested bounds and encoded as premultiplied 32-bit BGRA DIBs. Keep the last calendar available while settings are displayed. Invalidate DWM's cache after UI state changes. Release GDI bitmaps after DWM copies them and detach the subclass before releasing its state.
+- Windows discards a minimized window's pixels. When the taskbar restores the window, Slint's software renderer still treats its buffer as on screen and presents only dirty regions, which left the window blank apart from hovered or changed cells (November 2, 2026). A second subclass watches `WM_SIZE` for a restore from minimized and bumps the `repaint-generation` property of a window-sized, never-visible layer, so the next frame repaints and presents the whole window. Slint's own `show()` already does this for hidden windows.
 - The subclass is attached to this process's native window only. There is no Explorer injection or global mouse polling.
 - A custom `LIGHTCAL_DATA_DIR` gets an isolated single-instance namespace so fixture launches cannot activate the owner's real instance.
 
