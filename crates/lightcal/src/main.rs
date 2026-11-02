@@ -119,6 +119,10 @@ pub(crate) struct AppController {
     pub(crate) agenda: calendar_view::AgendaUiState,
     /// When calendars last loaded successfully; drives "Updated … ago" in Accounts.
     pub(crate) last_refreshed: Option<chrono::DateTime<chrono::Local>>,
+    /// Whether the popup is on screen right now, so header changes animate. The app reads
+    /// the native window (`popup_on_screen`); snapshots and tests pass a fixed answer so
+    /// process-wide native state cannot leak between them.
+    pub(crate) on_screen: fn() -> bool,
 }
 
 thread_local! {
@@ -1579,6 +1583,20 @@ impl AppController {
     }
 }
 
+/// Whether a header change synced now happens in front of the user. Like the tray and
+/// shortcut toggles it reads the native window, so hidden, taskbar-minimized and headless
+/// (snapshots, tests without a native "Lightcal" window) all count as off screen.
+fn popup_on_screen() -> bool {
+    #[cfg(windows)]
+    {
+        lightcal::platform::windows::main_window_is_open() == Some(true)
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
     #[cfg(windows)]
@@ -1597,6 +1615,10 @@ fn show_application_window(ui: &AppWindow) {
 }
 
 fn hide_application_window(ui: &AppWindow) {
+    // The window hides under the pointer (the header − button); without this the button
+    // keeps its hover fill when the calendar opens again.
+    ui.window()
+        .dispatch_event(slint::platform::WindowEvent::PointerExited);
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]
@@ -2726,6 +2748,7 @@ fn main() {
         ics_error: String::new(),
         agenda: Default::default(),
         last_refreshed: None,
+        on_screen: popup_on_screen,
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;

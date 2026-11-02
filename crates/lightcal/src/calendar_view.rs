@@ -233,9 +233,12 @@ impl AppController {
             ui.set_year_text(month.year.to_string().into());
             ui.set_year_first(false);
         }
+        // Animate the Today slot only when this change happens in front of the user.
+        ui.set_header_motion((self.on_screen)());
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());
+        ui.set_hide_to_tray_label(copy.hide_to_tray.into());
         ui.set_shaded_bands(ModelRc::new(VecModel::from(shaded_bands(
             &grid.gray_columns,
         ))));

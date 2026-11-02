@@ -50,10 +50,11 @@ body{margin:0}
   <div style="height: 44px; display: flex; align-items: center; gap: 2px; padding-left: 4px; flex-shrink: 0">
     <div style="flex-grow: 1; font: 600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.2px; color: var(--ink)">{{monthName}} <span style="font-weight: 400; color: var(--ink2)">{{year}}</span></div>
     <button class="ib" aria-label="Previous month" onClick="{{prev}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
-    <button class="tb" style="visibility: {{todayVis}}" onClick="{{goToday}}">Today</button>
+    <button class="tb" style="max-width: {{todayMax}}; padding: 0 {{todayPad}}; opacity: {{todayOp}}; overflow: hidden; white-space: nowrap; transition: max-width .18s ease-in-out, padding .18s ease-in-out, opacity .18s ease-in-out" tabindex="{{todayTab}}" aria-hidden="{{todayHidden}}" onClick="{{goToday}}">Today</button>
     <button class="ib" aria-label="Next month" onClick="{{next}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
     <div style="width: 1px; height: 16px; background: var(--line); margin: 0 4px"></div>
     <button class="ib" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+    <button class="ib" aria-label="Hide to tray" title="Hide to tray"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
   </div>
   <div style="position: relative; flex-shrink: 0">
     <div class="{{bandCls}}"></div>
@@ -200,7 +201,12 @@ class Component extends DCLogic {
       tileH: sz.tile + "px", fs: sz.fs + "px", lineH: (sz.fs + 2) + "px",
       monthName: first.toLocaleDateString("en-GB", { month: "long" }),
       year: String(y),
-      todayVis: onToday ? "hidden" : "visible",
+      // On the current day the arrows sit together; leaving it slides Today in between.
+      todayMax: onToday ? "0px" : "80px",
+      todayPad: onToday ? "0px" : "8px",
+      todayOp: onToday ? "0" : "1",
+      todayTab: onToday ? "-1" : "0",
+      todayHidden: onToday ? "true" : "false",
       showWeeks: showWeeks,
       gridCls: "g " + (showWeeks ? "g8" : "g7"),
       bandCls: "band " + (showWeeks ? "band8" : "band7"),

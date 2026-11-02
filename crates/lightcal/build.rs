@@ -97,7 +97,11 @@ fn main() {
         );
         println!("cargo:rustc-env={key}={configured}");
     }
-    slint_build::compile("ui/app.slint").expect("Failed to compile Slint UI");
+    // Debug builds (tests, the dev app) keep element debug info so headless UI tests can
+    // find controls by accessible label; release builds leave it out.
+    let config = slint_build::CompilerConfiguration::new()
+        .with_debug_info(std::env::var("PROFILE").as_deref() == Ok("debug"));
+    slint_build::compile_with_config("ui/app.slint", config).expect("Failed to compile Slint UI");
 
     #[cfg(windows)]
     {

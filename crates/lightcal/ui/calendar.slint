@@ -281,6 +281,7 @@ export component CalendarView inherits Rectangle {
     in property <string> prev-label: "Previous month";
     in property <string> next-label: "Next month";
     in property <string> settings-label: "Settings";
+    in property <string> hide-label: "Hide to tray";
     // Grid
     in property <bool> show-week-numbers;
     in property <[ShadedBand]> shaded-bands;
@@ -308,6 +309,11 @@ export component CalendarView inherits Rectangle {
     callback prev-month();
     callback next-month();
     callback open-settings(int);
+    // Hides the popup to the notification area, like Escape.
+    callback hide-to-tray();
+    // True when the change being shown was made while the popup was on screen; Rust sets
+    // it with the header data, so a popup that opens shows the header already settled.
+    in property <bool> header-motion: false;
     callback return-to-today();
     callback select-cell(int);
     callback toggle-event(string);
@@ -379,11 +385,25 @@ export component CalendarView inherits Rectangle {
             label: root.prev-label;
             clicked => { root.prev-month(); }
         }
-        TextButton {
-            label: root.today-button-label;
-            visible: !root.today-hidden;
-            enabled: !root.today-hidden;
-            clicked => { root.return-to-today(); }
+        // On the current day the arrows sit together; leaving it slides them apart and
+        // fades Today in between.
+        today-slot := Rectangle {
+            width: root.today-hidden ? 0px : today-button.preferred-width;
+            opacity: root.today-hidden ? 0 : 1;
+            clip: true;
+            animate width, opacity {
+                duration: root.header-motion ? 180ms : 0ms;
+                easing: ease-in-out;
+            }
+
+            today-button := TextButton {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                label: root.today-button-label;
+                visible: today-slot.width > 0px;
+                enabled: !root.today-hidden;
+                clicked => { root.return-to-today(); }
+            }
         }
         IconButton {
             icon: "chevron-right";
@@ -407,6 +427,11 @@ export component CalendarView inherits Rectangle {
             icon-weight: 1.75;
             label: root.settings-label;
             clicked => { root.open-settings(0); }
+        }
+        IconButton {
+            icon: "minimize";
+            label: root.hide-label;
+            clicked => { root.hide-to-tray(); }
         }
     }
 

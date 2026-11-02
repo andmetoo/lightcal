@@ -48,9 +48,13 @@ export component AppWindow inherits Window {
     in property <bool> year-first: false;
     in property <bool> today-hidden: false;
     in property <string> prev-month-label: "Previous month";
+    in property <string> hide-to-tray-label: "Hide to tray";
     in property <string> next-month-label: "Next month";
     in property <[ShadedBand]> shaded-bands: [];
     in-out property <bool> calendar-keyboard-nav: false;
+    // Set by Rust with the header data: the header animates only for changes made while
+    // the popup is on screen, never for ones applied just before it opens.
+    in property <bool> header-motion: false;
     in property <string> agenda-title: "";
     in property <string> agenda-count: "";
     in property <[AgendaChipRow]> agenda-chip-rows: [];
@@ -167,7 +171,7 @@ export component AppWindow inherits Window {
     in property <string> updates-heading-text: "Updates";
     in property <string> about-link-text: "About Lightcal";
     in property <string> app-name-text: "Lightcal";
-    in property <string> about-version-text: "Version 1.0.3";
+    in property <string> about-version-text: "Version 1.0.5";
     in property <string> provider-readonly-tag-text: "Read-only";
     in property <string> shortcut-unset-text: "Not set";
     in property <string> license-short-text: "GPL-3.0-only";
@@ -412,6 +416,8 @@ export component AppWindow inherits Window {
         prev-label: root.prev-month-label;
         next-label: root.next-month-label;
         settings-label: root.settings-title-text;
+        hide-label: root.hide-to-tray-label;
+        header-motion: root.header-motion;
         show-week-numbers: root.show-week-numbers;
         shaded-bands: root.shaded-bands;
         weekday-headers: root.weekday-headers;
@@ -435,6 +441,7 @@ export component AppWindow inherits Window {
         open-label: root.agenda-open-label;
         prev-month() => { root.prev-month(); }
         next-month() => { root.next-month(); }
+        hide-to-tray() => { root.dismiss-compact(); }
         open-settings(arg0) => { root.open-settings(arg0); }
         return-to-today() => { root.calendar-keyboard-nav = false; root.return-to-today(); }
         select-cell(arg0) => { root.calendar-keyboard-nav = false; root.select-cell(arg0); }

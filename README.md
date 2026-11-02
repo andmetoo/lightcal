@@ -2,7 +2,7 @@
 
 # Lightcal
 
-Lightcal 1.0.3 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
+Lightcal 1.0.5 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
 
 ## Highlights
 
@@ -23,7 +23,7 @@ Lightcal 1.0.3 is a small calendar that lives in the Windows tray. Click the tra
 | **Event details** | **Accounts** |
 | ![An expanded event with time, duration, location, calendar, Copy and Open](docs/images/event-details.png) | ![Settings, Accounts tab with a connected Google Calendar and selected calendars](docs/images/settings-accounts.png) |
 
-![About Lightcal, version 1.0.3, with the update check and project links](docs/images/about.png)
+![About Lightcal, version 1.0.5, with the update check and project links](docs/images/about.png)
 
 These are headless renders of the real Slint UI (`--render-snapshots`) with sample events; no account was used.
 
