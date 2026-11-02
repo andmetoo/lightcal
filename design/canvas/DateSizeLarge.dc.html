@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal calendar, Large dates</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 352px; height: 432px">
+  <dc-import name="DateSize" size="large" theme="{{theme}}" hint-size="352px,432px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":352,"height":432}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme || "light" }; }
+}
+</script>
+</body>
+</html>

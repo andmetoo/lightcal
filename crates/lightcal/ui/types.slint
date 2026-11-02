@@ -2,6 +2,10 @@
 
 // A calendar's color, adjusted in Rust for contrast on each theme
 // (event_colors.rs). Views draw it with `Theme.mark()`.
+// Size of the day numbers in the calendar grid (Settings › Calendar › Date size).
+// Mirrors preferences::DateSize; Theme turns it into grid and window metrics.
+export enum CalendarDateSize { standard, large, larger }
+
 export struct MarkColor {
     light: color,
     dark: color,

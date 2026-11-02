@@ -47,7 +47,7 @@ component SponsorButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
-import { AccountCardItem, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
+import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
 component Glyph inherits Path {
@@ -246,6 +246,8 @@ component Segment inherits Rectangle {
     in property <bool> has-preview: false;
     in property <bool> preview-mono: false;
     in property <string> preview-day;
+    // Date size options show a "28" sample at this size before the label.
+    in property <length> sample-size: 0px;
     callback clicked();
 
     width: root.fixed-width > 0px ? root.fixed-width : max(28px, lay.preferred-width);
@@ -264,8 +266,16 @@ component Segment inherits Rectangle {
     lay := HorizontalLayout {
         padding-left: root.fixed-width > 0px ? 0px : (root.has-preview ? 8px : 10px);
         padding-right: root.fixed-width > 0px ? 0px : (root.has-preview ? 12px : 10px);
-        spacing: 8px;
+        spacing: root.has-preview ? 8px : 6px;
         alignment: center;
+        if root.sample-size > 0px : Text {
+            text: "28";
+            font-size: root.sample-size;
+            font-weight: Theme.weight-semibold;
+            color: root.on || touch.has-hover ? Theme.ink : Theme.ink2;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
         if root.has-preview : Centered {
             TrayPreview {
                 mono: root.preview-mono;
@@ -888,6 +898,11 @@ export component SettingsView inherits Rectangle {
     in property <bool> show-week-numbers;
     in property <string> label-show-event-dots-text;
     in property <bool> show-event-dots;
+    in property <string> label-date-size-text;
+    in property <string> date-size-standard-label;
+    in property <string> date-size-large-label;
+    in property <string> date-size-larger-label;
+    in property <CalendarDateSize> date-size;
     in property <string> weekday-monday-label;
     in property <bool> first-weekday-monday;
     in property <string> weekday-sunday-label;
@@ -946,6 +961,7 @@ export component SettingsView inherits Rectangle {
     callback toggle-gray-weekday(int);
     callback toggle-show-week-numbers();
     callback toggle-show-event-dots();
+    callback select-date-size(CalendarDateSize);
     callback select-first-weekday-option(bool);
     callback add-calendar-account();
     callback cancel-account-sign-in();
@@ -1066,77 +1082,110 @@ export component SettingsView inherits Rectangle {
         width: parent.width;
         height: root.body-height;
 
-        VerticalLayout {
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-top: 12px;
-            padding-bottom: 12px;
-            spacing: 8px;
-            alignment: start;
+        // Scrolls once the Date size row pushes the cards past the window height.
+        ScrollView {
+            width: parent.width;
+            height: parent.height;
+            content-width: self.visible-width;
+            content-height: cal-col.preferred-height;
+            // The week menu is placed outside the scroll view; close it rather than leave it
+            // behind when the cards move.
+            scrolled => {
+                if (root.first-day-dropdown-open) {
+                    root.toggle-first-day-dropdown();
+                }
+            }
 
-            SettingsCard {
-                Row {
-                    title: root.label-theme-text;
-                    divider: false;
-                    Centered {
-                        Track {
-                            for opt[idx] in [root.theme-system-label, root.theme-light-label, root.theme-dark-label] : Segment {
-                                label: opt;
-                                on: root.theme-index == idx;
-                                clicked => {
-                                    if (idx == 0) { root.select-theme("system"); }
-                                    if (idx == 1) { root.select-theme("light"); }
-                                    if (idx == 2) { root.select-theme("dark"); }
+            cal-col := VerticalLayout {
+                width: parent.width;
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 12px;
+                padding-bottom: 12px;
+                spacing: 8px;
+                alignment: start;
+
+                SettingsCard {
+                    Row {
+                        title: root.label-theme-text;
+                        Centered {
+                            Track {
+                                for opt[idx] in [root.theme-system-label, root.theme-light-label, root.theme-dark-label] : Segment {
+                                    label: opt;
+                                    on: root.theme-index == idx;
+                                    clicked => {
+                                        if (idx == 0) { root.select-theme("system"); }
+                                        if (idx == 1) { root.select-theme("light"); }
+                                        if (idx == 2) { root.select-theme("dark"); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Row {
+                        title: root.label-date-size-text;
+                        divider: false;
+                        Centered {
+                            Track {
+                                for opt in [
+                                    { label: root.date-size-standard-label, size: CalendarDateSize.standard, sample: 10px },
+                                    { label: root.date-size-large-label, size: CalendarDateSize.large, sample: 11.5px },
+                                    { label: root.date-size-larger-label, size: CalendarDateSize.larger, sample: 13px },
+                                ] : Segment {
+                                    label: opt.label;
+                                    sample-size: opt.sample;
+                                    on: root.date-size == opt.size;
+                                    clicked => { root.select-date-size(opt.size); }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            SettingsCard {
-                Row {
-                    title: root.label-first-weekday-text;
-                    Centered {
-                        week-select := Select {
-                            text: root.current-first-weekday-display;
-                            is-open: root.first-day-dropdown-open;
-                            select-width: 136px;
-                            clicked => { root.toggle-first-day-dropdown(); }
-                        }
-                    }
-                }
-                Row {
-                    title: root.label-gray-weekdays-text;
-                    Centered {
-                        Track {
-                            for chip in root.gray-weekday-chips : Segment {
-                                fixed-width: 28px;
-                                label: chip.label;
-                                on: chip.active;
-                                clicked => { root.toggle-gray-weekday(chip.index); }
+                SettingsCard {
+                    Row {
+                        title: root.label-first-weekday-text;
+                        Centered {
+                            week-select := Select {
+                                text: root.current-first-weekday-display;
+                                is-open: root.first-day-dropdown-open;
+                                select-width: 136px;
+                                clicked => { root.toggle-first-day-dropdown(); }
                             }
                         }
                     }
-                }
-                Row {
-                    title: root.label-show-week-numbers-text;
-                    Centered {
-                        Switch {
-                            label: root.label-show-week-numbers-text;
-                            checked: root.show-week-numbers;
-                            toggled => { root.toggle-show-week-numbers(); }
+                    Row {
+                        title: root.label-gray-weekdays-text;
+                        Centered {
+                            Track {
+                                for chip in root.gray-weekday-chips : Segment {
+                                    fixed-width: 28px;
+                                    label: chip.label;
+                                    on: chip.active;
+                                    clicked => { root.toggle-gray-weekday(chip.index); }
+                                }
+                            }
                         }
                     }
-                }
-                Row {
-                    title: root.label-show-event-dots-text;
-                    divider: false;
-                    Centered {
-                        Switch {
-                            label: root.label-show-event-dots-text;
-                            checked: root.show-event-dots;
-                            toggled => { root.toggle-show-event-dots(); }
+                    Row {
+                        title: root.label-show-week-numbers-text;
+                        Centered {
+                            Switch {
+                                label: root.label-show-week-numbers-text;
+                                checked: root.show-week-numbers;
+                                toggled => { root.toggle-show-week-numbers(); }
+                            }
+                        }
+                    }
+                    Row {
+                        title: root.label-show-event-dots-text;
+                        divider: false;
+                        Centered {
+                            Switch {
+                                label: root.label-show-event-dots-text;
+                                checked: root.show-event-dots;
+                                toggled => { root.toggle-show-event-dots(); }
+                            }
                         }
                     }
                 }

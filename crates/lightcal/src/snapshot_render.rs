@@ -5,7 +5,7 @@ use calendar_core::{CalendarOccurrence, CalendarState, LocalDate, Weekday};
 use lightcal::platform::windows::{render_squircle_icon_rgba_64, ShortcutManager, StartupManager};
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
-    LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
+    DateSize, LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 use lightcal::snapshot::{write_rgba_png, HeadlessPlatform};
 use lightcal::updater::UpdateCheckState;
@@ -806,6 +806,24 @@ fn render_calendar_boards(
     }
     shot(ctrl, "chip-detail-light")?;
     ctrl.agenda.expanded = None;
+
+    // Date size (DateSize boards): Large keeps 352 × 432, Larger is 352 × 444.
+    for (size, theme) in [
+        (DateSize::Large, ThemePreference::Light),
+        (DateSize::Larger, ThemePreference::Light),
+        (DateSize::Larger, ThemePreference::Dark),
+    ] {
+        ctrl.prefs.date_size = size;
+        ctrl.prefs.theme = theme;
+        ctrl.sync_to_ui(ui);
+        helper.render_to_png(
+            &out_dir.join(format!("calendar-{}-{}.png", size.as_str(), theme.as_str())),
+            352,
+            crate::calendar_height(ui) as u32,
+        )?;
+    }
+    ctrl.prefs.date_size = DateSize::Standard;
+    ctrl.prefs.theme = ThemePreference::Light;
 
     for (locale, theme) in [
         (LocaleCode::Ru, ThemePreference::Light),

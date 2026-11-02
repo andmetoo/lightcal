@@ -25,7 +25,7 @@ Ship English (`en`) as the default regardless of the OS language, with optional 
 
 ## Tray and taskbar entry points
 
-Both entry points open the same 352 by 432 logical-pixel compact calendar. Settings use a 448 by 360 layout. Removing the expanded agenda does not remove the normal taskbar button.
+Both entry points open the same compact calendar: 352 by 432 logical pixels, or 352 by 444 with the Larger date size ([ADR 0012](decisions/0012-date-size.md)). Settings use a 448 by 360 layout. Removing the expanded agenda does not remove the normal taskbar button.
 
 - Tray clicks and the global shortcut show the calendar, or hide it when the calendar is already open. The taskbar button minimizes and restores the existing native window.
 - Escape, Close and the − button after Settings in the calendar header hide the window; its taskbar button returns when the calendar is shown again, and a pinned Lightcal button forwards activation to the running instance. Focus loss does not hide or destroy the window, including when Explorer opens the taskbar context menu.

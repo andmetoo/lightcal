@@ -994,6 +994,67 @@ fn agenda_actions_use_the_row_that_was_rendered() {
 }
 
 #[test]
+fn date_size_sets_calendar_height_from_theme_metrics() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-date-size-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    for (size, height) in [
+        (DateSize::Standard, 432.0),
+        (DateSize::Large, 432.0),
+        (DateSize::Larger, 444.0),
+    ] {
+        ctrl.prefs.date_size = size;
+        ctrl.sync_to_ui(&ui);
+        assert_eq!(ui.get_date_size(), CalendarDateSize::from(size));
+        assert_eq!(calendar_height(&ui), height);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn date_size_control_saves_the_choice_and_grows_the_calendar() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-date-size-control-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 0;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    wire_date_size(&ui, &ctrl);
+    ui.show().unwrap();
+    ctrl.borrow().sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.draw_if_needed(|_| {});
+
+    click_label(&ui, "Larger");
+    assert_eq!(ctrl.borrow().prefs.date_size, DateSize::Larger);
+    assert_eq!(ui.get_date_size(), CalendarDateSize::Larger);
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert_eq!(saved.preferences.date_size, DateSize::Larger);
+
+    ctrl.borrow_mut().settings_open = false;
+    ctrl.borrow().sync_to_ui(&ui);
+    assert_eq!(calendar_height(&ui), 444.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn header_hide_button_hides_the_calendar_like_escape() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
