@@ -155,23 +155,6 @@ impl DateSize {
             _ => Self::Standard,
         }
     }
-
-    /// Position in the Settings segmented control and the `date-size` UI property.
-    pub fn index(self) -> i32 {
-        match self {
-            Self::Standard => 0,
-            Self::Large => 1,
-            Self::Larger => 2,
-        }
-    }
-
-    pub fn from_index(index: i32) -> Self {
-        match index {
-            1 => Self::Large,
-            2 => Self::Larger,
-            _ => Self::Standard,
-        }
-    }
 }
 
 /// Supported UI locales (`en` is always the default and fallback).
@@ -1014,10 +997,9 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
     #[test]
     fn date_size_round_trips_and_loads_case_insensitively() {
         for size in [DateSize::Standard, DateSize::Large, DateSize::Larger] {
-            assert_eq!(DateSize::from_index(size.index()), size);
             assert_eq!(DateSize::from_str_lossy(size.as_str()), size);
         }
-        assert_eq!(DateSize::from_index(7), DateSize::Standard);
+        assert_eq!(DateSize::from_str_lossy("huge"), DateSize::Standard);
 
         let dir = unique_temp_dir("date-size");
         fs::create_dir_all(&dir).unwrap();

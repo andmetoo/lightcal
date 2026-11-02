@@ -6,10 +6,10 @@
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
 
 export { Theme }
-export { MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
+export { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
     title: "Lightcal";
@@ -197,8 +197,8 @@ export component AppWindow inherits Window {
     // Redesigned Settings View State & Dropdowns
     in property <bool> highlight-current-month: true;
     in property <bool> show-event-dots: true;
-    // 0=Standard (14 px), 1=Large (16 px), 2=Larger (18 px, week rows 34 px, popup 444 px tall).
-    in property <int> date-size: 0;
+    // Standard 14 px, Large 16 px, Larger 18 px (week rows 34 px, popup 444 px tall).
+    in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     in property <string> label-date-size-text: "Date size";
     in property <string> date-size-standard-label: "Standard";
     in property <string> date-size-large-label: "Large";
@@ -313,7 +313,7 @@ export component AppWindow inherits Window {
     callback select-update-channel(string);
     callback toggle-highlight-current-month();
     callback toggle-show-event-dots();
-    callback select-date-size(int);
+    callback select-date-size(CalendarDateSize);
     callback toggle-auto-check-updates();
     callback reset-shortcut();
     callback open-privacy-settings();

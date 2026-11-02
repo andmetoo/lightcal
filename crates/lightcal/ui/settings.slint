@@ -47,7 +47,7 @@ component SponsorButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
-import { AccountCardItem, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
+import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
 component Glyph inherits Path {
@@ -902,7 +902,7 @@ export component SettingsView inherits Rectangle {
     in property <string> date-size-standard-label;
     in property <string> date-size-large-label;
     in property <string> date-size-larger-label;
-    in property <int> date-size;
+    in property <CalendarDateSize> date-size;
     in property <string> weekday-monday-label;
     in property <bool> first-weekday-monday;
     in property <string> weekday-sunday-label;
@@ -961,7 +961,7 @@ export component SettingsView inherits Rectangle {
     callback toggle-gray-weekday(int);
     callback toggle-show-week-numbers();
     callback toggle-show-event-dots();
-    callback select-date-size(int);
+    callback select-date-size(CalendarDateSize);
     callback select-first-weekday-option(bool);
     callback add-calendar-account();
     callback cancel-account-sign-in();
@@ -1088,6 +1088,13 @@ export component SettingsView inherits Rectangle {
             height: parent.height;
             content-width: self.visible-width;
             content-height: cal-col.preferred-height;
+            // The week menu is placed outside the scroll view; close it rather than leave it
+            // behind when the cards move.
+            scrolled => {
+                if (root.first-day-dropdown-open) {
+                    root.toggle-first-day-dropdown();
+                }
+            }
 
             cal-col := VerticalLayout {
                 width: parent.width;
@@ -1120,11 +1127,15 @@ export component SettingsView inherits Rectangle {
                         divider: false;
                         Centered {
                             Track {
-                                for opt[idx] in [root.date-size-standard-label, root.date-size-large-label, root.date-size-larger-label] : Segment {
-                                    label: opt;
-                                    sample-size: idx == 2 ? 13px : idx == 1 ? 11.5px : 10px;
-                                    on: root.date-size == idx;
-                                    clicked => { root.select-date-size(idx); }
+                                for opt in [
+                                    { label: root.date-size-standard-label, size: CalendarDateSize.standard, sample: 10px },
+                                    { label: root.date-size-large-label, size: CalendarDateSize.large, sample: 11.5px },
+                                    { label: root.date-size-larger-label, size: CalendarDateSize.larger, sample: 13px },
+                                ] : Segment {
+                                    label: opt.label;
+                                    sample-size: opt.sample;
+                                    on: root.date-size == opt.size;
+                                    clicked => { root.select-date-size(opt.size); }
                                 }
                             }
                         }

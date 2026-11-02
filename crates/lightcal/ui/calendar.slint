@@ -8,7 +8,7 @@
 
 import { Theme } from "theme.slint";
 import { Icon, IconButton, TextButton } from "controls.slint";
-import { DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
+import { CalendarDateSize, DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
 
 // Inline accent action inside the event details (.gb): 24 px, accent 12/500.
 component DetailAction inherits Rectangle {
@@ -288,8 +288,7 @@ export component CalendarView inherits Rectangle {
     in property <[string]> iso-weeks;
     in property <[DayCellData]> cells;
     in property <bool> show-event-dots;
-    // 0=Standard, 1=Large, 2=Larger.
-    in property <int> date-size: 0;
+    in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     // Keyboard navigation draws the focus ring on the selected day.
     in property <bool> keyboard-nav: false;
     // Agenda

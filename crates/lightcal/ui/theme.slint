@@ -3,7 +3,7 @@
 // design/canvas/*.dc.html. `AppWindow.dark-mode` is two-way bound to
 // `Theme.dark`, so every component reads the active palette from here.
 
-import { MarkColor } from "types.slint";
+import { MarkColor, CalendarDateSize } from "types.slint";
 
 export global Theme {
     // Switched by AppWindow.dark-mode.
@@ -114,21 +114,21 @@ export global Theme {
     out property <int> weight-semibold: 600;
     out property <int> weight-bold: 700;
 
-    // ---- Date size (0=Standard, 1=Large, 2=Larger; design/canvas DateSize boards) ----
+    // ---- Date size (design/canvas DateSize boards) ----
     // The only source of these metrics: CalendarView lays out with them and Rust sizes
     // the window from calendar-height().
-    public pure function day-font(size: int) -> length {
-        size == 2 ? 18px : size == 1 ? 16px : root.type-day
+    public pure function day-font(size: CalendarDateSize) -> length {
+        size == CalendarDateSize.larger ? 18px : size == CalendarDateSize.large ? 16px : root.type-day
     }
-    public pure function day-tile-height(size: int) -> length {
-        size == 2 ? 30px : 28px
+    public pure function day-tile-height(size: CalendarDateSize) -> length {
+        size == CalendarDateSize.larger ? 30px : 28px
     }
-    public pure function week-row-height(size: int) -> length {
+    public pure function week-row-height(size: CalendarDateSize) -> length {
         root.day-tile-height(size) + 4px
     }
     // Header, weekday row, hairline, agenda and padding take 240 px; only the six
     // week rows grow (352 × 432, or 352 × 444 with Larger dates).
-    public pure function calendar-height(size: int) -> length {
+    public pure function calendar-height(size: CalendarDateSize) -> length {
         240px + 6 * root.week-row-height(size)
     }
 }

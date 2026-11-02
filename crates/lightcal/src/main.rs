@@ -363,6 +363,22 @@ fn target_logical_size(settings_open: bool, calendar_height: f32) -> (f32, f32) 
     }
 }
 
+fn ui_date_size(size: DateSize) -> CalendarDateSize {
+    match size {
+        DateSize::Standard => CalendarDateSize::Standard,
+        DateSize::Large => CalendarDateSize::Large,
+        DateSize::Larger => CalendarDateSize::Larger,
+    }
+}
+
+fn pref_date_size(size: CalendarDateSize) -> DateSize {
+    match size {
+        CalendarDateSize::Standard => DateSize::Standard,
+        CalendarDateSize::Large => DateSize::Large,
+        CalendarDateSize::Larger => DateSize::Larger,
+    }
+}
+
 /// Logical calendar height for the current date size, from the Slint Theme metrics.
 fn calendar_height(ui: &AppWindow) -> f32 {
     ui.global::<Theme>()
@@ -934,7 +950,7 @@ impl AppController {
         ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
-        ui.set_date_size(self.prefs.date_size.index());
+        ui.set_date_size(ui_date_size(self.prefs.date_size));
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
             LocaleCode::En => (
@@ -1150,6 +1166,12 @@ impl AppController {
 
         #[cfg(windows)]
         invalidate_taskbar_preview();
+    }
+
+    /// Settings › Calendar › Date size. The window resizes when Settings closes.
+    fn select_date_size(&mut self, size: DateSize) {
+        self.prefs.date_size = size;
+        self.persist();
     }
 
     fn persist(&self) {
@@ -3485,10 +3507,9 @@ fn main() {
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
-        ui.on_select_date_size(move |index| {
+        ui.on_select_date_size(move |size| {
             let mut c = ctrl.borrow_mut();
-            c.prefs.date_size = DateSize::from_index(index);
-            c.persist();
+            c.select_date_size(pref_date_size(size));
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
             }

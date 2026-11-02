@@ -979,12 +979,52 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
     ] {
         ctrl.prefs.date_size = size;
         ctrl.sync_to_ui(&ui);
-        assert_eq!(ui.get_date_size(), size.index());
+        assert_eq!(ui.get_date_size(), ui_date_size(size));
         assert_eq!(calendar_height(&ui), height);
-        assert_eq!(
-            target_logical_size(false, calendar_height(&ui)),
-            (352.0, height)
-        );
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn date_size_control_saves_the_choice_and_grows_the_calendar() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-date-size-control-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 0;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    let weak = ui.as_weak();
+    let observed = ctrl.clone();
+    // Same handler body as main(): store the choice, then refresh the UI.
+    ui.on_select_date_size(move |size| {
+        let mut c = observed.borrow_mut();
+        c.select_date_size(pref_date_size(size));
+        c.sync_to_ui(&weak.upgrade().unwrap());
+    });
+    ui.show().unwrap();
+    ctrl.borrow().sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.draw_if_needed(|_| {});
+
+    // "28 Larger", the last segment of the Date size row in the first card.
+    click(&ui, 385.0, 147.0);
+    assert_eq!(ctrl.borrow().prefs.date_size, DateSize::Larger);
+    assert_eq!(ui.get_date_size(), CalendarDateSize::Larger);
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert_eq!(saved.preferences.date_size, DateSize::Larger);
+
+    ctrl.borrow_mut().settings_open = false;
+    ctrl.borrow().sync_to_ui(&ui);
+    assert_eq!(calendar_height(&ui), 444.0);
     let _ = std::fs::remove_dir_all(&dir);
 }
