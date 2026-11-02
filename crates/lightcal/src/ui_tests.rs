@@ -235,10 +235,21 @@ fn month_navigation_continues_after_today() {
         .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
     window.set_size(slint::PhysicalSize::new(528, 648));
     let mut pixels = vec![PremultipliedRgbaColor::default(); 528 * 648];
+    // Compare only the title: from 16 px to just before the previous-month arrow at its
+    // leftmost, which is with Today showing. Font metrics differ by platform (Linux CI has
+    // no Segoe UI), so measure the arrow instead of assuming its position.
+    ui.set_today_hidden(false);
+    let title_end = ElementHandle::find_by_accessible_label(&ui, "Previous month")
+        .next()
+        .expect("previous-month arrow")
+        .absolute_position()
+        .x;
+    ctrl.borrow().sync_to_ui(&ui);
+    let title_end_px = ((title_end - 2.0) * 1.5) as usize;
+    assert!(title_end_px > 150, "room for the month title");
     let header_pixels = |pixels: &[PremultipliedRgbaColor]| -> Vec<u8> {
         (15..51)
-            // The title only (logical 16..150 at 150 %), clear of the month buttons' hover.
-            .flat_map(|y| (24..225).map(move |x| y * 528 + x))
+            .flat_map(|y| (24..title_end_px).map(move |x| y * 528 + x))
             .flat_map(|index| {
                 let pixel = pixels[index];
                 [pixel.red, pixel.green, pixel.blue, pixel.alpha]
