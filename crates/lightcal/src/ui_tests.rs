@@ -261,8 +261,12 @@ fn month_navigation_continues_after_today() {
         renderer.render(&mut pixels, 528);
     });
     let mut previous_title = header_pixels(&pixels);
-    let mut rendered_titles =
-        std::collections::BTreeMap::from([("November 2026", previous_title.clone())]);
+    // Keyed by month and whether Today is folded: Today takes room from the title, so a
+    // wide fallback font (Linux CI has no Segoe UI) can lay the same month out differently.
+    let mut rendered_titles = std::collections::BTreeMap::from([(
+        ("November 2026", ui.get_today_hidden()),
+        previous_title.clone(),
+    )]);
     use Target::{Label, Point};
     const PREV: Target = Label("Previous month");
     const NEXT: Target = Label("Next month");
@@ -315,13 +319,14 @@ fn month_navigation_continues_after_today() {
                 "The month title repaints at step {step}"
             );
         }
-        if let Some(expected) = rendered_titles.get(month) {
+        let key = (month, ui.get_today_hidden());
+        if let Some(expected) = rendered_titles.get(&key) {
             assert!(
                 &title == expected,
                 "The rendered heading matches {month} at step {step}"
             );
         } else {
-            rendered_titles.insert(month, title.clone());
+            rendered_titles.insert(key, title.clone());
         }
         previous_title = title;
     }
