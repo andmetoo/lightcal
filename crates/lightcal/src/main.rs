@@ -35,8 +35,8 @@ pub(crate) enum ActiveSignIn {
     Google,
 }
 use slint::{
-    ComponentHandle, Image, LogicalSize, Model, ModelRc, PhysicalPosition, Rgba8Pixel,
-    SharedPixelBuffer, SharedString, VecModel,
+    ComponentHandle, Image, LogicalSize, ModelRc, PhysicalPosition, Rgba8Pixel, SharedPixelBuffer,
+    SharedString, VecModel,
 };
 use std::cell::RefCell;
 use std::env;
@@ -313,30 +313,6 @@ fn google_status_line(
     } else {
         String::new()
     }
-}
-
-fn publish_sources(
-    existing: ModelRc<CalendarSourceItem>,
-    next: Vec<CalendarSourceItem>,
-) -> ModelRc<CalendarSourceItem> {
-    if let Some(model) = existing
-        .as_any()
-        .downcast_ref::<VecModel<CalendarSourceItem>>()
-    {
-        if model.row_count() == next.len()
-            && (0..next.len()).all(|index| {
-                model
-                    .row_data(index)
-                    .is_some_and(|row| row.id == next[index].id)
-            })
-        {
-            for (index, item) in next.into_iter().enumerate() {
-                model.set_row_data(index, item);
-            }
-            return existing;
-        }
-    }
-    ModelRc::new(VecModel::from(next))
 }
 
 /// Calendar sources by provider, as Settings lists them.
@@ -1118,21 +1094,6 @@ impl AppController {
 
         ui.set_start_with_windows(self.prefs.start_with_windows);
 
-        let cal_items: Vec<CalendarSourceItem> = self
-            .provider
-            .sources
-            .iter()
-            .map(|s| CalendarSourceItem {
-                id: s.id.clone().into(),
-                name: s.name.clone().into(),
-                account: s.account_label.clone().into(),
-                swatch: mark_color(&s.color_hex),
-                checked: self.prefs.selected_calendar_ids.contains(&s.id),
-                removable: s.id.starts_with("ics:"),
-            })
-            .collect();
-        let groups = split_sources(&cal_items);
-
         let mut upd_text = format_update_status(locale, &self.update_state);
         if self.update_state == UpdateCheckState::Idle {
             upd_text=match locale {
@@ -1151,12 +1112,7 @@ impl AppController {
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
-        self.sync_settings_view(ui, &cal_items, &groups);
-        ui.set_calendar_sources(publish_sources(ui.get_calendar_sources(), cal_items));
-        ui.set_outlook_sources(publish_sources(ui.get_outlook_sources(), groups.outlook));
-        ui.set_google_sources(publish_sources(ui.get_google_sources(), groups.google));
-        ui.set_ics_sources(publish_sources(ui.get_ics_sources(), groups.ics));
-        ui.set_windows_sources(publish_sources(ui.get_windows_sources(), groups.windows));
+        self.sync_settings_view(ui);
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
@@ -1192,12 +1148,7 @@ impl AppController {
 
 /// Settings and About (ADR 0011): copy, account cards and update status.
 impl AppController {
-    fn sync_settings_view(
-        &self,
-        ui: &AppWindow,
-        items: &[CalendarSourceItem],
-        groups: &SourceGroups,
-    ) {
+    fn sync_settings_view(&self, ui: &AppWindow) {
         use lightcal::calendars::account::MicrosoftAccountState as Ms;
         use lightcal::i18n::{settings_text, updated_ago};
         let locale = self.prefs.locale();
@@ -1230,12 +1181,25 @@ impl AppController {
                 .unwrap_or_else(|| fallback.to_string())
         };
 
+        let items: Vec<CalendarSourceItem> = self
+            .provider
+            .sources
+            .iter()
+            .map(|s| CalendarSourceItem {
+                id: s.id.clone().into(),
+                name: s.name.clone().into(),
+                account: s.account_label.clone().into(),
+                swatch: mark_color(&s.color_hex),
+                checked: self.prefs.selected_calendar_ids.contains(&s.id),
+                removable: s.id.starts_with("ics:"),
+            })
+            .collect();
         let SourceGroups {
             outlook,
             google,
             ics,
             windows,
-        } = groups;
+        } = split_sources(&items);
         let can_refresh = ui.get_can_refresh_calendars();
         let idle = !self.connection_busy && !self.provider_loading;
         let model = |list: Vec<CalendarSourceItem>| ModelRc::new(VecModel::from(list));

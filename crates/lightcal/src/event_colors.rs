@@ -17,33 +17,43 @@ use slint::Color;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-/// More distinct colors than any calendar list shows; past it the cache
-/// starts over, so recolored or removed calendars don't pile up in a tray app
-/// that runs for weeks.
-const CACHE_LIMIT: usize = 64;
+/// Entries per cache generation; the cache holds at most two generations.
+const CACHE_LIMIT: usize = 256;
+
+/// Adjusted colors by source hex: the UI syncs every minute, but calendar
+/// colors rarely change. Two generations keep it bounded in a tray app that
+/// runs for weeks without thrashing: when `current` fills up it becomes
+/// `previous`, and colors still in use move back to `current` on their next
+/// lookup instead of being computed again. Recolored or removed calendars
+/// drop out after two generations.
+#[derive(Default)]
+struct Cache {
+    current: HashMap<String, MarkColor>,
+    previous: HashMap<String, MarkColor>,
+}
 
 thread_local! {
-    /// Adjusted colors by source hex: the UI syncs every minute, but calendar
-    /// colors rarely change.
-    static CACHE: RefCell<HashMap<String, MarkColor>> = RefCell::default();
+    static CACHE: RefCell<Cache> = RefCell::default();
 }
 
 /// A calendar's color for both themes.
 pub(crate) fn mark_color(hex: &str) -> MarkColor {
     CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if let Some(mark) = cache.get(hex) {
+        if let Some(mark) = cache.current.get(hex) {
             return mark.clone();
         }
-        if cache.len() >= CACHE_LIMIT {
-            cache.clear();
+        let mark = cache.previous.remove(hex).unwrap_or_else(|| {
+            let source = parse_hex_color(hex);
+            MarkColor {
+                light: legible_event_color(source, false),
+                dark: legible_event_color(source, true),
+            }
+        });
+        if cache.current.len() >= CACHE_LIMIT {
+            cache.previous = std::mem::take(&mut cache.current);
         }
-        let source = parse_hex_color(hex);
-        let mark = MarkColor {
-            light: legible_event_color(source, false),
-            dark: legible_event_color(source, true),
-        };
-        cache.insert(hex.to_string(), mark.clone());
+        cache.current.insert(hex.to_string(), mark.clone());
         mark
     })
 }
@@ -241,8 +251,18 @@ mod tests {
     }
 
     #[test]
-    fn marks_come_from_a_cache_that_starts_over_when_full() {
-        let cached = |hex: &str| CACHE.with(|cache| cache.borrow().get(hex).cloned());
+    fn marks_come_from_a_two_generation_cache() {
+        let cached = |hex: &str| {
+            CACHE.with(|cache| {
+                let cache = cache.borrow();
+                cache.current.get(hex).or(cache.previous.get(hex)).cloned()
+            })
+        };
+        let fill = |colors: std::ops::Range<usize>| {
+            for i in colors {
+                mark_color(&format!("#{i:06X}"));
+            }
+        };
         // A planted entry comes back as is, so lookups are served from the cache.
         let planted = MarkColor {
             light: Color::from_rgb_u8(1, 2, 3),
@@ -250,8 +270,8 @@ mod tests {
         };
         CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
-            cache.clear();
-            cache.insert("#9FE1E7".into(), planted.clone());
+            *cache = Cache::default();
+            cache.current.insert("#9FE1E7".into(), planted.clone());
         });
         assert_eq!(mark_color("#9FE1E7"), planted);
 
@@ -259,11 +279,20 @@ mod tests {
         let fresh = mark_color("#FAD165");
         assert_eq!(cached("#FAD165"), Some(fresh));
 
-        // Filling the cache starts it over instead of growing it.
-        for i in 0..CACHE_LIMIT {
-            mark_color(&format!("#{i:06X}"));
-        }
-        assert!(CACHE.with(|cache| cache.borrow().len()) <= CACHE_LIMIT);
+        // A full generation moves to `previous`; a color still in use comes
+        // back from there without being computed again.
+        fill(0..CACHE_LIMIT);
+        assert!(CACHE.with(|cache| cache.borrow().previous.contains_key("#9FE1E7")));
+        assert_eq!(mark_color("#9FE1E7"), planted);
+
+        // The cache never holds more than two generations, and a color unused
+        // for two of them drops out.
+        fill(CACHE_LIMIT..4 * CACHE_LIMIT);
+        let (current, previous) = CACHE.with(|cache| {
+            let cache = cache.borrow();
+            (cache.current.len(), cache.previous.len())
+        });
+        assert!(current <= CACHE_LIMIT && previous <= CACHE_LIMIT);
         assert_eq!(cached("#9FE1E7"), None);
         assert_ne!(mark_color("#9FE1E7"), planted);
 
