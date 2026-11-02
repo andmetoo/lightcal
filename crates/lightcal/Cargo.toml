@@ -65,8 +65,9 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-# Element queries by accessible label for headless UI tests (same release as slint).
-i-slint-backend-testing = "=1.18.1"
+# Element queries by accessible label for headless UI tests; Cargo keeps it on slint's
+# exact patch release because the i-slint crates pin each other.
+i-slint-backend-testing = "1.18"
 
 [build-dependencies]
 slint-build = "1.18"

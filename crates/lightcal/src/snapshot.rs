@@ -1,28 +1,9 @@
 //! Pure-Rust uncompressed PNG encoder for visual regression tests and icon/UI snapshot inspection.
 
-use std::cell::Cell;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
-
-/// Longer than any UI animation (the header Today slot takes 180 ms).
-const ANIMATION_SETTLE: Duration = Duration::from_millis(300);
-
-thread_local! {
-    static CLOCK_START: Instant = Instant::now();
-    // Time skipped by `settle_animations`, added to the real clock.
-    static CLOCK_SKIPPED: Cell<Duration> = const { Cell::new(Duration::ZERO) };
-}
-
-/// Moves the headless clock past running animations so the next frame shows their end
-/// state. Real time keeps flowing too; nothing waits. Slint timers run on the same clock,
-/// so only tests that animate on purpose call this; `render_to_png` does not.
-pub fn settle_animations() {
-    CLOCK_SKIPPED.with(|skipped| skipped.set(skipped.get() + ANIMATION_SETTLE));
-    slint::platform::update_timers_and_animations();
-}
 
 pub struct HeadlessPlatform {
     pub window: Rc<slint::platform::software_renderer::MinimalSoftwareWindow>,
@@ -86,10 +67,6 @@ impl slint::platform::Platform for HeadlessPlatform {
         &self,
     ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
         Ok(self.window.clone())
-    }
-
-    fn duration_since_start(&self) -> Duration {
-        CLOCK_START.with(Instant::elapsed) + CLOCK_SKIPPED.with(Cell::get)
     }
 }
 

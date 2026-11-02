@@ -1580,8 +1580,8 @@ impl AppController {
 }
 
 fn show_application_window(ui: &AppWindow) {
-    // Open with the header already settled; it animates again once the user navigates.
-    ui.set_header_motion(false);
+    // Header changes synced from now on happen in front of the user and animate.
+    ui.set_popup_shown(true);
     let _ = ui.show();
     #[cfg(windows)]
     {
@@ -1599,6 +1599,8 @@ fn show_application_window(ui: &AppWindow) {
 }
 
 fn hide_application_window(ui: &AppWindow) {
+    // Changes made while hidden (tray Today, midnight) appear settled on the next show.
+    ui.set_popup_shown(false);
     // The window hides under the pointer (the header − button); without this the button
     // keeps its hover fill when the calendar opens again.
     ui.window()

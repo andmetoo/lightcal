@@ -311,9 +311,9 @@ export component CalendarView inherits Rectangle {
     callback open-settings(int);
     // Hides the popup to the notification area, like Escape.
     callback hide-to-tray();
-    // True after the user navigates in this popup; Rust clears it before showing the
-    // window so it opens settled instead of animating the header.
-    in-out property <bool> header-motion: false;
+    // True when the change being shown was made while the popup was on screen; Rust sets
+    // it with the header data, so a popup that opens shows the header already settled.
+    in property <bool> header-motion: false;
     callback return-to-today();
     callback select-cell(int);
     callback toggle-event(string);
@@ -383,7 +383,7 @@ export component CalendarView inherits Rectangle {
         IconButton {
             icon: "chevron-left";
             label: root.prev-label;
-            clicked => { root.header-motion = true; root.prev-month(); }
+            clicked => { root.prev-month(); }
         }
         // On the current day the arrows sit together; leaving it slides them apart and
         // fades Today in between.
@@ -402,13 +402,13 @@ export component CalendarView inherits Rectangle {
                 label: root.today-button-label;
                 visible: today-slot.width > 0px;
                 enabled: !root.today-hidden;
-                clicked => { root.header-motion = true; root.return-to-today(); }
+                clicked => { root.return-to-today(); }
             }
         }
         IconButton {
             icon: "chevron-right";
             label: root.next-label;
-            clicked => { root.header-motion = true; root.next-month(); }
+            clicked => { root.next-month(); }
         }
         HorizontalLayout {
             padding-left: 4px;
@@ -611,7 +611,7 @@ export component CalendarView inherits Rectangle {
                 }
 
                 touch := TouchArea {
-                    clicked => { root.header-motion = true; root.select-cell(pill.index); }
+                    clicked => { root.select-cell(pill.index); }
                 }
             }
         }

@@ -52,8 +52,10 @@ export component AppWindow inherits Window {
     in property <string> next-month-label: "Next month";
     in property <[ShadedBand]> shaded-bands: [];
     in-out property <bool> calendar-keyboard-nav: false;
-    // Header Today slot animates only after the user navigates (CalendarView.header-motion).
-    in-out property <bool> header-motion: false;
+    // Set by Rust: the header animates only for changes made while the popup is on
+    // screen (popup-shown), never for ones applied just before it opens.
+    in property <bool> header-motion: false;
+    in-out property <bool> popup-shown: false;
     in property <string> agenda-title: "";
     in property <string> agenda-count: "";
     in property <[AgendaChipRow]> agenda-chip-rows: [];
@@ -357,7 +359,6 @@ export component AppWindow inherits Window {
                 }
                 return reject;
             }
-            root.header-motion = true;
             if (event.text == Key.Escape) {
                 if (root.settings-open) {
                     root.close-settings();
@@ -417,7 +418,7 @@ export component AppWindow inherits Window {
         next-label: root.next-month-label;
         settings-label: root.settings-title-text;
         hide-label: root.hide-to-tray-label;
-        header-motion <=> root.header-motion;
+        header-motion: root.header-motion;
         show-week-numbers: root.show-week-numbers;
         shaded-bands: root.shaded-bands;
         weekday-headers: root.weekday-headers;

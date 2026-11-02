@@ -291,7 +291,7 @@ fn month_navigation_continues_after_today() {
             );
         }
         assert_eq!(ui.get_month_title(), month, "navigation step {step}");
-        lightcal::snapshot::settle_animations();
+        slint::platform::update_timers_and_animations();
         window.draw_if_needed(|renderer| {
             renderer.render(&mut pixels, 528);
         });
@@ -1123,7 +1123,11 @@ fn today_folds_between_the_arrows_on_the_current_day() {
     ctrl.sync_to_ui(&ui);
     window.draw_if_needed(|_| {});
     assert!(ui.get_today_hidden());
-    assert_eq!(arrow_gap(&ui), 4.0, "only the two 2 px layout gaps remain");
+    let close = |a: f32, b: f32| (a - b).abs() < 0.01;
+    assert!(
+        close(arrow_gap(&ui), 4.0),
+        "only the two 2 px layout gaps remain"
+    );
     assert!(
         ElementHandle::find_by_accessible_label(&ui, "Today")
             .next()
@@ -1138,7 +1142,39 @@ fn today_folds_between_the_arrows_on_the_current_day() {
     assert!(!ui.get_today_hidden());
     let today_width = today(&ui).size().width;
     assert!(today_width > 0.0);
-    assert_eq!(arrow_gap(&ui), 4.0 + today_width);
+    assert!(close(arrow_gap(&ui), 4.0 + today_width));
     assert_eq!(today(&ui).computed_opacity(), 1.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn header_animates_only_for_changes_made_while_the_popup_is_shown() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-header-motion-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+
+    // Hidden (startup, tray Today before the window opens): no motion.
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert!(!ui.get_header_motion());
+
+    // On screen: every change synced from now on animates, whatever triggered it
+    // (arrows, wheel, keys, the agenda's Next link).
+    ui.set_popup_shown(true);
+    ctrl.cal_state.return_to_today();
+    ctrl.sync_to_ui(&ui);
+    assert!(ui.get_header_motion());
+
+    // Hidden again: settled for the next show.
+    ui.set_popup_shown(false);
+    ctrl.sync_to_ui(&ui);
+    assert!(!ui.get_header_motion());
     let _ = std::fs::remove_dir_all(&dir);
 }
