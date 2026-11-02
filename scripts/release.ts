@@ -19,12 +19,15 @@ import {
   deleteAssetArgs,
   editReleaseArgs,
   embedsCertificatePin,
+  PUBLISH_STEPS,
+  SIGN_STEPS,
   matchingBuildRuns,
   missingSignedAssets,
   parseReleaseView,
   parseStableVersion,
   publishedReleaseNotes,
   publishedReleaseTitle,
+  runSteps,
   sha256Hex,
   signedUploadPaths,
   signingAsset,
@@ -35,7 +38,7 @@ import {
   verifyReleaseFiles,
   versionFromCheckout,
 } from "./release-draft.ts";
-import { storeCertificateSha256 } from "./certificate.ts";
+import { lookupStoreCertificate } from "./certificate.ts";
 import { ensureGh as ensureGhAt } from "./gh.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -217,9 +220,16 @@ function assertUpdatePinMatchesSigner(target: string): void {
 
 /** Checks an executable before signing, against the SIGN_CERT_SHA1 certificate it will be signed with. */
 function assertUpdatePinMatchesSigningCertificate(target: string): void {
-  const certSha256 = storeCertificateSha256(process.env.SIGN_CERT_SHA1 ?? "");
-  if (!certSha256) throw new Error("The SIGN_CERT_SHA1 certificate is not in the current-user store. Sign in to SimplySign Desktop.");
-  assertPinnedTo(target, certSha256, "the SIGN_CERT_SHA1 signing certificate");
+  const lookup = lookupStoreCertificate(process.env.SIGN_CERT_SHA1 ?? "");
+  switch (lookup.kind) {
+    case "found":
+      return assertPinnedTo(target, lookup.sha256, "the SIGN_CERT_SHA1 signing certificate");
+    case "absent":
+      throw new Error("The SIGN_CERT_SHA1 certificate is not in the current-user store. Sign in to SimplySign Desktop.");
+    case "unsupported":
+    case "failed":
+      throw new Error(`Could not read the SIGN_CERT_SHA1 certificate: ${lookup.reason}.`);
+  }
 }
 
 function packagePortableArchive(): void {
@@ -324,13 +334,15 @@ function signDraft(): void {
     throw error;
   }
   process.env.LIGHTCAL_RELEASE_VERSION = version;
-  // Fail before SimplySign is asked to sign a build that could never update itself.
-  assertUpdatePinMatchesSigningCertificate(DIST_BIN);
-  sign(DIST_BIN);
-  verify(DIST_BIN);
-  assertUpdatePinMatchesSigner(DIST_BIN);
-  packagePortableArchive();
-  signInstaller();
+  // SIGN_STEPS fixes the order: the pin is checked before SimplySign signs anything.
+  runSteps(SIGN_STEPS, {
+    "check-pin-before-signing": () => assertUpdatePinMatchesSigningCertificate(DIST_BIN),
+    sign: () => sign(DIST_BIN),
+    verify: () => verify(DIST_BIN),
+    "check-pin-after-signing": () => assertUpdatePinMatchesSigner(DIST_BIN),
+    package: packagePortableArchive,
+    "sign-installer": signInstaller,
+  });
 
   const uploads = signedUploadPaths(ROOT, version);
   assertFilesExist(uploads, existsSync);
@@ -359,24 +371,33 @@ function publishDraft(): void {
   const names = signedUploadPaths(ROOT, version).map((path) => basename(path));
   ghRun(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])],
     `Could not download release ${tag} for signature verification.`);
-  verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false), (archive, executable) =>
-    run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable)));
-  assertExecutableVersion(join(downloaded, "lightcal.exe"), version);
-  assertUpdatePinMatchesSigner(join(downloaded, "lightcal.exe"));
-  assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version);
-
-  for (const name of unsignedAssetsPresent(view, tag)) {
-    console.log(`Removing unsigned draft file ${name}`);
-    ghRun(deleteAssetArgs(tag, name), `Could not remove unsigned file ${name} from ${tag}.`);
-  }
-  const notesDir = join(ROOT, "target", "draft-sign");
-  mkdirSync(notesDir, { recursive: true });
-  const notesPath = join(notesDir, "published-notes.md");
-  writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
-  console.log(`=== Publishing ${tag} ===`);
-  ghRun(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath),
-    `Could not publish ${tag}. Check the release state in GitHub before retrying.`);
-  console.log(`Published ${tag}.`);
+  const app = join(downloaded, "lightcal.exe");
+  // PUBLISH_STEPS fixes the order: every check passes before the release is changed.
+  runSteps(PUBLISH_STEPS, {
+    "verify-files": () => verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false),
+      (archive, executable) =>
+        run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable))),
+    "check-app-version": () => assertExecutableVersion(app, version),
+    "check-pin": () => assertUpdatePinMatchesSigner(app),
+    "check-setup-version": () =>
+      assertExecutableVersion(join(downloaded, `lightcal-${version}-windows-x64-setup.exe`), version),
+    "remove-unsigned": () => {
+      for (const name of unsignedAssetsPresent(view, tag)) {
+        console.log(`Removing unsigned draft file ${name}`);
+        ghRun(deleteAssetArgs(tag, name), `Could not remove unsigned file ${name} from ${tag}.`);
+      }
+    },
+    publish: () => {
+      const notesDir = join(ROOT, "target", "draft-sign");
+      mkdirSync(notesDir, { recursive: true });
+      const notesPath = join(notesDir, "published-notes.md");
+      writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
+      console.log(`=== Publishing ${tag} ===`);
+      ghRun(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath),
+        `Could not publish ${tag}. Check the release state in GitHub before retrying.`);
+      console.log(`Published ${tag}.`);
+    },
+  });
 }
 
 // --- entry point -------------------------------------------------------------

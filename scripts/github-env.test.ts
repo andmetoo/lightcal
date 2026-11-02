@@ -6,6 +6,7 @@ import {
   parseDotenv,
   pinMismatch,
   plan,
+  resolvePinCheck,
   validCertificatePins,
   validGoogleClientId,
   validGoogleClientSecret,
@@ -84,8 +85,9 @@ describe("github-env", () => {
   });
 
   test("parses arguments strictly", () => {
-    expect(parseArgs([])).toEqual({ dryRun: false });
-    expect(parseArgs(["--repo", "o/r", "--dry-run"])).toEqual({ dryRun: true, repo: "o/r" });
+    expect(parseArgs([])).toEqual({ dryRun: false, skipPinCheck: false });
+    expect(parseArgs(["--repo", "o/r", "--dry-run"])).toEqual({ dryRun: true, skipPinCheck: false, repo: "o/r" });
+    expect(parseArgs(["--skip-pin-check"])).toEqual({ dryRun: false, skipPinCheck: true });
     expect(() => parseArgs(["--repo", "--dry-run"])).toThrow(/owner\/name/);
     expect(() => parseArgs(["--repo"])).toThrow(/owner\/name/);
     expect(() => parseArgs(["--bogus"])).toThrow(/Unknown argument/);
@@ -112,5 +114,41 @@ describe("pin against the signing certificate", () => {
   test("says nothing without a pin or a certificate to compare", () => {
     expect(pinMismatch(undefined, cert)).toBeUndefined();
     expect(pinMismatch(cert, null)).toBeUndefined();
+  });
+});
+
+describe("pin check inside plan", () => {
+  const cert = "538EFF7282EC191B33B46E26DAA09AE756F022BAE467D2736ACA01F69DD9CAD6";
+  const wrong = "f37b579af600613e4b2c54a89ab4395d1e1ad983ecd573e0ad33b49e3e56e678";
+  const pinError = (pins: string, context = {}) =>
+    plan({ LIGHTCAL_UPDATE_CERT_SHA256: pins }, new Map(), context)
+      .find((p) => p.entry.key === "LIGHTCAL_UPDATE_CERT_SHA256")?.error;
+  test("compares the pin with the signing certificate when one was read", () => {
+    expect(pinError(wrong, { signingCertSha256: cert })).toContain(cert);
+    expect(pinError(cert, { signingCertSha256: cert })).toBeUndefined();
+  });
+  test("checks only the format without a certificate", () => {
+    expect(pinError(wrong)).toBeUndefined();
+    expect(pinError("not-a-pin", { signingCertSha256: cert })).toMatch(/64-hex/);
+  });
+});
+
+describe("resolving the signing-certificate lookup", () => {
+  const cert = "538EFF7282EC191B33B46E26DAA09AE756F022BAE467D2736ACA01F69DD9CAD6";
+  test("a found certificate becomes the check context", () => {
+    expect(resolvePinCheck({ kind: "found", sha256: cert }, false)).toEqual({ context: { signingCertSha256: cert } });
+  });
+  test("signed-out SimplySign or a broken lookup stops the sync unless skipped", () => {
+    expect(resolvePinCheck({ kind: "absent" }, false).error).toMatch(/SimplySign.*--skip-pin-check/);
+    expect(resolvePinCheck({ kind: "failed", reason: "pwsh missing" }, false).error).toMatch(/pwsh missing.*--skip-pin-check/);
+    expect(resolvePinCheck({ kind: "absent" }, true)).toEqual({
+      context: {},
+      note: "LIGHTCAL_UPDATE_CERT_SHA256 not compared with the signing certificate (--skip-pin-check)",
+    });
+  });
+  test("no lookup possible (Linux, no SIGN_CERT_SHA1) only adds a note", () => {
+    const resolved = resolvePinCheck({ kind: "unsupported", reason: "SIGN_CERT_SHA1 is not set" }, false);
+    expect(resolved.error).toBeUndefined();
+    expect(resolved.note).toContain("SIGN_CERT_SHA1 is not set");
   });
 });

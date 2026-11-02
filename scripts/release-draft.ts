@@ -262,3 +262,33 @@ export function embedsCertificatePin(executable: Uint8Array, certSha256: string)
   }
   return false;
 }
+
+/**
+ * Signing steps of `just sign-draft`, in order. The update pin is checked against the signing
+ * certificate before SimplySign signs anything, and against the actual signer before packaging.
+ */
+export const SIGN_STEPS = [
+  "check-pin-before-signing",
+  "sign",
+  "verify",
+  "check-pin-after-signing",
+  "package",
+  "sign-installer",
+] as const;
+export type SignStep = (typeof SIGN_STEPS)[number];
+
+/** Steps of `just publish-release`, in order: every check passes before anything changes on GitHub. */
+export const PUBLISH_STEPS = [
+  "verify-files",
+  "check-app-version",
+  "check-pin",
+  "check-setup-version",
+  "remove-unsigned",
+  "publish",
+] as const;
+export type PublishStep = (typeof PUBLISH_STEPS)[number];
+
+/** Runs steps in the given order; the record type makes every step need an implementation. */
+export function runSteps<S extends string>(order: readonly S[], steps: Record<S, () => void>): void {
+  for (const step of order) steps[step]();
+}

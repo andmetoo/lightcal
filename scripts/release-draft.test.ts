@@ -9,6 +9,8 @@ import {
   assertReleaseExists,
   assertWindowsExecutable,
   deleteAssetArgs,
+  PUBLISH_STEPS,
+  SIGN_STEPS,
   editReleaseArgs,
   embedsCertificatePin,
   missingSignedAssets,
@@ -18,6 +20,7 @@ import {
   publishedReleaseNotes,
   publishedReleaseTitle,
   requireStableVersion,
+  runSteps,
   signedAssetNames,
   signedUploadPaths,
   signingAsset,
@@ -238,5 +241,25 @@ describe("embedded update pin", () => {
   });
   test("refuses a malformed fingerprint", () => {
     expect(() => embedsCertificatePin(binary(cert), "F0BBA075C11AFBD3E2798BF517A8F4C3CE74AF6B")).toThrow();
+  });
+});
+
+describe("release step order", () => {
+  const before = <S extends string>(order: readonly S[], a: S, b: S) => order.indexOf(a) < order.indexOf(b);
+  test("sign-draft checks the pin before signing and against the signer before packaging", () => {
+    expect(before(SIGN_STEPS, "check-pin-before-signing", "sign")).toBe(true);
+    expect(before(SIGN_STEPS, "verify", "check-pin-after-signing")).toBe(true);
+    expect(before(SIGN_STEPS, "check-pin-after-signing", "package")).toBe(true);
+  });
+  test("publish-release finishes every check before changing the release", () => {
+    for (const check of ["verify-files", "check-app-version", "check-pin", "check-setup-version"] as const) {
+      expect(before(PUBLISH_STEPS, check, "remove-unsigned")).toBe(true);
+    }
+    expect(PUBLISH_STEPS.at(-1)).toBe("publish");
+  });
+  test("runSteps runs every step once, in order", () => {
+    const ran: string[] = [];
+    runSteps(["b", "a"] as const, { a: () => ran.push("a"), b: () => ran.push("b") });
+    expect(ran).toEqual(["b", "a"]);
   });
 });
