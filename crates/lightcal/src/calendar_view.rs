@@ -236,6 +236,7 @@ impl AppController {
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());
+        ui.set_hide_to_tray_label(copy.hide_to_tray.into());
         ui.set_shaded_bands(ModelRc::new(VecModel::from(shaded_bands(
             &grid.gray_columns,
         ))));

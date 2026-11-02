@@ -783,6 +783,15 @@ fn render_calendar_boards(
     shot(ctrl, "december-light")?;
     ctrl.cal_state.return_to_today();
 
+    // Longest header: September with the Today button, next to settings and hide-to-tray.
+    ctrl.cal_state.navigate_months(-2);
+    for locale in [LocaleCode::En, LocaleCode::Ru, LocaleCode::Es] {
+        ctrl.prefs.set_locale(locale);
+        shot(ctrl, &format!("september-header-{}-light", locale.as_str()))?;
+    }
+    ctrl.prefs.set_locale(LocaleCode::En);
+    ctrl.cal_state.return_to_today();
+
     // Keyboard focus ring on the selected day after arrow-key navigation.
     ctrl.cal_state.move_selection_by_days(3);
     ui.set_calendar_keyboard_nav(true);

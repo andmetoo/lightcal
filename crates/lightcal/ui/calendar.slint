@@ -279,6 +279,7 @@ export component CalendarView inherits Rectangle {
     in property <string> prev-label: "Previous month";
     in property <string> next-label: "Next month";
     in property <string> settings-label: "Settings";
+    in property <string> hide-label: "Hide to tray";
     // Grid
     in property <bool> show-week-numbers;
     in property <[ShadedBand]> shaded-bands;
@@ -305,6 +306,8 @@ export component CalendarView inherits Rectangle {
     callback prev-month();
     callback next-month();
     callback open-settings(int);
+    // Hides the popup to the notification area, like Escape.
+    callback hide-to-tray();
     callback return-to-today();
     callback select-cell(int);
     callback toggle-event(string);
@@ -398,6 +401,11 @@ export component CalendarView inherits Rectangle {
             icon-weight: 1.75;
             label: root.settings-label;
             clicked => { root.open-settings(0); }
+        }
+        IconButton {
+            icon: "minimize";
+            label: root.hide-label;
+            clicked => { root.hide-to-tray(); }
         }
     }
 

@@ -1028,6 +1028,8 @@ pub struct AgendaCopy {
     pub open: &'static str,
     pub prev_month: &'static str,
     pub next_month: &'static str,
+    /// Header button that hides the popup to the notification area.
+    pub hide_to_tray: &'static str,
 }
 
 pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
@@ -1040,6 +1042,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Open",
             prev_month: "Previous month",
             next_month: "Next month",
+            hide_to_tray: "Hide to tray",
         },
         LocaleCode::Ru => &AgendaCopy {
             now: "Сейчас",
@@ -1049,6 +1052,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Открыть",
             prev_month: "Предыдущий месяц",
             next_month: "Следующий месяц",
+            hide_to_tray: "Свернуть в трей",
         },
         LocaleCode::Es => &AgendaCopy {
             now: "Ahora",
@@ -1058,6 +1062,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Abrir",
             prev_month: "Mes anterior",
             next_month: "Mes siguiente",
+            hide_to_tray: "Ocultar en la bandeja",
         },
         LocaleCode::Ja => &AgendaCopy {
             now: "進行中",
@@ -1067,6 +1072,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "開く",
             prev_month: "前の月",
             next_month: "次の月",
+            hide_to_tray: "トレイに隠す",
         },
     }
 }

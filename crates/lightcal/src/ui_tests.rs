@@ -211,7 +211,8 @@ fn month_navigation_continues_after_today() {
     let mut pixels = vec![PremultipliedRgbaColor::default(); 528 * 648];
     let header_pixels = |pixels: &[PremultipliedRgbaColor]| -> Vec<u8> {
         (15..51)
-            .flat_map(|y| (24..270).map(move |x| y * 528 + x))
+            // The title only (logical 16..150 at 150 %), clear of the month buttons' hover.
+            .flat_map(|y| (24..225).map(move |x| y * 528 + x))
             .flat_map(|index| {
                 let pixel = pixels[index];
                 [pixel.red, pixel.green, pixel.blue, pixel.alpha]
@@ -225,23 +226,24 @@ fn month_navigation_continues_after_today() {
     let mut previous_title = header_pixels(&pixels);
     let mut rendered_titles =
         std::collections::BTreeMap::from([("November 2026", previous_title.clone())]);
+    // Header buttons from the right: hide (−), settings, divider, next, Today, previous.
     for (step, (x, y, month, changed_title)) in [
-        (285.0, 22.0, "December 2026", true),
-        (285.0, 22.0, "January 2027", true),
-        (200.0, 22.0, "December 2026", true),
-        (200.0, 22.0, "November 2026", true),
-        (200.0, 22.0, "October 2026", true),
+        (255.0, 22.0, "December 2026", true),
+        (255.0, 22.0, "January 2027", true),
+        (170.0, 22.0, "December 2026", true),
+        (170.0, 22.0, "November 2026", true),
+        (170.0, 22.0, "October 2026", true),
         (187.0, 200.0, "October 2026", false),
-        (285.0, 22.0, "November 2026", true),
+        (255.0, 22.0, "November 2026", true),
         (145.0, 212.0, "November 2026", false),
-        (243.0, 22.0, "November 2026", false),
+        (213.0, 22.0, "November 2026", false),
         (187.0, 200.0, "November 2026", false),
-        (285.0, 22.0, "December 2026", true),
-        (285.0, 22.0, "January 2027", true),
-        (200.0, 22.0, "December 2026", true),
-        (243.0, 22.0, "November 2026", true),
+        (255.0, 22.0, "December 2026", true),
+        (255.0, 22.0, "January 2027", true),
+        (170.0, 22.0, "December 2026", true),
+        (213.0, 22.0, "November 2026", true),
         (145.0, 212.0, "November 2026", false),
-        (200.0, 22.0, "October 2026", true),
+        (170.0, 22.0, "October 2026", true),
     ]
     .into_iter()
     .enumerate()
@@ -957,5 +959,37 @@ fn agenda_actions_use_the_row_that_was_rendered() {
         .map(|row| row.title.to_string())
         .collect();
     assert_eq!(expanded, ["Weekend walk"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn header_hide_button_hides_the_calendar_like_escape() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-hide-button-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    let hidden = Rc::new(Cell::new(0));
+    let observed = hidden.clone();
+    ui.on_dismiss_compact(move || observed.set(observed.get() + 1));
+    ui.show().unwrap();
+    ctrl.sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    window.draw_if_needed(|_| {});
+
+    // The last header button: 12 px side padding, 28 px button, 44 px header.
+    click(&ui, 352.0 - 12.0 - 14.0, 22.0);
+    assert_eq!(hidden.get(), 1);
+    // Settings, just left of it, does not hide the calendar.
+    click(&ui, 352.0 - 12.0 - 28.0 - 2.0 - 14.0, 22.0);
+    assert_eq!(hidden.get(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
