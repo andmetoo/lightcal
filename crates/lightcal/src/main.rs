@@ -1571,42 +1571,31 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
 /// and asks DWM for custom previews again on each show in case it refused or forgot them.
 #[cfg(windows)]
 fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWND) {
-    if hwnd.is_null() {
-        return;
-    }
-    WINDOW_HOOKS.with(|slot| {
-        let attached = slot
-            .borrow()
-            .as_ref()
-            .is_some_and(|hooks| hooks.is_attached_to(hwnd));
-        if !attached {
-            let restore_ui = ui.as_weak();
-            let snapshot_ui = ui.as_weak();
-            // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
-            let hooks = unsafe {
-                lightcal::platform::windows::taskbar::WindowHooks::install(
-                    hwnd,
-                    move || {
-                        // Runs before the restored window paints, so its first frame is complete.
-                        if let Some(ui) = restore_ui.upgrade() {
-                            request_full_repaint(&ui);
-                        }
-                    },
-                    move || {
-                        let ui = snapshot_ui.upgrade()?;
-                        if ui.get_settings_open() {
-                            return None;
-                        }
-                        ui.window().take_snapshot().ok()
-                    },
-                )
-            };
-            *slot.borrow_mut() = hooks.ok();
+    let restore_ui = ui.as_weak();
+    let snapshot_ui = ui.as_weak();
+    let install = |hwnd| {
+        // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
+        unsafe {
+            lightcal::platform::windows::taskbar::WindowHooks::install(
+                hwnd,
+                move || {
+                    // Runs before the restored window paints, so its first frame is complete.
+                    if let Some(ui) = restore_ui.upgrade() {
+                        request_full_repaint(&ui);
+                    }
+                },
+                move || {
+                    let ui = snapshot_ui.upgrade()?;
+                    if ui.get_settings_open() {
+                        return None;
+                    }
+                    ui.window().take_snapshot().ok()
+                },
+            )
         }
-        if let Some(hooks) = slot.borrow().as_ref() {
-            hooks.request_previews();
-        }
-    });
+    };
+    // SAFETY: as above; `ensure` ignores a null handle.
+    WINDOW_HOOKS.with(|slot| unsafe { slot.borrow_mut().ensure(hwnd, install) });
 }
 
 /// Makes the next frame repaint and present every pixel, not only the dirty regions.
@@ -1656,11 +1645,7 @@ fn apply_window_chrome(ui: &AppWindow) {
 
 #[cfg(windows)]
 fn invalidate_taskbar_preview() {
-    WINDOW_HOOKS.with(|slot| {
-        if let Some(hooks) = slot.borrow().as_ref() {
-            hooks.invalidate_preview();
-        }
-    });
+    WINDOW_HOOKS.with(|slot| slot.borrow().invalidate_preview());
 }
 
 fn ctrl_release_url(ui_weak: &slint::Weak<AppWindow>) -> String {
@@ -1742,7 +1727,7 @@ impl TrayMenuItems {
 
 thread_local! {
     #[cfg(windows)]
-    static WINDOW_HOOKS: RefCell<Option<lightcal::platform::windows::taskbar::WindowHooks>> = const { RefCell::new(None) };
+    static WINDOW_HOOKS: RefCell<lightcal::platform::windows::taskbar::WindowHookSlot> = const { RefCell::new(lightcal::platform::windows::taskbar::WindowHookSlot::new()) };
     static ACTIVE_CONTROLLER: std::cell::RefCell<Option<std::rc::Weak<std::cell::RefCell<AppController>>>> = const { std::cell::RefCell::new(None) };
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }

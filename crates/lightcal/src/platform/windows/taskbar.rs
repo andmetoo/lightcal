@@ -30,6 +30,9 @@ struct HookState {
     /// Answers DWM thumbnail and Peek requests, which DWM sends only after
     /// `request_previews` has opted the window in.
     preview: PreviewState,
+    /// Set by the first `request_previews` and kept even if DWM later refuses one, so cache
+    /// invalidation is skipped only where previews were never requested.
+    previews_requested: Cell<bool>,
     minimized: Cell<bool>,
     on_restore: Box<dyn Fn()>,
     /// Set once the subclass is registered and cleared on `WM_NCDESTROY`, so a destroyed
@@ -58,9 +61,10 @@ pub struct WindowHooks {
 
 impl WindowHooks {
     /// Attaches the subclass. `on_restore` runs inside the window procedure, before the
-    /// restored window paints. `snapshot` answers DWM preview requests and is taken once now,
-    /// so a preview exists even if settings are open when DWM first asks. A panic in either
-    /// callback is caught inside the window procedure.
+    /// restored window paints. `snapshot` answers DWM preview requests; once attached, it is
+    /// also taken immediately, so a calendar showing at install time is cached before DWM
+    /// first asks. While it returns `None` (settings open) the last cached calendar is kept.
+    /// A panic in either callback is caught inside the window procedure.
     ///
     /// # Safety
     ///
@@ -75,9 +79,10 @@ impl WindowHooks {
         }
         let state = Box::new(HookState {
             preview: PreviewState {
-                last_calendar: RefCell::new(snapshot()),
+                last_calendar: RefCell::new(None),
                 snapshot: Box::new(snapshot),
             },
+            previews_requested: Cell::new(false),
             minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
             on_restore: Box::new(on_restore),
             attached: Cell::new(false),
@@ -87,6 +92,8 @@ impl WindowHooks {
             return Err("Could not attach to the application window".into());
         }
         state.attached.set(true);
+        // Rendered only after a successful attach, so a failed attempt costs no snapshot.
+        *state.preview.last_calendar.borrow_mut() = (state.preview.snapshot)();
         Ok(Self { hwnd, state })
     }
 
@@ -95,6 +102,7 @@ impl WindowHooks {
     /// DWM may have forgotten it. The subclass is already attached, so every request DWM
     /// then sends is answered.
     pub fn request_previews(&self) {
+        self.state.previews_requested.set(true);
         let enabled: i32 = 1;
         unsafe {
             DwmSetWindowAttribute(
@@ -112,11 +120,13 @@ impl WindowHooks {
         self.hwnd == hwnd && self.state.attached.get()
     }
 
-    /// Drops DWM's cached previews. Harmless when DWM refused previews, so it does not
-    /// depend on the last `request_previews` answer.
+    /// Drops DWM's cached previews once previews have been requested. It does not depend on
+    /// DWM's last answer, so a transient refusal never leaves a stale thumbnail.
     pub fn invalidate_preview(&self) {
-        unsafe {
-            DwmInvalidateIconicBitmaps(self.hwnd);
+        if self.state.previews_requested.get() {
+            unsafe {
+                DwmInvalidateIconicBitmaps(self.hwnd);
+            }
         }
     }
 }
@@ -128,6 +138,54 @@ impl Drop for WindowHooks {
                 RemoveWindowSubclass(self.hwnd, Some(hook_proc), SUBCLASS_ID);
             }
         }
+    }
+}
+
+/// The hooks for the current application window, reinstalled when that window changes.
+pub struct WindowHookSlot(Option<WindowHooks>);
+
+impl WindowHookSlot {
+    pub const fn new() -> Self {
+        Self(None)
+    }
+
+    /// Builds hooks for `hwnd` with `install` unless hooks are already attached to it (a
+    /// failed attempt is retried next time), then asks DWM for previews again, as
+    /// `WindowHooks::request_previews` recommends for every show.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` must be null or a live window owned by this thread.
+    pub unsafe fn ensure(
+        &mut self,
+        hwnd: HWND,
+        install: impl FnOnce(HWND) -> Result<WindowHooks, String>,
+    ) {
+        if hwnd.is_null() {
+            return;
+        }
+        if !self
+            .0
+            .as_ref()
+            .is_some_and(|hooks| hooks.is_attached_to(hwnd))
+        {
+            self.0 = install(hwnd).ok();
+        }
+        if let Some(hooks) = &self.0 {
+            hooks.request_previews();
+        }
+    }
+
+    pub fn invalidate_preview(&self) {
+        if let Some(hooks) = &self.0 {
+            hooks.invalidate_preview();
+        }
+    }
+}
+
+impl Default for WindowHookSlot {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -500,5 +558,52 @@ mod tests {
             0
         );
         assert_eq!(snapshots.get(), 2);
+    }
+    #[test]
+    fn hook_slot_installs_once_per_window_and_follows_a_new_window() {
+        let installs = Cell::new(0);
+        let install = |hwnd| {
+            installs.set(installs.get() + 1);
+            unsafe { WindowHooks::install(hwnd, || {}, || None) }
+        };
+        let mut slot = WindowHookSlot::new();
+        unsafe { slot.ensure(std::ptr::null_mut(), install) };
+        assert_eq!(installs.get(), 0);
+
+        let first = crate::platform::windows::test_window::TestWindow::new("Lightcal slot test");
+        // Repeated shows of the same window keep its hooks and only re-request previews.
+        unsafe {
+            slot.ensure(first.0, install);
+            slot.ensure(first.0, install);
+        }
+        assert_eq!(installs.get(), 1);
+        assert!(slot.0.as_ref().unwrap().state.previews_requested.get());
+        slot.invalidate_preview();
+
+        // A destroyed window, even if Windows reuses its handle, gets fresh hooks.
+        let first_hwnd = first.0;
+        drop(first);
+        let second = crate::platform::windows::test_window::TestWindow::new("Lightcal slot test");
+        unsafe { slot.ensure(second.0, install) };
+        assert_eq!(installs.get(), 2);
+        assert!(slot.0.as_ref().unwrap().is_attached_to(second.0));
+        if second.0 != first_hwnd {
+            assert!(!slot.0.as_ref().unwrap().is_attached_to(first_hwnd));
+        }
+    }
+    #[test]
+    fn snapshot_is_taken_only_after_a_successful_attach() {
+        let snapshots = std::rc::Rc::new(Cell::new(0));
+        let counter = snapshots.clone();
+        let snapshot = move || {
+            counter.set(counter.get() + 1);
+            None
+        };
+        // The temporary test window is destroyed at the end of this statement, and a
+        // destroyed window cannot be subclassed, so the attach fails.
+        let gone = crate::platform::windows::test_window::TestWindow::new("Lightcal gone").0;
+        assert_eq!(unsafe { IsWindow(gone) }, 0);
+        assert!(unsafe { WindowHooks::install(gone, || {}, snapshot) }.is_err());
+        assert_eq!(snapshots.get(), 0);
     }
 }
