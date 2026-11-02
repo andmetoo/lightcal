@@ -1568,7 +1568,7 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
 }
 
 /// Attaches the restore repaint and the taskbar preview (`WindowHooks`) to the native window,
-/// retrying the preview on each show until DWM accepts it.
+/// and asks DWM for custom previews again on each show in case it refused or forgot them.
 #[cfg(windows)]
 fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWND) {
     if hwnd.is_null() {
