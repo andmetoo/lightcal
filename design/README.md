@@ -17,6 +17,7 @@ canvas runtime to render; they are not application code.
 | States | First run, signing in, private ICS link, needs attention, shortcut conflict, update available |
 | Icons | App icon, live tray date in Color and Mono, real-size specimens and two-digit dates |
 | Languages | Russian App, Spanish Calendar and Japanese App settings |
+| Date size | Calendar at Standard, Large and Larger dates (light and dark), Large at 150 %, and the Settings Calendar tab with the Date size control |
 
 Every board has a light/dark switch. Calendar boards are interactive: days,
 month arrows, Today and agenda rows work. Settings tabs link to each other.

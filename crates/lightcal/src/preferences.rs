@@ -33,6 +33,26 @@ pub enum TrayIconMode {
     TimeAndDate,
 }
 
+/// Size of the day numbers in the calendar grid (14, 16 or 18 logical px).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DateSize {
+    #[default]
+    Standard,
+    Large,
+    Larger,
+}
+
+fn lenient_date_size<'de, D>(deserializer: D) -> Result<DateSize, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::String(value) => DateSize::from_str_lossy(&value),
+        _ => DateSize::default(),
+    })
+}
+
 fn lenient_theme<'de, D>(deserializer: D) -> Result<ThemePreference, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -107,6 +127,57 @@ impl ThemePreference {
             "light" => Self::Light,
             "dark" => Self::Dark,
             _ => Self::System,
+        }
+    }
+}
+
+impl DateSize {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::Large => "large",
+            Self::Larger => "larger",
+        }
+    }
+
+    /// True when `value` is a name this build understands (case-insensitive).
+    fn recognises(value: &str) -> bool {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "standard" | "large" | "larger"
+        )
+    }
+
+    pub fn from_str_lossy(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "large" => Self::Large,
+            "larger" => Self::Larger,
+            _ => Self::Standard,
+        }
+    }
+
+    /// Position in the Settings segmented control and the `date-size` UI property.
+    pub fn index(self) -> i32 {
+        match self {
+            Self::Standard => 0,
+            Self::Large => 1,
+            Self::Larger => 2,
+        }
+    }
+
+    pub fn from_index(index: i32) -> Self {
+        match index {
+            1 => Self::Large,
+            2 => Self::Larger,
+            _ => Self::Standard,
+        }
+    }
+
+    /// Logical height of the calendar popup; Larger adds 2 px to each of the six week rows.
+    pub fn calendar_height(self) -> f32 {
+        match self {
+            Self::Standard | Self::Large => 432.0,
+            Self::Larger => 444.0,
         }
     }
 }
@@ -257,6 +328,8 @@ pub struct Preferences {
     pub highlight_current_month: bool,
     #[serde(default = "default_true")]
     pub show_event_dots: bool,
+    #[serde(deserialize_with = "lenient_date_size")]
+    pub date_size: DateSize,
     #[serde(default)]
     pub auto_check_updates: bool,
     #[serde(default = "default_update_channel")]
@@ -294,6 +367,7 @@ impl Default for Preferences {
             taskbar_window_pos: None,
             highlight_current_month: true,
             show_event_dots: true,
+            date_size: DateSize::Standard,
             auto_check_updates: false,
             update_channel: "stable".to_string(),
             microsoft_client_id: default_microsoft_client_id(),
@@ -351,6 +425,7 @@ fn is_benign_normalization(
     match key {
         "theme" => raw.as_str().is_some_and(ThemePreference::recognises),
         "tray_icon_mode" => raw.as_str().is_some_and(TrayIconMode::recognises),
+        "date_size" => raw.as_str().is_some_and(DateSize::recognises),
         "selected_calendar_ids" => match (raw.as_array(), canonical.as_array()) {
             (Some(raw), Some(canonical)) => {
                 let raw: BTreeSet<_> = raw.iter().map(|item| item.as_str()).collect();
@@ -859,6 +934,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             default_microsoft_client_id()
         );
         assert!(loaded.preferences.show_event_dots);
+        assert_eq!(loaded.preferences.date_size, DateSize::Standard);
         assert!(!loaded.preferences.auto_check_updates);
         assert_eq!(loaded.preferences.update_channel, "stable");
 
@@ -866,6 +942,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         let mut modified = loaded.preferences;
         modified.highlight_current_month = false;
         modified.show_event_dots = false;
+        modified.date_size = DateSize::Larger;
         modified.auto_check_updates = true;
         modified.update_channel = "preview".to_string();
 
@@ -927,7 +1004,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         let store = PreferencesStore::new(&dir);
         fs::write(
             store.file_path(),
-            r#"{"schema_version": 1, "theme": "sepia", "tray_icon_mode": 7, "language": "ja", "show_event_dots": false}"#,
+            r#"{"schema_version": 1, "theme": "sepia", "tray_icon_mode": 7, "language": "ja", "show_event_dots": false, "date_size": "huge"}"#,
         )
         .unwrap();
         let loaded = store.load();
@@ -935,9 +1012,35 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         assert!(!loaded.recovered_from_error);
         assert_eq!(loaded.preferences.theme, ThemePreference::System);
         assert_eq!(loaded.preferences.tray_icon_mode, TrayIconMode::DateOnly);
+        assert_eq!(loaded.preferences.date_size, DateSize::Standard);
         assert_eq!(loaded.preferences.locale(), LocaleCode::Ja);
         assert!(!loaded.preferences.show_event_dots);
         assert!(loaded.preferences.highlight_current_month);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn date_size_round_trips_and_sets_calendar_height() {
+        for size in [DateSize::Standard, DateSize::Large, DateSize::Larger] {
+            assert_eq!(DateSize::from_index(size.index()), size);
+            assert_eq!(DateSize::from_str_lossy(size.as_str()), size);
+        }
+        assert_eq!(DateSize::from_index(7), DateSize::Standard);
+        assert_eq!(DateSize::Standard.calendar_height(), 432.0);
+        assert_eq!(DateSize::Large.calendar_height(), 432.0);
+        assert_eq!(DateSize::Larger.calendar_height(), 444.0);
+
+        let dir = unique_temp_dir("date-size");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        fs::write(
+            store.file_path(),
+            r#"{"schema_version": 1, "date_size": "LARGE"}"#,
+        )
+        .unwrap();
+        let loaded = store.load();
+        assert!(loaded.warning.is_none());
+        assert_eq!(loaded.preferences.date_size, DateSize::Large);
         let _ = fs::remove_dir_all(&dir);
     }
 

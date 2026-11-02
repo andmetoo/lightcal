@@ -14,7 +14,7 @@ use lightcal::platform::windows::{
 };
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
-    LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
+    DateSize, LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
 };
 mod calendar_view;
 mod event_colors;
@@ -355,16 +355,17 @@ fn resolve_dark_mode(theme: ThemePreference) -> bool {
     }
 }
 
-fn target_logical_size(settings_open: bool) -> (f32, f32) {
+fn target_logical_size(settings_open: bool, date_size: DateSize) -> (f32, f32) {
     if settings_open {
         (448.0, 360.0)
     } else {
-        (352.0, 432.0)
+        (352.0, date_size.calendar_height())
     }
 }
 
 fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
-    let (logical_w, logical_h) = target_logical_size(settings_open);
+    let date_size = DateSize::from_index(ui.get_date_size());
+    let (logical_w, logical_h) = target_logical_size(settings_open, date_size);
     ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     #[cfg(windows)]
@@ -664,6 +665,12 @@ impl AppController {
         ui.set_desc_highlight_current_month_text(strings.desc_highlight_current_month.into());
         ui.set_label_show_event_dots_text(strings.label_show_event_dots.into());
         ui.set_desc_show_event_dots_text(strings.desc_show_event_dots.into());
+        ui.set_label_date_size_text(strings.label_date_size.into());
+        ui.set_date_size_labels(slint::ModelRc::new(slint::VecModel::from(vec![
+            SharedString::from(strings.date_size_standard),
+            SharedString::from(strings.date_size_large),
+            SharedString::from(strings.date_size_larger),
+        ])));
         ui.set_label_tray_mode_text(strings.label_tray_mode.into());
         ui.set_desc_tray_mode_text(strings.desc_tray_mode.into());
         ui.set_label_tray_palette_text(strings.label_tray_palette.into());
@@ -924,6 +931,7 @@ impl AppController {
         ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
+        ui.set_date_size(self.prefs.date_size.index());
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
             LocaleCode::En => (
@@ -1529,7 +1537,10 @@ fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
     #[cfg(windows)]
     {
-        let (lw, lh) = target_logical_size(ui.get_settings_open());
+        let (lw, lh) = target_logical_size(
+            ui.get_settings_open(),
+            DateSize::from_index(ui.get_date_size()),
+        );
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
         if !hwnd.is_null() {
             unsafe {
@@ -3474,6 +3485,18 @@ fn main() {
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
+        ui.on_select_date_size(move |index| {
+            let mut c = ctrl.borrow_mut();
+            c.prefs.date_size = DateSize::from_index(index);
+            c.persist();
+            if let Some(w) = ui_weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(&ctrl);
+        let ui_weak = ui.as_weak();
         ui.on_toggle_auto_check_updates(move || {
             let mut c = ctrl.borrow_mut();
             c.prefs.auto_check_updates = !c.prefs.auto_check_updates;
@@ -3800,8 +3823,13 @@ mod tests {
 
     #[test]
     fn target_logical_size_matches_compact_and_settings_specs() {
-        assert_eq!(target_logical_size(false), (352.0, 432.0));
-        assert_eq!(target_logical_size(true), (448.0, 360.0));
+        assert_eq!(
+            target_logical_size(false, DateSize::Standard),
+            (352.0, 432.0)
+        );
+        assert_eq!(target_logical_size(false, DateSize::Large), (352.0, 432.0));
+        assert_eq!(target_logical_size(false, DateSize::Larger), (352.0, 444.0));
+        assert_eq!(target_logical_size(true, DateSize::Larger), (448.0, 360.0));
     }
 
     #[test]
@@ -3813,7 +3841,7 @@ mod tests {
             height: 1032,
         };
         for settings in [false, true] {
-            let (lw, lh) = target_logical_size(settings);
+            let (lw, lh) = target_logical_size(settings, DateSize::Larger);
             let pw = (lw as i32) + 16;
             let ph = (lh as i32) + 44;
             let (x, y) = area.anchor_above_tray(pw, ph, 12);

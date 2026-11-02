@@ -197,6 +197,10 @@ export component AppWindow inherits Window {
     // Redesigned Settings View State & Dropdowns
     in property <bool> highlight-current-month: true;
     in property <bool> show-event-dots: true;
+    // 0=Standard (14 px), 1=Large (16 px), 2=Larger (18 px, week rows 34 px, popup 444 px tall).
+    in property <int> date-size: 0;
+    in property <string> label-date-size-text: "Date size";
+    in property <[string]> date-size-labels: ["Standard", "Large", "Larger"];
     in property <bool> language-dropdown-open: false;
     in property <bool> theme-dropdown-open: false;
     in property <bool> first-day-dropdown-open: false;
@@ -307,6 +311,7 @@ export component AppWindow inherits Window {
     callback select-update-channel(string);
     callback toggle-highlight-current-month();
     callback toggle-show-event-dots();
+    callback select-date-size(int);
     callback toggle-auto-check-updates();
     callback reset-shortcut();
     callback open-privacy-settings();
@@ -321,10 +326,11 @@ export component AppWindow inherits Window {
     callback retry-sign-in();
     callback dismiss-startup-warning();
 
+    property <length> calendar-height: root.date-size == 2 ? 444px : 432px;
     width: root.settings-open ? 448px : 352px;
-    height: root.settings-open ? 360px : 432px;
+    height: root.settings-open ? 360px : root.calendar-height;
     preferred-width: root.settings-open ? 448px : 352px;
-    preferred-height: root.settings-open ? 360px : 432px;
+    preferred-height: root.settings-open ? 360px : root.calendar-height;
     background: transparent;
     // Bumped by the app when Windows has discarded the window's pixels (restore from
     // minimized). The software renderer only presents dirty regions, so this window-sized,
@@ -410,6 +416,7 @@ export component AppWindow inherits Window {
         iso-weeks: root.iso-weeks;
         cells: root.cells;
         show-event-dots: root.show-event-dots;
+        date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
         agenda-title: root.agenda-title;
         agenda-count: root.agenda-count;
@@ -461,6 +468,9 @@ export component AppWindow inherits Window {
         show-week-numbers: root.show-week-numbers;
         label-show-event-dots-text: root.label-show-event-dots-text;
         show-event-dots: root.show-event-dots;
+        label-date-size-text: root.label-date-size-text;
+        date-size-labels: root.date-size-labels;
+        date-size: root.date-size;
         weekday-monday-label: root.weekday-monday-label;
         first-weekday-monday: root.first-weekday-monday;
         weekday-sunday-label: root.weekday-sunday-label;
@@ -519,6 +529,7 @@ export component AppWindow inherits Window {
         toggle-gray-weekday(arg0) => { root.toggle-gray-weekday(arg0); }
         toggle-show-week-numbers() => { root.toggle-show-week-numbers(); }
         toggle-show-event-dots() => { root.toggle-show-event-dots(); }
+        select-date-size(arg0) => { root.select-date-size(arg0); }
         select-first-weekday-option(arg0) => { root.select-first-weekday-option(arg0); }
         add-calendar-account() => { root.add-calendar-account(); }
         cancel-account-sign-in() => { root.cancel-account-sign-in(); }

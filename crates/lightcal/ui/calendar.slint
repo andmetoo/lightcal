@@ -3,6 +3,8 @@
 //
 // Layout: 12 px side and bottom padding; a 44 px header; a 24 px weekday row;
 // six 32 px week rows; a hairline; the agenda header; a scrolling agenda.
+// Date size (design/canvas DateSize boards): Standard 14 px and Large 16 px dates use
+// the 32 px rows; Larger 18 px dates use 30 px tiles in 34 px rows and a 444 px popup.
 
 import { Theme } from "theme.slint";
 import { Icon, IconButton, TextButton } from "controls.slint";
@@ -286,6 +288,8 @@ export component CalendarView inherits Rectangle {
     in property <[string]> iso-weeks;
     in property <[DayCellData]> cells;
     in property <bool> show-event-dots;
+    // 0=Standard, 1=Large, 2=Larger.
+    in property <int> date-size: 0;
     // Keyboard navigation draws the focus ring on the selected day.
     in property <bool> keyboard-nav: false;
     // Agenda
@@ -316,6 +320,9 @@ export component CalendarView inherits Rectangle {
     property <length> wheel-travel: 0px;
     property <length> content-x: 12px;
     property <length> content-width: root.width - 24px;
+    property <length> day-font: root.date-size == 2 ? 18px : root.date-size == 1 ? 16px : Theme.type-day;
+    property <length> tile-height: root.date-size == 2 ? 30px : 28px;
+    property <length> row-height: root.date-size == 2 ? 34px : 32px;
 
     border-radius: Theme.radius-window;
     border-width: 1px;
@@ -401,12 +408,12 @@ export component CalendarView inherits Rectangle {
         }
     }
 
-    // ---------- Weekday row and grid (24 + 6 × 32 px) ----------
+    // ---------- Weekday row and grid (24 + 6 × row-height) ----------
     grid := TouchArea {
         x: root.content-x;
         y: Theme.header-height;
         width: root.content-width;
-        height: 24px + 6 * 32px;
+        height: 24px + 6 * root.row-height;
 
         property <length> lead: root.show-week-numbers ? 24px : 0px;
         property <length> col-width: (self.width - self.lead) / 7;
@@ -454,15 +461,15 @@ export component CalendarView inherits Rectangle {
 
         for row in [0, 1, 2, 3, 4, 5] : Rectangle {
             x: 0px;
-            y: 24px + row * 32px;
+            y: 24px + row * root.row-height;
             width: grid.width;
-            height: 32px;
+            height: root.row-height;
 
             if root.show-week-numbers : Text {
                 x: 0px;
                 y: 0px;
                 width: 24px;
-                height: 32px;
+                height: root.row-height;
                 text: root.iso-weeks[row];
                 font-size: Theme.type-tiny;
                 font-weight: Theme.weight-medium;
@@ -476,11 +483,15 @@ export component CalendarView inherits Rectangle {
                 property <int> index: row * 7 + col;
                 property <DayCellData> cell: root.cells[self.index];
                 property <bool> dots: root.show-event-dots && self.cell.in-month && self.cell.dot-count > 0;
+                // Dots sit 2 px above the tile bottom (1 px on Today); the number keeps the same
+                // gap above them at every date size.
+                property <length> dots-y: self.height - (self.cell.is-today ? 5px : 6px);
+                property <length> number-center: self.dots-y - (self.cell.is-today ? 2.5px : 3px) - root.day-font / 2;
 
                 x: grid.lead + col * grid.col-width + (grid.col-width - 34px) / 2;
-                y: 2px;
+                y: (root.row-height - root.tile-height) / 2;
                 width: 34px;
-                height: 28px;
+                height: root.tile-height;
                 accessible-role: button;
                 accessible-label: self.cell.accessible-label;
 
@@ -528,11 +539,11 @@ export component CalendarView inherits Rectangle {
 
                 Text {
                     x: 0px;
-                    y: (pill.cell.is-today ? 13.5px : 12px) - 8px;
+                    y: pill.number-center - root.day-font / 2 - 1px;
                     width: parent.width;
-                    height: 16px;
+                    height: root.day-font + 2px;
                     text: pill.cell.day-number;
-                    font-size: Theme.type-day;
+                    font-size: root.day-font;
                     font-weight: pill.cell.is-today || pill.cell.is-selected ? Theme.weight-semibold
                         : !pill.cell.in-month ? Theme.weight-regular
                         : Theme.weight-medium;
@@ -545,7 +556,7 @@ export component CalendarView inherits Rectangle {
 
                 if pill.dots : HorizontalLayout {
                     x: 0px;
-                    y: pill.cell.is-today ? 23px : 22px;
+                    y: pill.dots-y;
                     width: parent.width;
                     height: 4px;
                     spacing: 3px;
@@ -579,7 +590,7 @@ export component CalendarView inherits Rectangle {
     }
 
     // ---------- Agenda ----------
-    property <length> agenda-top: Theme.header-height + 24px + 6 * 32px + 8px;
+    property <length> agenda-top: Theme.header-height + 24px + 6 * root.row-height + 8px;
 
     Rectangle {
         x: root.content-x + 4px;

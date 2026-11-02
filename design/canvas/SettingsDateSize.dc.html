@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal settings, Calendar tab with Date size</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit}
+.st{--page:#F3F3F3;--card:#FFFFFF;--cardline:#E8E8E8;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--track:#EBEBEB;--thumb:#FFFFFF;--hover:#E8E8E8;--accent:#00796B;--toggleoff:#838383}
+.st.dark{--page:#191919;--card:#222222;--cardline:#2A2A2A;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2E2E2E;--ctrl:#2A2A2A;--ctrlline:#333333;--ctrlbottom:#3F3F3F;--track:#161616;--thumb:#3A3A3A;--hover:#2A2A2A;--accent:#53B9AB;--toggleoff:#7B7B7B}
+.cap{width:46px;height:32px;border:0;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.cap:hover{background:var(--hover)}
+.cap.x:hover{background:#C42B1C;color:#FFFFFF}
+.tab{position:relative;height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:6px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink)}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:3px;width:16px;height:3px;margin-left:-8px;border-radius:1.5px;background:var(--accent)}
+.card{background:var(--card);border:1px solid var(--cardline);border-radius:8px;flex-shrink:0}
+.r{position:relative;height:40px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink)}
+.r+.r::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.seg{display:inline-flex;padding:2px;gap:2px;border-radius:8px;background:var(--track)}
+.seg button{height:24px;min-width:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.seg.days button{padding:0;width:28px}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--thumb);color:var(--ink);box-shadow:0 0 0 1px var(--ctrlline),0 1px 2px rgba(0,0,0,.08)}
+.sz{font-variant-numeric:tabular-nums;font-weight:600;line-height:1}
+.dd{height:28px;min-width:136px;padding:0 8px 0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;justify-content:space-between;gap:8px;font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box}
+.tg{position:relative;width:40px;height:20px;border-radius:10px;border:1px solid var(--toggleoff);background:transparent;padding:0;cursor:pointer;box-sizing:border-box;transition:background .12s}
+.tg span{position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:6px;background:var(--toggleoff);transition:all .12s}
+.tg.on{background:#00796B;border-color:#00796B}
+.tg.on span{top:2px;left:21px;width:14px;height:14px;border-radius:7px;background:#FFFFFF}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lnk{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:4px;padding:2px 4px;margin-left:-4px}
+.lnk:hover{color:var(--ink);background:var(--hover)}
+.scroll{scrollbar-width:thin}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="width: 448px; height: 360px; box-sizing: border-box; background: var(--page); color: var(--ink); font-family: 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 32px; display: flex; align-items: center; flex-shrink: 0">
+    <div style="flex-grow: 1; display: flex; align-items: center; gap: 8px; padding-left: 12px">
+      <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+      <span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">Lightcal settings</span>
+    </div>
+    <button class="cap x" aria-label="Close"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+  </div>
+  <nav aria-label="Settings sections" style="height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--cardline); flex-shrink: 0">
+    <a class="tab on" href="SettingsDateSize.dc.html" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg>Calendar</a>
+    <a class="tab" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>Accounts</a>
+    <a class="tab" href="#"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M8 9h8M8 15h5"></path></svg>App</a>
+  </nav>
+  <div class="scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box">
+    <div class="card">
+      <div class="r">
+        <span>Theme</span>
+        <div class="seg" role="group" aria-label="Theme">
+          <sc-for list="{{themes}}" as="t" hint-placeholder-count="3"><button class="{{t.cls}}" aria-pressed="{{t.on}}" onClick="{{t.pick}}">{{t.label}}</button></sc-for>
+        </div>
+      </div>
+      <div class="r">
+        <span>Date size</span>
+        <div class="seg" role="group" aria-label="Date size">
+          <sc-for list="{{sizes}}" as="s" hint-placeholder-count="3"><button class="{{s.cls}}" aria-pressed="{{s.on}}" onClick="{{s.pick}}"><span class="sz" style="font-size: {{s.fs}}" aria-hidden="true">28</span>{{s.label}}</button></sc-for>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="r">
+        <span>Week starts on</span>
+        <button class="dd" aria-haspopup="listbox">Monday<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink2)"><path d="m6 9 6 6 6-6"></path></svg></button>
+      </div>
+      <div class="r">
+        <span>Shaded days</span>
+        <div class="seg days" role="group" aria-label="Shaded days">
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7"><button class="{{d.cls}}" aria-pressed="{{d.on}}" aria-label="{{d.full}}" onClick="{{d.pick}}">{{d.label}}</button></sc-for>
+        </div>
+      </div>
+      <div class="r">
+        <span>Week numbers</span>
+        <button class="{{weeksCls}}" role="switch" aria-checked="{{weeks}}" aria-label="Week numbers" onClick="{{toggleWeeks}}"><span></span></button>
+      </div>
+      <div class="r">
+        <span>Event dots</span>
+        <button class="{{dotsCls}}" role="switch" aria-checked="{{dots}}" aria-label="Event dots" onClick="{{toggleDots}}"><span></span></button>
+      </div>
+    </div>
+  </div>
+  <div style="height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--cardline); flex-shrink: 0">
+    <a class="lnk" href="WinAbout.dc.html">About Lightcal</a>
+    <span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink3)">Version 1.0.3</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":448,"height":360}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var theme = st.theme || "System";
+    var size = st.size || "Large";
+    var shaded = st.shaded || [5, 6];
+    var weeks = st.weeks != null ? st.weeks : true;
+    var dots = st.dots != null ? st.dots : true;
+    var dark = (this.props.theme || "light") === "dark";
+    var full = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    var fs = { Standard: "10px", Large: "11.5px", Larger: "13px" };
+    return {
+      rootCls: "st" + (dark ? " dark" : ""),
+      themes: ["System", "Light", "Dark"].map(function (t) {
+        return { label: t, on: String(t === theme), cls: t === theme ? "on" : "", pick: function () { self.setState({ theme: t }); } };
+      }),
+      sizes: ["Standard", "Large", "Larger"].map(function (s) {
+        return { label: s, fs: fs[s], on: String(s === size), cls: s === size ? "on" : "", pick: function () { self.setState({ size: s }); } };
+      }),
+      days: ["M", "T", "W", "T", "F", "S", "S"].map(function (l, i) {
+        var on = shaded.indexOf(i) >= 0;
+        return { label: l, full: full[i], on: String(on), cls: on ? "on" : "", pick: function () { self.setState({ shaded: on ? shaded.filter(function (x) { return x !== i; }) : shaded.concat([i]) }); } };
+      }),
+      weeks: String(weeks), weeksCls: "tg" + (weeks ? " on" : ""),
+      dots: String(dots), dotsCls: "tg" + (dots ? " on" : ""),
+      toggleWeeks: function () { self.setState({ weeks: !weeks }); },
+      toggleDots: function () { self.setState({ dots: !dots }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
