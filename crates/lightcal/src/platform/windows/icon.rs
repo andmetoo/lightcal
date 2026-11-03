@@ -726,17 +726,30 @@ pub fn render_tray_icon_rgba(day_of_month: u8, dark_taskbar: bool) -> Vec<u8> {
     )
 }
 
-/// Render at the notification area's native pixel size to avoid Windows resampling text.
-pub fn render_native_tray_icon(
-    mode: TrayIconMode,
-    monochrome: bool,
-    day: u8,
-    weekday: Weekday,
-    time: (u8, u8),
-    dark: bool,
-) -> (Vec<u8>, u32) {
+thread_local! {
+    static SMALL_ICON_SIZE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
+}
+
+/// The shell's small-icon size in physical pixels (16..=64), at the taskbar's DPI. It is
+/// asked once and remembered until `forget_small_icon_size`, so the tray and window icons
+/// agree and a UI sync does not query the shell each time.
+pub fn native_small_icon_size() -> u32 {
+    SMALL_ICON_SIZE.with(|size| {
+        let known = size.get().unwrap_or_else(query_small_icon_size);
+        size.set(Some(known));
+        known
+    })
+}
+
+/// Makes the next `native_small_icon_size` ask the shell again, after a DPI, display or
+/// system setting change.
+pub fn forget_small_icon_size() {
+    SMALL_ICON_SIZE.with(|size| size.set(None));
+}
+
+fn query_small_icon_size() -> u32 {
     #[cfg(windows)]
-    let size = unsafe {
+    unsafe {
         use windows_sys::Win32::UI::{
             HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi},
             WindowsAndMessaging::{FindWindowW, SM_CXSMICON},
@@ -756,21 +769,9 @@ pub fn render_native_tray_icon(
             taskbar_dpi
         };
         GetSystemMetricsForDpi(SM_CXSMICON, dpi).clamp(16, 64) as u32
-    };
+    }
     #[cfg(not(windows))]
-    let size = 32;
-    (
-        render_squircle_icon_generic(
-            size as usize,
-            mode,
-            monochrome,
-            day,
-            weekday,
-            time,
-            taskbar_prefers_dark_mode(dark),
-        ),
-        size,
-    )
+    32
 }
 
 /// The shell's theme is independent of the selected application theme.
@@ -824,7 +825,7 @@ pub fn render_tray_icon_variant_rgba(
     )
 }
 
-/// Renders a 64×64 icon, used for the window/taskbar icon and settings previews.
+/// Renders a 64×64 icon, used for the settings previews and UI snapshots.
 pub fn render_squircle_icon_rgba_64(
     mode: TrayIconMode,
     monochrome: bool,
@@ -1205,6 +1206,18 @@ mod tests {
     use super::*;
 
     const TRAY_SIZES: [usize; 7] = [16, 20, 24, 32, 40, 48, 64];
+
+    #[test]
+    fn small_icon_size_is_remembered_until_forgotten() {
+        let shell = query_small_icon_size();
+        assert!((16..=64).contains(&shell));
+        // A remembered size is returned without asking the shell again.
+        SMALL_ICON_SIZE.with(|size| size.set(Some(99)));
+        assert_eq!(native_small_icon_size(), 99);
+        assert_eq!(native_small_icon_size(), 99);
+        forget_small_icon_size();
+        assert_eq!(native_small_icon_size(), shell);
+    }
 
     /// The system face when this machine has one, and always the fallback.
     fn faces() -> Vec<Face> {

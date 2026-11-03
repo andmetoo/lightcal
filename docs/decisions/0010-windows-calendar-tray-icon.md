@@ -24,6 +24,14 @@ smaller date. The rest of the owner's completed design must be preserved.
   Render glyphs at native resolution instead of resizing a large icon.
 - Apply this artwork to the live tray and window/taskbar date icon. Preserve
   the static undated application icon and legacy multiline render modes.
+- *Pinned buttons (November 3, 2026):* Alt+Tab and an unpinned taskbar button
+  show the dated window icon. Once the owner pins Lightcal, its button draws
+  the pinned shortcut's static app icon and ignores the window icon; that is how
+  Windows treats pinned buttons, not a Lightcal fault. An
+  `ITaskbarList3::SetOverlayIcon` date badge on a static button was tried and
+  rejected by the owner as looking bad, and editing the pinned shortcut is ruled
+  out by [ADR 0005](0005-taskbar-calendar-presence.md). Pinned buttons keep the
+  static icon.
 - Patch only the existing date specimens in Penpot, preserving their numeral
   layer IDs, board geometry, links and all unrelated owner edits. The isolated
   migration verifies unchanged names, geometry, paints and text properties on
