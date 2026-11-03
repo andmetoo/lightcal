@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-> **Status.** Milestone 0 and the application baseline are done (release 1.0.5). The text below is the original plan, kept for traceability; measured resource gates remain open and are tracked in [validation](validation.md).
+> **Status.** Milestone 0 and the application baseline are done (release 1.1.0). The text below is the original plan, kept for traceability; measured resource gates remain open and are tracked in [validation](validation.md).
 
 Each milestone ends with a reviewable PR and owner acceptance. Estimates are planning time boxes, not delivery promises. Do not start application implementation in the planning PR.
 

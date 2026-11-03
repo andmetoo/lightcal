@@ -1191,6 +1191,71 @@ fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Opens the language menu by clicking the select that shows `current`.
+fn open_language_menu(ui: &AppWindow, current: &str) {
+    let select = ElementHandle::find_by_element_type_name(ui, "Select")
+        .find(|element| element.accessible_value().as_deref() == Some(current))
+        .unwrap_or_else(|| panic!("no select showing {current:?}"));
+    let center = element_center(&select);
+    click(ui, center.x, center.y);
+}
+
+#[test]
+fn language_menu_columns_select_and_save_each_language() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-language-menu-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 2;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    wire_language(&ui, &ctrl);
+    ui.show().unwrap();
+    ctrl.borrow().sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.draw_if_needed(|_| {});
+
+    // Latin scripts fill the left column, Cyrillic and CJK the right, top to bottom.
+    open_language_menu(&ui, "English");
+    assert!(ui.get_language_dropdown_open());
+    let left = labelled_center(&ui, LocaleCode::PtBr.display_name());
+    let right = labelled_center(&ui, LocaleCode::ZhHans.display_name());
+    assert!(
+        right.x > left.x,
+        "Simplified Chinese is in the right column"
+    );
+    assert!(
+        (right.y - left.y).abs() < 1.0,
+        "both columns have five rows"
+    );
+    assert!(labelled_center(&ui, LocaleCode::En.display_name()).y < left.y);
+    assert!(labelled_center(&ui, LocaleCode::Ru.display_name()).y < right.y);
+
+    // Every language can be picked from the menu and is saved under its code.
+    let mut current = LocaleCode::En;
+    for locale in LocaleCode::ALL.into_iter().rev() {
+        if !ui.get_language_dropdown_open() {
+            open_language_menu(&ui, current.display_name());
+        }
+        click_label(&ui, locale.display_name());
+        assert_eq!(ctrl.borrow().prefs.locale(), locale);
+        assert!(!ui.get_language_dropdown_open());
+        let saved = PreferencesStore::new(dir.clone()).load();
+        assert_eq!(saved.preferences.language, locale.as_str());
+        current = locale;
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn date_size_control_saves_the_choice_and_grows_the_calendar() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};

@@ -16,7 +16,7 @@ canvas runtime to render; they are not application code.
 | Windows | Calendar (today, event details, dark empty day), settings Calendar / Accounts / App, About, taskbar and tray at 150 %, tray menu |
 | States | First run, signing in, private ICS link, needs attention, shortcut conflict, update available |
 | Icons | App icon, live tray date in Color and Mono, real-size specimens and two-digit dates |
-| Languages | Russian App, Spanish Calendar and Japanese App settings |
+| Languages | Russian App, Spanish Calendar and Japanese App settings; the open two-column language menu, German Calendar and Simplified Chinese App ([ADR 0014](../docs/decisions/0014-ten-languages.md)) |
 | Date size | Calendar at Standard, Large and Larger dates (light and dark), Large at 150 %, and the Settings Calendar tab with the Date size control |
 
 Every board has a light/dark switch. Calendar boards are interactive: days,
@@ -40,7 +40,7 @@ message box; a cancelled sign-in is a quiet line with **Try again**.
 - [Gray + Teal](palettes/README.md) surfaces and actions; coral only for
   identity and Today.
 - Segoe UI Variable from Windows (Text for UI, Display for large headings),
-  Segoe UI on Windows 10, and Yu Gothic UI for Japanese. Nothing is bundled.
+  Segoe UI on Windows 10, Yu Gothic UI for Japanese and Microsoft YaHei UI for Simplified Chinese. Nothing is bundled.
 - Only solid fills, rounded rectangles, 1–2 px borders and one clip, so every
   board maps to Slint. Window corners and shadow come from DWM; Mica is
   optional.

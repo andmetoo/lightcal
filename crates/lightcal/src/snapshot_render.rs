@@ -48,7 +48,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
     let shortcut_mgr = ShortcutManager::new();
 
     let ui = AppWindow::new().expect("Failed to create headless AppWindow");
-    crate::apply_system_font(&ui);
+    crate::apply_system_font(&ui, LocaleCode::En);
     ui.show().expect("Failed to show headless AppWindow");
 
     let mut ctrl = AppController {
@@ -841,6 +841,12 @@ fn render_calendar_boards(
         (LocaleCode::Ru, ThemePreference::Light),
         (LocaleCode::Ja, ThemePreference::Dark),
         (LocaleCode::Es, ThemePreference::Light),
+        (LocaleCode::De, ThemePreference::Light),
+        (LocaleCode::Fr, ThemePreference::Dark),
+        (LocaleCode::PtBr, ThemePreference::Light),
+        (LocaleCode::Uk, ThemePreference::Dark),
+        (LocaleCode::ZhHans, ThemePreference::Light),
+        (LocaleCode::Ko, ThemePreference::Dark),
     ] {
         ctrl.prefs.set_locale(locale);
         ctrl.prefs.theme = theme;
@@ -1132,8 +1138,8 @@ fn render_settings_snapshots(
     }
     ctrl.prefs.show_koi = false;
 
-    // Languages (Languages.dc.html): every tab and About in ru, es and ja.
-    for locale in [LocaleCode::Ru, LocaleCode::Es, LocaleCode::Ja] {
+    // Languages (Languages.dc.html): every tab and About in each non-English language.
+    for locale in LocaleCode::ALL.into_iter().filter(|&l| l != LocaleCode::En) {
         reset(ctrl);
         connect(ctrl);
         ctrl.prefs.set_locale(locale);
@@ -1183,6 +1189,21 @@ fn render_settings_snapshots(
             360,
         )?;
     }
+
+    // The open language menu in the Chinese UI, where the UI font is Microsoft YaHei UI
+    // and the other scripts come from fallback.
+    reset(ctrl);
+    ctrl.settings_tab = 2;
+    ctrl.prefs.set_locale(LocaleCode::ZhHans);
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.language_dropdown_open = true;
+    ctrl.sync_to_ui(ui);
+    helper.render_to_png(
+        &out_dir.join("settings-app-language-menu-light-zh-Hans.png"),
+        448,
+        360,
+    )?;
+    ctrl.language_dropdown_open = false;
 
     reset(ctrl);
     ctrl.provider = base_provider;
