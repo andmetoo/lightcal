@@ -1,7 +1,9 @@
 //! Windows shell integration: single-instance synchronization, window work area,
 //! dark mode registry queries, user startup registration, and global shortcuts.
 
-use crate::platform::{normalize_shortcut, WorkArea};
+use crate::platform::{normalize_shortcut, TaskbarEdge, WorkArea};
+#[cfg(windows)]
+use crate::platform::{AnswerCache, ShellTaskbar};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -41,12 +43,20 @@ pub fn system_prefers_dark_mode() -> bool {
     true
 }
 
-/// Queries the primary monitor work area on Windows, falling back to `1920×1040`.
-pub fn primary_work_area() -> WorkArea {
+/// Queries the primary monitor work area and its taskbar edge on Windows, falling back to
+/// the system work area and then to `1920×1040`, with a bottom taskbar.
+pub fn primary_tray_area() -> (WorkArea, TaskbarEdge) {
     #[cfg(windows)]
     {
-        use windows_sys::Win32::Foundation::RECT;
+        use windows_sys::Win32::Foundation::{POINT, RECT};
+        use windows_sys::Win32::Graphics::Gdi::{MonitorFromPoint, MONITOR_DEFAULTTOPRIMARY};
         use windows_sys::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETWORKAREA};
+        // SAFETY: MonitorFromPoint takes a plain point and always returns a monitor here.
+        let monitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+        // SAFETY: `monitor` came from MonitorFromPoint.
+        if let Some(found) = unsafe { monitor_tray_area(monitor) } {
+            return found;
+        }
         let mut rect = RECT {
             left: 0,
             top: 0,
@@ -56,19 +66,218 @@ pub fn primary_work_area() -> WorkArea {
         let ok =
             unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut rect as *mut _ as *mut _, 0) };
         if ok != 0 && rect.right > rect.left && rect.bottom > rect.top {
-            return WorkArea {
-                x: rect.left,
-                y: rect.top,
-                width: rect.right - rect.left,
-                height: rect.bottom - rect.top,
-            };
+            return (rect_area(rect), TaskbarEdge::Bottom);
         }
     }
+    (
+        WorkArea {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1040,
+        },
+        TaskbarEdge::Bottom,
+    )
+}
+
+#[cfg(windows)]
+fn rect_area(r: windows_sys::Win32::Foundation::RECT) -> WorkArea {
     WorkArea {
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1040,
+        x: r.left,
+        y: r.top,
+        width: r.right - r.left,
+        height: r.bottom - r.top,
+    }
+}
+
+/// The work area of `monitor` and the edge its taskbar is on; see `platform::tray_area`.
+///
+/// # Safety
+///
+/// `monitor` must be a monitor handle from the Win32 monitor APIs.
+#[cfg(windows)]
+unsafe fn monitor_tray_area(
+    monitor: windows_sys::Win32::Graphics::Gdi::HMONITOR,
+) -> Option<(WorkArea, TaskbarEdge)> {
+    use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITORINFO};
+
+    let mut mi: MONITORINFO = std::mem::zeroed();
+    mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+    if GetMonitorInfoW(monitor, &mut mi) == 0 {
+        return None;
+    }
+    let work = rect_area(mi.rcWork);
+    if work.width <= 0 || work.height <= 0 {
+        return None;
+    }
+    let monitor_area = rect_area(mi.rcMonitor);
+    // A stale report stands in for a busy shell only while it still matches the work area;
+    // right after the taskbar moves, the strips are the better guess.
+    let report = shell_taskbar(mi.rcMonitor)
+        .filter(|(bar, fresh)| *fresh || bar.fits(monitor_area, work))
+        .map(|(bar, _)| bar);
+    Some(crate::platform::tray_area(monitor_area, work, report))
+}
+
+#[cfg(windows)]
+thread_local! {
+    /// The shell's answer per monitor rectangle, kept until `forget_shell_taskbar`, so
+    /// placing the window does not ask Explorer again each time.
+    static SHELL_TASKBARS: std::cell::RefCell<AnswerCache<WorkArea, ShellTaskbar>> =
+        const { std::cell::RefCell::new(AnswerCache::new()) };
+}
+
+/// How long a missing or busy shell is not asked again, so a burst of placements (a view
+/// switch places the window up to three times) waits on it at most once.
+#[cfg(windows)]
+const SHELL_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Makes the remembered taskbar reports stale; call it on display and setting changes,
+/// which include the taskbar moving or starting to auto-hide, and when Explorer restarts.
+#[cfg(windows)]
+pub fn forget_shell_taskbar() {
+    SHELL_TASKBARS.with(|cache| cache.borrow_mut().clear());
+}
+
+/// Hides the application window (`SW_HIDE`) and makes the taskbar reports stale: display
+/// and setting changes do not reliably reach a hidden window, so the next show asks again.
+/// A null `hwnd` only forgets.
+///
+/// # Safety
+///
+/// `hwnd` must be null or a valid, live Win32 window handle owned by this process.
+#[cfg(windows)]
+pub unsafe fn hide_native_window(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
+    forget_shell_taskbar();
+    if !hwnd.is_null() {
+        ShowWindow(hwnd, SW_HIDE);
+    }
+}
+
+/// The shell's taskbar report for `monitor` and whether it is fresh, remembered until
+/// `forget_shell_taskbar`. A missing or busy shell is not asked again for
+/// `SHELL_RETRY_AFTER`; meanwhile the last report for `monitor`, if there is one, is given
+/// as stale. Right after sign-in, before Explorer has answered once, there is none.
+#[cfg(windows)]
+fn shell_taskbar(monitor: windows_sys::Win32::Foundation::RECT) -> Option<(ShellTaskbar, bool)> {
+    SHELL_TASKBARS.with(|cache| {
+        cache.borrow_mut().get_or_ask(
+            rect_area(monitor),
+            std::time::Instant::now(),
+            SHELL_RETRY_AFTER,
+            || query_shell_taskbar(monitor),
+        )
+    })
+}
+
+/// Whether taskbars show on every display (Settings > Personalization > Taskbar), from
+/// `MMTaskbarEnabled`; Windows shows them everywhere when the value is missing.
+#[cfg(windows)]
+fn taskbars_on_all_displays() -> bool {
+    use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+    let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\0"
+        .encode_utf16()
+        .collect();
+    let value_name: Vec<u16> = "MMTaskbarEnabled\0".encode_utf16().collect();
+    let mut data: u32 = 1;
+    let mut data_len: u32 = std::mem::size_of::<u32>() as u32;
+    // SAFETY: NUL-terminated names and a DWORD buffer of the size we pass.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            value_name.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            &mut data as *mut u32 as *mut _,
+            &mut data_len,
+        )
+    };
+    status != 0 || data != 0
+}
+
+/// Asks the shell (Explorer) for the taskbar edge, the auto-hide state and the auto-hidden
+/// taskbar on that edge of `monitor`. Returns `None` when Explorer is missing or does not
+/// answer a probe within 200 ms, so placement does not wait on a busy shell.
+#[cfg(windows)]
+fn query_shell_taskbar(monitor: windows_sys::Win32::Foundation::RECT) -> Option<ShellTaskbar> {
+    use windows_sys::Win32::Foundation::{HWND, RECT};
+    use windows_sys::Win32::UI::Shell::{
+        SHAppBarMessage, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE,
+        ABM_GETTASKBARPOS, ABS_AUTOHIDE, APPBARDATA,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        FindWindowW, GetWindowRect, SendMessageTimeoutW, SMTO_ABORTIFHUNG, SMTO_BLOCK, WM_NULL,
+    };
+
+    let class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
+    let appbar = || {
+        // SAFETY: APPBARDATA is plain data; all-zero is a valid value.
+        let mut data: APPBARDATA = unsafe { std::mem::zeroed() };
+        data.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
+        data
+    };
+    // SAFETY: plain Win32 calls on a NUL-terminated class name and on structs we own; the
+    // APPBARDATA messages read `cbSize`, `uEdge` and `rc` and write only into the struct.
+    unsafe {
+        let tray = FindWindowW(class.as_ptr(), std::ptr::null());
+        if tray.is_null() {
+            return None;
+        }
+        if SendMessageTimeoutW(
+            tray,
+            WM_NULL,
+            0,
+            0,
+            SMTO_ABORTIFHUNG | SMTO_BLOCK,
+            200,
+            std::ptr::null_mut(),
+        ) == 0
+        {
+            return None;
+        }
+        let mut bar = appbar();
+        if SHAppBarMessage(ABM_GETTASKBARPOS, &mut bar) == 0 {
+            return None;
+        }
+        let edge = match bar.uEdge {
+            ABE_LEFT => TaskbarEdge::Left,
+            ABE_TOP => TaskbarEdge::Top,
+            ABE_RIGHT => TaskbarEdge::Right,
+            _ => TaskbarEdge::Bottom,
+        };
+        let auto_hide = SHAppBarMessage(ABM_GETSTATE, &mut appbar()) as u32 & ABS_AUTOHIDE != 0;
+        let mut auto_hide_bar = None;
+        if auto_hide {
+            let mut query = appbar();
+            query.uEdge = bar.uEdge;
+            query.rc = monitor;
+            let hidden = SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &mut query) as HWND;
+            let mut rect: RECT = std::mem::zeroed();
+            // The bar slides away but keeps its size, so its window rectangle gives the
+            // room it takes when shown.
+            if !hidden.is_null() && GetWindowRect(hidden, &mut rect) != 0 {
+                auto_hide_bar = Some(rect_area(rect));
+            }
+        }
+        // The primary taskbar's monitor holds its inner edge: an auto-hidden bar slides off
+        // its monitor, possibly onto the next one, but keeps that edge on screen.
+        let r = bar.rc;
+        let (x, y) = match edge {
+            TaskbarEdge::Left => (r.right - 1, (r.top + r.bottom) / 2),
+            TaskbarEdge::Right => (r.left, (r.top + r.bottom) / 2),
+            TaskbarEdge::Top => ((r.left + r.right) / 2, r.bottom - 1),
+            TaskbarEdge::Bottom => ((r.left + r.right) / 2, r.top),
+        };
+        let holds_primary =
+            monitor.left <= x && x < monitor.right && monitor.top <= y && y < monitor.bottom;
+        Some(ShellTaskbar {
+            edge,
+            auto_hide_bar,
+            auto_hide,
+            taskbar_here: holds_primary || auto_hide_bar.is_some() || taskbars_on_all_displays(),
+        })
     }
 }
 
@@ -914,16 +1123,18 @@ pub fn animation_effects_enabled() -> bool {
     ok == 0 || enabled != 0
 }
 
-/// Atomically positions and sizes the window above the system tray / taskbar on the current
-/// monitor, in one SetWindowPos, so the change shows as a single step. Returns whether the
-/// window landed exactly there: false when Windows clamped it (for example to size limits
-/// the window still reports for its previous content) or there is no window.
+/// Atomically positions and sizes the window next to the system tray on the current monitor,
+/// in the work-area corner by the tray for whichever edge the taskbar is on. One SetWindowPos
+/// makes the change show as a single step, and a window already there is left alone.
+/// Returns whether the window landed exactly there:
+/// false when Windows clamped it (for example to size limits the window still reports for
+/// its previous content) or there is no window.
 ///
 /// # Safety
 ///
 /// `hwnd` must be a valid, live Win32 window handle owned by this process.
 #[cfg(windows)]
-pub unsafe fn position_window_above_tray(
+pub unsafe fn position_window_by_tray(
     hwnd: windows_sys::Win32::Foundation::HWND,
     logical_w: f32,
     logical_h: f32,
@@ -932,9 +1143,7 @@ pub unsafe fn position_window_above_tray(
         return false;
     }
     use windows_sys::Win32::Foundation::RECT;
-    use windows_sys::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
-    };
+    use windows_sys::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
     use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
@@ -948,28 +1157,15 @@ pub unsafe fn position_window_above_tray(
     let margin = (12.0 * scale).round() as i32;
 
     let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
-    let mut mi: MONITORINFO = std::mem::zeroed();
-    mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
-
-    let (work_x, work_y, work_w, work_h) = if GetMonitorInfoW(monitor, &mut mi) != 0 {
-        (
-            mi.rcWork.left,
-            mi.rcWork.top,
-            mi.rcWork.right - mi.rcWork.left,
-            mi.rcWork.bottom - mi.rcWork.top,
-        )
-    } else {
-        let wa = primary_work_area();
-        (wa.x, wa.y, wa.width, wa.height)
-    };
-
-    let (target_x, target_y) = WorkArea {
-        x: work_x,
-        y: work_y,
-        width: work_w,
-        height: work_h,
+    let (work_area, edge) = monitor_tray_area(monitor).unwrap_or_else(primary_tray_area);
+    let (target_x, target_y) = work_area.anchor_by_tray(edge, phys_w, phys_h, margin);
+    let target = (target_x, target_y, target_x + phys_w, target_y + phys_h);
+    let mut placed: RECT = std::mem::zeroed();
+    if GetWindowRect(hwnd, &mut placed) != 0
+        && (placed.left, placed.top, placed.right, placed.bottom) == target
+    {
+        return true;
     }
-    .anchor_above_tray(phys_w, phys_h, margin);
 
     SetWindowPos(
         hwnd,
@@ -980,14 +1176,12 @@ pub unsafe fn position_window_above_tray(
         phys_h,
         SWP_NOACTIVATE | SWP_NOZORDER,
     );
-    let mut placed: RECT = std::mem::zeroed();
     GetWindowRect(hwnd, &mut placed) != 0
-        && (placed.left, placed.top, placed.right, placed.bottom)
-            == (target_x, target_y, target_x + phys_w, target_y + phys_h)
+        && (placed.left, placed.top, placed.right, placed.bottom) == target
 }
 
-/// Restores a minimized window and positions it accurately above the tray. Returns whether
-/// it landed exactly there; see `position_window_above_tray`.
+/// Restores a minimized window and positions it accurately next to the tray. Returns whether
+/// it landed exactly there; see `position_window_by_tray`.
 ///
 /// # Safety
 ///
@@ -1011,7 +1205,7 @@ pub unsafe fn show_and_restore_window(
         ShowWindow(hwnd, SW_SHOW);
     }
 
-    let placed = position_window_above_tray(hwnd, logical_w, logical_h);
+    let placed = position_window_by_tray(hwnd, logical_w, logical_h);
 
     BringWindowToTop(hwnd);
     SetForegroundWindow(hwnd);
@@ -1144,6 +1338,45 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn primary_tray_area_matches_the_live_taskbar() {
+        use windows_sys::Win32::Foundation::POINT;
+        use windows_sys::Win32::Graphics::Gdi::{
+            GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+        };
+        let mut mi: MONITORINFO = unsafe { std::mem::zeroed() };
+        mi.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        let monitor = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+        assert_ne!(unsafe { GetMonitorInfoW(monitor, &mut mi) }, 0);
+        let monitor_area = rect_area(mi.rcMonitor);
+        let (work, edge) = unsafe { monitor_tray_area(monitor) }.expect("primary monitor");
+        assert!(work.width > 0 && work.height > 0);
+        let inside = monitor_area.x <= work.x
+            && monitor_area.y <= work.y
+            && work.x + work.width <= monitor_area.x + monitor_area.width
+            && work.y + work.height <= monitor_area.y + monitor_area.height;
+        assert!(inside, "{work:?} inside {monitor_area:?}");
+        // Sessions without Explorer (some CI services) have no taskbar to compare against.
+        let Some(bar) = query_shell_taskbar(mi.rcMonitor) else {
+            return;
+        };
+        // A taskbar that keeps room (a strip, or an auto-hidden bar found) is on the
+        // shell's edge; one hidden in tablet posture or not reported may keep none.
+        if work != monitor_area {
+            assert_eq!(
+                edge, bar.edge,
+                "the primary monitor has the primary taskbar"
+            );
+        }
+        // The answer is remembered until it is forgotten.
+        assert_eq!(shell_taskbar(mi.rcMonitor), shell_taskbar(mi.rcMonitor));
+        assert!(SHELL_TASKBARS.with(|cache| cache.borrow().has_fresh()));
+        // Hiding the window makes it stale, so the next show asks again.
+        unsafe { hide_native_window(std::ptr::null_mut()) };
+        assert!(!SHELL_TASKBARS.with(|cache| cache.borrow().has_fresh()));
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn native_window_state_follows_taskbar_minimize_restore_and_hide() {
         use windows_sys::Win32::UI::WindowsAndMessaging::*;
         let window = crate::platform::windows::test_window::TestWindow::new("Lightcal");
@@ -1229,15 +1462,15 @@ mod tests {
         // Settings, then the calendar: each a single change, exactly where asked.
         for (width, height) in [(448.0, 360.0), (352.0, 432.0)] {
             let before = changes.get();
-            assert!(unsafe { position_window_above_tray(hwnd, width, height) });
+            assert!(unsafe { position_window_by_tray(hwnd, width, height) });
             assert_eq!(changes.get() - before, 1, "{width} × {height} in one step");
         }
         assert_ne!(
             unsafe { SetWindowSubclass(hwnd, Some(clamp), CLAMP_ID, 0) },
             0
         );
-        assert!(!unsafe { position_window_above_tray(hwnd, 448.0, 360.0) });
-        assert!(!unsafe { position_window_above_tray(std::ptr::null_mut(), 448.0, 360.0) });
+        assert!(!unsafe { position_window_by_tray(hwnd, 448.0, 360.0) });
+        assert!(!unsafe { position_window_by_tray(std::ptr::null_mut(), 448.0, 360.0) });
         unsafe {
             RemoveWindowSubclass(hwnd, Some(clamp), CLAMP_ID);
             RemoveWindowSubclass(hwnd, Some(count), COUNT_ID);

@@ -9,7 +9,7 @@ use lightcal::i18n::{
 #[cfg(windows)]
 use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
 use lightcal::platform::windows::{
-    bring_to_foreground, primary_work_area, query_calendar_provider, render_squircle_icon_rgba_64,
+    bring_to_foreground, primary_tray_area, query_calendar_provider, render_squircle_icon_rgba_64,
     system_prefers_dark_mode, ShortcutManager, SingleInstance, StartupManager,
 };
 #[cfg(windows)]
@@ -629,16 +629,14 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
             // One SetWindowPos sizes and moves the window together. Resizing through Slint
             // first showed the new size in the old place for about 20 ms, then a jump.
             let placed = unsafe {
-                lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h)
+                lightcal::platform::windows::position_window_by_tray(hwnd, logical_w, logical_h)
             };
             if !placed {
                 // Windows clamped it to limits Slint still held for the previous view: give
                 // Slint the new size, then place the window again.
                 ui.window().set_size(LogicalSize::new(logical_w, logical_h));
                 let placed = unsafe {
-                    lightcal::platform::windows::position_window_above_tray(
-                        hwnd, logical_w, logical_h,
-                    )
+                    lightcal::platform::windows::position_window_by_tray(hwnd, logical_w, logical_h)
                 };
                 if !placed {
                     // Slint applies new limits once it handles events: place it again then,
@@ -654,7 +652,7 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
                         // SAFETY: find_lightcal_hwnd returns this process's live window, or
                         // null, which the call ignores.
                         unsafe {
-                            lightcal::platform::windows::position_window_above_tray(hwnd, w, h);
+                            lightcal::platform::windows::position_window_by_tray(hwnd, w, h);
                         }
                         apply_window_chrome(&ui);
                     });
@@ -668,12 +666,12 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
     ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     let scale = ui.window().scale_factor().max(1.0);
-    // Frameless window geometry anchored cleanly right above the Windows Taskbar / System Tray.
+    // Frameless window geometry anchored next to the System Tray, on any taskbar edge.
     let phys_w = (logical_w * scale).round() as i32;
     let phys_h = (logical_h * scale).round() as i32;
     let margin_phys = (12.0 * scale).round() as i32;
-    let work_area = primary_work_area();
-    let (x, y) = work_area.anchor_above_tray(phys_w, phys_h, margin_phys);
+    let (work_area, edge) = primary_tray_area();
+    let (x, y) = work_area.anchor_by_tray(edge, phys_w, phys_h, margin_phys);
     ui.window().set_position(PhysicalPosition::new(x, y));
 }
 
@@ -2110,16 +2108,11 @@ fn hide_application_window(ui: &AppWindow) {
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]
-    {
-        let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
-        if !hwnd.is_null() {
-            unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
-                    hwnd,
-                    windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE,
-                );
-            }
-        }
+    // SAFETY: find_lightcal_hwnd returns this process's live window, or null.
+    unsafe {
+        lightcal::platform::windows::hide_native_window(
+            lightcal::platform::windows::find_lightcal_hwnd(),
+        );
     }
 }
 
@@ -2131,6 +2124,42 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
     ui.window().is_visible() && !ui.window().is_minimized()
 }
 
+/// How long display and setting changes must stop before an open window moves to the tray.
+#[cfg(any(windows, test))]
+const REANCHOR_QUIET: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Runs `run` once `REANCHOR_QUIET` has passed since the last call: each call restarts the
+/// one re-anchor timer, so a burst of display and setting changes runs only the last `run`,
+/// once, after the burst.
+#[cfg(any(windows, test))]
+fn after_display_quiet(run: impl FnMut() + 'static) {
+    thread_local! {
+        static REANCHOR: slint::Timer = slint::Timer::default();
+    }
+    REANCHOR.with(|timer| timer.start(slint::TimerMode::SingleShot, REANCHOR_QUIET, run));
+}
+
+/// Moves an open window back to the tray `REANCHOR_QUIET` after the last of a burst of
+/// display and setting changes.
+#[cfg(windows)]
+fn schedule_reanchor(ui_weak: slint::Weak<AppWindow>) {
+    after_display_quiet(move || {
+        let Some(ui) = ui_weak.upgrade() else {
+            return;
+        };
+        if !application_window_is_open(&ui) {
+            return;
+        }
+        let (w, h) = target_logical_size(ui.get_settings_open(), calendar_height(&ui));
+        let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+        // SAFETY: find_lightcal_hwnd returns this process's live window, or null, which the
+        // call ignores. A window already in place is left alone.
+        if !unsafe { lightcal::platform::windows::position_window_by_tray(hwnd, w, h) } {
+            sync_window_geometry(&ui, ui.get_settings_open());
+        }
+    });
+}
+
 /// Attaches the restore repaint and the taskbar preview (`WindowHooks`) to the native window,
 /// and asks DWM for custom previews again on each show in case it refused or forgot them.
 #[cfg(windows)]
@@ -2138,6 +2167,7 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
     let restore_ui = ui.as_weak();
     let snapshot_ui = ui.as_weak();
     let wake_ui = ui.as_weak();
+    let display_ui = ui.as_weak();
     let install = |hwnd| {
         // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
         unsafe {
@@ -2172,12 +2202,15 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     });
                 });
                 // The tray and window icons follow the shell's icon size and theme, redrawn
-                // after the change is complete, like the koi.
-                hooks.set_on_display_change(|| {
+                // after the change is complete, like the koi. An open window moves to the
+                // tray again, since the taskbar may have changed edge or monitor.
+                hooks.set_on_display_change(move || {
+                    lightcal::platform::windows::forget_shell_taskbar();
                     slint::Timer::single_shot(std::time::Duration::ZERO, || {
                         lightcal::platform::windows::icon::forget_small_icon_size();
                         sync_icons_if_idle();
                     });
+                    schedule_reanchor(display_ui.clone());
                 });
                 hooks.subscribe_session_and_display();
             })
@@ -4611,7 +4644,7 @@ mod tests {
             let (lw, lh) = target_logical_size(settings, 444.0);
             let pw = (lw as i32) + 16;
             let ph = (lh as i32) + 44;
-            let (x, y) = area.anchor_above_tray(pw, ph, 12);
+            let (x, y) = area.anchor_by_tray(lightcal::platform::TaskbarEdge::Bottom, pw, ph, 12);
             assert!(x >= area.x + 8);
             assert!(y >= area.y + 8);
             assert!(x + pw <= area.x + area.width - 8);
