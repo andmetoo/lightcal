@@ -715,6 +715,205 @@ pub fn main_window_is_open() -> Option<bool> {
     Some(unsafe { IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 })
 }
 
+/// Display power, from the `GUID_CONSOLE_DISPLAY_STATE` notifications the window hooks
+/// subscribe to. It starts as on; Windows sends the current state right after subscribing.
+#[cfg(windows)]
+static DISPLAY_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Records the console display turning off (false) or on or dimmed (true).
+#[cfg(windows)]
+pub fn set_display_on(on: bool) {
+    DISPLAY_ON.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether a window is cloaked by DWM (another virtual desktop, a suspended app).
+#[cfg(windows)]
+unsafe fn is_cloaked(hwnd: windows_sys::Win32::Foundation::HWND) -> bool {
+    use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    let mut cloaked: u32 = 0;
+    let read = DwmGetWindowAttribute(
+        hwnd,
+        DWMWA_CLOAKED as u32,
+        &mut cloaked as *mut u32 as *mut _,
+        std::mem::size_of::<u32>() as u32,
+    );
+    read == 0 && cloaked != 0
+}
+
+/// The visible frame of a window: DWM's extended frame bounds, which leave out the invisible
+/// resize borders, or the window rectangle when DWM has none.
+#[cfg(windows)]
+unsafe fn frame_rect(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+) -> Option<windows_sys::Win32::Foundation::RECT> {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect;
+    let mut rect: RECT = std::mem::zeroed();
+    if DwmGetWindowAttribute(
+        hwnd,
+        DWMWA_EXTENDED_FRAME_BOUNDS as u32,
+        &mut rect as *mut RECT as *mut _,
+        std::mem::size_of::<RECT>() as u32,
+    ) == 0
+    {
+        return Some(rect);
+    }
+    (GetWindowRect(hwnd, &mut rect) != 0).then_some(rect)
+}
+
+/// Whether someone can see part of the application window, which must already be on screen:
+/// false while the display is off, the session is locked, the window is cloaked on another
+/// virtual desktop, or other windows cover it completely. Coverage is checked at five
+/// points across the window against the opaque windows above it in z-order; layered and
+/// click-through windows (overlays, which may be translucent) never count as covering.
+#[cfg(windows)]
+pub fn main_window_is_seen() -> bool {
+    use windows_sys::Win32::System::StationsAndDesktops::{
+        CloseDesktop, OpenInputDesktop, DESKTOP_SWITCHDESKTOP,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindow, GetWindowLongW, IsIconic, IsWindowVisible, GWL_EXSTYLE, GW_HWNDPREV,
+        WS_EX_LAYERED, WS_EX_TRANSPARENT,
+    };
+    if !DISPLAY_ON.load(std::sync::atomic::Ordering::Relaxed) {
+        return false;
+    }
+    let hwnd = find_lightcal_hwnd();
+    if hwnd.is_null() {
+        return false;
+    }
+    // SAFETY: these calls only read window, DWM and desktop state; the input desktop handle
+    // is closed before returning.
+    unsafe {
+        if is_cloaked(hwnd) {
+            return false;
+        }
+        // A locked session (or a UAC prompt) switches input to a desktop we cannot open.
+        let input = OpenInputDesktop(0, 0, DESKTOP_SWITCHDESKTOP);
+        if input.is_null() {
+            return false;
+        }
+        CloseDesktop(input);
+        let Some(rect) = frame_rect(hwnd) else {
+            return true;
+        };
+        let (w, h) = (rect.right - rect.left, rect.bottom - rect.top);
+        let points = [(1, 1), (1, 3), (3, 1), (3, 3), (2, 2)]
+            .map(|(fx, fy)| (rect.left + w * fx / 4, rect.top + h * fy / 4));
+        let mut covered = [false; 5];
+        let mut above = GetWindow(hwnd, GW_HWNDPREV);
+        while !above.is_null() && covered.contains(&false) {
+            let ex_style = GetWindowLongW(above, GWL_EXSTYLE) as u32;
+            let opaque = IsWindowVisible(above) != 0
+                && IsIconic(above) == 0
+                && ex_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT) == 0
+                && !is_cloaked(above);
+            if let Some(r) = opaque.then(|| frame_rect(above)).flatten() {
+                for (point, hit) in points.iter().zip(covered.iter_mut()) {
+                    *hit |= point.0 >= r.left
+                        && point.0 < r.right
+                        && point.1 >= r.top
+                        && point.1 < r.bottom;
+                }
+            }
+            above = GetWindow(above, GW_HWNDPREV);
+        }
+        covered.contains(&false)
+    }
+}
+
+/// A WinEvent hook and the callback it reports to.
+#[cfg(windows)]
+type WindowChangeWatch = (
+    windows_sys::Win32::UI::Accessibility::HWINEVENTHOOK,
+    std::rc::Rc<dyn Fn()>,
+);
+
+thread_local! {
+    /// The WinEvent hook that reports window changes elsewhere, and its callback.
+    #[cfg(windows)]
+    static WINDOW_CHANGES: std::cell::RefCell<Option<WindowChangeWatch>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Calls `on_change` when another app's window comes to the foreground, finishes moving or
+/// resizing, or is minimized or restored: the changes that can uncover this window. The
+/// callback runs on this thread from its message loop. Does nothing if already watching.
+#[cfg(windows)]
+pub fn watch_window_changes(on_change: impl Fn() + 'static) {
+    use windows_sys::Win32::UI::Accessibility::SetWinEventHook;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND, WINEVENT_OUTOFCONTEXT,
+        WINEVENT_SKIPOWNPROCESS,
+    };
+    unsafe extern "system" fn changed(
+        _hook: windows_sys::Win32::UI::Accessibility::HWINEVENTHOOK,
+        _event: u32,
+        _hwnd: windows_sys::Win32::Foundation::HWND,
+        _object: i32,
+        _child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        // Cloned out first, so the callback may stop the watch.
+        let callback = WINDOW_CHANGES.with(|slot| slot.borrow().as_ref().map(|(_, f)| f.clone()));
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+    WINDOW_CHANGES.with(|slot| {
+        if slot.borrow().is_some() {
+            return;
+        }
+        // SAFETY: an out-of-context hook with a plain function; it is removed with
+        // UnhookWinEvent in `stop_watching_window_changes`.
+        let hook = unsafe {
+            SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_MINIMIZEEND,
+                std::ptr::null_mut(),
+                Some(changed),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            )
+        };
+        if !hook.is_null() {
+            *slot.borrow_mut() = Some((hook, std::rc::Rc::new(on_change)));
+        }
+    });
+}
+
+/// Removes the hook set by `watch_window_changes`, if any.
+#[cfg(windows)]
+pub fn stop_watching_window_changes() {
+    use windows_sys::Win32::UI::Accessibility::UnhookWinEvent;
+    if let Some((hook, _)) = WINDOW_CHANGES.with(|slot| slot.borrow_mut().take()) {
+        // SAFETY: `hook` came from SetWinEventHook and is unhooked once.
+        unsafe { UnhookWinEvent(hook) };
+    }
+}
+
+/// Windows Settings › Accessibility › Visual effects › Animation effects. Reads as on
+/// when the query fails, which matches the Windows default.
+#[cfg(windows)]
+pub fn animation_effects_enabled() -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION,
+    };
+    let mut enabled: windows_sys::core::BOOL = 1;
+    // SAFETY: SPI_GETCLIENTAREAANIMATION writes one BOOL to the pointer we pass.
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            &mut enabled as *mut _ as *mut _,
+            0,
+        )
+    };
+    ok == 0 || enabled != 0
+}
+
 /// Atomically positions and sizes the window above the system tray / taskbar on the current monitor.
 ///
 /// # Safety

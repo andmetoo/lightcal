@@ -303,6 +303,9 @@ pub struct Preferences {
     pub highlight_current_month: bool,
     #[serde(default = "default_true")]
     pub show_event_dots: bool,
+    // Koi swimming behind the calendar grid (ADR 0013).
+    #[serde(default)]
+    pub show_koi: bool,
     #[serde(deserialize_with = "lenient_date_size")]
     pub date_size: DateSize,
     #[serde(default)]
@@ -342,6 +345,7 @@ impl Default for Preferences {
             taskbar_window_pos: None,
             highlight_current_month: true,
             show_event_dots: true,
+            show_koi: false,
             date_size: DateSize::Standard,
             auto_check_updates: false,
             update_channel: "stable".to_string(),
@@ -909,6 +913,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             default_microsoft_client_id()
         );
         assert!(loaded.preferences.show_event_dots);
+        assert!(!loaded.preferences.show_koi);
         assert_eq!(loaded.preferences.date_size, DateSize::Standard);
         assert!(!loaded.preferences.auto_check_updates);
         assert_eq!(loaded.preferences.update_channel, "stable");
@@ -917,6 +922,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         let mut modified = loaded.preferences;
         modified.highlight_current_month = false;
         modified.show_event_dots = false;
+        modified.show_koi = true;
         modified.date_size = DateSize::Larger;
         modified.auto_check_updates = true;
         modified.update_channel = "preview".to_string();

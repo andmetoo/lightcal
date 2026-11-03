@@ -8,6 +8,7 @@
 
 import { Theme } from "theme.slint";
 import { Icon, IconButton, TextButton } from "controls.slint";
+import { KoiPond } from "koi.slint";
 import { CalendarDateSize, DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
 
 // Inline accent action inside the event details (.gb): 24 px, accent 12/500.
@@ -289,6 +290,10 @@ export component CalendarView inherits Rectangle {
     in property <[string]> iso-weeks;
     in property <[DayCellData]> cells;
     in property <bool> show-event-dots;
+    // Koi swim behind the dates (ADR 0013).
+    in property <bool> show-koi: false;
+    // Pond time in seconds, advanced by Rust while the popup is on screen.
+    in property <float> koi-clock;
     in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     // Keyboard navigation draws the focus ring on the selected day.
     in property <bool> keyboard-nav: false;
@@ -471,6 +476,13 @@ export component CalendarView inherits Rectangle {
             height: grid.height;
             border-radius: Theme.radius-day;
             background: Theme.weekend-band;
+        }
+
+        // Over the bands, under the weekday letters and dates.
+        if root.show-koi : KoiPond {
+            clock: root.koi-clock;
+            width: grid.width;
+            height: grid.height;
         }
 
         for wd[col] in root.weekday-headers : Text {

@@ -23,6 +23,18 @@ fn labelled_center(ui: &AppWindow, label: &str) -> slint::LogicalPosition {
     let element = ElementHandle::find_by_accessible_label(ui, label)
         .next()
         .unwrap_or_else(|| panic!("no element labelled {label:?}"));
+    element_center(&element)
+}
+
+/// Centre of the switch with this label; a settings row title shares the label.
+fn switch_center(ui: &AppWindow, label: &str) -> slint::LogicalPosition {
+    let element = ElementHandle::find_by_accessible_label(ui, label)
+        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Checkbox))
+        .unwrap_or_else(|| panic!("no switch labelled {label:?}"));
+    element_center(&element)
+}
+
+fn element_center(element: &ElementHandle) -> slint::LogicalPosition {
     let (position, size) = (element.absolute_position(), element.size());
     slint::LogicalPosition::new(
         position.x + size.width / 2.0,
@@ -1033,6 +1045,149 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
         assert_eq!(ui.get_date_size(), CalendarDateSize::from(size));
         assert_eq!(calendar_height(&ui), height);
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn koi_pace_follows_what_the_user_can_see() {
+    use lightcal::platform::WindowView;
+    let seen = WindowView {
+        on_screen: true,
+        seen: true,
+        animation_effects: true,
+    };
+    assert_eq!(koi_pace(true, false, seen), KoiPace::Swim);
+    assert_eq!(koi_pace(false, false, seen), KoiPace::Off);
+    assert_eq!(koi_pace(true, true, seen), KoiPace::Off);
+    let hidden = WindowView {
+        on_screen: false,
+        seen: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, hidden), KoiPace::Off);
+    let covered = WindowView {
+        seen: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, covered), KoiPace::Watch);
+    let still = WindowView {
+        animation_effects: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, still), KoiPace::Watch);
+}
+
+#[test]
+fn koi_clock_swims_watches_and_stops_with_the_window() {
+    use lightcal::platform::WindowView;
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    ui.set_show_koi(true);
+    let view = |on_screen, seen, animation_effects| WindowView {
+        on_screen,
+        seen,
+        animation_effects,
+    };
+    let swimming = || KOI_TIMER.with(|t| t.running());
+    let watching = || KOI_WATCHING.with(Cell::get);
+
+    // Hidden: nothing runs.
+    wake_koi_with(&ui, view(false, false, true));
+    assert!(!swimming() && !watching());
+
+    // Shown and seen: swims, and the first frame already has the current time.
+    ui.set_koi_clock(-1.0);
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(swimming() && !watching());
+    assert_eq!(KOI_TIMER.with(|t| t.interval()), KOI_FRAME);
+    assert!(ui.get_koi_clock() >= 0.0);
+
+    // Covered: the koi hold still with no timer and wait for window changes.
+    ui.set_koi_clock(-1.0);
+    wake_koi_with(&ui, view(true, false, true));
+    assert!(!swimming() && watching());
+    assert_eq!(ui.get_koi_clock(), -1.0);
+
+    // Uncovered again: swims, and stops watching.
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(swimming() && !watching());
+
+    // Animation effects off: still and watching.
+    wake_koi_with(&ui, view(true, true, false));
+    assert!(!swimming() && watching());
+
+    // Settings open, or hidden: nothing runs.
+    ui.set_settings_open(true);
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(!swimming() && !watching());
+    ui.set_settings_open(false);
+    wake_koi_with(&ui, view(true, false, true));
+    wake_koi_with(&ui, view(false, false, true));
+    assert!(!swimming() && !watching());
+}
+
+#[test]
+fn koi_clock_wraps_on_a_whole_number_of_every_loop_and_tail_beat() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let school = ui.global::<KoiSchool>().get_fish();
+    assert!(school.row_count() > 0);
+    // Periods arrive as f32, so allow for their rounding.
+    let whole = |value: f64| (value - value.round()).abs() < 1e-3;
+    for fish in school.iter() {
+        // Whole loop frequencies bring every fish back to the same pose after each lap.
+        assert!(whole(fish.a.into()) && whole(fish.b.into()), "{fish:?}");
+        for period in [fish.period, fish.beat] {
+            assert!(
+                whole(KOI_CLOCK_WRAP_SECS / f64::from(period)),
+                "{KOI_CLOCK_WRAP_SECS} s is not a whole number of {period} s"
+            );
+        }
+    }
+}
+
+#[test]
+fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-koi-pond-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 0;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    wire_koi_pond(&ui, &ctrl);
+    ui.show().unwrap();
+    ctrl.borrow().sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.draw_if_needed(|_| {});
+    // Koi pond is the last Calendar row, below the fold.
+    scroll(&ui, -1000.0);
+    window.draw_if_needed(|_| {});
+    assert!(!ui.get_show_koi());
+
+    let switch = switch_center(&ui, "Koi pond");
+    click(&ui, switch.x, switch.y);
+    assert!(ctrl.borrow().prefs.show_koi);
+    assert!(ui.get_show_koi());
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert!(saved.preferences.show_koi);
+
+    click(&ui, switch.x, switch.y);
+    assert!(!ctrl.borrow().prefs.show_koi);
+    assert!(!ui.get_show_koi());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

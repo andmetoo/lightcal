@@ -750,6 +750,16 @@ fn render_calendar_boards(
     shot(ctrl, "today-no-weeks-light")?;
     ctrl.prefs.show_week_numbers = true;
 
+    // Koi pond behind the grid, at a fixed pond time so the boards are reproducible.
+    ctrl.prefs.show_koi = true;
+    ui.set_koi_clock(20.0);
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("koi-{}", theme.as_str()))?;
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.prefs.show_koi = false;
+
     // Event details: Friday 13 November, Design review expanded.
     ctrl.cal_state
         .select_date(LocalDate::new(2026, 11, 13).unwrap());
@@ -1088,6 +1098,39 @@ fn render_settings_snapshots(
     shot(ctrl, "about-offline")?;
     ctrl.update_state = UpdateCheckState::RateLimited;
     shot(ctrl, "about-error")?;
+
+    // The end of the Calendar tab, below the fold, with Koi pond on: its label in every
+    // language next to the switch.
+    for locale in LocaleCode::ALL {
+        reset(ctrl);
+        ctrl.prefs.set_locale(locale);
+        ctrl.prefs.show_koi = true;
+        ctrl.settings_tab = 0;
+        ctrl.prefs.theme = ThemePreference::Light;
+        ctrl.sync_to_ui(ui);
+        // Lay the tab out at settings size before scrolling it.
+        helper.window.set_size(slint::PhysicalSize::new(448, 360));
+        helper.window.draw_if_needed(|_| {});
+        let scroll = |delta_y| {
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::PointerScrolled {
+                    position: slint::LogicalPosition::new(220.0, 220.0),
+                    delta_x: 0.0,
+                    delta_y,
+                });
+        };
+        scroll(-1000.0);
+        helper.render_to_png(
+            &out_dir.join(format!(
+                "settings-calendar-end-light-{}.png",
+                locale.as_str()
+            )),
+            448,
+            360,
+        )?;
+        scroll(1000.0);
+    }
+    ctrl.prefs.show_koi = false;
 
     // Languages (Languages.dc.html): every tab and About in ru, es and ja.
     for locale in [LocaleCode::Ru, LocaleCode::Es, LocaleCode::Ja] {

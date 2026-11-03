@@ -301,3 +301,53 @@ mod tests {
         assert!(normalize_shortcut("Ctrl + ").is_err());
     }
 }
+
+/// What the user can see of the application window, for decorations that animate
+/// (the koi pond, ADR 0013).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowView {
+    /// Shown and not minimized.
+    pub on_screen: bool,
+    /// On screen with the display on, not cloaked on another virtual desktop, not under the
+    /// lock screen and not completely covered by opaque windows.
+    pub seen: bool,
+    /// Windows Settings › Accessibility › Visual effects › Animation effects.
+    pub animation_effects: bool,
+}
+
+/// Reads the native application window. Off Windows, and before the window exists, the
+/// window counts as off screen.
+pub fn main_window_view() -> WindowView {
+    #[cfg(windows)]
+    {
+        let on_screen = windows::main_window_is_open() == Some(true);
+        WindowView {
+            on_screen,
+            seen: on_screen && windows::main_window_is_seen(),
+            animation_effects: windows::animation_effects_enabled(),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        WindowView {
+            on_screen: false,
+            seen: false,
+            animation_effects: true,
+        }
+    }
+}
+
+/// Calls `on_change` when another app's window changes in a way that can uncover this one
+/// (foreground, move or resize, minimize or restore). Does nothing off Windows.
+pub fn watch_window_changes(on_change: impl Fn() + 'static) {
+    #[cfg(windows)]
+    windows::watch_window_changes(on_change);
+    #[cfg(not(windows))]
+    drop(on_change);
+}
+
+/// Stops `watch_window_changes`.
+pub fn stop_watching_window_changes() {
+    #[cfg(windows)]
+    windows::stop_watching_window_changes();
+}
