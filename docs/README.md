@@ -1,10 +1,10 @@
 # Documentation
 
-Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.1.0 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
+Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.1.1 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
 
 | Document | Purpose |
 | --- | --- |
-| [Calendar motion](decisions/0016-calendar-motion.md) | Copy, Settings, agenda and month-change transitions; Today underline |
+| [Calendar motion](decisions/0016-calendar-motion.md) | Copy, agenda and month-change transitions; Today underline; Settings unchanged |
 | [Calendar hover follow](decisions/0015-calendar-hover-follow.md) | One highlight springs after the pointer across the day grid; stronger selected fill |
 | [Ten languages](decisions/0014-ten-languages.md) | German, French, Brazilian Portuguese, Ukrainian, Simplified Chinese and Korean; two-column language menu |
 | [Koi pond](decisions/0013-koi-pond.md) | Optional koi swimming behind the calendar grid, off by default |

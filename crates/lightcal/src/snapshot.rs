@@ -62,11 +62,42 @@ impl HeadlessPlatform {
     }
 }
 
+thread_local! {
+    static START: std::time::Instant = std::time::Instant::now();
+    /// Test clock: while set, Slint's time (animations, timers, `animation-tick()`) moves
+    /// only when a test advances it, so motion tests do not depend on machine speed.
+    static TEST_TIME: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Stops Slint's clock on this thread at its current time; see [`advance_test_time`].
+pub fn use_test_time() {
+    let now = START.with(|start| start.elapsed());
+    TEST_TIME.with(|time| time.set(Some(now)));
+}
+
+/// Moves the stopped test clock forward. Panics if `use_test_time` was not called on this
+/// thread: without it no time would pass and a motion test would compare one moment twice.
+pub fn advance_test_time(by: std::time::Duration) {
+    TEST_TIME.with(|time| {
+        let now = time
+            .get()
+            .expect("call use_test_time before advancing the test clock");
+        time.set(Some(now + by));
+    });
+}
+
 impl slint::platform::Platform for HeadlessPlatform {
     fn create_window_adapter(
         &self,
     ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
         Ok(self.window.clone())
+    }
+
+    fn duration_since_start(&self) -> std::time::Duration {
+        TEST_TIME
+            .with(|time| time.get())
+            .unwrap_or_else(|| START.with(|start| start.elapsed()))
     }
 }
 

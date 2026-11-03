@@ -33,8 +33,12 @@ be marked with an underline instead of a ring.
   `FadeIn` control (`ui/controls.slint`) instead takes its opacity from the
   animation clock since it was created, and a timer pins it at full opacity
   when done, so it stops redrawing once settled. Event details use it, and fade
-  only for the event just clicked; details shown with the calendar, such as on
-  returning from Settings, appear at once.
+  only for the event just clicked: Rust names that event until its details
+  report that they faded in (or the day changes, or Settings opens), so a
+  refresh right after the click cannot cancel the fade, and details shown again
+  later (rows rebuilt by a refresh, another day and back, Settings and back)
+  appear at once. The single panel shared by all-day chips fades again
+  when a click opens another chip.
 - **Agenda expand.** The details panel fades in over 160 ms, while the row
   above squares its lower corners at the same pace. Row fills, including hover,
   change at once.

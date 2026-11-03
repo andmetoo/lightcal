@@ -635,10 +635,29 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
                 // Windows clamped it to limits Slint still held for the previous view: give
                 // Slint the new size, then place the window again.
                 ui.window().set_size(LogicalSize::new(logical_w, logical_h));
-                unsafe {
+                let placed = unsafe {
                     lightcal::platform::windows::position_window_above_tray(
                         hwnd, logical_w, logical_h,
-                    );
+                    )
+                };
+                if !placed {
+                    // Slint applies new limits once it handles events: place it again then,
+                    // for the view shown at that moment (it may have switched back).
+                    let ui_weak = ui.as_weak();
+                    slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                        let Some(ui) = ui_weak.upgrade() else {
+                            return;
+                        };
+                        let (w, h) =
+                            target_logical_size(ui.get_settings_open(), calendar_height(&ui));
+                        let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+                        // SAFETY: find_lightcal_hwnd returns this process's live window, or
+                        // null, which the call ignores.
+                        unsafe {
+                            lightcal::platform::windows::position_window_above_tray(hwnd, w, h);
+                        }
+                        apply_window_chrome(&ui);
+                    });
                 }
             }
             apply_window_chrome(ui);

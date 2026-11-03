@@ -366,14 +366,14 @@ export component CalendarView inherits Rectangle {
     callback open-event(string);
     callback go-next-event();
 
-    // The event the user last expanded or collapsed: only its details fade in. Details shown
-    // with the view, such as on returning from Settings, appear at once (ADR 0016).
-    property <string> just-toggled;
-
-    function toggle(key: string) {
-        root.just-toggled = key;
-        root.toggle-event(key);
-    }
+    // The event just expanded by a click: only its details fade in. Rust sets it for one
+    // sync, so details shown again later appear at once (ADR 0016).
+    in property <string> fade-details-key;
+    // The details of this event faded in, so Rust stops naming it.
+    callback details-faded(string);
+    // The pointer moved over the days while keyboard navigation showed its ring: mouse
+    // input ends keyboard mode, so the ring and the hover highlight never overlap.
+    callback pointer-took-over();
 
     // Wheel travel since the last month step (one notch is 60 px in Slint's winit backend).
     property <length> wheel-travel: 0px;
@@ -705,8 +705,12 @@ export component CalendarView inherits Rectangle {
                         }
                     }
                     // After arrow keys hide the highlight, the next pointer move brings it back.
+                    // Real movement, never a hover change alone, also ends keyboard mode.
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.move) {
+                            if (root.keyboard-nav) {
+                                root.pointer-took-over();
+                            }
                             root.report-hover(pill.index);
                         }
                     }
@@ -773,14 +777,22 @@ export component CalendarView inherits Rectangle {
                     alignment: start;
                     for chip in chip-row.chips : AllDayChip {
                         event: chip;
-                        clicked => { root.toggle(chip.key); }
+                        clicked => { root.toggle-event(chip.key); }
                     }
                 }
             }
             if root.has-expanded-chip : VerticalLayout {
                 padding-bottom: 6px;
                 EventDetails {
-                    fade-on-create: root.expanded-chip.key == root.just-toggled;
+                    fade-on-create: root.expanded-chip.key == root.fade-details-key;
+                    init => {
+                        if (self.fade-on-create) {
+                            root.details-faded(root.expanded-chip.key);
+                        }
+                    }
+                    // One panel serves every chip: it fades again when another chip opens.
+                    fade-key: root.expanded-chip.key;
+                    fade-on-change: root.expanded-chip.key == root.fade-details-key;
                     event: root.expanded-chip;
                     joined: false;
                     copy-label: root.copy-label;
@@ -796,10 +808,15 @@ export component CalendarView inherits Rectangle {
                 AgendaRow {
                     event: ev;
                     now-label: root.now-label;
-                    clicked => { root.toggle(ev.key); }
+                    clicked => { root.toggle-event(ev.key); }
                 }
                 if ev.expanded : EventDetails {
-                    fade-on-create: ev.key == root.just-toggled;
+                    fade-on-create: ev.key == root.fade-details-key;
+                    init => {
+                        if (self.fade-on-create) {
+                            root.details-faded(ev.key);
+                        }
+                    }
                     event: ev;
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;

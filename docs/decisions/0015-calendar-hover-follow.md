@@ -37,7 +37,10 @@ flicker in the 13 px gaps between tiles and that the hover fill (#F0F0F0 /
   100 ms. Leaving them, including into the weekday letters, fades it out in
   place over 120 ms; once invisible it starts fresh at the next cell.
 - Hover is independent of the selection. Arrow keys fade it out until the
-  pointer moves again.
+  pointer moves again, and that movement over the days (real movement, not a
+  hover change alone) ends keyboard mode, as
+  elsewhere in Windows: the focus ring goes as the highlight returns, so the
+  ring's filled gap never cuts into the moving highlight.
 - The selected day uses the palette's Selected fill, #E0E0E0 / #3A3A3A
   (`Theme.day-selected`), so hover and selected stay distinct. Other uses of
   `Theme.selected` are unchanged.

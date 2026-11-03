@@ -1026,6 +1026,104 @@ fn agenda_actions_use_the_row_that_was_rendered() {
 }
 
 #[test]
+fn agenda_details_fade_only_after_a_click_and_copied_crossfades() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    use std::time::Duration;
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-agenda-motion-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    lightcal::snapshot::use_test_time();
+    let mut ctrl = controller(&dir);
+    ctrl.animation_effects = || true;
+    ctrl.settings_open = false;
+    ctrl.provider = crate::snapshot_render::canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    // Friday 13 November has one event, so its actions are on screen (as in the snapshots).
+    ctrl.cal_state
+        .select_date(LocalDate::new(2026, 11, 13).unwrap());
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    let size = (352, 432);
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    ink_after(&window, size, Duration::from_millis(50));
+    let review = (0..ui.get_agenda_events().row_count())
+        .map(|row| ui.get_agenda_events().row_data(row).unwrap())
+        .find(|row| row.title == "Design review")
+        .expect("13 November has the design review");
+    // Changes over time: the first frame differs from one 400 ms later, which is steady.
+    let moves = || {
+        let first = ink_after(&window, size, Duration::ZERO);
+        let settled = ink_after(&window, size, Duration::from_millis(400));
+        assert_eq!(ink_after(&window, size, Duration::from_millis(50)), settled);
+        first != settled
+    };
+
+    // A click expands the review: its details fade in, even when a refresh syncs again
+    // before the next frame.
+    let faded = Rc::new(RefCell::new(Vec::new()));
+    let log = faded.clone();
+    ui.on_agenda_details_faded(move |key| log.borrow_mut().push(key));
+    ctrl.toggle_agenda_event(&review.key);
+    ctrl.sync_to_ui(&ui);
+    ctrl.sync_to_ui(&ui);
+    assert!(moves(), "details fade in after a click");
+    assert_eq!(*faded.borrow(), std::slice::from_ref(&review.key));
+    for key in faded.borrow().iter() {
+        ctrl.agenda_details_faded(key);
+    }
+    // A refresh brings another event that day: the rows are rebuilt, and the open details
+    // appear at once.
+    let mut extra = ctrl
+        .provider
+        .occurrences
+        .iter()
+        .find(|event| event.title == "Design review")
+        .unwrap()
+        .clone();
+    extra.event_id.push_str("-later");
+    extra.title = "Design follow-up".to_string();
+    ctrl.provider.occurrences.push(extra);
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "rebuilt rows do not fade the open details again");
+    // Another day and back: the still-open details appear at once.
+    let review_day = ctrl.cal_state.selected_date;
+    ctrl.cal_state.select_date(review_day.add_days(1));
+    ctrl.sync_to_ui(&ui);
+    ink_after(&window, size, Duration::from_millis(50));
+    ctrl.cal_state.select_date(review_day);
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "details shown again on their day do not fade");
+    // Any later sync leaves them as they are.
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "a sync does not fade them again");
+    // Settings and back rebuilds the calendar: the open details appear at once.
+    ctrl.settings_open = true;
+    ctrl.sync_to_ui(&ui);
+    ink_after(&window, size, Duration::from_millis(50));
+    ctrl.settings_open = false;
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "details shown with the view do not fade");
+    // Copy crossfades the action's label to Copied.
+    ctrl.copy_agenda_event(&review.key)
+        .expect("the review can be copied");
+    ctrl.sync_to_ui(&ui);
+    assert!(moves(), "Copy crossfades to Copied");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn date_size_sets_calendar_height_from_theme_metrics() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -1418,15 +1516,16 @@ fn header_animates_only_while_the_popup_is_on_screen() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Ink in the window: how far its pixels are from white, summed. A fading page shows
-/// what lies beneath it in its first frame, so its ink differs from the settled frame.
+/// Ink in the window after `wait` on the test clock (`use_test_time`): how far its pixels
+/// are from white, summed. A fading panel shows what lies beneath it in its first frame,
+/// so its ink differs from the settled frame.
 fn ink_after(
     window: &slint::platform::software_renderer::MinimalSoftwareWindow,
     (width, height): (usize, usize),
     wait: std::time::Duration,
 ) -> u64 {
     use slint::platform::software_renderer::PremultipliedRgbaColor;
-    std::thread::sleep(wait);
+    lightcal::snapshot::advance_test_time(wait);
     slint::platform::update_timers_and_animations();
     window.request_redraw();
     let mut pixels = vec![PremultipliedRgbaColor::default(); width * height];
@@ -1453,6 +1552,7 @@ fn opening_settings_shows_the_page_at_once() {
         "lightcal-settings-open-{}",
         lightcal::calendars::random_key().unwrap()
     ));
+    lightcal::snapshot::use_test_time();
     let mut ctrl = controller(&dir);
     ctrl.animation_effects = || true;
     ctrl.settings_open = false;

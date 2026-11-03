@@ -201,12 +201,22 @@ export component FadeIn inherits Rectangle {
     // False shows it at once: for details that appear with the calendar itself, as it
     // returns from Settings.
     in property <bool> fade-on-create: true;
+    // A panel reused for another item (one panel serves every all-day chip) fades again
+    // when `fade-key` changes while `fade-on-change` holds.
+    in property <string> fade-key;
+    in property <bool> fade-on-change: false;
     property <duration> born;
     property <bool> done: !Motion.enabled;
     init => {
         root.born = animation-tick();
         if (!root.fade-on-create) {
             root.done = true;
+        }
+    }
+    changed fade-key => {
+        if (root.fade-on-change && Motion.enabled) {
+            root.born = animation-tick();
+            root.done = false;
         }
     }
     opacity: root.done ? 1 : root.eased(clamp((animation-tick() - root.born) / root.fade-duration, 0, 1));

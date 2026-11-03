@@ -67,6 +67,9 @@ export component AppWindow inherits Window {
     in property <[AgendaChipRow]> agenda-chip-rows: [];
     in property <AgendaEventItem> agenda-expanded-chip;
     in property <bool> agenda-has-expanded-chip: false;
+    // The event whose details fade in: set by Rust for the sync after a click (ADR 0016).
+    in property <string> agenda-fade-key;
+    callback agenda-details-faded(string);
     in property <[AgendaEventItem]> agenda-events: [];
     in property <bool> agenda-empty: false;
     in property <string> agenda-empty-text: "No events";
@@ -179,7 +182,7 @@ export component AppWindow inherits Window {
     in property <string> updates-heading-text: "Updates";
     in property <string> about-link-text: "About Lightcal";
     in property <string> app-name-text: "Lightcal";
-    in property <string> about-version-text: "Version 1.1.0";
+    in property <string> about-version-text: "Version 1.1.1";
     in property <string> provider-readonly-tag-text: "Read-only";
     in property <string> shortcut-unset-text: "Not set";
     in property <string> license-short-text: "GPL-3.0-only";
@@ -449,6 +452,9 @@ export component AppWindow inherits Window {
         chip-rows: root.agenda-chip-rows;
         expanded-chip: root.agenda-expanded-chip;
         has-expanded-chip: root.agenda-has-expanded-chip;
+        fade-details-key: root.agenda-fade-key;
+        details-faded(arg0) => { root.agenda-details-faded(arg0); }
+        pointer-took-over() => { root.calendar-keyboard-nav = false; }
         agenda-events: root.agenda-events;
         agenda-empty: root.agenda-empty;
         empty-text: root.agenda-empty-text;

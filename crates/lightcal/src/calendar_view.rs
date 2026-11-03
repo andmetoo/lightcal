@@ -70,6 +70,11 @@ pub(crate) struct AgendaUiState {
     pub(crate) copy_generation: u64,
     /// Fixed local wall-clock time ([`local_minutes`]) for tests and snapshots.
     pub(crate) now_override: Option<i64>,
+    /// The event just expanded by a click, so only its details fade in. It lasts until those
+    /// details have faded in (the panel reports it), or the day changes, or Settings opens,
+    /// so a refresh right after the click cannot cancel the fade and details shown again
+    /// later (rows rebuilt, another day and back, Settings and back) appear at once.
+    pub(crate) fade: RefCell<Option<EventKey>>,
 }
 
 impl AppController {
@@ -116,6 +121,15 @@ impl AppController {
         } else {
             Some(key)
         };
+        *self.agenda.fade.borrow_mut() = self.agenda.expanded.clone();
+    }
+
+    /// The details of `row_key` have faded in: no later rebuild fades them again.
+    pub(crate) fn agenda_details_faded(&self, row_key: &str) {
+        let mut fade = self.agenda.fade.borrow_mut();
+        if fade.as_ref().map(EventKey::encode).as_deref() == Some(row_key) {
+            *fade = None;
+        }
     }
 
     /// Plain-text details of the event at `index` for the clipboard and the copy
@@ -317,6 +331,14 @@ impl AppController {
             })
             .collect();
         ui.set_agenda_chip_rows(ModelRc::new(VecModel::from(chip_rows)));
+        let fade_key = {
+            let mut fade = self.agenda.fade.borrow_mut();
+            if self.settings_open || fade.as_ref().is_some_and(|key| key.date != selected) {
+                *fade = None;
+            }
+            fade.as_ref().map(EventKey::encode).unwrap_or_default()
+        };
+        ui.set_agenda_fade_key(fade_key.into());
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
         let shown = ui.get_agenda_events();
@@ -365,6 +387,20 @@ pub(crate) fn connect_agenda_callbacks(
     reload: impl Fn(slint::Weak<AppWindow>) + 'static,
 ) {
     use slint::ComponentHandle;
+    {
+        // Reported while Slint builds the panel, possibly during a sync that holds the
+        // controller: then it is handled right after.
+        let ctrl = Rc::clone(ctrl);
+        ui.on_agenda_details_faded(move |row_key| match ctrl.try_borrow() {
+            Ok(c) => c.agenda_details_faded(&row_key),
+            Err(_) => {
+                let ctrl = Rc::clone(&ctrl);
+                slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                    ctrl.borrow().agenda_details_faded(&row_key);
+                });
+            }
+        });
+    }
     {
         let ctrl = Rc::clone(ctrl);
         let weak = ui.as_weak();
