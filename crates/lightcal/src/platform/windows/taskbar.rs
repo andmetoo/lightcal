@@ -519,6 +519,10 @@ unsafe extern "system" fn hook_proc(
             }
         }
     }
+    #[cfg(debug_assertions)]
+    if message == windows_sys::Win32::UI::WindowsAndMessaging::WM_WINDOWPOSCHANGED {
+        trace_window_pos(lp);
+    }
     match message {
         WM_NCDESTROY => {
             RemoveWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID);
@@ -545,6 +549,57 @@ unsafe extern "system" fn hook_proc(
         _ => {}
     }
     DefSubclassProc(hwnd, message, wp, lp)
+}
+
+/// Debug builds with `LIGHTCAL_TRACE_WINDOW` set print every native move and resize, so a
+/// view switch can be counted: each line is one change the user may see.
+#[cfg(debug_assertions)]
+fn tracing() -> bool {
+    thread_local! {
+        /// Read once: the window procedure runs this for every move.
+        static ENABLED: bool = std::env::var_os("LIGHTCAL_TRACE_WINDOW").is_some();
+    }
+    ENABLED.with(|enabled| *enabled)
+}
+
+#[cfg(debug_assertions)]
+fn trace_line(line: &str) {
+    thread_local! {
+        static START: std::time::Instant = std::time::Instant::now();
+    }
+    if tracing() {
+        let ms = START.with(|start| start.elapsed().as_millis());
+        eprintln!("window {ms:>6} ms: {line}");
+    }
+}
+
+#[cfg(debug_assertions)]
+unsafe fn trace_window_pos(lp: LPARAM) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SWP_NOMOVE, SWP_NOSIZE, WINDOWPOS};
+    if lp == 0 || !tracing() {
+        return;
+    }
+    let pos = &*(lp as *const WINDOWPOS);
+    if pos.flags & SWP_NOMOVE != 0 && pos.flags & SWP_NOSIZE != 0 {
+        return;
+    }
+    trace_line(&format!(
+        "x {} y {} {} × {}{}{}",
+        pos.x,
+        pos.y,
+        pos.cx,
+        pos.cy,
+        if pos.flags & SWP_NOMOVE != 0 {
+            " (no move)"
+        } else {
+            ""
+        },
+        if pos.flags & SWP_NOSIZE != 0 {
+            " (no size)"
+        } else {
+            ""
+        },
+    ));
 }
 
 /// Activation (the low word of wParam is WA_INACTIVE, 0, on deactivation), any system

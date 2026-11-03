@@ -914,7 +914,10 @@ pub fn animation_effects_enabled() -> bool {
     ok == 0 || enabled != 0
 }
 
-/// Atomically positions and sizes the window above the system tray / taskbar on the current monitor.
+/// Atomically positions and sizes the window above the system tray / taskbar on the current
+/// monitor, in one SetWindowPos, so the change shows as a single step. Returns whether the
+/// window landed exactly there: false when Windows clamped it (for example to size limits
+/// the window still reports for its previous content) or there is no window.
 ///
 /// # Safety
 ///
@@ -924,16 +927,17 @@ pub unsafe fn position_window_above_tray(
     hwnd: windows_sys::Win32::Foundation::HWND,
     logical_w: f32,
     logical_h: f32,
-) {
+) -> bool {
     if hwnd.is_null() {
-        return;
+        return false;
     }
+    use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
     };
     use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
+        GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
     };
 
     let dpi = GetDpiForWindow(hwnd);
@@ -976,9 +980,14 @@ pub unsafe fn position_window_above_tray(
         phys_h,
         SWP_NOACTIVATE | SWP_NOZORDER,
     );
+    let mut placed: RECT = std::mem::zeroed();
+    GetWindowRect(hwnd, &mut placed) != 0
+        && (placed.left, placed.top, placed.right, placed.bottom)
+            == (target_x, target_y, target_x + phys_w, target_y + phys_h)
 }
 
-/// Restores a minimized window and positions it accurately above the tray.
+/// Restores a minimized window and positions it accurately above the tray. Returns whether
+/// it landed exactly there; see `position_window_above_tray`.
 ///
 /// # Safety
 ///
@@ -988,9 +997,9 @@ pub unsafe fn show_and_restore_window(
     hwnd: windows_sys::Win32::Foundation::HWND,
     logical_w: f32,
     logical_h: f32,
-) {
+) -> bool {
     if hwnd.is_null() {
-        return;
+        return false;
     }
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         BringWindowToTop, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
@@ -1002,10 +1011,11 @@ pub unsafe fn show_and_restore_window(
         ShowWindow(hwnd, SW_SHOW);
     }
 
-    position_window_above_tray(hwnd, logical_w, logical_h);
+    let placed = position_window_above_tray(hwnd, logical_w, logical_h);
 
     BringWindowToTop(hwnd);
     SetForegroundWindow(hwnd);
+    placed
 }
 
 /// Environment variable that opts into the Windows 11 Mica backdrop prototype (ADR 0011).
@@ -1157,6 +1167,81 @@ mod tests {
             ShowWindow(hwnd, SW_HIDE);
         }
         assert_eq!(main_window_is_open(), Some(false));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn placing_the_window_is_one_change_and_reports_a_clamp() {
+        use std::cell::Cell;
+        use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+        use windows_sys::Win32::UI::Shell::{
+            DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::*;
+        const COUNT_ID: usize = 0x4c43_5043;
+        const CLAMP_ID: usize = 0x4c43_434c;
+
+        /// Counts the native changes of size or position the user could see.
+        unsafe extern "system" fn count(
+            hwnd: HWND,
+            message: u32,
+            wp: WPARAM,
+            lp: LPARAM,
+            _id: usize,
+            data: usize,
+        ) -> LRESULT {
+            if message == WM_WINDOWPOSCHANGED {
+                let pos = &*(lp as *const WINDOWPOS);
+                if pos.flags & SWP_NOSIZE == 0 || pos.flags & SWP_NOMOVE == 0 {
+                    let changes = &*(data as *const Cell<u32>);
+                    changes.set(changes.get() + 1);
+                }
+            }
+            DefSubclassProc(hwnd, message, wp, lp)
+        }
+        /// Size limits the window still reports, as Slint can for the previous view.
+        unsafe extern "system" fn clamp(
+            hwnd: HWND,
+            message: u32,
+            wp: WPARAM,
+            lp: LPARAM,
+            _id: usize,
+            _data: usize,
+        ) -> LRESULT {
+            let result = DefSubclassProc(hwnd, message, wp, lp);
+            if message == WM_GETMINMAXINFO {
+                let info = &mut *(lp as *mut MINMAXINFO);
+                info.ptMaxTrackSize.x = 200;
+                info.ptMaxTrackSize.y = 200;
+            }
+            result
+        }
+
+        let window =
+            crate::platform::windows::test_window::TestWindow::new("Lightcal placement test");
+        let hwnd = window.0;
+        let changes = Box::new(Cell::new(0u32));
+        let data = &*changes as *const Cell<u32> as usize;
+        assert_ne!(
+            unsafe { SetWindowSubclass(hwnd, Some(count), COUNT_ID, data) },
+            0
+        );
+        // Settings, then the calendar: each a single change, exactly where asked.
+        for (width, height) in [(448.0, 360.0), (352.0, 432.0)] {
+            let before = changes.get();
+            assert!(unsafe { position_window_above_tray(hwnd, width, height) });
+            assert_eq!(changes.get() - before, 1, "{width} × {height} in one step");
+        }
+        assert_ne!(
+            unsafe { SetWindowSubclass(hwnd, Some(clamp), CLAMP_ID, 0) },
+            0
+        );
+        assert!(!unsafe { position_window_above_tray(hwnd, 448.0, 360.0) });
+        assert!(!unsafe { position_window_above_tray(std::ptr::null_mut(), 448.0, 360.0) });
+        unsafe {
+            RemoveWindowSubclass(hwnd, Some(clamp), CLAMP_ID);
+            RemoveWindowSubclass(hwnd, Some(count), COUNT_ID);
+        }
     }
 
     #[test]

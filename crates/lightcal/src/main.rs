@@ -621,19 +621,32 @@ fn calendar_height(ui: &AppWindow) -> f32 {
 
 fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
     let (logical_w, logical_h) = target_logical_size(settings_open, calendar_height(ui));
-    ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     #[cfg(windows)]
     {
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
         if !hwnd.is_null() {
-            unsafe {
-                lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h);
+            // One SetWindowPos sizes and moves the window together. Resizing through Slint
+            // first showed the new size in the old place for about 20 ms, then a jump.
+            let placed = unsafe {
+                lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h)
+            };
+            if !placed {
+                // Windows clamped it to limits Slint still held for the previous view: give
+                // Slint the new size, then place the window again.
+                ui.window().set_size(LogicalSize::new(logical_w, logical_h));
+                unsafe {
+                    lightcal::platform::windows::position_window_above_tray(
+                        hwnd, logical_w, logical_h,
+                    );
+                }
             }
             apply_window_chrome(ui);
             return;
         }
     }
+
+    ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     let scale = ui.window().scale_factor().max(1.0);
     // Frameless window geometry anchored cleanly right above the Windows Taskbar / System Tray.
@@ -2045,18 +2058,25 @@ fn popup_on_screen() -> bool {
 
 fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
+    // Showing places the window once; it is placed again only if that did not land.
     #[cfg(windows)]
-    {
+    let placed = {
         let (lw, lh) = target_logical_size(ui.get_settings_open(), calendar_height(ui));
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+        let placed = !hwnd.is_null()
+            && unsafe { lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh) };
         if !hwnd.is_null() {
-            unsafe {
-                lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh);
-            }
             ensure_window_hooks(ui, hwnd);
         }
+        placed
+    };
+    #[cfg(not(windows))]
+    let placed = false;
+    if placed {
+        apply_window_chrome(ui);
+    } else {
+        sync_window_geometry(ui, ui.get_settings_open());
     }
-    sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
     wake_koi(ui);
 }
