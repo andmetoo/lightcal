@@ -599,8 +599,15 @@ fn draw_text(
     }
 }
 
+/// Digit height for two-digit dates: about 0.4 of the raster.
 fn digit_height_target(size: usize) -> usize {
     (size as f32 * 0.4 + 0.5).round() as usize
+}
+
+/// Digit height for single-digit dates: about half the raster, so one digit
+/// does not look lost in a tile sized for "28".
+fn single_digit_height_target(size: usize) -> usize {
+    (size as f32 * 0.5).round() as usize
 }
 
 /// The date tile: an optional label in a taller band, and a body line
@@ -655,15 +662,24 @@ fn all_dates() -> Vec<String> {
     (1..=31).map(|day: u8| day.to_string()).collect()
 }
 
+/// Dates 1–9 share one taller size and 10–31 another, so every date of a
+/// group keeps the same height while a lone digit fills the tile.
 fn render_date_tile(size: usize, face: Face, style: Style, day: u8) -> Vec<u8> {
+    let day = day.clamp(1, 31);
+    let (days, target) = if day < 10 {
+        (1..=9, single_digit_height_target(size))
+    } else {
+        (10..=31, digit_height_target(size))
+    };
+    let candidates: Vec<String> = days.map(|d: u8| d.to_string()).collect();
     render_tile(
         size,
         face,
         style,
         None,
-        &day.clamp(1, 31).to_string(),
-        &all_dates(),
-        digit_height_target(size),
+        &day.to_string(),
+        &candidates,
+        target,
     )
 }
 
@@ -1330,23 +1346,36 @@ mod tests {
     }
 
     #[test]
-    fn one_numeral_size_per_raster_size() {
+    fn one_numeral_size_per_digit_count_and_raster_size() {
         // Flat-topped, flat-bottomed digits show the shared cap height directly.
         for face in faces() {
             for size in TRAY_SIZES {
-                let rows: Vec<(usize, usize)> = [1u8, 4, 7, 11, 14, 17]
-                    .iter()
-                    .map(|&day| {
-                        let b =
-                            numeral_bounds(&render_date_tile(size, face, Style::Color, day), size);
-                        (b.1, b.3)
-                    })
-                    .collect();
-                // Baselines are identical; the `1` flag may rise one row above `4`/`7`.
+                let rows_for = |days: &[u8]| -> Vec<(usize, usize)> {
+                    days.iter()
+                        .map(|&day| {
+                            let b = numeral_bounds(
+                                &render_date_tile(size, face, Style::Color, day),
+                                size,
+                            );
+                            (b.1, b.3)
+                        })
+                        .collect()
+                };
+                let single = rows_for(&[1, 4, 7]);
+                let double = rows_for(&[11, 14, 17]);
+                for rows in [&single, &double] {
+                    // Baselines are identical; the `1` flag may rise one row above `4`/`7`.
+                    assert!(
+                        rows.windows(2)
+                            .all(|w| w[0].1 == w[1].1 && w[0].0.abs_diff(w[1].0) <= 1),
+                        "numeral rows differ at {size}px: {rows:?}"
+                    );
+                }
+                // A lone digit is drawn taller than a two-digit date.
+                let height = |rows: &[(usize, usize)]| rows[1].1 - rows[1].0;
                 assert!(
-                    rows.windows(2)
-                        .all(|w| w[0].1 == w[1].1 && w[0].0.abs_diff(w[1].0) <= 1),
-                    "numeral rows differ at {size}px: {rows:?}"
+                    height(&single) > height(&double),
+                    "single digits are not taller at {size}px: {single:?} vs {double:?}"
                 );
             }
         }

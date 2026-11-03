@@ -58,10 +58,12 @@ expensive for a one-person project.
   2/32 outline (at least 1 px) in `#1A1A1A` on a light shell and white on a
   dark one. The numeral is Segoe UI Variable Bold (Text optical size) from
   `%WINDIR%\Fonts`, falling back to Segoe UI Bold and then built-in stroke
-  digits; only the needed outlines stay in memory. Digits are about 0.4 of the
-  raster tall, with one size for all 31 dates at each raster (ADR 0010; the
-  canvas's 19/18 split is not used), sit on a whole-pixel baseline centred
-  below the band, and shrink only if the widest date would cross the margin.
+  digits; only the needed outlines stay in memory. Dates 10–31 are about 0.4
+  of the raster tall and dates 1–9 about 0.5, so a lone digit does not look
+  lost in a tile sized for two. Each group shares one size at each raster
+  (ADR 0010; the canvas's 19/18 split is not used). Digits sit on a
+  whole-pixel baseline centred below the band and shrink only if the widest
+  date of their group would cross the margin.
   The application icon and `crates/lightcal/assets/lightcal.ico` come from the
   same renderer (`--export-app-icon`); `--export-icon-review <dir>` writes
   review sheets. The window/taskbar icon stays the dated tile (ADR 0010).
