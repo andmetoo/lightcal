@@ -23,6 +23,18 @@ fn labelled_center(ui: &AppWindow, label: &str) -> slint::LogicalPosition {
     let element = ElementHandle::find_by_accessible_label(ui, label)
         .next()
         .unwrap_or_else(|| panic!("no element labelled {label:?}"));
+    element_center(&element)
+}
+
+/// Centre of the switch with this label; a settings row title shares the label.
+fn switch_center(ui: &AppWindow, label: &str) -> slint::LogicalPosition {
+    let element = ElementHandle::find_by_accessible_label(ui, label)
+        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Checkbox))
+        .unwrap_or_else(|| panic!("no switch labelled {label:?}"));
+    element_center(&element)
+}
+
+fn element_center(element: &ElementHandle) -> slint::LogicalPosition {
     let (position, size) = (element.absolute_position(), element.size());
     slint::LogicalPosition::new(
         position.x + size.width / 2.0,
@@ -1064,22 +1076,16 @@ fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     window.draw_if_needed(|_| {});
     assert!(!ui.get_show_koi());
 
-    // The row title shares the label; press the switch itself.
-    let switch = ElementHandle::find_by_accessible_label(&ui, "Koi pond")
-        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Checkbox))
-        .expect("Koi pond switch");
-    let center = |e: &ElementHandle| {
-        let (p, s) = (e.absolute_position(), e.size());
-        (p.x + s.width / 2.0, p.y + s.height / 2.0)
-    };
-    let (x, y) = center(&switch);
-    click(&ui, x, y);
+    let switch = switch_center(&ui, "Koi pond");
+    click(&ui, switch.x, switch.y);
     assert!(ctrl.borrow().prefs.show_koi);
     assert!(ui.get_show_koi());
+    // No native popup is on screen in a headless test, so the koi clock does not run.
+    assert!(!KOI_TIMER.with(|timer| timer.running()));
     let saved = PreferencesStore::new(dir.clone()).load();
     assert!(saved.preferences.show_koi);
 
-    click(&ui, x, y);
+    click(&ui, switch.x, switch.y);
     assert!(!ctrl.borrow().prefs.show_koi);
     assert!(!ui.get_show_koi());
     let _ = std::fs::remove_dir_all(&dir);

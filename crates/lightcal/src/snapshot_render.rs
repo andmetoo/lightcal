@@ -750,8 +750,9 @@ fn render_calendar_boards(
     shot(ctrl, "today-no-weeks-light")?;
     ctrl.prefs.show_week_numbers = true;
 
-    // Koi pond behind the grid.
+    // Koi pond behind the grid, at a fixed pond time so the boards are reproducible.
     ctrl.prefs.show_koi = true;
+    ui.set_koi_clock(20.0);
     for theme in [ThemePreference::Light, ThemePreference::Dark] {
         ctrl.prefs.theme = theme;
         shot(ctrl, &format!("koi-{}", theme.as_str()))?;

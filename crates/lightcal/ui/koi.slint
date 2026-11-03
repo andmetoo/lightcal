@@ -6,7 +6,9 @@
 import { Theme } from "theme.slint";
 
 struct KoiPose {
-    heading: angle,
+    // Cosine and sine of the heading, worked out once per fish and frame.
+    cos: float,
+    sin: float,
     // Tail beat, −1 … 1.
     wag: float,
     // Body length in logical px.
@@ -42,10 +44,10 @@ global KoiMath {
         p.wag * 0.12 * p.size * (0.5 - u) * (0.5 - u)
     }
     public pure function x(p: KoiPose, u: float, v: float) -> float {
-        root.half * p.size + u * p.size * cos(p.heading) - (v * p.size + root.bend(p, u)) * sin(p.heading)
+        root.half * p.size + u * p.size * p.cos - (v * p.size + root.bend(p, u)) * p.sin
     }
     public pure function y(p: KoiPose, u: float, v: float) -> float {
-        root.half * p.size + u * p.size * sin(p.heading) + (v * p.size + root.bend(p, u)) * cos(p.heading)
+        root.half * p.size + u * p.size * p.sin + (v * p.size + root.bend(p, u)) * p.cos
     }
 }
 
@@ -200,8 +202,9 @@ component Koi inherits Rectangle {
     KoiBody {
         pose: root.pose;
         fill: root.body;
-        // A faint edge keeps a white koi visible on the light popup.
-        stroke: Theme.dark ? transparent : #00000048;
+        // A faint edge keeps a white koi visible on the light popup and a dark one on the
+        // dark popup.
+        stroke: Theme.dark ? #FFFFFF2C : #00000048;
         stroke-width: 0.8px;
     }
     KoiSpot { pose: root.pose; fill: root.head-spot; u: 0.3; v: 0; ru: 0.11; rv: 0.075; }
@@ -211,31 +214,36 @@ component Koi inherits Rectangle {
 
 // The pond fills its parent. Every koi follows its own slow loop
 // (x = sin(a·θ + p), y = sin(b·θ + q) around the centre) and points along the
-// loop's tangent. Nothing is drawn, and nothing animates, unless the pond is shown.
+// loop's tangent. Rust advances `clock` (seconds) while the popup is on screen and
+// wraps it every 960 s, a whole number of every loop and tail beat below, so the
+// wrap is seamless and the value stays small enough for exact float math.
 export component KoiPond inherits Rectangle {
-    property <float> t: animation-tick() / 1s;
+    in property <float> clock;
     // Faint enough that every date reads over a fish.
     opacity: 0.5;
     property <[KoiSwim]> school: [
         // Kohaku: white with red patches, on a wide oval.
-        { a: 1, b: 1, p: 0deg, q: 90deg, ax: 0.38, ay: 0.36, period: 46, beat: 1.3, size: 46,
+        { a: 1, b: 1, p: 0deg, q: 90deg, ax: 0.38, ay: 0.36, period: 48, beat: 1.2, size: 46,
           body: #F6F1E9, fin: #F6F1E9C0, head: #E04A2A, back: #E04A2A, tail: #00000000 },
         // Yamabuki ogon: plain gold, on a figure eight.
-        { a: -1, b: 2, p: 60deg, q: 0deg, ax: 0.42, ay: 0.30, period: 64, beat: 1.1, size: 40,
+        { a: -1, b: 2, p: 60deg, q: 0deg, ax: 0.42, ay: 0.30, period: 64, beat: 1.6, size: 40,
           body: #F2A93B, fin: #F2A93BC0, head: #F8CB72, back: #00000000, tail: #00000000 },
         // Showa: dark with red and white patches, on a tall figure eight.
-        { a: 2, b: 1, p: 0deg, q: 200deg, ax: 0.30, ay: 0.38, period: 80, beat: 1.5, size: 36,
-          body: #34302E, fin: #34302EB0, head: #E04A2A, back: #F6F1E9, tail: #E04A2A },
+        { a: 2, b: 1, p: 0deg, q: 200deg, ax: 0.30, ay: 0.38, period: 80, beat: 1.0, size: 36,
+          body: Theme.dark ? #4A4441 : #34302E, fin: Theme.dark ? #4A4441B0 : #34302EB0, head: #E04A2A, back: #F6F1E9, tail: #E04A2A },
     ];
 
     for fish in root.school : Koi {
-        property <angle> theta: root.t * 360deg / fish.period;
+        property <angle> theta: root.clock * 360deg / fish.period;
         cx: root.width / 2 + fish.ax * root.width * sin(fish.a * self.theta + fish.p);
         cy: root.height / 2 + fish.ay * root.height * sin(fish.b * self.theta + fish.q);
+        property <angle> heading: atan2(
+            fish.ay * root.height / 1px * fish.b * cos(fish.b * self.theta + fish.q),
+            fish.ax * root.width / 1px * fish.a * cos(fish.a * self.theta + fish.p));
         pose: {
-            heading: atan2(fish.ay * root.height / 1px * fish.b * cos(fish.b * self.theta + fish.q),
-                fish.ax * root.width / 1px * fish.a * cos(fish.a * self.theta + fish.p)),
-            wag: 0.8 * sin(root.t * 360deg / fish.beat + fish.p),
+            cos: cos(self.heading),
+            sin: sin(self.heading),
+            wag: 0.8 * sin(root.clock * 360deg / fish.beat + fish.p),
             size: fish.size,
         };
         body: fish.body;

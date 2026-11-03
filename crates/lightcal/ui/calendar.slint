@@ -292,6 +292,8 @@ export component CalendarView inherits Rectangle {
     in property <bool> show-event-dots;
     // Koi swim behind the dates (ADR 0013).
     in property <bool> show-koi: false;
+    // Pond time in seconds, advanced by Rust while the popup is on screen.
+    in property <float> koi-clock;
     in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     // Keyboard navigation draws the focus ring on the selected day.
     in property <bool> keyboard-nav: false;
@@ -478,6 +480,7 @@ export component CalendarView inherits Rectangle {
 
         // Over the bands, under the weekday letters and dates.
         if root.show-koi : KoiPond {
+            clock: root.koi-clock;
             width: grid.width;
             height: grid.height;
         }

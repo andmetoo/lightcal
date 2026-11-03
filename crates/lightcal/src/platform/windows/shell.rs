@@ -715,6 +715,26 @@ pub fn main_window_is_open() -> Option<bool> {
     Some(unsafe { IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 })
 }
 
+/// Windows Settings › Accessibility › Visual effects › Animation effects. Reads as on
+/// when the query fails, which matches the Windows default.
+#[cfg(windows)]
+pub fn animation_effects_enabled() -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION,
+    };
+    let mut enabled: windows_sys::core::BOOL = 1;
+    // SAFETY: SPI_GETCLIENTAREAANIMATION writes one BOOL to the pointer we pass.
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            &mut enabled as *mut _ as *mut _,
+            0,
+        )
+    };
+    ok == 0 || enabled != 0
+}
+
 /// Atomically positions and sizes the window above the system tray / taskbar on the current monitor.
 ///
 /// # Safety

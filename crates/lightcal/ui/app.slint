@@ -204,6 +204,8 @@ export component AppWindow inherits Window {
     in property <bool> show-event-dots: true;
     // Koi swimming behind the calendar grid; off by default (ADR 0013).
     in property <bool> show-koi: false;
+    // Pond time in seconds (ADR 0013); Rust advances it only while the pond is on screen.
+    in property <float> koi-clock;
     // Standard 14 px, Large 16 px, Larger 18 px (week rows 34 px, popup 444 px tall).
     in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     in property <string> label-date-size-text: "Date size";
@@ -429,6 +431,7 @@ export component AppWindow inherits Window {
         cells: root.cells;
         show-event-dots: root.show-event-dots;
         show-koi: root.show-koi;
+        koi-clock: root.koi-clock;
         date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
         agenda-title: root.agenda-title;

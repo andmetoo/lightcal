@@ -402,6 +402,57 @@ fn wire_koi_pond(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
     });
 }
 
+/// The koi clock wraps every 960 s, a whole number of every koi loop and tail beat in
+/// ui/koi.slint, so the wrap is seamless and the f32 clock never loses precision.
+const KOI_CLOCK_WRAP_SECS: f64 = 960.0;
+/// About 30 frames a second: smooth for slow fish, and fewer repaints than the display rate.
+const KOI_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
+
+thread_local! {
+    static KOI_TIMER: slint::Timer = slint::Timer::default();
+    static KOI_EPOCH: std::time::Instant = std::time::Instant::now();
+}
+
+fn animation_effects_enabled() -> bool {
+    #[cfg(windows)]
+    {
+        lightcal::platform::windows::animation_effects_enabled()
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
+/// The koi move only while the calendar shows the pond on screen and Windows animation
+/// effects are on; otherwise they hold still.
+fn koi_should_swim(ui: &AppWindow) -> bool {
+    ui.get_show_koi() && !ui.get_settings_open() && popup_on_screen() && animation_effects_enabled()
+}
+
+/// Starts the koi clock when the pond should swim. The timer stops itself once the popup
+/// hides or minimizes, the pond closes or animation effects go off, so a hidden Lightcal
+/// never wakes for the koi; showing or restoring the popup starts it again.
+fn wake_koi(ui: &AppWindow) {
+    if KOI_TIMER.with(|timer| timer.running()) || !koi_should_swim(ui) {
+        return;
+    }
+    let ui_weak = ui.as_weak();
+    KOI_TIMER.with(|timer| {
+        timer.start(slint::TimerMode::Repeated, KOI_FRAME, move || {
+            let Some(ui) = ui_weak.upgrade() else {
+                return;
+            };
+            if !koi_should_swim(&ui) {
+                KOI_TIMER.with(|timer| timer.stop());
+                return;
+            }
+            let secs = KOI_EPOCH.with(|epoch| epoch.elapsed().as_secs_f64());
+            ui.set_koi_clock((secs % KOI_CLOCK_WRAP_SECS) as f32);
+        });
+    });
+}
+
 /// Settings › Calendar › Date size: store the choice and refresh the UI. Shared with the
 /// headless test so it exercises the production handler.
 fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
@@ -989,6 +1040,7 @@ impl AppController {
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
         ui.set_show_koi(self.prefs.show_koi);
+        wake_koi(ui);
         ui.set_date_size(self.prefs.date_size.into());
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
@@ -1629,6 +1681,7 @@ fn show_application_window(ui: &AppWindow) {
     }
     sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
+    wake_koi(ui);
 }
 
 fn hide_application_window(ui: &AppWindow) {
@@ -1675,6 +1728,7 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     // Runs before the restored window paints, so its first frame is complete.
                     if let Some(ui) = restore_ui.upgrade() {
                         request_full_repaint(&ui);
+                        wake_koi(&ui);
                     }
                 },
                 move || {
