@@ -715,14 +715,58 @@ pub fn main_window_is_open() -> Option<bool> {
     Some(unsafe { IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 })
 }
 
-/// Whether the application window is the foreground window: false while it sits behind
-/// another app, on another virtual desktop, or under the lock screen.
+/// Whether someone can see part of the application window, which must already be on screen:
+/// false while it is cloaked on another virtual desktop, the session is locked or another
+/// window covers it completely. Five points across the window are hit-tested, so a
+/// window that still shows a corner counts as seen.
 #[cfg(windows)]
-pub fn main_window_is_foreground() -> bool {
+pub fn main_window_is_seen() -> bool {
+    use windows_sys::Win32::Foundation::{POINT, RECT};
+    use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+    use windows_sys::Win32::System::StationsAndDesktops::{
+        CloseDesktop, OpenInputDesktop, DESKTOP_SWITCHDESKTOP,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetWindowRect, WindowFromPoint, GA_ROOT,
+    };
     let hwnd = find_lightcal_hwnd();
-    // SAFETY: GetForegroundWindow only reads shell state.
-    !hwnd.is_null()
-        && unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() } == hwnd
+    if hwnd.is_null() {
+        return false;
+    }
+    // SAFETY: these calls only read window, DWM and desktop state for our own window; the
+    // input desktop handle is closed before returning.
+    unsafe {
+        let mut cloaked: u32 = 0;
+        let cloak_read = DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED as u32,
+            &mut cloaked as *mut u32 as *mut _,
+            std::mem::size_of::<u32>() as u32,
+        );
+        if cloak_read == 0 && cloaked != 0 {
+            return false;
+        }
+        // A locked session (or a UAC prompt) switches input to a desktop we cannot open.
+        let input = OpenInputDesktop(0, 0, DESKTOP_SWITCHDESKTOP);
+        if input.is_null() {
+            return false;
+        }
+        CloseDesktop(input);
+        let mut rect: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return true;
+        }
+        let (w, h) = (rect.right - rect.left, rect.bottom - rect.top);
+        [(1, 1), (1, 3), (3, 1), (3, 3), (2, 2)]
+            .into_iter()
+            .any(|(fx, fy)| {
+                let point = POINT {
+                    x: rect.left + w * fx / 4,
+                    y: rect.top + h * fy / 4,
+                };
+                GetAncestor(WindowFromPoint(point), GA_ROOT) == hwnd
+            })
+    }
 }
 
 /// Windows Settings › Accessibility › Visual effects › Animation effects. Reads as on

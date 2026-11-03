@@ -1099,6 +1099,39 @@ fn render_settings_snapshots(
     ctrl.update_state = UpdateCheckState::RateLimited;
     shot(ctrl, "about-error")?;
 
+    // The end of the Calendar tab, below the fold, with Koi pond on: its label in every
+    // language next to the switch.
+    for locale in LocaleCode::ALL {
+        reset(ctrl);
+        ctrl.prefs.set_locale(locale);
+        ctrl.prefs.show_koi = true;
+        ctrl.settings_tab = 0;
+        ctrl.prefs.theme = ThemePreference::Light;
+        ctrl.sync_to_ui(ui);
+        // Lay the tab out at settings size before scrolling it.
+        helper.window.set_size(slint::PhysicalSize::new(448, 360));
+        helper.window.draw_if_needed(|_| {});
+        let scroll = |delta_y| {
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::PointerScrolled {
+                    position: slint::LogicalPosition::new(220.0, 220.0),
+                    delta_x: 0.0,
+                    delta_y,
+                });
+        };
+        scroll(-1000.0);
+        helper.render_to_png(
+            &out_dir.join(format!(
+                "settings-calendar-end-light-{}.png",
+                locale.as_str()
+            )),
+            448,
+            360,
+        )?;
+        scroll(1000.0);
+    }
+    ctrl.prefs.show_koi = false;
+
     // Languages (Languages.dc.html): every tab and About in ru, es and ja.
     for locale in [LocaleCode::Ru, LocaleCode::Es, LocaleCode::Ja] {
         reset(ctrl);

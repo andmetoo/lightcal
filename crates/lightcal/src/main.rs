@@ -405,42 +405,40 @@ fn wire_koi_pond(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
 /// The koi clock wraps every 960 s, a whole number of every koi loop and tail beat in
 /// ui/koi.slint, so the wrap is seamless and the f32 clock never loses precision.
 const KOI_CLOCK_WRAP_SECS: f64 = 960.0;
-/// About 30 frames a second: smooth for slow fish, and fewer repaints than the display rate.
-const KOI_FRAME: std::time::Duration = std::time::Duration::from_millis(33);
+/// 31.25 ms (32 frames a second) is two ticks of Windows' default 15.625 ms timer, so
+/// frames stay evenly spaced even where the timer wait is not high resolution.
+const KOI_FRAME: std::time::Duration = std::time::Duration::from_micros(31_250);
+/// While the popup is on screen but unseen or still, a check a second notices when the
+/// koi may swim again (a covering window moved, the session unlocked).
+const KOI_WATCH: std::time::Duration = std::time::Duration::from_secs(1);
 
 thread_local! {
     static KOI_TIMER: slint::Timer = slint::Timer::default();
     static KOI_EPOCH: std::time::Instant = std::time::Instant::now();
+    /// Reads the native window; tests replace it with a fake.
+    static KOI_VIEW: std::cell::Cell<fn() -> lightcal::platform::WindowView> =
+        std::cell::Cell::new(lightcal::platform::main_window_view);
 }
 
-fn animation_effects_enabled() -> bool {
-    #[cfg(windows)]
-    {
-        lightcal::platform::windows::animation_effects_enabled()
-    }
-    #[cfg(not(windows))]
-    {
-        true
-    }
+/// What the koi clock does next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KoiPace {
+    /// Pond off, settings open, or the popup hidden or minimized: no timer at all.
+    Off,
+    /// On screen but not seen (covered, cloaked, locked) or Animation effects off: the koi
+    /// hold still and a slow check waits for that to change.
+    Watch,
+    Swim,
 }
 
-/// Whether the popup is on screen and in front: not hidden, minimized, behind another
-/// app, on another virtual desktop or under the lock screen.
-fn popup_in_front() -> bool {
-    #[cfg(windows)]
-    {
-        popup_on_screen() && lightcal::platform::windows::main_window_is_foreground()
+fn koi_pace(show_koi: bool, settings_open: bool, view: lightcal::platform::WindowView) -> KoiPace {
+    if !show_koi || settings_open || !view.on_screen {
+        KoiPace::Off
+    } else if view.seen && view.animation_effects {
+        KoiPace::Swim
+    } else {
+        KoiPace::Watch
     }
-    #[cfg(not(windows))]
-    {
-        false
-    }
-}
-
-/// The koi move only while the calendar shows the pond in front and Windows animation
-/// effects are on; otherwise they hold still.
-fn koi_should_swim(ui: &AppWindow) -> bool {
-    ui.get_show_koi() && !ui.get_settings_open() && popup_in_front() && animation_effects_enabled()
 }
 
 /// Pond time now, from one epoch, so the koi carry on where real time puts them.
@@ -449,27 +447,37 @@ fn set_koi_clock_now(ui: &AppWindow) {
     ui.set_koi_clock((secs % KOI_CLOCK_WRAP_SECS) as f32);
 }
 
-/// Starts the koi clock when the pond should swim. The timer stops itself once the popup
-/// hides, minimizes or loses the foreground, the pond closes or animation effects go off,
-/// so an unseen Lightcal never wakes for the koi. Showing, restoring or activating the
-/// popup and turning animation effects back on start it again.
+/// Sets the koi clock's pace from the window as it is now. Off stops the timer, so a hidden
+/// Lightcal never wakes for the koi; Watch checks once a second; Swim advances the pond
+/// every frame. Showing, restoring or activating the popup, closing settings and an
+/// Animation effects change call this; the timer calls it on every tick.
 fn wake_koi(ui: &AppWindow) {
-    if KOI_TIMER.with(|timer| timer.running()) || !koi_should_swim(ui) {
-        return;
-    }
-    // The first frame shows the current pose, not the one from when the koi last stopped.
-    set_koi_clock_now(ui);
-    let ui_weak = ui.as_weak();
+    let view = KOI_VIEW.with(|probe| probe.get()());
+    let pace = koi_pace(ui.get_show_koi(), ui.get_settings_open(), view);
+    let interval = match pace {
+        KoiPace::Off => {
+            KOI_TIMER.with(|timer| timer.stop());
+            return;
+        }
+        KoiPace::Watch => KOI_WATCH,
+        KoiPace::Swim => {
+            // Also before the first frame, so it never shows the pose the koi stopped in.
+            set_koi_clock_now(ui);
+            KOI_FRAME
+        }
+    };
     KOI_TIMER.with(|timer| {
-        timer.start(slint::TimerMode::Repeated, KOI_FRAME, move || {
-            let Some(ui) = ui_weak.upgrade() else {
-                return;
-            };
-            if !koi_should_swim(&ui) {
-                KOI_TIMER.with(|timer| timer.stop());
-                return;
+        if timer.running() {
+            if timer.interval() != interval {
+                timer.set_interval(interval);
             }
-            set_koi_clock_now(&ui);
+            return;
+        }
+        let ui_weak = ui.as_weak();
+        timer.start(slint::TimerMode::Repeated, interval, move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                wake_koi(&ui);
+            }
         });
     });
 }

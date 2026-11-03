@@ -1049,6 +1049,109 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
 }
 
 #[test]
+fn koi_pace_follows_what_the_user_can_see() {
+    use lightcal::platform::WindowView;
+    let seen = WindowView {
+        on_screen: true,
+        seen: true,
+        animation_effects: true,
+    };
+    assert_eq!(koi_pace(true, false, seen), KoiPace::Swim);
+    assert_eq!(koi_pace(false, false, seen), KoiPace::Off);
+    assert_eq!(koi_pace(true, true, seen), KoiPace::Off);
+    let hidden = WindowView {
+        on_screen: false,
+        seen: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, hidden), KoiPace::Off);
+    let covered = WindowView {
+        seen: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, covered), KoiPace::Watch);
+    let still = WindowView {
+        animation_effects: false,
+        ..seen
+    };
+    assert_eq!(koi_pace(true, false, still), KoiPace::Watch);
+}
+
+thread_local! {
+    static FAKE_VIEW: Cell<lightcal::platform::WindowView> = const {
+        Cell::new(lightcal::platform::WindowView {
+            on_screen: false,
+            seen: false,
+            animation_effects: true,
+        })
+    };
+}
+
+fn fake_view() -> lightcal::platform::WindowView {
+    FAKE_VIEW.with(Cell::get)
+}
+
+#[test]
+fn koi_clock_swims_watches_and_stops_with_the_window() {
+    use lightcal::platform::WindowView;
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    ui.set_show_koi(true);
+    KOI_VIEW.with(|probe| probe.set(fake_view));
+    let set_view = |on_screen, seen, animation_effects| {
+        FAKE_VIEW.with(|view| {
+            view.set(WindowView {
+                on_screen,
+                seen,
+                animation_effects,
+            })
+        })
+    };
+    let timer = || KOI_TIMER.with(|t| t.running().then(|| t.interval()));
+
+    // Hidden: no timer at all.
+    wake_koi(&ui);
+    assert_eq!(timer(), None);
+
+    // Shown and seen: swims, and the first frame already has the current time.
+    ui.set_koi_clock(-1.0);
+    set_view(true, true, true);
+    wake_koi(&ui);
+    assert_eq!(timer(), Some(KOI_FRAME));
+    assert!(ui.get_koi_clock() >= 0.0);
+
+    // Covered: the koi hold still and a slow check watches for the window to show again.
+    set_view(true, false, true);
+    ui.set_koi_clock(-1.0);
+    wake_koi(&ui);
+    assert_eq!(timer(), Some(KOI_WATCH));
+    assert_eq!(ui.get_koi_clock(), -1.0);
+
+    // Uncovered again: the next check swims.
+    set_view(true, true, true);
+    wake_koi(&ui);
+    assert_eq!(timer(), Some(KOI_FRAME));
+
+    // Animation effects off: still, watched.
+    set_view(true, true, false);
+    wake_koi(&ui);
+    assert_eq!(timer(), Some(KOI_WATCH));
+
+    // Settings open, or hidden: the timer stops.
+    set_view(true, true, true);
+    ui.set_settings_open(true);
+    wake_koi(&ui);
+    assert_eq!(timer(), None);
+    ui.set_settings_open(false);
+    wake_koi(&ui);
+    set_view(false, false, true);
+    wake_koi(&ui);
+    assert_eq!(timer(), None);
+}
+
+#[test]
 fn koi_clock_wraps_on_a_whole_number_of_every_loop_and_tail_beat() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -1102,8 +1205,6 @@ fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     click(&ui, switch.x, switch.y);
     assert!(ctrl.borrow().prefs.show_koi);
     assert!(ui.get_show_koi());
-    // No native popup is on screen in a headless test, so the koi clock does not run.
-    assert!(!KOI_TIMER.with(|timer| timer.running()));
     let saved = PreferencesStore::new(dir.clone()).load();
     assert!(saved.preferences.show_koi);
 

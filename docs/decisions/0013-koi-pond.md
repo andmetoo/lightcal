@@ -21,17 +21,22 @@ popup is hidden and must not make dates harder to read.
   koi have a faint outline: dark in the light theme, light in the dark theme,
   where the showa body is also lightened.
 - The fish are vector paths in `ui/koi.slint` with no image assets. Their
-  pose comes from a pond clock in seconds that Rust advances about 30 times a
-  second and wraps every 960 s, a whole number of every loop and tail beat, so
+  pose comes from a pond clock in seconds that Rust advances 32 times a second
+  (two ticks of the default Windows timer, so frames stay evenly spaced) and wraps every 960 s, a whole number of every loop and tail beat, so
   the wrap is seamless and the f32 clock stays precise however long Lightcal
   runs. Each fish lives in its own small box so the software renderer
   repaints only the boxes that move.
-- The clock runs only while the pond is shown, the popup is the foreground
-  window and Windows **Animation effects** is on. Its timer stops itself when
-  the popup hides, minimizes, falls behind another app, moves to another
-  virtual desktop or sits under the lock screen. Showing or activating the
-  popup, or turning Animation effects back on, starts it again from the current
-  pond time. With Animation effects off the koi stay still.
+- The koi swim while the pond is shown, the popup can be seen and Windows
+  **Animation effects** is on. "Seen" means on screen, not cloaked on another
+  virtual desktop, not under the lock screen, and not completely covered:
+  five points across the window are hit-tested, so a popup shown without
+  activation, or partly behind another app, still swims.
+- When the popup is on screen but unseen, or Animation effects is off, the koi
+  hold still and the timer checks once a second for that to change. When the
+  popup hides or minimizes, the pond closes or settings open, the timer stops
+  entirely. Showing, restoring or activating the popup, or an Animation effects
+  change, re-checks at once, and swimming always resumes from the current pond
+  time.
 - A test reads the school from Slint and checks that the 960 s wrap is a whole
   number of every loop period and tail beat.
 - Labels: Koi pond, Пруд с карпами кои, Estanque koi, 鯉の池.
@@ -39,7 +44,8 @@ popup is hidden and must not make dates harder to read.
 ## Consequences
 
 - While the popup is open with the pond on, Lightcal repaints the koi about
-  30 times a second. [Validation](../validation.md) records 0 CPU with the pond on and the popup
+  32 times a second, and checks once a second while it is open but unseen.
+  [Validation](../validation.md) records 0 CPU with the pond on and the popup
   hidden; the cost while the popup is open is not measured yet.
 - Headless snapshots pin the pond clock, so `calendar-koi-*.png` are
   reproducible.
