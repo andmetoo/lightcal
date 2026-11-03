@@ -32,21 +32,27 @@ be marked with an underline instead of a ring.
   property, so an element created already "open" would never fade. The
   `FadeIn` control (`ui/controls.slint`) instead takes its opacity from the
   animation clock since it was created, and a timer pins it at full opacity
-  when done, so it stops redrawing once settled. Event details use it, and
-  appear at once when the calendar returns from Settings with one open.
+  when done, so it stops redrawing once settled. Event details use it, and fade
+  only for the event just clicked; details shown with the calendar, such as on
+  returning from Settings, appear at once.
 - **Agenda expand.** The details panel fades in over 160 ms, while the row
-  above squares its lower corners at the same pace and fades its fill.
+  above squares its lower corners at the same pace. Row fills, including hover,
+  change at once.
   Collapsing is instant. The panel cannot also slide or grow: it is created
   when it opens and takes its height from its own layout, so the agenda below
   still moves at once.
-  Agenda rows are now updated in place when their number is unchanged, so a
+  Agenda rows are now updated in place when they are the same events, so a
   sync (for example after Copy) no longer rebuilds them or restarts their
-  transitions.
+  transitions; another day's events get new rows, so nothing animates between
+  unrelated events.
 - **Month change.** When the displayed month changes, the six day rows enter
   from 8 px in the direction of travel (later months from the right) and fade
   in, ease-out cubic over 180 ms. The weekday letters, shaded bands, koi and
-  hover highlight stay put. It plays only for changes made while the popup is
-  on screen with Animation effects on; Rust drives it with a timer that runs
+  hover highlight stay put, and clicks and hover use the settled grid while the
+  rows move. A month change during a slide carries on from the offset and
+  opacity on screen, so fast paging glides instead of blanking the grid. It
+  plays only for changes made while the popup is on screen with Animation
+  effects on; Rust drives it with a timer that runs
   only during the slide, and hiding the popup or opening Settings settles it.
 - **Selected Today.** The 1.5 px coral ring is replaced by a 16 × 2 px coral
   underline, 1 px below the Today tile in the 4 px gap between week rows. The

@@ -3,7 +3,7 @@
 //! from where it is drawn, at the speed it has, and never visits cells passed on the way.
 //! A timer advances the spring only while something still moves.
 
-use crate::AppWindow;
+use crate::{AppWindow, Motion};
 use slint::ComponentHandle;
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
@@ -158,7 +158,7 @@ pub(crate) fn wire_hover_follow(ui: &AppWindow) {
     ui.on_hover_cell(move |index| {
         if let Some(ui) = ui_weak.upgrade() {
             let cell = (index >= 0).then_some((index % 7, index / 7));
-            let animate = lightcal::platform::animation_effects_enabled();
+            let animate = ui.global::<Motion>().get_enabled();
             HOVER.with_borrow_mut(|hover| hover.point(cell, animate));
             publish(&ui);
         }
@@ -168,7 +168,7 @@ pub(crate) fn wire_hover_follow(ui: &AppWindow) {
 /// Arrow keys hide the highlight until the pointer moves again.
 pub(crate) fn hide_hover_for_keys(ui: &AppWindow) {
     ui.set_hover_cell_index(-1);
-    let animate = lightcal::platform::animation_effects_enabled();
+    let animate = ui.global::<Motion>().get_enabled();
     HOVER.with_borrow_mut(|hover| hover.point(None, animate));
     publish(ui);
 }

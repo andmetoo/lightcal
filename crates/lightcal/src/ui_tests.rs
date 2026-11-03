@@ -1476,9 +1476,13 @@ fn opening_settings_shows_the_page_at_once() {
 #[test]
 fn month_changes_slide_only_on_screen_with_animation_effects() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
-    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let window_handle = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window_handle.clone(),
+    }))
+    .unwrap();
     let ui = AppWindow::new().unwrap();
+    let window = window_handle;
     let dir = std::env::temp_dir().join(format!(
         "lightcal-month-slide-{}",
         lightcal::calendars::random_key().unwrap()
@@ -1495,19 +1499,46 @@ fn month_changes_slide_only_on_screen_with_animation_effects() {
     assert!(settled(&ui));
     assert!(ui.global::<Motion>().get_enabled());
 
-    // On screen: forward enters from the right, back from the left.
+    // On screen: forward enters from the right.
     ctrl.on_screen = || true;
     ctrl.cal_state.navigate_months(1);
     ctrl.sync_to_ui(&ui);
     assert_eq!((ui.get_month_shift(), ui.get_month_fade()), (8.0, 0.0));
+    // Clicks use the settled grid while the rows slide: a point 4 px inside the second
+    // column's left edge selects the second column, not the first.
+    let lead = if ui.get_show_week_numbers() {
+        24.0
+    } else {
+        0.0
+    };
+    let col_width = (352.0 - 24.0 - lead) / 7.0;
+    let selected = Rc::new(Cell::new(-1));
+    let picked = selected.clone();
+    ui.on_select_cell(move |index| picked.set(index));
+    ui.show().unwrap();
+    ui.window()
+        .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
+    window.set_size(slint::PhysicalSize::new(528, 648));
+    click(&ui, 12.0 + lead + col_width + 4.0, 68.0 + 16.0);
+    assert_eq!(selected.get(), 1);
+    // A change during a slide carries on from where the rows are, never jumping to the
+    // other side or blanking the grid.
+    let (shift, fade) = (ui.get_month_shift(), ui.get_month_fade());
+    ctrl.cal_state.navigate_months(-1);
+    ctrl.sync_to_ui(&ui);
+    assert!((0.0..=shift).contains(&ui.get_month_shift()));
+    assert!(ui.get_month_fade() >= fade);
+    // A sync in the same month leaves a slide alone; hiding settles it.
+    let shift = ui.get_month_shift();
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(ui.get_month_shift(), shift);
+    month_slide::settle_month_slide(&ui);
+    assert!(settled(&ui));
+    // Once settled, going back enters from the left.
     ctrl.cal_state.navigate_months(-1);
     ctrl.sync_to_ui(&ui);
     assert_eq!(ui.get_month_shift(), -8.0);
-    // A sync in the same month leaves a slide alone; hiding settles it.
-    ctrl.sync_to_ui(&ui);
-    assert_eq!(ui.get_month_shift(), -8.0);
     month_slide::settle_month_slide(&ui);
-    assert!(settled(&ui));
 
     // Animation effects off: no slide, no header motion, and every transition is instant.
     ctrl.animation_effects = || false;
@@ -1584,6 +1615,13 @@ fn hover_follows_whole_day_cells_and_hides_for_arrow_keys() {
     move_to(at(4.0, 3.0, col_width / 2.0 + 1.0, 16.0));
     assert_eq!(ui.get_hover_cell_index(), 25);
     assert_eq!(*reported.borrow(), [9, 10, 17, -1, 25, 25]);
+
+    // A sync rebuilds the cells model but not the day tiles, so leaving the window after
+    // a click still reports leaving and the highlight cannot get stuck.
+    ctrl.sync_to_ui(&ui);
+    ui.window().dispatch_event(WindowEvent::PointerExited);
+    assert_eq!(ui.get_hover_cell_index(), -1);
+    assert_eq!(reported.borrow().last(), Some(&-1));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -187,7 +187,6 @@ component AgendaRow inherits Rectangle {
     border-bottom-right-radius: root.event.expanded ? 0px : Theme.radius-control;
     background: root.event.expanded ? Theme.chip : (touch.has-hover ? Theme.hover : transparent);
     animate border-bottom-left-radius, border-bottom-right-radius { duration: Motion.move; easing: ease-out; }
-    animate background { duration: Motion.fade; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.event.time-label + ", " + root.event.title
         + (root.event.badge != "" ? ", " + root.event.badge : "");
@@ -368,13 +367,13 @@ export component CalendarView inherits Rectangle {
     callback open-event(string);
     callback go-next-event();
 
-    // Details shown with the view (returning from Settings) appear at once; only ones
-    // opened afterwards fade in (ADR 0016).
-    property <bool> ready: false;
-    Timer {
-        interval: 1ms;
-        running: !root.ready;
-        triggered => { root.ready = true; }
+    // The event the user last expanded or collapsed: only its details fade in. Details shown
+    // with the view, such as on returning from Settings, appear at once (ADR 0016).
+    property <string> just-toggled;
+
+    function toggle(key: string) {
+        root.just-toggled = key;
+        root.toggle-event(key);
     }
 
     // Wheel travel since the last month step (one notch is 60 px in Slint's winit backend).
@@ -693,8 +692,10 @@ export component CalendarView inherits Rectangle {
 
                 // The whole cell, gaps included, so a sweep along a row never leaves the
                 // grid between tiles.
+                // Offset against the month slide, so clicks and hover always use the
+                // settled grid while the rows move.
                 TouchArea {
-                    x: -(grid.col-width - pill.width) / 2;
+                    x: -(grid.col-width - pill.width) / 2 - root.month-shift;
                     y: -pill.y;
                     width: grid.col-width;
                     height: root.row-height;
@@ -775,14 +776,14 @@ export component CalendarView inherits Rectangle {
                     alignment: start;
                     for chip in chip-row.chips : AllDayChip {
                         event: chip;
-                        clicked => { root.toggle-event(chip.key); }
+                        clicked => { root.toggle(chip.key); }
                     }
                 }
             }
             if root.has-expanded-chip : VerticalLayout {
                 padding-bottom: 6px;
                 EventDetails {
-                    fade-on-create: root.ready;
+                    fade-on-create: root.expanded-chip.key == root.just-toggled;
                     event: root.expanded-chip;
                     joined: false;
                     copy-label: root.copy-label;
@@ -798,10 +799,10 @@ export component CalendarView inherits Rectangle {
                 AgendaRow {
                     event: ev;
                     now-label: root.now-label;
-                    clicked => { root.toggle-event(ev.key); }
+                    clicked => { root.toggle(ev.key); }
                 }
                 if ev.expanded : EventDetails {
-                    fade-on-create: root.ready;
+                    fade-on-create: ev.key == root.just-toggled;
                     event: ev;
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;

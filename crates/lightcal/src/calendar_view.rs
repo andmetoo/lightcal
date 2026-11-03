@@ -320,7 +320,12 @@ impl AppController {
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
         let shown = ui.get_agenda_events();
-        update_rows_in_place(&shown, timed, |rows| ui.set_agenda_events(rows));
+        update_rows_in_place(
+            &shown,
+            timed,
+            |a, b| a.key == b.key,
+            |rows| ui.set_agenda_events(rows),
+        );
         ui.set_agenda_empty(events.is_empty());
         ui.set_agenda_empty_text(format_event_count(locale, 0).into());
         let next = events
@@ -517,16 +522,24 @@ fn detail_time(locale: LocaleCode, event: &CalendarOccurrence) -> String {
     }
 }
 
-/// Updates the rows already shown when their number is unchanged, so Slint keeps each row
-/// and its transitions (an opening details panel, Copy → Copied) instead of rebuilding
-/// them on every sync. Otherwise publishes a new model.
+/// Updates the rows already shown when they are the same rows (`same_row` pairwise), so
+/// Slint keeps each row and its transitions (an opening details panel, Copy → Copied)
+/// instead of rebuilding them on every sync. Different rows, such as another day's
+/// events, get a new model, so no transition plays between unrelated rows.
 fn update_rows_in_place<T: Clone + PartialEq + 'static>(
     shown: &ModelRc<T>,
     rows: Vec<T>,
+    same_row: impl Fn(&T, &T) -> bool,
     publish: impl FnOnce(ModelRc<T>),
 ) {
     if let Some(model) = shown.as_any().downcast_ref::<VecModel<T>>() {
-        if model.row_count() == rows.len() {
+        let same = model.row_count() == rows.len()
+            && rows.iter().enumerate().all(|(index, row)| {
+                model
+                    .row_data(index)
+                    .is_some_and(|shown| same_row(&shown, row))
+            });
+        if same {
             for (index, row) in rows.into_iter().enumerate() {
                 if model.row_data(index).as_ref() != Some(&row) {
                     model.set_row_data(index, row);
@@ -541,6 +554,25 @@ fn update_rows_in_place<T: Clone + PartialEq + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rows_stay_in_place_only_when_they_are_the_same_rows() {
+        let shown = ModelRc::new(VecModel::from(vec![(1, "a"), (2, "b")]));
+        let same_key = |a: &(i32, &str), b: &(i32, &str)| a.0 == b.0;
+        // Same events, new data (Copy → Copied): updated in place.
+        let mut published = false;
+        update_rows_in_place(&shown, vec![(1, "a"), (2, "B")], same_key, |_| {
+            published = true
+        });
+        assert!(!published);
+        assert_eq!(shown.row_data(1), Some((2, "B")));
+        // Another day's events, same count: a new model, so no transition plays.
+        update_rows_in_place(&shown, vec![(3, "c"), (4, "d")], same_key, |_| {
+            published = true
+        });
+        assert!(published);
+        assert_eq!(shown.row_data(0), Some((1, "a")));
+    }
 
     #[test]
     fn adjacent_shaded_columns_merge_into_one_band() {
