@@ -613,10 +613,25 @@ fn wakes(message: u32, wp: WPARAM) -> bool {
     }
 }
 
-/// A DPI or display change, or a system setting change such as the taskbar moving to
-/// another monitor, any of which can change the shell's icon sizes.
+/// A DPI or display change, a system setting change such as the taskbar moving to another
+/// monitor, or Explorer restarting with a new taskbar, any of which can change the shell's
+/// icon sizes and the taskbar's place.
 fn changes_display(message: u32) -> bool {
     matches!(message, WM_DPICHANGED | WM_DISPLAYCHANGE | WM_SETTINGCHANGE)
+        || (message != 0 && message == taskbar_created())
+}
+
+/// The `TaskbarCreated` message Explorer broadcasts to top-level windows after it restarts,
+/// or 0 (`WM_NULL`, which never matches) when it cannot be registered.
+fn taskbar_created() -> u32 {
+    static MESSAGE: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *MESSAGE.get_or_init(|| {
+        let name: Vec<u16> = "TaskbarCreated".encode_utf16().chain([0]).collect();
+        // SAFETY: `name` is NUL-terminated and outlives the call.
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::RegisterWindowMessageW(name.as_ptr())
+        }
+    })
 }
 
 /// The console display state from a `PBT_POWERSETTINGCHANGE` broadcast: `Some(false)` when
@@ -955,14 +970,21 @@ mod tests {
         let counter = changes.clone();
         let hooks = unsafe { WindowHooks::install(window.0, || {}, || None) }.unwrap();
         hooks.set_on_display_change(move || counter.set(counter.get() + 1));
-        for message in [WM_DPICHANGED, WM_DISPLAYCHANGE, WM_SETTINGCHANGE] {
+        for message in [
+            WM_DPICHANGED,
+            WM_DISPLAYCHANGE,
+            WM_SETTINGCHANGE,
+            taskbar_created(),
+        ] {
             // A null RECT makes WM_DPICHANGED's default handling a no-op for the test window.
             unsafe { SendMessageW(window.0, message, 0, 0) };
         }
-        assert_eq!(changes.get(), 3);
+        assert_eq!(changes.get(), 4);
         unsafe { SendMessageW(window.0, WM_SIZE, 0, 0) };
-        assert_eq!(changes.get(), 3);
+        assert_eq!(changes.get(), 4);
         assert!(!changes_display(WM_ACTIVATE));
+        // WM_NULL is never taken for TaskbarCreated, even if registering it failed.
+        assert!(!changes_display(0));
     }
     #[test]
     fn hooks_report_native_restores_from_minimized() {

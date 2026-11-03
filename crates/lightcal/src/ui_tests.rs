@@ -1743,3 +1743,30 @@ fn display_change_refresh_follows_preferences_and_skips_a_busy_controller() {
     ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn reanchor_runs_once_after_a_burst_of_changes() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    lightcal::snapshot::use_test_time();
+    let runs = Rc::new(Cell::new(0));
+    let last = Rc::new(Cell::new(0));
+    let step = REANCHOR_QUIET / 2;
+    // Changes closer together than the quiet time keep pushing the move back, and only
+    // the last change's move runs.
+    for change in 1..=4 {
+        let (counter, latest) = (runs.clone(), last.clone());
+        after_display_quiet(move || {
+            counter.set(counter.get() + 1);
+            latest.set(change);
+        });
+        lightcal::snapshot::advance_test_time(step);
+        slint::platform::update_timers_and_animations();
+        assert_eq!(runs.get(), 0);
+    }
+    lightcal::snapshot::advance_test_time(REANCHOR_QUIET);
+    slint::platform::update_timers_and_animations();
+    assert_eq!((runs.get(), last.get()), (1, 4));
+    lightcal::snapshot::advance_test_time(REANCHOR_QUIET * 3);
+    slint::platform::update_timers_and_animations();
+    assert_eq!(runs.get(), 1, "a single-shot move");
+}
