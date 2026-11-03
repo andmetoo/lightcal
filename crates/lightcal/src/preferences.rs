@@ -169,10 +169,35 @@ pub enum LocaleCode {
     Es,
     #[serde(rename = "ja")]
     Ja,
+    #[serde(rename = "de")]
+    De,
+    #[serde(rename = "fr")]
+    Fr,
+    #[serde(rename = "pt-BR")]
+    PtBr,
+    #[serde(rename = "uk")]
+    Uk,
+    #[serde(rename = "zh-Hans")]
+    ZhHans,
+    #[serde(rename = "ko")]
+    Ko,
 }
 
 impl LocaleCode {
-    pub const ALL: [LocaleCode; 4] = [Self::En, Self::Ru, Self::Es, Self::Ja];
+    /// Every locale in language-menu order: English first, then Latin, Cyrillic and CJK
+    /// scripts, each sorted by its own name.
+    pub const ALL: [LocaleCode; 10] = [
+        Self::En,
+        Self::De,
+        Self::Es,
+        Self::Fr,
+        Self::PtBr,
+        Self::Ru,
+        Self::Uk,
+        Self::Ja,
+        Self::Ko,
+        Self::ZhHans,
+    ];
 
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -180,6 +205,12 @@ impl LocaleCode {
             Self::Ru => "ru",
             Self::Es => "es",
             Self::Ja => "ja",
+            Self::De => "de",
+            Self::Fr => "fr",
+            Self::PtBr => "pt-BR",
+            Self::Uk => "uk",
+            Self::ZhHans => "zh-Hans",
+            Self::Ko => "ko",
         }
     }
 
@@ -189,6 +220,12 @@ impl LocaleCode {
             Self::Ru => "Русский",
             Self::Es => "Español",
             Self::Ja => "日本語",
+            Self::De => "Deutsch",
+            Self::Fr => "Français",
+            Self::PtBr => "Português (Brasil)",
+            Self::Uk => "Українська",
+            Self::ZhHans => "简体中文",
+            Self::Ko => "한국어",
         }
     }
 
@@ -197,6 +234,12 @@ impl LocaleCode {
             "ru" => Self::Ru,
             "es" => Self::Es,
             "ja" => Self::Ja,
+            "de" => Self::De,
+            "fr" => Self::Fr,
+            "pt-br" | "pt_br" | "pt" => Self::PtBr,
+            "uk" => Self::Uk,
+            "zh-hans" | "zh_hans" | "zh-cn" | "zh" => Self::ZhHans,
+            "ko" => Self::Ko,
             _ => Self::En,
         }
     }
@@ -454,7 +497,7 @@ enum WarningKind {
 
 impl WarningKind {
     fn message(&self, locale: LocaleCode) -> String {
-        use LocaleCode::{En, Es, Ja, Ru};
+        use LocaleCode::{De, En, Es, Fr, Ja, Ko, PtBr, Ru, Uk, ZhHans};
         let n = CURRENT_SCHEMA_VERSION;
         match (self, locale) {
             (Self::Unreadable(e), En) => format!("Could not read preferences file: {e}"),
@@ -494,6 +537,60 @@ impl WarningKind {
             ),
             (Self::Malformed(e), Ja) => format!(
                 "設定ファイルが壊れています ({e})。コピーを保持し、安全な既定値を読み込みました。"
+            ),
+            (Self::Unreadable(e), De) => format!("Die Einstellungsdatei konnte nicht gelesen werden: {e}"),
+            (Self::NewerSchema(v), De) => format!(
+                "Das Einstellungsschema v{v} ist neuer als das unterstützte v{n}; die Originaldatei bleibt erhalten und sichere Standardwerte wurden geladen."
+            ),
+            (Self::MissingSchema, De) => "Die Einstellungsdatei hat keine schema_version; eine Kopie bleibt erhalten und sichere Standardwerte wurden geladen.".into(),
+            (Self::ResetValues, De) => "Einige Einstellungen wurden nicht erkannt und zurückgesetzt; die Originaldatei bleibt erhalten.".into(),
+            (Self::Malformed(e), De) => format!(
+                "Beschädigte Einstellungsdatei ({e}); eine Kopie bleibt erhalten und sichere Standardwerte wurden geladen."
+            ),
+            (Self::Unreadable(e), Fr) => format!("Impossible de lire le fichier de préférences\u{a0}: {e}"),
+            (Self::NewerSchema(v), Fr) => format!(
+                "Le schéma de préférences v{v} est plus récent que la version prise en charge v{n}\u{a0}; le fichier d’origine est conservé et des valeurs par défaut sûres ont été chargées."
+            ),
+            (Self::MissingSchema, Fr) => "Le fichier de préférences n’a pas de schema_version\u{a0}; une copie est conservée et des valeurs par défaut sûres ont été chargées.".into(),
+            (Self::ResetValues, Fr) => "Certains paramètres n’ont pas été reconnus et ont été réinitialisés\u{a0}; le fichier d’origine est conservé.".into(),
+            (Self::Malformed(e), Fr) => format!(
+                "Fichier de préférences endommagé ({e})\u{a0}; une copie est conservée et des valeurs par défaut sûres ont été chargées."
+            ),
+            (Self::Unreadable(e), PtBr) => format!("Não foi possível ler o arquivo de preferências: {e}"),
+            (Self::NewerSchema(v), PtBr) => format!(
+                "O esquema de preferências v{v} é mais recente que o suportado v{n}; o arquivo original foi mantido e valores padrão seguros foram carregados."
+            ),
+            (Self::MissingSchema, PtBr) => "O arquivo de preferências não tem schema_version; uma cópia foi mantida e valores padrão seguros foram carregados.".into(),
+            (Self::ResetValues, PtBr) => "Algumas configurações não foram reconhecidas e foram redefinidas; o arquivo original foi mantido.".into(),
+            (Self::Malformed(e), PtBr) => format!(
+                "Arquivo de preferências corrompido ({e}); uma cópia foi mantida e valores padrão seguros foram carregados."
+            ),
+            (Self::Unreadable(e), Uk) => format!("Не вдалося прочитати файл налаштувань: {e}"),
+            (Self::NewerSchema(v), Uk) => format!(
+                "Схема налаштувань v{v} новіша за підтримувану v{n}; початковий файл збережено, завантажено безпечні типові значення."
+            ),
+            (Self::MissingSchema, Uk) => "У файлі налаштувань немає schema_version; копію збережено, завантажено безпечні типові значення.".into(),
+            (Self::ResetValues, Uk) => "Деякі налаштування не розпізнано й скинуто; початковий файл збережено.".into(),
+            (Self::Malformed(e), Uk) => format!(
+                "Файл налаштувань пошкоджено ({e}); копію збережено, завантажено безпечні типові значення."
+            ),
+            (Self::Unreadable(e), ZhHans) => format!("无法读取设置文件：{e}"),
+            (Self::NewerSchema(v), ZhHans) => format!(
+                "设置架构 v{v} 比支持的 v{n} 更新；已保留原始文件并加载安全的默认值。"
+            ),
+            (Self::MissingSchema, ZhHans) => "设置文件缺少 schema_version；已保留副本并加载安全的默认值。".into(),
+            (Self::ResetValues, ZhHans) => "部分设置无法识别，已重置；原始文件已保留。".into(),
+            (Self::Malformed(e), ZhHans) => format!(
+                "设置文件已损坏（{e}）；已保留副本并加载安全的默认值。"
+            ),
+            (Self::Unreadable(e), Ko) => format!("설정 파일을 읽을 수 없습니다: {e}"),
+            (Self::NewerSchema(v), Ko) => format!(
+                "설정 스키마 v{v}이(가) 지원되는 v{n}보다 최신입니다. 원본 파일은 보관하고 안전한 기본값을 불러왔습니다."
+            ),
+            (Self::MissingSchema, Ko) => "설정 파일에 schema_version이 없습니다. 사본을 보관하고 안전한 기본값을 불러왔습니다.".into(),
+            (Self::ResetValues, Ko) => "일부 설정을 인식할 수 없어 초기화했습니다. 원본 파일은 보관되어 있습니다.".into(),
+            (Self::Malformed(e), Ko) => format!(
+                "설정 파일이 손상되었습니다({e}). 사본을 보관하고 안전한 기본값을 불러왔습니다."
             ),
         }
     }
@@ -1110,6 +1207,43 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
     }
 
     #[test]
+    fn locale_codes_round_trip_and_accept_aliases() {
+        for locale in LocaleCode::ALL {
+            assert_eq!(LocaleCode::from_code_or_default(locale.as_str()), locale);
+        }
+        for (code, expected) in [
+            ("pt-BR", LocaleCode::PtBr),
+            ("pt-br", LocaleCode::PtBr),
+            ("pt_BR", LocaleCode::PtBr),
+            ("pt", LocaleCode::PtBr),
+            ("zh-Hans", LocaleCode::ZhHans),
+            ("zh_hans", LocaleCode::ZhHans),
+            ("zh-CN", LocaleCode::ZhHans),
+            ("zh", LocaleCode::ZhHans),
+            (" UK ", LocaleCode::Uk),
+            ("zh-TW", LocaleCode::En),
+            ("pt-PT", LocaleCode::En),
+        ] {
+            assert_eq!(LocaleCode::from_code_or_default(code), expected, "{code}");
+        }
+
+        let dir = unique_temp_dir("locale_aliases");
+        fs::create_dir_all(&dir).unwrap();
+        let store = PreferencesStore::new(&dir);
+        for (saved, canonical) in [("pt-BR", "pt-BR"), ("zh-cn", "zh-Hans"), ("ko", "ko")] {
+            fs::write(
+                store.file_path(),
+                format!(r#"{{"schema_version": 1, "language": "{saved}"}}"#),
+            )
+            .unwrap();
+            let loaded = store.load();
+            assert_eq!(loaded.preferences.language, canonical);
+            assert!(loaded.warning.is_none(), "{saved}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn localized_warning_follows_the_loaded_language() {
         let dir = unique_temp_dir("localized_warning");
         fs::create_dir_all(&dir).unwrap();
@@ -1118,6 +1252,12 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             ("ru", "Некоторые настройки"),
             ("es", "Algunos ajustes"),
             ("ja", "認識できない設定"),
+            ("de", "Einige Einstellungen"),
+            ("fr", "Certains paramètres"),
+            ("pt-BR", "Algumas configurações"),
+            ("uk", "Деякі налаштування"),
+            ("zh-Hans", "部分设置"),
+            ("ko", "일부 설정"),
             ("en", "Some settings were not recognised"),
         ] {
             fs::write(

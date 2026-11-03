@@ -87,14 +87,7 @@ pub fn skipped_events_note(locale: LocaleCode, name: &str, count: usize) -> Stri
             format!("{name}: {count} {noun} could not be read")
         }
         LocaleCode::Ru => {
-            let (tens, ones) = (count % 100, count % 10);
-            let noun = if (11..=14).contains(&tens) || ones == 0 || ones >= 5 {
-                "событий"
-            } else if ones == 1 {
-                "событие"
-            } else {
-                "события"
-            };
+            let noun = crate::i18n::slavic_plural(count, "событие", "события", "событий");
             format!("{name}: не удалось прочитать {count} {noun}")
         }
         LocaleCode::Es => {
@@ -105,6 +98,33 @@ pub fn skipped_events_note(locale: LocaleCode, name: &str, count: usize) -> Stri
             }
         }
         LocaleCode::Ja => format!("{name}: {count} 件の予定を読み込めませんでした"),
+        LocaleCode::De => {
+            if count == 1 {
+                format!("{name}: 1 Termin konnte nicht gelesen werden")
+            } else {
+                format!("{name}: {count} Termine konnten nicht gelesen werden")
+            }
+        }
+        LocaleCode::Fr => {
+            if count <= 1 {
+                format!("{name}\u{a0}: {count} événement n’a pas pu être lu")
+            } else {
+                format!("{name}\u{a0}: {count} événements n’ont pas pu être lus")
+            }
+        }
+        LocaleCode::PtBr => {
+            if count == 1 {
+                format!("{name}: não foi possível ler 1 evento")
+            } else {
+                format!("{name}: não foi possível ler {count} eventos")
+            }
+        }
+        LocaleCode::Uk => {
+            let noun = crate::i18n::slavic_plural(count, "подію", "події", "подій");
+            format!("{name}: не вдалося прочитати {count} {noun}")
+        }
+        LocaleCode::ZhHans => format!("{name}：有 {count} 个事件无法读取"),
+        LocaleCode::Ko => format!("{name}: 일정 {count}개를 읽을 수 없습니다"),
     }
 }
 

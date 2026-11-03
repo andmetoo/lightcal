@@ -47,7 +47,7 @@ component SponsorButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
-import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem } from "types.slint";
+import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem, LanguageOption } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
 component Glyph inherits Path {
@@ -930,11 +930,8 @@ export component SettingsView inherits Rectangle {
     in property <string> palette-monochrome-text;
     in property <string> live-day-text;
     in property <string> updates-heading-text;
-    in property <string> lang-en-us-label;
+    in property <[LanguageOption]> language-options;
     in property <string> current-language-code;
-    in property <string> lang-ru-label;
-    in property <string> lang-es-label;
-    in property <string> lang-ja-label;
     in property <string> about-version-text;
     in property <bool> update-is-available;
     in property <bool> update-is-checking;
@@ -1619,7 +1616,8 @@ export component SettingsView inherits Rectangle {
                             lang-select := Select {
                                 text: root.current-language-display;
                                 is-open: root.language-dropdown-open;
-                                select-width: 136px;
+                                // Fits the longest name, Português (Brasil).
+                                select-width: 168px;
                                 clicked => { root.toggle-language-dropdown(); }
                             }
                         }
@@ -1854,29 +1852,24 @@ export component SettingsView inherits Rectangle {
             }
         }
 
+        // Two columns, filled top to bottom: Latin-script languages on the left,
+        // Cyrillic and CJK on the right. Right-aligned under the select.
         if root.language-dropdown-open : Menu {
-            x: lang-select.absolute-position.x - app-tab.absolute-position.x;
+            x: lang-select.absolute-position.x + lang-select.width - self.width - app-tab.absolute-position.x;
             y: lang-select.absolute-position.y - app-tab.absolute-position.y + 32px;
-            width: 136px;
-            MenuOption {
-                label: root.lang-en-us-label;
-                active: root.current-language-code == "en";
-                clicked => { root.select-language("en"); }
-            }
-            MenuOption {
-                label: root.lang-ru-label;
-                active: root.current-language-code == "ru";
-                clicked => { root.select-language("ru"); }
-            }
-            MenuOption {
-                label: root.lang-es-label;
-                active: root.current-language-code == "es";
-                clicked => { root.select-language("es"); }
-            }
-            MenuOption {
-                label: root.lang-ja-label;
-                active: root.current-language-code == "ja";
-                clicked => { root.select-language("ja"); }
+            width: 328px;
+            language-grid := Rectangle {
+                property <int> rows: Math.ceil(root.language-options.length / 2);
+                height: self.rows * (Theme.control-height + 2px) - 2px;
+                for option[i] in root.language-options : MenuOption {
+                    x: i < language-grid.rows ? 0 : (parent.width + 4px) / 2;
+                    y: Math.mod(i, language-grid.rows) * (Theme.control-height + 2px);
+                    width: (parent.width - 4px) / 2;
+                    label: option.label;
+                    font-family: option.font != "" ? option.font : Theme.font-family;
+                    active: root.current-language-code == option.code;
+                    clicked => { root.select-language(option.code); }
+                }
             }
         }
     }

@@ -2,7 +2,7 @@
 
 # Lightcal
 
-Lightcal 1.0.5 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
+Lightcal 1.1.0 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
 
 ## Highlights
 
@@ -10,7 +10,7 @@ Lightcal 1.0.5 is a small calendar that lives in the Windows tray. Click the tra
 - **Event dots and agenda.** Up to three dots per day in calendar colors. The agenda lists all-day events, time ranges, **Now** and the time to the next event. Click an event for its duration, location and calendar, with **Copy** and, for Google and Outlook, **Open** in the web calendar.
 - **Your calendars, read-only.** Google Calendar, Outlook (Microsoft Graph), private HTTPS ICS links and, optionally, calendars exposed by Windows. Choose which calendars to show. Lightcal never changes an event.
 - **Tray date icon.** The tray shows today's date in Lightcal's coral tile or a mono outline, with weekday or time variants. It does not replace the Windows clock.
-- **Four languages.** English, Russian, Spanish and Japanese, switched without a restart.
+- **Ten languages.** English, German, Spanish, French, Brazilian Portuguese, Russian, Ukrainian, Japanese, Korean and Simplified Chinese, switched without a restart.
 - **Light and dark.** Follows Windows or stays on the theme you choose.
 - **Opt-in extras.** A global shortcut and start with Windows are off until you turn them on.
 - **Updates on request.** **Check for updates** compares your version with the latest GitHub release only when you ask.
@@ -23,7 +23,7 @@ Lightcal 1.0.5 is a small calendar that lives in the Windows tray. Click the tra
 | **Event details** | **Accounts** |
 | ![An expanded event with time, duration, location, calendar, Copy and Open](docs/images/event-details.png) | ![Settings, Accounts tab with a connected Google Calendar and selected calendars](docs/images/settings-accounts.png) |
 
-![About Lightcal, version 1.0.5, with the update check and project links](docs/images/about.png)
+![About Lightcal, version 1.1.0, with the update check and project links](docs/images/about.png)
 
 These are headless renders of the real Slint UI (`--render-snapshots`) with sample events; no account was used.
 

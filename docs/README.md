@@ -1,9 +1,10 @@
 # Documentation
 
-Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.0.5 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
+Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.1.0 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
 
 | Document | Purpose |
 | --- | --- |
+| [Ten languages](decisions/0014-ten-languages.md) | German, French, Brazilian Portuguese, Ukrainian, Simplified Chinese and Korean; two-column language menu |
 | [Koi pond](decisions/0013-koi-pond.md) | Optional koi swimming behind the calendar grid, off by default |
 | [Date size setting](decisions/0012-date-size.md) | Standard, Large and Larger day numbers; the 352 × 444 popup for Larger |
 | [Windows-only design refresh](decisions/0011-windows-only-design-refresh.md) | November 1 redesign, new icons, event details, design canvas, macOS dropped |

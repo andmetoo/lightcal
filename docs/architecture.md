@@ -53,7 +53,7 @@ Write via a temporary file and platform-appropriate atomic replacement, retainin
 
 ## Localization
 
-Use bundled message catalogs for `en`, `ru`, `es`, and `ja`, with English as the initial and fallback language. Keep locale identifiers in preferences and message keys in code; localize in the presentation layer, including tray/menu strings and accessibility announcements. Use the selected locale for month/weekday names, date patterns, and event-count plurals. Never translate provider/user event data. A language change rebuilds presentation strings without re-querying or altering the calendar domain state. Use installed Japanese-capable font fallback and test glyph coverage; no remote font requests. Preserve system timezone and user-chosen weekday settings across language changes.
+Use bundled message catalogs for `en`, `de`, `es`, `fr`, `pt-BR`, `ru`, `uk`, `ja`, `ko`, and `zh-Hans`, with English as the initial and fallback language. Keep locale identifiers in preferences and message keys in code; localize in the presentation layer, including tray/menu strings and accessibility announcements. Use the selected locale for month/weekday names, date patterns, and event-count plurals. Never translate provider/user event data. A language change rebuilds presentation strings without re-querying or altering the calendar domain state. Use installed Japanese-capable font fallback, Microsoft YaHei UI for Simplified Chinese, and test glyph coverage; no remote font requests. Preserve system timezone and user-chosen weekday settings across language changes.
 
 ## Calendar provider, shortcut, and update checking
 

@@ -47,25 +47,56 @@ use std::rc::Rc;
 
 slint::include_modules!();
 
-/// Keeps the UI on Segoe UI when Segoe UI Variable is missing (Windows 10).
-/// Slint 1.18 falls back to the generic sans-serif family (Arial on Windows)
-/// for an unknown name, so the static face is selected explicitly.
-pub(crate) fn apply_system_font(ui: &AppWindow) {
-    if !segoe_ui_variable_installed() {
-        ui.global::<Theme>().set_font_family("Segoe UI".into());
+/// Picks the UI font for the language. Keeps the UI on Segoe UI when Segoe UI Variable is
+/// missing (Windows 10): Slint 1.18 falls back to the generic sans-serif family (Arial on
+/// Windows) for an unknown name, so the static face is selected explicitly. Simplified
+/// Chinese uses Microsoft YaHei UI, because Slint's fallback otherwise takes CJK glyphs from
+/// a Japanese face that lacks many simplified characters.
+pub(crate) fn apply_system_font(ui: &AppWindow, locale: LocaleCode) {
+    let family = if let Some(family) = language_font(locale) {
+        family
+    } else if segoe_ui_variable_installed() {
+        "Segoe UI Variable Text"
+    } else {
+        "Segoe UI"
+    };
+    let theme = ui.global::<Theme>();
+    if theme.get_font_family() != family {
+        theme.set_font_family(family.into());
     }
+}
+
+/// The font a language needs instead of the UI font, also used for its language-menu entry.
+fn language_font(locale: LocaleCode) -> Option<&'static str> {
+    (locale == LocaleCode::ZhHans && yahei_installed()).then_some("Microsoft YaHei UI")
 }
 
 #[cfg(windows)]
 fn segoe_ui_variable_installed() -> bool {
-    lightcal::platform::windows::system_fonts_dir()
-        .is_some_and(|fonts| fonts.join("SegUIVar.ttf").is_file())
+    static FOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FOUND.get_or_init(|| system_font_file_exists("SegUIVar.ttf"))
+}
+
+#[cfg(windows)]
+fn yahei_installed() -> bool {
+    static FOUND: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FOUND.get_or_init(|| system_font_file_exists("msyh.ttc"))
+}
+
+#[cfg(windows)]
+fn system_font_file_exists(file: &str) -> bool {
+    lightcal::platform::windows::system_fonts_dir().is_some_and(|fonts| fonts.join(file).is_file())
 }
 
 /// Off Windows the named family is absent and Slint uses its sans-serif fallback.
 #[cfg(not(windows))]
 fn segoe_ui_variable_installed() -> bool {
     true
+}
+
+#[cfg(not(windows))]
+fn yahei_installed() -> bool {
+    false
 }
 
 pub(crate) struct AppController {
@@ -279,6 +310,12 @@ fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
         LocaleCode::Es => format!("Eventos de Google no leídos: {count}"),
         LocaleCode::Ja => format!("読み取れなかった Google の予定: {count}"),
         LocaleCode::En => format!("Google events not read: {count}"),
+        LocaleCode::De => format!("Nicht gelesene Google-Termine: {count}"),
+        LocaleCode::Fr => format!("Événements Google non lus\u{a0}: {count}"),
+        LocaleCode::PtBr => format!("Eventos do Google não lidos: {count}"),
+        LocaleCode::Uk => format!("Не прочитано подій Google: {count}"),
+        LocaleCode::ZhHans => format!("未能读取的 Google 事件：{count}"),
+        LocaleCode::Ko => format!("읽지 못한 Google 일정: {count}"),
     }
 }
 
@@ -294,12 +331,24 @@ fn google_status_line(
         LocaleCode::Es => "Google conectado",
         LocaleCode::Ja => "Google に接続済み",
         LocaleCode::En => "Google connected",
+        LocaleCode::De => "Google verbunden",
+        LocaleCode::Fr => "Google connecté",
+        LocaleCode::PtBr => "Google conectado",
+        LocaleCode::Uk => "Google під’єднано",
+        LocaleCode::ZhHans => "Google 已连接",
+        LocaleCode::Ko => "Google 연결됨",
     };
     let expired = match locale {
         LocaleCode::Ru => "Сеанс Google истёк — войдите повторно",
         LocaleCode::Es => "La sesión de Google caducó; vuelve a iniciar sesión",
         LocaleCode::Ja => "Google のセッションが切れました。再度サインインしてください",
         LocaleCode::En => "Google session expired — sign in again",
+        LocaleCode::De => "Google-Sitzung abgelaufen – bitte erneut anmelden",
+        LocaleCode::Fr => "La session Google a expiré — reconnectez-vous",
+        LocaleCode::PtBr => "A sessão do Google expirou — entre novamente",
+        LocaleCode::Uk => "Сеанс Google завершився — увійдіть знову",
+        LocaleCode::ZhHans => "Google 会话已过期，请重新登录",
+        LocaleCode::Ko => "Google 세션이 만료되었습니다. 다시 로그인하세요",
     };
     if needs_signin {
         expired.into()
@@ -531,6 +580,34 @@ fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
     });
 }
 
+/// The language select and its two-column menu.
+fn wire_language(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    let toggle_ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_toggle_language_dropdown(move || {
+        let mut c = toggle_ctrl.borrow_mut();
+        c.language_dropdown_open = !c.language_dropdown_open;
+        c.theme_dropdown_open = false;
+        c.first_day_dropdown_open = false;
+        c.update_channel_dropdown_open = false;
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_select_language(move |code| {
+        let mut c = ctrl.borrow_mut();
+        let loc = LocaleCode::from_code_or_default(code.as_str());
+        c.prefs.set_locale(loc);
+        c.language_dropdown_open = false;
+        c.persist();
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
+}
+
 /// Logical calendar height for the current date size, from the Slint Theme metrics.
 fn calendar_height(ui: &AppWindow) -> f32 {
     ui.global::<Theme>()
@@ -654,6 +731,15 @@ fn format_compact_summary(locale: LocaleCode, date: LocalDate, count: usize) -> 
             let wd = weekday_short(locale, date.weekday());
             format!("{}月{}日 ({wd}) · {count_str}", date.month, date.day)
         }
+        LocaleCode::De | LocaleCode::Fr | LocaleCode::PtBr | LocaleCode::Uk => format!(
+            "{} · {}",
+            lightcal::i18n::format_short_date(locale, date).to_uppercase(),
+            count_str.to_uppercase()
+        ),
+        LocaleCode::ZhHans | LocaleCode::Ko => format!(
+            "{} · {count_str}",
+            lightcal::i18n::format_short_date(locale, date)
+        ),
     }
 }
 
@@ -671,6 +757,7 @@ impl AppController {
         let managed = lightcal::installer::package_managed();
         ui.set_package_managed_updates(managed);
 
+        apply_system_font(ui, locale);
         let theme_changed = ui.get_dark_mode() != dark_mode;
         ui.set_dark_mode(dark_mode);
         if theme_changed {
@@ -989,6 +1076,144 @@ impl AppController {
                 "Subscribe",
                 "Google sign-in is not configured in this build.",
             ),
+            LocaleCode::De => (
+                "Ändern",
+                "Von einer anderen App belegt",
+                "Konto hinzufügen",
+                "Wählen Sie eine schreibgeschützte Quelle.",
+                "Google Kalender",
+                "Mit Ihrem Google-Konto verbinden.",
+                "Geschäftlich, Schule oder privat.",
+                "Privater ICS-Link",
+                "Über eine Kalenderadresse abonnieren.",
+                "Warten auf den Browser…",
+                "Abbrechen",
+                "Wiederholen",
+                "Anmeldung abgebrochen. Ihre Konten sind unverändert.",
+                "Termine sind möglicherweise veraltet.",
+                "Neu verbinden",
+                "Für dieses Konto wurden keine Kalender gefunden.",
+                "Kalenderlink hinzufügen",
+                "Wer die Adresse kennt, kann diesen Kalender lesen.",
+                "Bleibt auf diesem Computer.",
+                "Abonnieren",
+                "Die Google-Anmeldung ist in diesem Build nicht eingerichtet.",
+            ),
+            LocaleCode::Fr => (
+                "Modifier",
+                "Utilisé par une autre application",
+                "Ajouter un compte",
+                "Choisissez une source en lecture seule.",
+                "Google Agenda",
+                "Connectez-vous avec votre compte Google.",
+                "Compte professionnel, scolaire ou personnel.",
+                "Lien ICS privé",
+                "Abonnez-vous avec l’adresse d’un agenda.",
+                "En attente du navigateur…",
+                "Annuler",
+                "Réessayer",
+                "Connexion annulée. Vos comptes n’ont pas changé.",
+                "Les événements ne sont peut-être pas à jour.",
+                "Reconnecter",
+                "Aucun calendrier trouvé pour ce compte.",
+                "Ajouter un lien de calendrier",
+                "Toute personne qui a l’adresse peut lire ce calendrier.",
+                "Reste sur cet ordinateur.",
+                "S’abonner",
+                "La connexion Google n’est pas configurée dans cette version.",
+            ),
+            LocaleCode::PtBr => (
+                "Alterar",
+                "Usado por outro app",
+                "Adicionar uma conta",
+                "Escolha uma fonte somente leitura.",
+                "Google Agenda",
+                "Conecte usando sua conta do Google.",
+                "Conta corporativa, de estudante ou pessoal.",
+                "Link ICS privado",
+                "Assine usando o endereço de um calendário.",
+                "Aguardando o navegador…",
+                "Cancelar",
+                "Tentar novamente",
+                "Login cancelado. Suas contas não foram alteradas.",
+                "Os eventos podem estar desatualizados.",
+                "Reconectar",
+                "Nenhum calendário encontrado nesta conta.",
+                "Adicionar um link de calendário",
+                "Quem tiver o endereço pode ler este calendário.",
+                "Fica neste computador.",
+                "Assinar",
+                "O login do Google não está configurado nesta versão.",
+            ),
+            LocaleCode::Uk => (
+                "Змінити",
+                "Використовує інший застосунок",
+                "Додати обліковий запис",
+                "Виберіть джерело лише для читання.",
+                "Google Календар",
+                "Під’єднайтеся через обліковий запис Google.",
+                "Робочий, навчальний або особистий обліковий запис.",
+                "Приватне посилання ICS",
+                "Підписка за адресою календаря.",
+                "Очікування браузера…",
+                "Скасувати",
+                "Ще раз",
+                "Вхід скасовано. Облікові записи не змінилися.",
+                "Події можуть бути застарілими.",
+                "Під’єднати знову",
+                "У цьому обліковому записі немає календарів.",
+                "Додати посилання на календар",
+                "Будь-хто з цією адресою може читати календар.",
+                "Залишається на цьому комп’ютері.",
+                "Підписатися",
+                "Вхід через Google у цій збірці не налаштовано.",
+            ),
+            LocaleCode::ZhHans => (
+                "更改",
+                "已被其他应用占用",
+                "添加帐户",
+                "选择一个只读来源。",
+                "Google 日历",
+                "使用你的 Google 帐户连接。",
+                "工作、学校或个人帐户。",
+                "私有 ICS 链接",
+                "使用日历地址订阅。",
+                "正在等待浏览器…",
+                "取消",
+                "重试",
+                "已取消登录。你的帐户没有变化。",
+                "事件可能不是最新的。",
+                "重新连接",
+                "此帐户中没有日历。",
+                "添加日历链接",
+                "知道此地址的任何人都能读取此日历。",
+                "仅保存在这台电脑上。",
+                "订阅",
+                "此版本未配置 Google 登录。",
+            ),
+            LocaleCode::Ko => (
+                "변경",
+                "다른 앱에서 사용 중",
+                "계정 추가",
+                "읽기 전용 소스를 선택하세요.",
+                "Google 캘린더",
+                "Google 계정으로 연결합니다.",
+                "회사, 학교 또는 개인 계정.",
+                "비공개 ICS 링크",
+                "캘린더 주소로 구독합니다.",
+                "브라우저를 기다리는 중…",
+                "취소",
+                "다시 시도",
+                "로그인이 취소되었습니다. 계정은 변경되지 않았습니다.",
+                "일정이 최신이 아닐 수 있습니다.",
+                "다시 연결",
+                "이 계정에는 캘린더가 없습니다.",
+                "캘린더 링크 추가",
+                "주소를 아는 사람은 누구나 이 캘린더를 읽을 수 있습니다.",
+                "이 컴퓨터에만 저장됩니다.",
+                "구독",
+                "이 빌드에는 Google 로그인이 구성되어 있지 않습니다.",
+            ),
         };
         ui.set_shortcut_change_label(change.into());
         ui.set_shortcut_conflict_line(conflict_line.into());
@@ -1016,6 +1241,12 @@ impl AppController {
                 LocaleCode::Es => "Comprobando el calendario…",
                 LocaleCode::Ja => "カレンダーを確認中…",
                 LocaleCode::En => "Checking calendar…",
+                LocaleCode::De => "Kalender wird geprüft…",
+                LocaleCode::Fr => "Vérification du calendrier…",
+                LocaleCode::PtBr => "Verificando o calendário…",
+                LocaleCode::Uk => "Перевірка календаря…",
+                LocaleCode::ZhHans => "正在检查日历…",
+                LocaleCode::Ko => "캘린더 확인 중…",
             }
             .into(),
         );
@@ -1026,6 +1257,12 @@ impl AppController {
                 LocaleCode::Es => "Desconectar Google",
                 LocaleCode::Ja => "Google を切断",
                 LocaleCode::En => "Disconnect Google",
+                LocaleCode::De => "Google trennen",
+                LocaleCode::Fr => "Déconnecter Google",
+                LocaleCode::PtBr => "Desconectar o Google",
+                LocaleCode::Uk => "Від’єднати Google",
+                LocaleCode::ZhHans => "断开 Google",
+                LocaleCode::Ko => "Google 연결 끊기",
             }
             .into(),
         );
@@ -1116,6 +1353,27 @@ impl AppController {
                 "更新を自動確認",
                 "起動時と毎日確認します。インストールは別に設定します",
             ),
+            LocaleCode::De => (
+                "Automatisch nach Updates suchen",
+                "Beim Start und täglich; die Installation wird separat gesteuert",
+            ),
+            LocaleCode::Fr => (
+                "Rechercher les mises à jour automatiquement",
+                "Au démarrage et chaque jour\u{a0}; l’installation se règle à part",
+            ),
+            LocaleCode::PtBr => (
+                "Verificar atualizações automaticamente",
+                "Ao iniciar e diariamente; a instalação é configurada à parte",
+            ),
+            LocaleCode::Uk => (
+                "Автоматично перевіряти оновлення",
+                "Під час запуску й щодня; інсталяція вмикається окремо",
+            ),
+            LocaleCode::ZhHans => ("自动检查更新", "启动时和每天检查；安装单独设置"),
+            LocaleCode::Ko => (
+                "자동으로 업데이트 확인",
+                "시작할 때와 매일 확인합니다. 설치는 따로 설정합니다",
+            ),
         };
         ui.set_label_auto_updates_text(check_title.into());
         ui.set_desc_auto_updates_text(check_description.into());
@@ -1150,6 +1408,12 @@ impl AppController {
                 LocaleCode::Ru => format!("Доступна версия {latest_version}"),
                 LocaleCode::Es => format!("La versión {latest_version} está disponible"),
                 LocaleCode::Ja => format!("バージョン {latest_version} が利用できます"),
+                LocaleCode::De => format!("Version {latest_version} ist verfügbar"),
+                LocaleCode::Fr => format!("La version {latest_version} est disponible"),
+                LocaleCode::PtBr => format!("A versão {latest_version} está disponível"),
+                LocaleCode::Uk => format!("Доступна версія {latest_version}"),
+                LocaleCode::ZhHans => format!("版本 {latest_version} 已可用"),
+                LocaleCode::Ko => format!("버전 {latest_version}을(를) 사용할 수 있습니다"),
             };
             ui.set_update_ready_title_text(title.into());
         } else {
@@ -1174,13 +1438,7 @@ impl AppController {
         }
         ui.set_release_notes_button_text(strings.release_notes_button.into());
 
-        let lang_disp = match locale {
-            LocaleCode::En => strings.lang_en_us,
-            LocaleCode::Ru => strings.lang_ru,
-            LocaleCode::Es => strings.lang_es,
-            LocaleCode::Ja => strings.lang_ja,
-        };
-        ui.set_current_language_display(lang_disp.into());
+        ui.set_current_language_display(locale.display_name().into());
 
         let theme_disp = match self.prefs.theme {
             ThemePreference::Light => strings.theme_light_obsidian,
@@ -1230,10 +1488,19 @@ impl AppController {
         ui.set_shortcut_error_message(self.shortcut_error.clone().into());
         ui.set_startup_status_text(self.startup_error.clone().into());
         ui.set_shortcut_record_label(strings.shortcut_record.into());
-        ui.set_lang_en_us_label(strings.lang_en_us.into());
-        ui.set_lang_ru_label(strings.lang_ru.into());
-        ui.set_lang_es_label(strings.lang_es.into());
-        ui.set_lang_ja_label(strings.lang_ja.into());
+        // The menu lists every language by its own name in any UI language, so it is
+        // built once; replacing it would recreate the open menu's entries.
+        if slint::Model::row_count(&ui.get_language_options()) == 0 {
+            let languages: Vec<LanguageOption> = LocaleCode::ALL
+                .iter()
+                .map(|option| LanguageOption {
+                    code: option.as_str().into(),
+                    label: option.display_name().into(),
+                    font: language_font(*option).unwrap_or_default().into(),
+                })
+                .collect();
+            ui.set_language_options(ModelRc::new(VecModel::from(languages)));
+        }
         ui.set_weekday_monday_label(strings.start_of_week_monday.into());
         ui.set_weekday_sunday_label(strings.start_of_week_sunday.into());
         ui.set_theme_light_label(strings.theme_light_obsidian.into());
@@ -1275,6 +1542,12 @@ impl AppController {
                 LocaleCode::Ru=>"Проверка стабильных релизов GitHub. Для установки нужен настроенный сертификат подписи.",
                 LocaleCode::Es=>"Buscar versiones estables en GitHub. La instalación requiere un certificado configurado.",
                 LocaleCode::Ja=>"GitHub の安定版を確認します。インストールには署名証明書の設定が必要です。",
+                LocaleCode::De=>"Prüft stabile GitHub-Versionen. Die Installation erfordert ein eingerichtetes Signaturzertifikat.",
+                LocaleCode::Fr=>"Recherche les versions stables sur GitHub. L’installation exige un certificat de signature configuré.",
+                LocaleCode::PtBr=>"Verifica versões estáveis no GitHub. A instalação exige um certificado de assinatura configurado.",
+                LocaleCode::Uk=>"Перевірка стабільних випусків на GitHub. Для інсталяції потрібен налаштований сертифікат підпису.",
+                LocaleCode::ZhHans=>"检查 GitHub 上的稳定版。安装需要已配置的签名证书。",
+                LocaleCode::Ko=>"GitHub의 안정 버전을 확인합니다. 설치하려면 서명 인증서를 구성해야 합니다.",
             }.into();
         }
         if managed {
@@ -1283,6 +1556,12 @@ impl AppController {
                 LocaleCode::Ru=>"Обновления MSIX выполняет Microsoft Store или канал установки пакета.",
                 LocaleCode::Es=>"Microsoft Store o el canal de distribución administra las actualizaciones MSIX.",
                 LocaleCode::Ja=>"MSIX の更新は Microsoft Store またはパッケージ配布元が管理します。",
+                LocaleCode::De=>"MSIX-Updates verwaltet der Microsoft Store oder der Verteilungskanal des Pakets.",
+                LocaleCode::Fr=>"Les mises à jour MSIX sont gérées par le Microsoft Store ou le canal de déploiement du package.",
+                LocaleCode::PtBr=>"As atualizações MSIX são gerenciadas pela Microsoft Store ou pelo canal de distribuição do pacote.",
+                LocaleCode::Uk=>"Оновленнями MSIX керує Microsoft Store або канал розповсюдження пакета.",
+                LocaleCode::ZhHans=>"MSIX 更新由 Microsoft Store 或包分发渠道管理。",
+                LocaleCode::Ko=>"MSIX 업데이트는 Microsoft Store 또는 패키지 배포 채널에서 관리합니다.",
             }.into();
         }
         ui.set_update_status_text(upd_text.into());
@@ -2889,7 +3168,7 @@ fn main() {
     }
 
     let ui = AppWindow::new().expect("Failed to create Lightcal window");
-    apply_system_font(&ui);
+    apply_system_font(&ui, prefs.locale());
 
     ACTIVE_UI.with(|u| {
         *u.borrow_mut() = Some(ui.as_weak());
@@ -3370,20 +3649,7 @@ fn main() {
             }
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_select_language(move |code| {
-            let mut c = ctrl.borrow_mut();
-            let loc = LocaleCode::from_code_or_default(code.as_str());
-            c.prefs.set_locale(loc);
-            c.language_dropdown_open = false;
-            c.persist();
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
+    wire_language(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
@@ -3737,20 +4003,6 @@ fn main() {
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
-        ui.on_toggle_language_dropdown(move || {
-            let mut c = ctrl.borrow_mut();
-            c.language_dropdown_open = !c.language_dropdown_open;
-            c.theme_dropdown_open = false;
-            c.first_day_dropdown_open = false;
-            c.update_channel_dropdown_open = false;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
         ui.on_toggle_theme_dropdown(move || {
             let mut c = ctrl.borrow_mut();
             c.theme_dropdown_open = !c.theme_dropdown_open;
@@ -3961,6 +4213,24 @@ fn main() {
                             }
                             LocaleCode::En => {
                                 "The Google client secret is not set in this build.".into()
+                            }
+                            LocaleCode::De => {
+                                "Das Google-Clientgeheimnis fehlt in diesem Build.".into()
+                            }
+                            LocaleCode::Fr => {
+                                "Le secret client Google n’est pas défini dans cette version."
+                                    .into()
+                            }
+                            LocaleCode::PtBr => {
+                                "O segredo do cliente Google não está definido nesta versão.".into()
+                            }
+                            LocaleCode::Uk => {
+                                "Секрет клієнта Google не задано в цій збірці.".into()
+                            }
+                            LocaleCode::ZhHans => "此版本未设置 Google 客户端密钥。".into(),
+                            LocaleCode::Ko => {
+                                "이 빌드에는 Google 클라이언트 비밀번호가 설정되어 있지 않습니다."
+                                    .into()
                             }
                         }
                     } else {

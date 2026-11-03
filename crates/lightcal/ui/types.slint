@@ -44,6 +44,14 @@ export struct WeekdayChipItem {
     active: bool,
 }
 
+// One entry in the language menu: preference code, the language's own name, and the font
+// that can draw it (empty for the UI font).
+export struct LanguageOption {
+    code: string,
+    label: string,
+    font: string,
+}
+
 // One agenda event. `index` addresses the selected day's agenda in Rust.
 export struct AgendaEventItem {
     index: int,

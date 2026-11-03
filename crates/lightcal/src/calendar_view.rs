@@ -224,15 +224,15 @@ impl AppController {
         let is_today = selected == state.today;
 
         let month = grid.displayed_month;
-        if locale == LocaleCode::Ja {
-            ui.set_month_name_text(month_name(locale, month.month).into());
-            ui.set_year_text(format!("{}年", month.year).into());
-            ui.set_year_first(true);
-        } else {
-            ui.set_month_name_text(month_name(locale, month.month).into());
-            ui.set_year_text(month.year.to_string().into());
-            ui.set_year_first(false);
-        }
+        // Japanese, Chinese and Korean put the year first, with its own year mark.
+        let year_mark = match locale {
+            LocaleCode::Ja | LocaleCode::ZhHans => Some("年"),
+            LocaleCode::Ko => Some("년"),
+            _ => None,
+        };
+        ui.set_month_name_text(month_name(locale, month.month).into());
+        ui.set_year_text(format!("{}{}", month.year, year_mark.unwrap_or_default()).into());
+        ui.set_year_first(year_mark.is_some());
         // Animate the Today slot only when this change happens in front of the user.
         ui.set_header_motion((self.on_screen)());
         ui.set_today_hidden(grid.is_current_month && is_today);

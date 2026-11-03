@@ -6,7 +6,7 @@
 import { Theme } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings } from "types.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption } from "types.slint";
 
 export { Theme }
 export { KoiSchool, KoiSwim } from "koi.slint";
@@ -171,7 +171,7 @@ export component AppWindow inherits Window {
     in property <string> updates-heading-text: "Updates";
     in property <string> about-link-text: "About Lightcal";
     in property <string> app-name-text: "Lightcal";
-    in property <string> about-version-text: "Version 1.0.5";
+    in property <string> about-version-text: "Version 1.1.0";
     in property <string> provider-readonly-tag-text: "Read-only";
     in property <string> shortcut-unset-text: "Not set";
     in property <string> license-short-text: "GPL-3.0-only";
@@ -227,10 +227,7 @@ export component AppWindow inherits Window {
     in property <string> section-region-text: "Region";
     in property <string> section-startup-text: "Startup";
     in property <string> desc-auto-install-text: "Install the signed release and restart after a successful check.";
-    in property <string> lang-en-us-label: "English (US)";
-    in property <string> lang-ru-label: "Русский";
-    in property <string> lang-es-label: "Español";
-    in property <string> lang-ja-label: "日本語";
+    in property <[LanguageOption]> language-options;
     in property <string> weekday-monday-label: "Monday";
     in property <string> weekday-sunday-label: "Sunday";
     in property <string> theme-light-label: "Light (Alabaster)";
@@ -516,11 +513,8 @@ export component AppWindow inherits Window {
         palette-monochrome-text: root.palette-monochrome-text;
         live-day-text: root.live-day-text;
         updates-heading-text: root.updates-heading-text;
-        lang-en-us-label: root.lang-en-us-label;
+        language-options: root.language-options;
         current-language-code: root.current-language-code;
-        lang-ru-label: root.lang-ru-label;
-        lang-es-label: root.lang-es-label;
-        lang-ja-label: root.lang-ja-label;
         about-version-text: root.about-version-text;
         update-is-available: root.update-is-available;
         update-is-checking: root.update-is-checking;

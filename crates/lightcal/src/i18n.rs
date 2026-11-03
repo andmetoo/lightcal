@@ -1,4 +1,5 @@
-//! Bundled message catalogs and locale-aware date/plural formatting for `en`, `ru`, `es`, and `ja`.
+//! Bundled message catalogs and locale-aware date/plural formatting for `en`, `de`, `es`, `fr`,
+//! `pt-BR`, `ru`, `uk`, `ja`, `ko`, and `zh-Hans`.
 
 use crate::preferences::LocaleCode;
 use calendar_core::{LocalDate, Weekday, YearMonth};
@@ -57,6 +58,84 @@ pub fn connection_labels(locale: LocaleCode) -> [&'static str; 11] {
             "インストールして再起動",
             "署名済み更新を自動インストール",
             "Outlook と非公開 ICS を読み取り専用で表示",
+        ],
+        LocaleCode::De => [
+            "Microsoft-Desktop-Client ID",
+            "Outlook verbinden",
+            "Outlook trennen",
+            "ICS-Kalendername",
+            "Private HTTPS-ICS-Adresse",
+            "ICS hinzufügen",
+            "Entfernen",
+            "Windows-Kalender (veraltet, optional)",
+            "Installieren und neu starten",
+            "Signierte Updates automatisch installieren",
+            "Outlook und private ICS-Abos, schreibgeschützt",
+        ],
+        LocaleCode::Fr => [
+            "Client ID Microsoft pour bureau",
+            "Connecter Outlook",
+            "Déconnecter Outlook",
+            "Nom du calendrier ICS",
+            "Adresse HTTPS ICS privée",
+            "Ajouter ICS",
+            "Supprimer",
+            "Calendriers Windows (ancien, facultatif)",
+            "Installer et redémarrer",
+            "Installer automatiquement les mises à jour signées",
+            "Outlook et abonnements ICS privés en lecture seule",
+        ],
+        LocaleCode::PtBr => [
+            "Client ID da Microsoft para desktop",
+            "Conectar Outlook",
+            "Desconectar Outlook",
+            "Nome do calendário ICS",
+            "Endereço HTTPS privado do ICS",
+            "Adicionar ICS",
+            "Remover",
+            "Calendários do Windows (legado, opcional)",
+            "Instalar e reiniciar",
+            "Instalar atualizações assinadas automaticamente",
+            "Outlook e assinaturas ICS privadas, somente leitura",
+        ],
+        LocaleCode::Uk => [
+            "Client ID застосунку Microsoft",
+            "Під’єднати Outlook",
+            "Від’єднати Outlook",
+            "Назва календаря ICS",
+            "Приватна HTTPS-адреса ICS",
+            "Додати ICS",
+            "Видалити",
+            "Календарі Windows (застарілі, необов’язково)",
+            "Інсталювати й перезапустити",
+            "Автоматично інсталювати підписані оновлення",
+            "Outlook і приватні підписки ICS лише для читання",
+        ],
+        LocaleCode::ZhHans => [
+            "Microsoft 桌面 Client ID",
+            "连接 Outlook",
+            "断开 Outlook",
+            "ICS 日历名称",
+            "私有 HTTPS ICS 地址",
+            "添加 ICS",
+            "删除",
+            "Windows 日历（旧版，可选）",
+            "安装并重启",
+            "自动安装已签名的更新",
+            "以只读方式显示 Outlook 和私有 ICS 订阅",
+        ],
+        LocaleCode::Ko => [
+            "Microsoft 데스크톱 Client ID",
+            "Outlook 연결",
+            "Outlook 연결 끊기",
+            "ICS 캘린더 이름",
+            "비공개 HTTPS ICS 주소",
+            "ICS 추가",
+            "제거",
+            "Windows 캘린더(레거시, 선택 사항)",
+            "설치 후 다시 시작",
+            "서명된 업데이트 자동 설치",
+            "Outlook 및 비공개 ICS 구독(읽기 전용)",
         ],
     }
 }
@@ -127,10 +206,6 @@ pub struct UiStrings {
     pub palette_monochrome: &'static str,
     // Redesigned settings strings
     pub preferences_subtitle: &'static str,
-    pub lang_en_us: &'static str,
-    pub lang_ru: &'static str,
-    pub lang_es: &'static str,
-    pub lang_ja: &'static str,
     pub start_of_week_monday: &'static str,
     pub start_of_week_sunday: &'static str,
     pub shortcut_conflict_title: &'static str,
@@ -249,10 +324,6 @@ const EN_STRINGS: UiStrings = UiStrings {
     palette_colored: "Color",
     palette_monochrome: "Mono",
     preferences_subtitle: "Preferences",
-    lang_en_us: "English",
-    lang_ru: "Русский",
-    lang_es: "Español",
-    lang_ja: "日本語",
     start_of_week_monday: "Monday",
     start_of_week_sunday: "Sunday",
     shortcut_conflict_title: "Shortcut unavailable: Alt + Space is already registered by Raycast.",
@@ -376,10 +447,6 @@ const RU_STRINGS: UiStrings = UiStrings {
     palette_colored: "Цвет",
     palette_monochrome: "Моно",
     preferences_subtitle: "Параметры",
-    lang_en_us: "English",
-    lang_ru: "Русский",
-    lang_es: "Español",
-    lang_ja: "日本語",
     start_of_week_monday: "Понедельник",
     start_of_week_sunday: "Воскресенье",
     shortcut_conflict_title: "Сочетание недоступно: комбинация уже занята другим приложением.",
@@ -503,10 +570,6 @@ const ES_STRINGS: UiStrings = UiStrings {
     palette_colored: "Color",
     palette_monochrome: "Mono",
     preferences_subtitle: "Preferencias",
-    lang_en_us: "English",
-    lang_ru: "Русский",
-    lang_es: "Español",
-    lang_ja: "日本語",
     start_of_week_monday: "Lunes",
     start_of_week_sunday: "Domingo",
     shortcut_conflict_title: "Atajo no disponible: combinación ya registrada por otra aplicación.",
@@ -627,10 +690,6 @@ const JA_STRINGS: UiStrings = UiStrings {
     palette_colored: "カラー",
     palette_monochrome: "モノクロ",
     preferences_subtitle: "環境設定",
-    lang_en_us: "English",
-    lang_ru: "Русский",
-    lang_es: "Español",
-    lang_ja: "日本語",
     start_of_week_monday: "月曜日",
     start_of_week_sunday: "日曜日",
     shortcut_conflict_title: "ショートカットを使用できません: 他のアプリで既に使用されています。",
@@ -689,12 +748,727 @@ const JA_STRINGS: UiStrings = UiStrings {
     agenda_event_fallback: "予定",
 };
 
+const DE_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "Aktueller Monat",
+    today_button: "Heute",
+    week_col_header: "KW",
+    selected_date_overline: "AUSGEWÄHLTES DATUM",
+    settings_title: "Einstellungen",
+    nav_general: "App",
+    nav_appearance: "Kalender",
+    nav_calendars: "Konten",
+    nav_about: "Info",
+    general_subtitle: "Sprache, Autostart, Tastenkürzel, Infobereichssymbol und Updates.",
+    label_language: "Sprache",
+    desc_language: "Sprache für Monatsnamen, Wochentage und Bedienelemente",
+    label_startup: "Mit Windows starten",
+    desc_startup: "Lightcal bei der Anmeldung unauffällig im Infobereich starten",
+    label_shortcut: "Tastenkürzel",
+    desc_shortcut: "Kalender von überall auf dem Desktop ein- oder ausblenden",
+    shortcut_unset: "Nicht festgelegt",
+    shortcut_record: "Aufnehmen…",
+    shortcut_clear: "Löschen",
+    section_region: "Region",
+    section_startup: "Start",
+    appearance_subtitle: "Design, Wochenbeginn, schattierte Tage, Kalenderwochen und Terminpunkte.",
+    label_theme: "Design",
+    desc_theme: "System, Hell oder Dunkel",
+    theme_system: "System",
+    theme_light: "Hell",
+    theme_dark: "Dunkel",
+    label_first_weekday: "Woche beginnt am",
+    desc_first_weekday: "Erste Spalte im Kalenderraster",
+    label_gray_weekdays: "Schattierte Tage",
+    desc_gray_weekdays: "Ausgewählte Wochentagsspalten mit einem dezenten Band hinterlegen",
+    label_show_weekday: "Wochentag im Datum",
+    desc_show_weekday: "Wochentag beim heutigen und ausgewählten Datum anzeigen.",
+    label_show_week_numbers: "Kalenderwochen",
+    desc_show_week_numbers: "ISO-Kalenderwochen am linken Rand anzeigen",
+    calendars_subtitle: "Verbundene Konten und Kalender, die Terminpunkte anzeigen.",
+    provider_heading: "Ihre Konten",
+    provider_readonly_tag: "Schreibgeschützt",
+    refresh_button: "Aktualisieren",
+    calendars_empty_title: "Noch keine Konten verbunden",
+    calendars_denied_title: "Kalenderzugriff ist in den Datenschutzeinstellungen deaktiviert",
+    calendars_unavailable_desc: "Noch nichts verbunden. Fügen Sie Google, Outlook oder einen privaten ICS-Link hinzu und wählen Sie die Kalender aus.",
+    calendars_dot_note: "Nur markierte Kalender liefern Terminpunkte (bis zu 3 pro Tag).",
+    about_subtitle: "Versionsstatus und Links.",
+    about_license_line: "GPL-3.0-only · Open Source",
+    updates_heading: "Updates",
+    updates_idle_desc: "Updates werden nur auf Anfrage gesucht.",
+    updates_checking_desc: "Neueste stabile Version auf GitHub wird gesucht…",
+    updates_check_button: "Jetzt prüfen",
+    updates_open_release_button: "Release-Seite öffnen ↗",
+    tray_open_calendar: "Kalender öffnen",
+    tray_settings: "Einstellungen",
+    tray_about: "Über Lightcal",
+    tray_quit: "Beenden",
+    back_to_calendar: "‹ Zu den Einstellungen",
+    label_tray_mode: "Symbol",
+    desc_tray_mode: "Farbiges oder einfarbiges Infobereichssymbol",
+    label_tray_palette: "Symbol",
+    desc_tray_palette: "Farbiges oder einfarbiges Infobereichssymbol",
+    palette_colored: "Farbe",
+    palette_monochrome: "Mono",
+    preferences_subtitle: "Einstellungen",
+    start_of_week_monday: "Montag",
+    start_of_week_sunday: "Sonntag",
+    shortcut_conflict_title: "Tastenkürzel nicht verfügbar: bereits von einer anderen App belegt.",
+    shortcut_conflict_hint: "Drücken Sie eine neue Tastenkombination (z. B. Alt + C) oder klicken Sie auf „Zurücksetzen“.",
+    shortcut_reset_button: "Zurücksetzen",
+    theme_light_obsidian: "Hell",
+    theme_dark_obsidian: "Dunkel",
+    theme_system_obsidian: "System",
+    label_highlight_current_month: "Aktuellen Monat hervorheben",
+    desc_highlight_current_month: "Markierung für den aktuellen Monat anzeigen",
+    label_show_event_dots: "Terminpunkte",
+    desc_show_event_dots: "Bis zu 3 farbige Punkte an Tagen mit Terminen",
+    label_show_koi: "Koiteich",
+    label_date_size: "Datumsgröße",
+    date_size_standard: "Normal",
+    date_size_large: "Groß",
+    date_size_larger: "Größer",
+    add_calendar_button: "+ Konto hinzufügen",
+    add_calendar_account_button: "+ Konto hinzufügen",
+    open_privacy_settings_button: "Datenschutzeinstellungen",
+    access_denied_desc: "Lightcal benötigt Lesezugriff auf Kalendertermine. Die Monatsansicht funktioniert auch ohne.",
+    retry_sync_button: "Erneut synchronisieren",
+    checking_updates_label: "Suche nach Updates…",
+    update_available_badge: "Update verfügbar",
+    update_ready_title: "Eine neuere Version ist verfügbar",
+    update_ready_notes: "Prüft das signierte Update vor Installation und Neustart.",
+    download_release_button: "Herunterladen",
+    manual_update_notes: "Dieser Build kann sich nicht selbst aktualisieren. Laden Sie die neue Version von GitHub herunter.",
+    manual_install_status: "Automatische Installation erfordert einen signierten Build. Updates gibt es auf GitHub.",
+    release_notes_button: "Versionshinweise",
+    dismiss_label: "Schließen",
+    refresh_slow_status: "Aktualisierung dauert länger als erwartet",
+    worker_failed_error: "Unerwarteter Fehler. Bitte versuchen Sie es erneut.",
+    label_auto_updates: "Automatische Updates",
+    desc_auto_updates: "Signierte Versionen im Hintergrund laden und prüfen",
+    label_update_channel: "Updatekanal",
+    desc_update_channel: "Geprüfte stabile Versionen oder Vorschau-Builds erhalten",
+    channel_stable: "Stabil",
+    channel_preview: "Vorschau",
+    label_license_source: "Lizenz & Quellcode",
+    desc_license_source: "GPL-3.0-only · Mit Rust und Slint gebaut, ganz ohne Webview",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "Privater Kalenderlink",
+    ics_help: "Fügen Sie eine private HTTPS-ICS-Adresse ein. Sie wird nur auf diesem Computer gespeichert.",
+    desc_auto_install: "Nach erfolgreicher Prüfung signierte Version installieren und neu starten.",
+    startup_error: "Der Windows-Autostart konnte nicht geändert werden.",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "Kalender",
+    agenda_all_day: "Ganztägig",
+    agenda_event_fallback: "Termin",
+};
+
+const FR_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "Mois en cours",
+    today_button: "Aujourd’hui",
+    week_col_header: "SEM",
+    selected_date_overline: "DATE SÉLECTIONNÉE",
+    settings_title: "Paramètres",
+    nav_general: "Application",
+    nav_appearance: "Calendrier",
+    nav_calendars: "Comptes",
+    nav_about: "À propos",
+    general_subtitle: "Langue, démarrage, raccourci, icône de la zone de notification et mises à jour.",
+    label_language: "Langue",
+    desc_language: "Langue de l’interface pour les mois, les jours et les commandes",
+    label_startup: "Lancer avec Windows",
+    desc_startup: "Lancer Lightcal discrètement dans la zone de notification à la connexion",
+    label_shortcut: "Raccourci d’ouverture",
+    desc_shortcut: "Afficher ou masquer le calendrier depuis n’importe où sur le bureau",
+    shortcut_unset: "Non défini",
+    shortcut_record: "Enregistrer…",
+    shortcut_clear: "Effacer",
+    section_region: "Région",
+    section_startup: "Démarrage",
+    appearance_subtitle: "Thème, début de semaine, jours ombrés, numéros de semaine et points.",
+    label_theme: "Thème",
+    desc_theme: "Système, clair ou sombre",
+    theme_system: "Système",
+    theme_light: "Clair",
+    theme_dark: "Sombre",
+    label_first_weekday: "Début de semaine",
+    desc_first_weekday: "Première colonne de la grille du calendrier",
+    label_gray_weekdays: "Jours ombrés",
+    desc_gray_weekdays: "Teinter les colonnes des jours choisis d’une bande verticale douce",
+    label_show_weekday: "Jour de la semaine dans les dates",
+    desc_show_weekday: "Afficher le nom du jour dans la date du jour et la date sélectionnée.",
+    label_show_week_numbers: "Numéros de semaine",
+    desc_show_week_numbers: "Afficher les numéros de semaine ISO dans la marge gauche",
+    calendars_subtitle: "Comptes connectés et calendriers affichant des points d’événements.",
+    provider_heading: "Vos comptes",
+    provider_readonly_tag: "Lecture seule",
+    refresh_button: "Actualiser",
+    calendars_empty_title: "Aucun compte connecté",
+    calendars_denied_title: "L’accès au calendrier est désactivé dans les paramètres de confidentialité",
+    calendars_unavailable_desc: "Rien n’est encore connecté. Ajoutez Google, Outlook ou un lien ICS privé, puis choisissez les calendriers à afficher.",
+    calendars_dot_note: "Seuls les calendriers cochés affichent des points (3 par jour au maximum).",
+    about_subtitle: "Version et liens.",
+    about_license_line: "GPL-3.0-only · Open source",
+    updates_heading: "Mises à jour",
+    updates_idle_desc: "Les mises à jour sont recherchées à votre demande.",
+    updates_checking_desc: "Recherche de la dernière version stable sur GitHub…",
+    updates_check_button: "Rechercher",
+    updates_open_release_button: "Ouvrir la page de version ↗",
+    tray_open_calendar: "Ouvrir le calendrier",
+    tray_settings: "Paramètres",
+    tray_about: "À propos de Lightcal",
+    tray_quit: "Quitter",
+    back_to_calendar: "‹ Retour aux paramètres",
+    label_tray_mode: "Icône de notification",
+    desc_tray_mode: "Icône en couleur ou monochrome",
+    label_tray_palette: "Icône de notification",
+    desc_tray_palette: "Icône en couleur ou monochrome",
+    palette_colored: "Couleur",
+    palette_monochrome: "Mono",
+    preferences_subtitle: "Préférences",
+    start_of_week_monday: "Lundi",
+    start_of_week_sunday: "Dimanche",
+    shortcut_conflict_title: "Raccourci indisponible\u{a0}: cette combinaison est déjà utilisée par une autre application.",
+    shortcut_conflict_hint: "Appuyez sur une autre combinaison (par exemple Alt + C) ou cliquez sur Réinitialiser.",
+    shortcut_reset_button: "Réinitialiser",
+    theme_light_obsidian: "Clair",
+    theme_dark_obsidian: "Sombre",
+    theme_system_obsidian: "Système",
+    label_highlight_current_month: "Mettre en évidence le mois",
+    desc_highlight_current_month: "Afficher l’indicateur du mois en cours",
+    label_show_event_dots: "Points d’événements",
+    desc_show_event_dots: "Jusqu’à 3 points de couleur les jours avec événements",
+    label_show_koi: "Bassin de carpes koï",
+    label_date_size: "Taille des dates",
+    date_size_standard: "Standard",
+    date_size_large: "Grande",
+    date_size_larger: "Plus grande",
+    add_calendar_button: "+ Ajouter un compte",
+    add_calendar_account_button: "+ Ajouter un compte",
+    open_privacy_settings_button: "Paramètres de confidentialité",
+    access_denied_desc: "Lightcal a besoin d’une autorisation pour lire les événements. La vue mensuelle fonctionne sans.",
+    retry_sync_button: "Réessayer",
+    checking_updates_label: "Recherche de mises à jour…",
+    update_available_badge: "Mise à jour disponible",
+    update_ready_title: "Une nouvelle version est disponible",
+    update_ready_notes: "Vérifie la mise à jour signée avant l’installation et le redémarrage.",
+    download_release_button: "Télécharger",
+    manual_update_notes: "Cette version ne peut pas s’installer seule. Téléchargez la nouvelle version sur GitHub.",
+    manual_install_status: "L’installation automatique nécessite une version signée. Téléchargez les mises à jour sur GitHub.",
+    release_notes_button: "Notes de version",
+    dismiss_label: "Ignorer",
+    refresh_slow_status: "L’actualisation prend plus de temps que prévu",
+    worker_failed_error: "L’opération a échoué de façon inattendue. Veuillez réessayer.",
+    label_auto_updates: "Mises à jour automatiques",
+    desc_auto_updates: "Télécharger et vérifier les versions signées en arrière-plan",
+    label_update_channel: "Canal de mise à jour",
+    desc_update_channel: "Recevoir les versions stables vérifiées ou les préversions",
+    channel_stable: "Stable",
+    channel_preview: "Préversion",
+    label_license_source: "Licence et code source",
+    desc_license_source: "GPL-3.0-only · Créé avec Rust et Slint, sans webview superflu",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "Lien de calendrier privé",
+    ics_help: "Collez une adresse HTTPS ICS privée. Elle est stockée uniquement sur cet ordinateur.",
+    desc_auto_install: "Installer la version signée et redémarrer après une vérification réussie.",
+    startup_error: "Impossible de modifier l’entrée de démarrage Windows.",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "Calendrier",
+    agenda_all_day: "Toute la journée",
+    agenda_event_fallback: "Événement",
+};
+
+const PT_BR_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "Mês atual",
+    today_button: "Hoje",
+    week_col_header: "SEM",
+    selected_date_overline: "DATA SELECIONADA",
+    settings_title: "Configurações",
+    nav_general: "App",
+    nav_appearance: "Calendário",
+    nav_calendars: "Contas",
+    nav_about: "Sobre",
+    general_subtitle: "Idioma, inicialização, atalho, ícone da bandeja e atualizações.",
+    label_language: "Idioma",
+    desc_language: "Idioma da interface para meses, dias da semana e controles",
+    label_startup: "Iniciar com o Windows",
+    desc_startup: "Iniciar o Lightcal discretamente na bandeja do sistema ao entrar",
+    label_shortcut: "Atalho para abrir",
+    desc_shortcut: "Mostrar ou ocultar o calendário de qualquer lugar da área de trabalho",
+    shortcut_unset: "Não definido",
+    shortcut_record: "Gravar…",
+    shortcut_clear: "Limpar",
+    section_region: "Região",
+    section_startup: "Inicialização",
+    appearance_subtitle: "Tema, início da semana, dias sombreados, números da semana e pontos de eventos.",
+    label_theme: "Tema",
+    desc_theme: "Sistema, Claro ou Escuro",
+    theme_system: "Sistema",
+    theme_light: "Claro",
+    theme_dark: "Escuro",
+    label_first_weekday: "Semana começa em",
+    desc_first_weekday: "Primeira coluna exibida na grade do calendário",
+    label_gray_weekdays: "Dias sombreados",
+    desc_gray_weekdays: "Destacar as colunas de dias selecionadas com uma faixa vertical suave",
+    label_show_weekday: "Dia da semana nas datas",
+    desc_show_weekday: "Incluir o nome do dia da semana na data de hoje e na data selecionada.",
+    label_show_week_numbers: "Números da semana",
+    desc_show_week_numbers: "Exibir números de semana ISO na margem esquerda",
+    calendars_subtitle: "Contas conectadas e os calendários que mostram pontos de eventos.",
+    provider_heading: "Suas contas",
+    provider_readonly_tag: "Somente leitura",
+    refresh_button: "Atualizar",
+    calendars_empty_title: "Nenhuma conta conectada ainda",
+    calendars_denied_title: "O acesso ao calendário está desativado nas Configurações de privacidade",
+    calendars_unavailable_desc: "Nada conectado ainda. Adicione Google, Outlook ou um link ICS privado e escolha quais calendários mostrar.",
+    calendars_dot_note: "Só os calendários marcados geram pontos de eventos (até 3 pontos por dia).",
+    about_subtitle: "Status da versão e links.",
+    about_license_line: "GPL-3.0-only · Código aberto",
+    updates_heading: "Atualizações",
+    updates_idle_desc: "As atualizações são verificadas quando você pede.",
+    updates_checking_desc: "Verificando no GitHub a versão estável mais recente…",
+    updates_check_button: "Verificar agora",
+    updates_open_release_button: "Abrir página da versão ↗",
+    tray_open_calendar: "Abrir calendário",
+    tray_settings: "Configurações",
+    tray_about: "Sobre o Lightcal",
+    tray_quit: "Sair",
+    back_to_calendar: "‹ Voltar às configurações",
+    label_tray_mode: "Ícone da bandeja",
+    desc_tray_mode: "Ícone colorido ou monocromático",
+    label_tray_palette: "Ícone da bandeja",
+    desc_tray_palette: "Ícone colorido ou monocromático",
+    palette_colored: "Cor",
+    palette_monochrome: "Mono",
+    preferences_subtitle: "Preferências",
+    start_of_week_monday: "Segunda-feira",
+    start_of_week_sunday: "Domingo",
+    shortcut_conflict_title: "Atalho indisponível: a combinação já está em uso por outro app.",
+    shortcut_conflict_hint: "Pressione uma nova combinação de teclas (por exemplo, Alt + C) ou clique em Redefinir.",
+    shortcut_reset_button: "Redefinir",
+    theme_light_obsidian: "Claro",
+    theme_dark_obsidian: "Escuro",
+    theme_system_obsidian: "Sistema",
+    label_highlight_current_month: "Destacar mês atual",
+    desc_highlight_current_month: "Mostrar o indicador do mês atual",
+    label_show_event_dots: "Pontos de eventos",
+    desc_show_event_dots: "Mostrar até 3 pontos coloridos nos dias com eventos",
+    label_show_koi: "Lago de carpas",
+    label_date_size: "Tamanho da data",
+    date_size_standard: "Padrão",
+    date_size_large: "Grande",
+    date_size_larger: "Maior",
+    add_calendar_button: "+ Adicionar conta",
+    add_calendar_account_button: "+ Adicionar conta",
+    open_privacy_settings_button: "Abrir Configurações de privacidade",
+    access_denied_desc: "O Lightcal precisa de permissão para ler eventos do calendário. A visão do mês funciona sem eles.",
+    retry_sync_button: "Sincronizar de novo",
+    checking_updates_label: "Verificando atualizações…",
+    update_available_badge: "Atualização disponível",
+    update_ready_title: "Uma nova versão está disponível",
+    update_ready_notes: "Verifica a atualização assinada antes de instalar e reiniciar.",
+    download_release_button: "Baixar",
+    manual_update_notes: "Esta versão não instala atualizações sozinha. Baixe a versão mais recente no GitHub.",
+    manual_install_status: "A instalação automática exige uma versão assinada. Baixe as atualizações no GitHub.",
+    release_notes_button: "Notas da versão",
+    dismiss_label: "Dispensar",
+    refresh_slow_status: "A atualização está demorando mais que o esperado",
+    worker_failed_error: "A operação falhou inesperadamente. Tente novamente.",
+    label_auto_updates: "Atualizações automáticas",
+    desc_auto_updates: "Baixar e verificar versões assinadas em segundo plano",
+    label_update_channel: "Canal de atualização",
+    desc_update_channel: "Receber versões estáveis verificadas ou versões prévias",
+    channel_stable: "Estável",
+    channel_preview: "Prévia",
+    label_license_source: "Licença e código",
+    desc_license_source: "GPL-3.0-only · Feito com Rust e Slint, sem o peso de um webview",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "Link de calendário privado",
+    ics_help: "Cole um endereço HTTPS ICS privado. Ele fica salvo apenas neste computador.",
+    desc_auto_install: "Instalar a versão assinada e reiniciar após uma verificação bem-sucedida.",
+    startup_error: "Não foi possível atualizar a entrada de inicialização do Windows.",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "Calendário",
+    agenda_all_day: "Dia inteiro",
+    agenda_event_fallback: "Evento",
+};
+
+const UK_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "Поточний місяць",
+    today_button: "Сьогодні",
+    week_col_header: "ТИЖ",
+    selected_date_overline: "ВИБРАНА ДАТА",
+    settings_title: "Налаштування",
+    nav_general: "Застосунок",
+    nav_appearance: "Календар",
+    nav_calendars: "Облікові записи",
+    nav_about: "Про програму",
+    general_subtitle: "Мова, автозапуск, сполучення клавіш, значок у треї та оновлення.",
+    label_language: "Мова",
+    desc_language: "Мова інтерфейсу для назв місяців, днів тижня й елементів керування",
+    label_startup: "Запускати разом із Windows",
+    desc_startup: "Тихо запускати Lightcal в області сповіщень після входу",
+    label_shortcut: "Швидкий виклик",
+    desc_shortcut: "Відкривати або ховати календар із будь-якого місця робочого стола",
+    shortcut_unset: "Не задано",
+    shortcut_record: "Задати…",
+    shortcut_clear: "Очистити",
+    section_region: "Регіон",
+    section_startup: "Запуск",
+    appearance_subtitle: "Тема, початок тижня, затінені дні, номери тижнів і точки подій.",
+    label_theme: "Тема",
+    desc_theme: "Системна, світла або темна",
+    theme_system: "Системна",
+    theme_light: "Світла",
+    theme_dark: "Темна",
+    label_first_weekday: "Початок тижня",
+    desc_first_weekday: "Перший стовпець у сітці календаря",
+    label_gray_weekdays: "Затінені дні",
+    desc_gray_weekdays: "Підсвічувати вибрані дні тижня м’якою вертикальною смугою",
+    label_show_weekday: "День тижня в датах",
+    desc_show_weekday: "Показувати назву дня тижня в сьогоднішній і вибраній даті.",
+    label_show_week_numbers: "Номери тижнів",
+    desc_show_week_numbers: "Показувати номери тижнів ISO вздовж лівого краю",
+    calendars_subtitle: "Під’єднані облікові записи й календарі з точками подій.",
+    provider_heading: "Ваші облікові записи",
+    provider_readonly_tag: "Лише читання",
+    refresh_button: "Оновити",
+    calendars_empty_title: "Облікові записи ще не під’єднано",
+    calendars_denied_title: "Доступ до календарів вимкнено в параметрах конфіденційності",
+    calendars_unavailable_desc: "Поки нічого не під’єднано. Додайте Google, Outlook або приватне посилання ICS і виберіть, які календарі показувати.",
+    calendars_dot_note: "Точки подій показуються лише для позначених календарів (до 3 точок на день).",
+    about_subtitle: "Версія та посилання.",
+    about_license_line: "GPL-3.0-only · Відкритий код",
+    updates_heading: "Оновлення",
+    updates_idle_desc: "Оновлення перевіряються на ваш запит.",
+    updates_checking_desc: "Перевірка останнього стабільного випуску на GitHub…",
+    updates_check_button: "Перевірити",
+    updates_open_release_button: "Сторінка випуску ↗",
+    tray_open_calendar: "Відкрити календар",
+    tray_settings: "Налаштування",
+    tray_about: "Про Lightcal",
+    tray_quit: "Вийти",
+    back_to_calendar: "‹ До налаштувань",
+    label_tray_mode: "Значок у треї",
+    desc_tray_mode: "Кольоровий або монохромний значок",
+    label_tray_palette: "Значок у треї",
+    desc_tray_palette: "Кольоровий або монохромний значок",
+    palette_colored: "Колір",
+    palette_monochrome: "Моно",
+    preferences_subtitle: "Параметри",
+    start_of_week_monday: "Понеділок",
+    start_of_week_sunday: "Неділя",
+    shortcut_conflict_title: "Сполучення недоступне: його вже зайняв інший застосунок.",
+    shortcut_conflict_hint: "Натисніть нове сполучення клавіш (наприклад, Alt + C) або «Скинути».",
+    shortcut_reset_button: "Скинути",
+    theme_light_obsidian: "Світла",
+    theme_dark_obsidian: "Темна",
+    theme_system_obsidian: "Системна",
+    label_highlight_current_month: "Виділяти поточний місяць",
+    desc_highlight_current_month: "Показувати позначку поточного місяця",
+    label_show_event_dots: "Точки подій",
+    desc_show_event_dots: "До 3 кольорових точок у днях із подіями",
+    label_show_koi: "Ставок із коропами кої",
+    label_date_size: "Розмір дат",
+    date_size_standard: "Звичайний",
+    date_size_large: "Великий",
+    date_size_larger: "Більший",
+    add_calendar_button: "+ Додати обліковий запис",
+    add_calendar_account_button: "+ Додати обліковий запис",
+    open_privacy_settings_button: "Параметри конфіденційності",
+    access_denied_desc: "Lightcal потрібен дозвіл на читання подій календаря. Перегляд місяця працює й без нього.",
+    retry_sync_button: "Повторити",
+    checking_updates_label: "Перевірка оновлень…",
+    update_available_badge: "Є оновлення",
+    update_ready_title: "Доступна новіша версія",
+    update_ready_notes: "Перевіряє підпис оновлення перед інсталяцією та перезапуском.",
+    download_release_button: "Завантажити",
+    manual_update_notes: "Ця збірка не може сама інсталювати оновлення. Завантажте новіший випуск із GitHub.",
+    manual_install_status: "Автоматична інсталяція потребує підписаної збірки. Завантажуйте оновлення з GitHub.",
+    release_notes_button: "Що нового",
+    dismiss_label: "Закрити",
+    refresh_slow_status: "Оновлення триває довше, ніж очікувалося",
+    worker_failed_error: "Операція несподівано завершилася помилкою. Спробуйте ще раз.",
+    label_auto_updates: "Автоматичні оновлення",
+    desc_auto_updates: "Завантажувати й перевіряти підписані випуски у фоновому режимі",
+    label_update_channel: "Канал оновлень",
+    desc_update_channel: "Отримувати перевірені стабільні випуски або попередні збірки",
+    channel_stable: "Стабільний",
+    channel_preview: "Попередній",
+    label_license_source: "Ліцензія та код",
+    desc_license_source: "GPL-3.0-only · Створено на Rust і Slint, без важкого webview",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "Приватне посилання на календар",
+    ics_help: "Вставте приватну HTTPS-адресу ICS. Вона зберігається лише на цьому комп’ютері.",
+    desc_auto_install: "Після успішної перевірки інсталювати підписаний випуск і перезапустити.",
+    startup_error: "Не вдалося оновити автозапуск Windows.",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "Календар",
+    agenda_all_day: "Увесь день",
+    agenda_event_fallback: "Подія",
+};
+
+const ZH_HANS_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "本月",
+    today_button: "今天",
+    week_col_header: "周",
+    selected_date_overline: "所选日期",
+    settings_title: "设置",
+    nav_general: "应用",
+    nav_appearance: "日历",
+    nav_calendars: "帐户",
+    nav_about: "关于",
+    general_subtitle: "语言、启动、快捷键、托盘图标和更新。",
+    label_language: "语言",
+    desc_language: "月份名称、星期和控件所用的界面语言",
+    label_startup: "开机时启动",
+    desc_startup: "登录时在系统托盘中静默启动 Lightcal",
+    label_shortcut: "打开快捷键",
+    desc_shortcut: "在桌面任意位置显示或隐藏日历弹窗",
+    shortcut_unset: "未设置",
+    shortcut_record: "录制…",
+    shortcut_clear: "清除",
+    section_region: "区域",
+    section_startup: "启动",
+    appearance_subtitle: "主题、每周起始日、底色标记的星期、周数和事件圆点。",
+    label_theme: "主题",
+    desc_theme: "系统、浅色或深色",
+    theme_system: "系统",
+    theme_light: "浅色",
+    theme_dark: "深色",
+    label_first_weekday: "每周起始日",
+    desc_first_weekday: "日历网格中显示的第一列",
+    label_gray_weekdays: "底色标记",
+    desc_gray_weekdays: "用柔和的竖条为所选星期列添加底色",
+    label_show_weekday: "日期中显示星期",
+    desc_show_weekday: "在今天和所选日期的文字中包含星期名称。",
+    label_show_week_numbers: "周数",
+    desc_show_week_numbers: "在左侧边缘显示 ISO 周数",
+    calendars_subtitle: "已连接的帐户以及显示事件圆点的日历。",
+    provider_heading: "你的帐户",
+    provider_readonly_tag: "只读",
+    refresh_button: "刷新",
+    calendars_empty_title: "尚未连接任何帐户",
+    calendars_denied_title: "日历访问权限已在系统隐私设置中关闭",
+    calendars_unavailable_desc:
+        "尚未连接任何内容。请添加 Google、Outlook 或私有 ICS 链接，然后选择要显示的日历。",
+    calendars_dot_note: "只有勾选的日历才会显示事件圆点（每天最多 3 个）。",
+    about_subtitle: "版本状态和链接。",
+    about_license_line: "GPL-3.0-only · 开源",
+    updates_heading: "更新",
+    updates_idle_desc: "仅在你请求时检查更新。",
+    updates_checking_desc: "正在 GitHub 上检查最新稳定版…",
+    updates_check_button: "立即检查",
+    updates_open_release_button: "打开发布页面 ↗",
+    tray_open_calendar: "打开日历",
+    tray_settings: "设置",
+    tray_about: "关于 Lightcal",
+    tray_quit: "退出",
+    back_to_calendar: "‹ 返回设置",
+    label_tray_mode: "托盘图标",
+    desc_tray_mode: "彩色或单色托盘图标",
+    label_tray_palette: "托盘图标",
+    desc_tray_palette: "彩色或单色托盘图标",
+    palette_colored: "彩色",
+    palette_monochrome: "单色",
+    preferences_subtitle: "首选项",
+    start_of_week_monday: "星期一",
+    start_of_week_sunday: "星期日",
+    shortcut_conflict_title: "快捷键不可用：该组合键已被其他应用占用。",
+    shortcut_conflict_hint: "请按新的组合键（例如 Alt + C），或单击“重置”。",
+    shortcut_reset_button: "重置",
+    theme_light_obsidian: "浅色",
+    theme_dark_obsidian: "深色",
+    theme_system_obsidian: "系统",
+    label_highlight_current_month: "突出显示本月",
+    desc_highlight_current_month: "显示本月指示标记",
+    label_show_event_dots: "事件圆点",
+    desc_show_event_dots: "在有事件的日期上最多显示 3 个彩色圆点",
+    label_show_koi: "锦鲤池",
+    label_date_size: "日期大小",
+    date_size_standard: "标准",
+    date_size_large: "大",
+    date_size_larger: "特大",
+    add_calendar_button: "+ 添加帐户",
+    add_calendar_account_button: "+ 添加帐户",
+    open_privacy_settings_button: "打开隐私设置",
+    access_denied_desc: "Lightcal 需要读取日历事件的权限。没有该权限时，月视图仍可正常使用。",
+    retry_sync_button: "重试同步",
+    checking_updates_label: "正在检查更新…",
+    update_available_badge: "有可用更新",
+    update_ready_title: "有新版本可用",
+    update_ready_notes: "安装并重启前会先验证已签名的更新。",
+    download_release_button: "下载",
+    manual_update_notes: "此版本无法自行安装更新。请从 GitHub 下载新版本。",
+    manual_install_status: "自动安装需要已签名的版本。请从 GitHub 下载更新。",
+    release_notes_button: "发行说明",
+    dismiss_label: "关闭",
+    refresh_slow_status: "刷新时间比预期长",
+    worker_failed_error: "操作意外失败。请重试。",
+    label_auto_updates: "自动更新",
+    desc_auto_updates: "在后台下载并验证已签名的版本",
+    label_update_channel: "更新通道",
+    desc_update_channel: "接收经过验证的稳定版或预览版",
+    channel_stable: "稳定版",
+    channel_preview: "预览版",
+    label_license_source: "许可证和源代码",
+    desc_license_source: "GPL-3.0-only · 基于 Rust 和 Slint 构建，不含臃肿的 webview",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "私有日历链接",
+    ics_help: "粘贴私有 HTTPS ICS 地址。它仅保存在这台电脑上。",
+    desc_auto_install: "检查成功后安装已签名的版本并重启。",
+    startup_error: "无法更新 Windows 启动项。",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "日历",
+    agenda_all_day: "全天",
+    agenda_event_fallback: "事件",
+};
+
+const KO_STRINGS: UiStrings = UiStrings {
+    app_name: "Lightcal",
+    current_month_badge: "이번 달",
+    today_button: "오늘",
+    week_col_header: "주",
+    selected_date_overline: "선택한 날짜",
+    settings_title: "설정",
+    nav_general: "앱",
+    nav_appearance: "캘린더",
+    nav_calendars: "계정",
+    nav_about: "정보",
+    general_subtitle: "언어, 시작, 바로 가기 키, 트레이 아이콘 및 업데이트.",
+    label_language: "언어",
+    desc_language: "월 이름, 요일 및 컨트롤에 사용할 인터페이스 언어",
+    label_startup: "Windows 시작 시 실행",
+    desc_startup: "로그인하면 Lightcal이 시스템 트레이에서 조용히 시작됩니다",
+    label_shortcut: "열기 바로 가기 키",
+    desc_shortcut: "바탕 화면 어디에서나 캘린더 팝업을 열거나 닫습니다",
+    shortcut_unset: "설정 안 함",
+    shortcut_record: "기록…",
+    shortcut_clear: "지우기",
+    section_region: "지역",
+    section_startup: "시작",
+    appearance_subtitle: "테마, 주 시작일, 음영 요일, 주 번호 및 일정 점.",
+    label_theme: "테마",
+    desc_theme: "시스템, 밝게 또는 어둡게",
+    theme_system: "시스템",
+    theme_light: "밝게",
+    theme_dark: "어둡게",
+    label_first_weekday: "주 시작일",
+    desc_first_weekday: "캘린더 표의 첫 번째 열",
+    label_gray_weekdays: "음영 요일",
+    desc_gray_weekdays: "선택한 요일 열에 은은한 세로 띠를 표시합니다",
+    label_show_weekday: "날짜에 요일 표시",
+    desc_show_weekday: "오늘 및 선택한 날짜 텍스트에 요일 이름을 포함합니다.",
+    label_show_week_numbers: "주 번호",
+    desc_show_week_numbers: "왼쪽 여백에 ISO 주 번호를 표시합니다",
+    calendars_subtitle: "연결된 계정과 일정 점을 표시할 캘린더.",
+    provider_heading: "내 계정",
+    provider_readonly_tag: "읽기 전용",
+    refresh_button: "새로 고침",
+    calendars_empty_title: "아직 연결된 계정이 없습니다",
+    calendars_denied_title: "시스템 개인 정보 설정에서 캘린더 액세스가 꺼져 있습니다",
+    calendars_unavailable_desc: "아직 연결된 항목이 없습니다. Google, Outlook 또는 비공개 ICS 링크를 추가한 다음 표시할 캘린더를 선택하세요.",
+    calendars_dot_note: "선택한 캘린더만 일정 점으로 표시됩니다(하루 최대 3개).",
+    about_subtitle: "버전 상태 및 링크.",
+    about_license_line: "GPL-3.0-only · 오픈 소스",
+    updates_heading: "업데이트",
+    updates_idle_desc: "요청할 때만 업데이트를 확인합니다.",
+    updates_checking_desc: "GitHub에서 최신 안정 릴리스를 확인하는 중…",
+    updates_check_button: "지금 확인",
+    updates_open_release_button: "릴리스 페이지 열기 ↗",
+    tray_open_calendar: "캘린더 열기",
+    tray_settings: "설정",
+    tray_about: "Lightcal 정보",
+    tray_quit: "끝내기",
+    back_to_calendar: "‹ 설정으로 돌아가기",
+    label_tray_mode: "트레이 아이콘",
+    desc_tray_mode: "컬러 또는 흑백 트레이 배지",
+    label_tray_palette: "트레이 아이콘",
+    desc_tray_palette: "컬러 또는 흑백 트레이 배지",
+    palette_colored: "컬러",
+    palette_monochrome: "흑백",
+    preferences_subtitle: "기본 설정",
+    start_of_week_monday: "월요일",
+    start_of_week_sunday: "일요일",
+    shortcut_conflict_title: "바로 가기 키를 사용할 수 없음: 다른 앱에서 이미 사용 중입니다.",
+    shortcut_conflict_hint: "새 키 조합(예: Alt + C)을 누르거나 다시 설정을 클릭하세요.",
+    shortcut_reset_button: "다시 설정",
+    theme_light_obsidian: "밝게",
+    theme_dark_obsidian: "어둡게",
+    theme_system_obsidian: "시스템",
+    label_highlight_current_month: "이번 달 강조",
+    desc_highlight_current_month: "이번 달 표시기를 표시합니다",
+    label_show_event_dots: "일정 점",
+    desc_show_event_dots: "일정이 있는 날에 최대 3개의 컬러 점을 표시합니다",
+    label_show_koi: "잉어 연못",
+    label_date_size: "날짜 크기",
+    date_size_standard: "표준",
+    date_size_large: "크게",
+    date_size_larger: "더 크게",
+    add_calendar_button: "+ 계정 추가",
+    add_calendar_account_button: "+ 계정 추가",
+    open_privacy_settings_button: "개인 정보 설정 열기",
+    access_denied_desc: "Lightcal이 캘린더 일정을 읽으려면 권한이 필요합니다. 권한이 없어도 월 보기는 계속 사용할 수 있습니다.",
+    retry_sync_button: "다시 동기화",
+    checking_updates_label: "업데이트 확인 중…",
+    update_available_badge: "업데이트 있음",
+    update_ready_title: "새 버전을 사용할 수 있습니다",
+    update_ready_notes: "설치 및 다시 시작 전에 서명된 업데이트를 확인합니다.",
+    download_release_button: "다운로드",
+    manual_update_notes: "이 빌드는 업데이트를 직접 설치할 수 없습니다. GitHub에서 새 릴리스를 다운로드하세요.",
+    manual_install_status: "자동 설치에는 서명된 빌드가 필요합니다. GitHub에서 업데이트를 다운로드하세요.",
+    release_notes_button: "릴리스 정보",
+    dismiss_label: "닫기",
+    refresh_slow_status: "새로 고침이 예상보다 오래 걸리고 있습니다",
+    worker_failed_error: "작업이 예기치 않게 실패했습니다. 다시 시도하세요.",
+    label_auto_updates: "자동 업데이트",
+    desc_auto_updates: "백그라운드에서 서명된 릴리스를 다운로드하고 확인합니다",
+    label_update_channel: "업데이트 채널",
+    desc_update_channel: "검증된 안정 릴리스 또는 미리 보기 빌드를 받습니다",
+    channel_stable: "안정",
+    channel_preview: "미리 보기",
+    label_license_source: "라이선스 및 소스",
+    desc_license_source: "GPL-3.0-only · Rust와 Slint로 제작, 무거운 webview 없음",
+    github_repo_button: "GitHub ↗",
+    koona_app_button: "koona.app ↗",
+    outlook_section: "Outlook",
+    ics_section: "비공개 캘린더 링크",
+    ics_help: "비공개 HTTPS ICS 주소를 붙여 넣으세요. 이 컴퓨터에만 저장됩니다.",
+    desc_auto_install: "확인에 성공하면 서명된 릴리스를 설치하고 다시 시작합니다.",
+    startup_error: "Windows 시작 항목을 업데이트할 수 없습니다.",
+    license_short: "GPL-3.0-only",
+    agenda_calendar_fallback: "캘린더",
+    agenda_all_day: "종일",
+    agenda_event_fallback: "일정",
+};
+
 pub fn catalog(locale: LocaleCode) -> &'static UiStrings {
     match locale {
         LocaleCode::En => &EN_STRINGS,
         LocaleCode::Ru => &RU_STRINGS,
         LocaleCode::Es => &ES_STRINGS,
         LocaleCode::Ja => &JA_STRINGS,
+        LocaleCode::De => &DE_STRINGS,
+        LocaleCode::Fr => &FR_STRINGS,
+        LocaleCode::PtBr => &PT_BR_STRINGS,
+        LocaleCode::Uk => &UK_STRINGS,
+        LocaleCode::ZhHans => &ZH_HANS_STRINGS,
+        LocaleCode::Ko => &KO_STRINGS,
     }
 }
 
@@ -705,6 +1479,11 @@ pub fn about_version_line(locale: LocaleCode, version: &str) -> String {
         LocaleCode::Ru => format!("Версия {version}"),
         LocaleCode::Es => format!("Versión {version}"),
         LocaleCode::Ja => format!("バージョン {version}"),
+        LocaleCode::De | LocaleCode::Fr => format!("Version {version}"),
+        LocaleCode::PtBr => format!("Versão {version}"),
+        LocaleCode::Uk => format!("Версія {version}"),
+        LocaleCode::ZhHans => format!("版本 {version}"),
+        LocaleCode::Ko => format!("버전 {version}"),
     }
 }
 
@@ -757,6 +1536,54 @@ pub fn weekday_short(locale: LocaleCode, day: Weekday) -> &'static str {
         (LocaleCode::Ja, Weekday::Friday) => "金",
         (LocaleCode::Ja, Weekday::Saturday) => "土",
         (LocaleCode::Ja, Weekday::Sunday) => "日",
+
+        (LocaleCode::De, Weekday::Monday) => "Mo",
+        (LocaleCode::De, Weekday::Tuesday) => "Di",
+        (LocaleCode::De, Weekday::Wednesday) => "Mi",
+        (LocaleCode::De, Weekday::Thursday) => "Do",
+        (LocaleCode::De, Weekday::Friday) => "Fr",
+        (LocaleCode::De, Weekday::Saturday) => "Sa",
+        (LocaleCode::De, Weekday::Sunday) => "So",
+
+        (LocaleCode::Fr, Weekday::Monday) => "Lu",
+        (LocaleCode::Fr, Weekday::Tuesday) => "Ma",
+        (LocaleCode::Fr, Weekday::Wednesday) => "Me",
+        (LocaleCode::Fr, Weekday::Thursday) => "Je",
+        (LocaleCode::Fr, Weekday::Friday) => "Ve",
+        (LocaleCode::Fr, Weekday::Saturday) => "Sa",
+        (LocaleCode::Fr, Weekday::Sunday) => "Di",
+
+        (LocaleCode::PtBr, Weekday::Monday) => "Seg",
+        (LocaleCode::PtBr, Weekday::Tuesday) => "Ter",
+        (LocaleCode::PtBr, Weekday::Wednesday) => "Qua",
+        (LocaleCode::PtBr, Weekday::Thursday) => "Qui",
+        (LocaleCode::PtBr, Weekday::Friday) => "Sex",
+        (LocaleCode::PtBr, Weekday::Saturday) => "Sáb",
+        (LocaleCode::PtBr, Weekday::Sunday) => "Dom",
+
+        (LocaleCode::Uk, Weekday::Monday) => "Пн",
+        (LocaleCode::Uk, Weekday::Tuesday) => "Вт",
+        (LocaleCode::Uk, Weekday::Wednesday) => "Ср",
+        (LocaleCode::Uk, Weekday::Thursday) => "Чт",
+        (LocaleCode::Uk, Weekday::Friday) => "Пт",
+        (LocaleCode::Uk, Weekday::Saturday) => "Сб",
+        (LocaleCode::Uk, Weekday::Sunday) => "Нд",
+
+        (LocaleCode::ZhHans, Weekday::Monday) => "一",
+        (LocaleCode::ZhHans, Weekday::Tuesday) => "二",
+        (LocaleCode::ZhHans, Weekday::Wednesday) => "三",
+        (LocaleCode::ZhHans, Weekday::Thursday) => "四",
+        (LocaleCode::ZhHans, Weekday::Friday) => "五",
+        (LocaleCode::ZhHans, Weekday::Saturday) => "六",
+        (LocaleCode::ZhHans, Weekday::Sunday) => "日",
+
+        (LocaleCode::Ko, Weekday::Monday) => "월",
+        (LocaleCode::Ko, Weekday::Tuesday) => "화",
+        (LocaleCode::Ko, Weekday::Wednesday) => "수",
+        (LocaleCode::Ko, Weekday::Thursday) => "목",
+        (LocaleCode::Ko, Weekday::Friday) => "금",
+        (LocaleCode::Ko, Weekday::Saturday) => "토",
+        (LocaleCode::Ko, Weekday::Sunday) => "일",
     }
 }
 
@@ -793,6 +1620,54 @@ pub fn weekday_full(locale: LocaleCode, day: Weekday) -> &'static str {
         (LocaleCode::Ja, Weekday::Friday) => "金曜日",
         (LocaleCode::Ja, Weekday::Saturday) => "土曜日",
         (LocaleCode::Ja, Weekday::Sunday) => "日曜日",
+
+        (LocaleCode::De, Weekday::Monday) => "Montag",
+        (LocaleCode::De, Weekday::Tuesday) => "Dienstag",
+        (LocaleCode::De, Weekday::Wednesday) => "Mittwoch",
+        (LocaleCode::De, Weekday::Thursday) => "Donnerstag",
+        (LocaleCode::De, Weekday::Friday) => "Freitag",
+        (LocaleCode::De, Weekday::Saturday) => "Samstag",
+        (LocaleCode::De, Weekday::Sunday) => "Sonntag",
+
+        (LocaleCode::Fr, Weekday::Monday) => "Lundi",
+        (LocaleCode::Fr, Weekday::Tuesday) => "Mardi",
+        (LocaleCode::Fr, Weekday::Wednesday) => "Mercredi",
+        (LocaleCode::Fr, Weekday::Thursday) => "Jeudi",
+        (LocaleCode::Fr, Weekday::Friday) => "Vendredi",
+        (LocaleCode::Fr, Weekday::Saturday) => "Samedi",
+        (LocaleCode::Fr, Weekday::Sunday) => "Dimanche",
+
+        (LocaleCode::PtBr, Weekday::Monday) => "Segunda-feira",
+        (LocaleCode::PtBr, Weekday::Tuesday) => "Terça-feira",
+        (LocaleCode::PtBr, Weekday::Wednesday) => "Quarta-feira",
+        (LocaleCode::PtBr, Weekday::Thursday) => "Quinta-feira",
+        (LocaleCode::PtBr, Weekday::Friday) => "Sexta-feira",
+        (LocaleCode::PtBr, Weekday::Saturday) => "Sábado",
+        (LocaleCode::PtBr, Weekday::Sunday) => "Domingo",
+
+        (LocaleCode::Uk, Weekday::Monday) => "Понеділок",
+        (LocaleCode::Uk, Weekday::Tuesday) => "Вівторок",
+        (LocaleCode::Uk, Weekday::Wednesday) => "Середа",
+        (LocaleCode::Uk, Weekday::Thursday) => "Четвер",
+        (LocaleCode::Uk, Weekday::Friday) => "П’ятниця",
+        (LocaleCode::Uk, Weekday::Saturday) => "Субота",
+        (LocaleCode::Uk, Weekday::Sunday) => "Неділя",
+
+        (LocaleCode::ZhHans, Weekday::Monday) => "星期一",
+        (LocaleCode::ZhHans, Weekday::Tuesday) => "星期二",
+        (LocaleCode::ZhHans, Weekday::Wednesday) => "星期三",
+        (LocaleCode::ZhHans, Weekday::Thursday) => "星期四",
+        (LocaleCode::ZhHans, Weekday::Friday) => "星期五",
+        (LocaleCode::ZhHans, Weekday::Saturday) => "星期六",
+        (LocaleCode::ZhHans, Weekday::Sunday) => "星期日",
+
+        (LocaleCode::Ko, Weekday::Monday) => "월요일",
+        (LocaleCode::Ko, Weekday::Tuesday) => "화요일",
+        (LocaleCode::Ko, Weekday::Wednesday) => "수요일",
+        (LocaleCode::Ko, Weekday::Thursday) => "목요일",
+        (LocaleCode::Ko, Weekday::Friday) => "금요일",
+        (LocaleCode::Ko, Weekday::Saturday) => "토요일",
+        (LocaleCode::Ko, Weekday::Sunday) => "일요일",
     }
 }
 
@@ -843,11 +1718,115 @@ pub fn month_name(locale: LocaleCode, month: u8) -> &'static str {
     const JA: [&str; 12] = [
         "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月",
     ];
+    const DE: [&str; 12] = [
+        "Januar",
+        "Februar",
+        "März",
+        "April",
+        "Mai",
+        "Juni",
+        "Juli",
+        "August",
+        "September",
+        "Oktober",
+        "November",
+        "Dezember",
+    ];
+    const FR: [&str; 12] = [
+        "Janvier",
+        "Février",
+        "Mars",
+        "Avril",
+        "Mai",
+        "Juin",
+        "Juillet",
+        "Août",
+        "Septembre",
+        "Octobre",
+        "Novembre",
+        "Décembre",
+    ];
+    const PT_BR: [&str; 12] = [
+        "Janeiro",
+        "Fevereiro",
+        "Março",
+        "Abril",
+        "Maio",
+        "Junho",
+        "Julho",
+        "Agosto",
+        "Setembro",
+        "Outubro",
+        "Novembro",
+        "Dezembro",
+    ];
+    const UK: [&str; 12] = [
+        "Січень",
+        "Лютий",
+        "Березень",
+        "Квітень",
+        "Травень",
+        "Червень",
+        "Липень",
+        "Серпень",
+        "Вересень",
+        "Жовтень",
+        "Листопад",
+        "Грудень",
+    ];
+    const KO: [&str; 12] = [
+        "1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월",
+    ];
     match locale {
         LocaleCode::En => EN[idx],
         LocaleCode::Ru => RU[idx],
         LocaleCode::Es => ES[idx],
-        LocaleCode::Ja => JA[idx],
+        // Chinese month names are written exactly like the Japanese ones.
+        LocaleCode::Ja | LocaleCode::ZhHans => JA[idx],
+        LocaleCode::De => DE[idx],
+        LocaleCode::Fr => FR[idx],
+        LocaleCode::PtBr => PT_BR[idx],
+        LocaleCode::Uk => UK[idx],
+        LocaleCode::Ko => KO[idx],
+    }
+}
+
+fn month_genitive_uk(month: u8) -> &'static str {
+    const UK_GEN: [&str; 12] = [
+        "січня",
+        "лютого",
+        "березня",
+        "квітня",
+        "травня",
+        "червня",
+        "липня",
+        "серпня",
+        "вересня",
+        "жовтня",
+        "листопада",
+        "грудня",
+    ];
+    UK_GEN[(month.clamp(1, 12) - 1) as usize]
+}
+
+/// Russian and Ukrainian plural form: `one` for 1, 21, 31…; `few` for 2-4, 22-24…;
+/// `many` for 0, 5-20, 25-30….
+pub(crate) fn slavic_plural<'a>(
+    count: usize,
+    one: &'a str,
+    few: &'a str,
+    many: &'a str,
+) -> &'a str {
+    let rem100 = count % 100;
+    let rem10 = count % 10;
+    if (11..=14).contains(&rem100) {
+        many
+    } else if rem10 == 1 {
+        one
+    } else if (2..=4).contains(&rem10) {
+        few
+    } else {
+        many
     }
 }
 
@@ -871,8 +1850,11 @@ fn month_genitive_ru(month: u8) -> &'static str {
 
 pub fn format_month_year(locale: LocaleCode, ym: YearMonth) -> String {
     match locale {
-        LocaleCode::Ja => format!("{}年{}", ym.year, month_name(locale, ym.month)),
-        LocaleCode::Es => format!("{} {}", month_name(locale, ym.month), ym.year),
+        LocaleCode::Ja | LocaleCode::ZhHans => {
+            format!("{}年{}", ym.year, month_name(locale, ym.month))
+        }
+        LocaleCode::Ko => format!("{}년 {}", ym.year, month_name(locale, ym.month)),
+        LocaleCode::PtBr => format!("{} de {}", month_name(locale, ym.month), ym.year),
         _ => format!("{} {}", month_name(locale, ym.month), ym.year),
     }
 }
@@ -907,6 +1889,46 @@ pub fn format_date_line(locale: LocaleCode, date: LocalDate, include_weekday: bo
         ),
         (LocaleCode::Ja, true) => format!("{}月{}日 {}", date.month, date.day, wd),
         (LocaleCode::Ja, false) => format!("{}年{}月{}日", date.year, date.month, date.day),
+        (LocaleCode::De, true) => format!("{wd}, {}. {}", date.day, month_name(locale, date.month)),
+        (LocaleCode::De, false) => format!(
+            "{}. {} {}",
+            date.day,
+            month_name(locale, date.month),
+            date.year
+        ),
+        (LocaleCode::Fr, true) => format!(
+            "{wd} {} {}",
+            date.day,
+            month_name(locale, date.month).to_lowercase()
+        ),
+        (LocaleCode::Fr, false) => format!(
+            "{} {} {}",
+            date.day,
+            month_name(locale, date.month).to_lowercase(),
+            date.year
+        ),
+        (LocaleCode::PtBr, true) => format!(
+            "{wd}, {} de {}",
+            date.day,
+            month_name(locale, date.month).to_lowercase()
+        ),
+        (LocaleCode::PtBr, false) => format!(
+            "{} de {} de {}",
+            date.day,
+            month_name(locale, date.month).to_lowercase(),
+            date.year
+        ),
+        (LocaleCode::Uk, true) => format!("{wd}, {} {}", date.day, month_genitive_uk(date.month)),
+        (LocaleCode::Uk, false) => format!(
+            "{} {} {}",
+            date.day,
+            month_genitive_uk(date.month),
+            date.year
+        ),
+        (LocaleCode::ZhHans, true) => format!("{}月{}日 {}", date.month, date.day, wd),
+        (LocaleCode::ZhHans, false) => format!("{}年{}月{}日", date.year, date.month, date.day),
+        (LocaleCode::Ko, true) => format!("{}월 {}일 {}", date.month, date.day, wd),
+        (LocaleCode::Ko, false) => format!("{}년 {}월 {}일", date.year, date.month, date.day),
     }
 }
 
@@ -921,19 +1943,39 @@ pub fn format_event_count(locale: LocaleCode, count: usize) -> String {
             if count == 0 {
                 return "Нет событий".to_string();
             }
-            let rem100 = count % 100;
-            let rem10 = count % 10;
-            let word = if (11..=14).contains(&rem100) {
-                "событий"
-            } else if rem10 == 1 {
-                "событие"
-            } else if (2..=4).contains(&rem10) {
-                "события"
-            } else {
-                "событий"
-            };
+            let word = slavic_plural(count, "событие", "события", "событий");
             format!("{count} {word}")
         }
+        LocaleCode::Uk => {
+            if count == 0 {
+                return "Немає подій".to_string();
+            }
+            let word = slavic_plural(count, "подія", "події", "подій");
+            format!("{count} {word}")
+        }
+        LocaleCode::De => match count {
+            0 => "Keine Termine".to_string(),
+            1 => "1 Termin".to_string(),
+            n => format!("{n} Termine"),
+        },
+        LocaleCode::Fr => match count {
+            0 => "Aucun événement".to_string(),
+            1 => "1 événement".to_string(),
+            n => format!("{n} événements"),
+        },
+        LocaleCode::PtBr => match count {
+            0 => "Nenhum evento".to_string(),
+            1 => "1 evento".to_string(),
+            n => format!("{n} eventos"),
+        },
+        LocaleCode::ZhHans => match count {
+            0 => "没有事件".to_string(),
+            n => format!("{n} 个事件"),
+        },
+        LocaleCode::Ko => match count {
+            0 => "일정 없음".to_string(),
+            n => format!("일정 {n}개"),
+        },
         LocaleCode::Es => match count {
             0 => "Sin eventos".to_string(),
             1 => "1 evento".to_string(),
@@ -953,17 +1995,11 @@ pub fn format_calendar_count(locale: LocaleCode, count: usize) -> String {
             n => format!("{n} calendars"),
         },
         LocaleCode::Ru => {
-            let rem100 = count % 100;
-            let rem10 = count % 10;
-            let word = if (11..=14).contains(&rem100) {
-                "календарей"
-            } else if rem10 == 1 {
-                "календарь"
-            } else if (2..=4).contains(&rem10) {
-                "календаря"
-            } else {
-                "календарей"
-            };
+            let word = slavic_plural(count, "календарь", "календаря", "календарей");
+            format!("{count} {word}")
+        }
+        LocaleCode::Uk => {
+            let word = slavic_plural(count, "календар", "календарі", "календарів");
             format!("{count} {word}")
         }
         LocaleCode::Es => match count {
@@ -971,6 +2007,17 @@ pub fn format_calendar_count(locale: LocaleCode, count: usize) -> String {
             n => format!("{n} calendarios"),
         },
         LocaleCode::Ja => format!("カレンダー{count}件"),
+        LocaleCode::De => format!("{count} Kalender"),
+        LocaleCode::Fr => match count {
+            0 | 1 => format!("{count} calendrier"),
+            n => format!("{n} calendriers"),
+        },
+        LocaleCode::PtBr => match count {
+            1 => "1 calendário".to_string(),
+            n => format!("{n} calendários"),
+        },
+        LocaleCode::ZhHans => format!("{count} 个日历"),
+        LocaleCode::Ko => format!("캘린더 {count}개"),
     }
 }
 
@@ -980,6 +2027,12 @@ pub fn format_active_calendars_heading(locale: LocaleCode, count: usize) -> Stri
         LocaleCode::Ru => format!("АКТИВНЫЕ КАЛЕНДАРИ ({count})"),
         LocaleCode::Es => format!("CALENDARIOS ACTIVOS ({count})"),
         LocaleCode::Ja => format!("有効なカレンダー ({count})"),
+        LocaleCode::De => format!("AKTIVE KALENDER ({count})"),
+        LocaleCode::Fr => format!("CALENDRIERS ACTIFS ({count})"),
+        LocaleCode::PtBr => format!("CALENDÁRIOS ATIVOS ({count})"),
+        LocaleCode::Uk => format!("АКТИВНІ КАЛЕНДАРІ ({count})"),
+        LocaleCode::ZhHans => format!("已启用的日历 ({count})"),
+        LocaleCode::Ko => format!("활성 캘린더 ({count})"),
     }
 }
 
@@ -990,6 +2043,12 @@ pub fn format_sync_status(locale: LocaleCode, count: usize) -> String {
         LocaleCode::Ru => format!("Синхронизировано · {cal_count}"),
         LocaleCode::Es => format!("Sincronizado · {cal_count}"),
         LocaleCode::Ja => format!("同期済み · {cal_count}"),
+        LocaleCode::De => format!("Synchronisiert · {cal_count}"),
+        LocaleCode::Fr => format!("Synchronisé · {cal_count}"),
+        LocaleCode::PtBr => format!("Sincronizado · {cal_count}"),
+        LocaleCode::Uk => format!("Синхронізовано · {cal_count}"),
+        LocaleCode::ZhHans => format!("已同步 · {cal_count}"),
+        LocaleCode::Ko => format!("동기화됨 · {cal_count}"),
     }
 }
 
@@ -1007,30 +2066,60 @@ pub fn format_update_status(
             LocaleCode::Ru => format!("Установлена последняя версия (v{current_version})"),
             LocaleCode::Es => format!("Actualizado (v{current_version})"),
             LocaleCode::Ja => format!("最新バージョンです (v{current_version})"),
+            LocaleCode::De => format!("Aktuell (v{current_version})"),
+            LocaleCode::Fr => format!("À jour (v{current_version})"),
+            LocaleCode::PtBr => format!("Atualizado (v{current_version})"),
+            LocaleCode::Uk => format!("Встановлено останню версію (v{current_version})"),
+            LocaleCode::ZhHans => format!("已是最新版本 (v{current_version})"),
+            LocaleCode::Ko => format!("최신 버전 (v{current_version})"),
         },
         UpdateCheckState::UpdateAvailable { latest_version, .. } => match locale {
             LocaleCode::En => format!("Update available: v{latest_version}"),
             LocaleCode::Ru => format!("Доступно обновление: v{latest_version}"),
             LocaleCode::Es => format!("Actualización disponible: v{latest_version}"),
             LocaleCode::Ja => format!("アップデートがあります: v{latest_version}"),
+            LocaleCode::De => format!("Update verfügbar: v{latest_version}"),
+            LocaleCode::Fr => format!("Mise à jour disponible\u{a0}: v{latest_version}"),
+            LocaleCode::PtBr => format!("Atualização disponível: v{latest_version}"),
+            LocaleCode::Uk => format!("Доступне оновлення: v{latest_version}"),
+            LocaleCode::ZhHans => format!("有可用更新：v{latest_version}"),
+            LocaleCode::Ko => format!("업데이트 사용 가능: v{latest_version}"),
         },
         UpdateCheckState::NoStableRelease => match locale {
             LocaleCode::En => "No stable release published on GitHub yet.".to_string(),
             LocaleCode::Ru => "Стабильных релизов на GitHub пока нет.".to_string(),
             LocaleCode::Es => "Aún no hay versiones estables en GitHub.".to_string(),
             LocaleCode::Ja => "GitHub にまだ安定版リリースがありません。".to_string(),
+            LocaleCode::De => "Auf GitHub gibt es noch keine stabile Version.".to_string(),
+            LocaleCode::Fr => "Aucune version stable n’est encore publiée sur GitHub.".to_string(),
+            LocaleCode::PtBr => "Ainda não há versão estável publicada no GitHub.".to_string(),
+            LocaleCode::Uk => "На GitHub ще немає стабільних випусків.".to_string(),
+            LocaleCode::ZhHans => "GitHub 上还没有发布稳定版。".to_string(),
+            LocaleCode::Ko => "GitHub에 아직 안정 버전이 없습니다.".to_string(),
         },
         UpdateCheckState::Offline => match locale {
             LocaleCode::En => "Offline: could not reach GitHub.".to_string(),
             LocaleCode::Ru => "Нет сети: не удалось подключиться к GitHub.".to_string(),
             LocaleCode::Es => "Sin conexión: no se pudo acceder a GitHub.".to_string(),
             LocaleCode::Ja => "オフライン: GitHub にアクセスできません。".to_string(),
+            LocaleCode::De => "Offline: GitHub ist nicht erreichbar.".to_string(),
+            LocaleCode::Fr => "Hors connexion\u{a0}: impossible de joindre GitHub.".to_string(),
+            LocaleCode::PtBr => "Offline: não foi possível acessar o GitHub.".to_string(),
+            LocaleCode::Uk => "Немає мережі: не вдалося під’єднатися до GitHub.".to_string(),
+            LocaleCode::ZhHans => "脱机：无法连接到 GitHub。".to_string(),
+            LocaleCode::Ko => "오프라인: GitHub에 연결할 수 없습니다.".to_string(),
         },
         UpdateCheckState::Timeout => match locale {
             LocaleCode::En => "Update check timed out.".to_string(),
             LocaleCode::Ru => "Превышено время ожидания ответа.".to_string(),
             LocaleCode::Es => "Tiempo de espera de actualización agotado.".to_string(),
             LocaleCode::Ja => "アップデートの確認がタイムアウトしました。".to_string(),
+            LocaleCode::De => "Zeitüberschreitung bei der Updateprüfung.".to_string(),
+            LocaleCode::Fr => "La recherche de mises à jour a expiré.".to_string(),
+            LocaleCode::PtBr => "A verificação de atualizações expirou.".to_string(),
+            LocaleCode::Uk => "Час очікування перевірки оновлень вичерпано.".to_string(),
+            LocaleCode::ZhHans => "检查更新超时。".to_string(),
+            LocaleCode::Ko => "업데이트 확인 시간이 초과되었습니다.".to_string(),
         },
         UpdateCheckState::RateLimited => match locale {
             LocaleCode::En => "GitHub API rate limit reached. Try again later.".to_string(),
@@ -1038,6 +2127,20 @@ pub fn format_update_status(
             LocaleCode::Es => "Límite de GitHub API alcanzado. Inténtelo más tarde.".to_string(),
             LocaleCode::Ja => {
                 "GitHub API のレート制限に達しました。後でお試しください。".to_string()
+            }
+            LocaleCode::De => {
+                "GitHub-API-Limit erreicht. Versuchen Sie es später erneut.".to_string()
+            }
+            LocaleCode::Fr => "Limite de l’API GitHub atteinte. Réessayez plus tard.".to_string(),
+            LocaleCode::PtBr => {
+                "Limite da API do GitHub atingido. Tente novamente mais tarde.".to_string()
+            }
+            LocaleCode::Uk => {
+                "Вичерпано ліміт запитів до GitHub API. Спробуйте пізніше.".to_string()
+            }
+            LocaleCode::ZhHans => "已达到 GitHub API 速率限制。请稍后再试。".to_string(),
+            LocaleCode::Ko => {
+                "GitHub API 요청 한도에 도달했습니다. 나중에 다시 시도하세요.".to_string()
             }
         },
         UpdateCheckState::InvalidResponse(msg) => msg.clone(),
@@ -1099,6 +2202,66 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             next_month: "次の月",
             hide_to_tray: "トレイに隠す",
         },
+        LocaleCode::De => &AgendaCopy {
+            now: "Jetzt",
+            next_prefix: "Danach:",
+            copy: "Kopieren",
+            copied: "Kopiert",
+            open: "Öffnen",
+            prev_month: "Vorheriger Monat",
+            next_month: "Nächster Monat",
+            hide_to_tray: "Ausblenden",
+        },
+        LocaleCode::Fr => &AgendaCopy {
+            now: "En cours",
+            next_prefix: "Ensuite\u{a0}:",
+            copy: "Copier",
+            copied: "Copié",
+            open: "Ouvrir",
+            prev_month: "Mois précédent",
+            next_month: "Mois suivant",
+            hide_to_tray: "Masquer",
+        },
+        LocaleCode::PtBr => &AgendaCopy {
+            now: "Agora",
+            next_prefix: "Próximo:",
+            copy: "Copiar",
+            copied: "Copiado",
+            open: "Abrir",
+            prev_month: "Mês anterior",
+            next_month: "Próximo mês",
+            hide_to_tray: "Ocultar na bandeja",
+        },
+        LocaleCode::Uk => &AgendaCopy {
+            now: "Зараз",
+            next_prefix: "Далі:",
+            copy: "Копіювати",
+            copied: "Скопійовано",
+            open: "Відкрити",
+            prev_month: "Попередній місяць",
+            next_month: "Наступний місяць",
+            hide_to_tray: "Сховати в трей",
+        },
+        LocaleCode::ZhHans => &AgendaCopy {
+            now: "现在",
+            next_prefix: "接下来：",
+            copy: "复制",
+            copied: "已复制",
+            open: "打开",
+            prev_month: "上个月",
+            next_month: "下个月",
+            hide_to_tray: "隐藏到托盘",
+        },
+        LocaleCode::Ko => &AgendaCopy {
+            now: "지금",
+            next_prefix: "다음:",
+            copy: "복사",
+            copied: "복사됨",
+            open: "열기",
+            prev_month: "이전 달",
+            next_month: "다음 달",
+            hide_to_tray: "트레이로 숨기기",
+        },
     }
 }
 
@@ -1136,6 +2299,42 @@ pub fn tray_menu_copy(locale: LocaleCode) -> &'static TrayMenuCopy {
             sponsor: "♥ Lightcal を支援",
             exit: "終了",
         },
+        LocaleCode::De => &TrayMenuCopy {
+            open: "Lightcal öffnen",
+            settings: "Einstellungen…",
+            sponsor: "♥ Lightcal unterstützen",
+            exit: "Beenden",
+        },
+        LocaleCode::Fr => &TrayMenuCopy {
+            open: "Ouvrir Lightcal",
+            settings: "Paramètres…",
+            sponsor: "♥ Soutenir Lightcal",
+            exit: "Quitter",
+        },
+        LocaleCode::PtBr => &TrayMenuCopy {
+            open: "Abrir o Lightcal",
+            settings: "Configurações…",
+            sponsor: "♥ Patrocinar o Lightcal",
+            exit: "Sair",
+        },
+        LocaleCode::Uk => &TrayMenuCopy {
+            open: "Відкрити Lightcal",
+            settings: "Налаштування…",
+            sponsor: "♥ Підтримати Lightcal",
+            exit: "Вийти",
+        },
+        LocaleCode::ZhHans => &TrayMenuCopy {
+            open: "打开 Lightcal",
+            settings: "设置…",
+            sponsor: "♥ 赞助 Lightcal",
+            exit: "退出",
+        },
+        LocaleCode::Ko => &TrayMenuCopy {
+            open: "Lightcal 열기",
+            settings: "설정…",
+            sponsor: "♥ Lightcal 후원",
+            exit: "끝내기",
+        },
     }
 }
 
@@ -1144,11 +2343,19 @@ pub fn format_duration(locale: LocaleCode, minutes: i64) -> String {
     let minutes = minutes.max(0);
     let (h, m) = (minutes / 60, minutes % 60);
     let (hour_unit, minute_unit) = match locale {
-        LocaleCode::En | LocaleCode::Es => (" h", " min"),
+        LocaleCode::En | LocaleCode::Es | LocaleCode::Fr | LocaleCode::PtBr => (" h", " min"),
+        LocaleCode::De => (" Std.", " Min."),
         LocaleCode::Ru => (" ч", " мин"),
+        LocaleCode::Uk => (" год", " хв"),
         LocaleCode::Ja => ("時間", "分"),
+        LocaleCode::ZhHans => ("小时", "分钟"),
+        LocaleCode::Ko => ("시간", "분"),
     };
-    let separator = if locale == LocaleCode::Ja { "" } else { " " };
+    let separator = if matches!(locale, LocaleCode::Ja | LocaleCode::ZhHans) {
+        ""
+    } else {
+        " "
+    };
     match (h, m) {
         (0, m) => format!("{m}{minute_unit}"),
         (h, 0) => format!("{h}{hour_unit}"),
@@ -1164,6 +2371,12 @@ pub fn format_starts_in(locale: LocaleCode, minutes: i64) -> String {
         LocaleCode::Ru => format!("через {duration}"),
         LocaleCode::Es => format!("en {duration}"),
         LocaleCode::Ja => format!("{duration}後"),
+        LocaleCode::De => format!("in {duration}"),
+        LocaleCode::Fr => format!("dans {duration}"),
+        LocaleCode::PtBr => format!("em {duration}"),
+        LocaleCode::Uk => format!("через {duration}"),
+        LocaleCode::ZhHans => format!("{duration}后"),
+        LocaleCode::Ko => format!("{duration} 후"),
     }
 }
 
@@ -1214,6 +2427,64 @@ pub fn format_short_date(locale: LocaleCode, date: LocalDate) -> String {
             date.day,
             weekday_short(locale, date.weekday())
         ),
+        LocaleCode::De => {
+            const WD: [&str; 7] = ["Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So."];
+            const MO: [&str; 12] = [
+                "Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.",
+                "Nov.", "Dez.",
+            ];
+            format!("{}, {}. {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Fr => {
+            const WD: [&str; 7] = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
+            const MO: [&str; 12] = [
+                "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.",
+                "nov.", "déc.",
+            ];
+            format!("{} {} {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::PtBr => {
+            const WD: [&str; 7] = ["seg.", "ter.", "qua.", "qui.", "sex.", "sáb.", "dom."];
+            const MO: [&str; 12] = [
+                "jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.",
+                "nov.", "dez.",
+            ];
+            format!("{}, {} de {}", WD[weekday], date.day, MO[month])
+        }
+        LocaleCode::Uk => {
+            const MO: [&str; 12] = [
+                "січ.",
+                "лют.",
+                "бер.",
+                "квіт.",
+                "трав.",
+                "черв.",
+                "лип.",
+                "серп.",
+                "вер.",
+                "жовт.",
+                "лист.",
+                "груд.",
+            ];
+            format!(
+                "{}, {} {}",
+                weekday_short(locale, date.weekday()),
+                date.day,
+                MO[month]
+            )
+        }
+        LocaleCode::ZhHans => format!(
+            "{}月{}日 周{}",
+            date.month,
+            date.day,
+            weekday_short(locale, date.weekday())
+        ),
+        LocaleCode::Ko => format!(
+            "{}월 {}일 ({})",
+            date.month,
+            date.day,
+            weekday_short(locale, date.weekday())
+        ),
     }
 }
 
@@ -1222,14 +2493,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tray_menu_is_translated_in_all_four_languages() {
+    fn tray_menu_is_translated_in_every_language() {
         let en = tray_menu_copy(LocaleCode::En);
-        for locale in [
-            LocaleCode::En,
-            LocaleCode::Ru,
-            LocaleCode::Es,
-            LocaleCode::Ja,
-        ] {
+        for locale in LocaleCode::ALL {
             let copy = tray_menu_copy(locale);
             for label in [copy.open, copy.settings, copy.sponsor, copy.exit] {
                 assert!(!label.trim().is_empty());
@@ -1243,7 +2509,7 @@ mod tests {
     }
 
     #[test]
-    fn pluralization_and_date_formatting_all_four_languages() {
+    fn pluralization_and_date_formatting_in_every_language() {
         let oct29 = LocalDate::new(2026, 10, 29).unwrap();
         assert_eq!(
             format_date_line(LocaleCode::En, oct29, true),
@@ -1267,6 +2533,56 @@ mod tests {
         assert_eq!(format_event_count(LocaleCode::Ru, 5), "5 событий");
         assert_eq!(format_event_count(LocaleCode::Ru, 21), "21 событие");
         assert_eq!(format_event_count(LocaleCode::Ja, 2), "予定2件");
+
+        let dated = [
+            (
+                LocaleCode::De,
+                "Donnerstag, 29. Oktober",
+                "29. Oktober 2026",
+            ),
+            (LocaleCode::Fr, "Jeudi 29 octobre", "29 octobre 2026"),
+            (
+                LocaleCode::PtBr,
+                "Quinta-feira, 29 de outubro",
+                "29 de outubro de 2026",
+            ),
+            (LocaleCode::Uk, "Четвер, 29 жовтня", "29 жовтня 2026"),
+            (LocaleCode::ZhHans, "10月29日 星期四", "2026年10月29日"),
+            (LocaleCode::Ko, "10월 29일 목요일", "2026년 10월 29일"),
+        ];
+        for (locale, with_weekday, without) in dated {
+            assert_eq!(format_date_line(locale, oct29, true), with_weekday);
+            assert_eq!(format_date_line(locale, oct29, false), without);
+        }
+        let november = YearMonth::new(2026, 11).unwrap();
+        assert_eq!(
+            format_month_year(LocaleCode::PtBr, november),
+            "Novembro de 2026"
+        );
+        assert_eq!(
+            format_month_year(LocaleCode::ZhHans, november),
+            "2026年11月"
+        );
+        assert_eq!(format_month_year(LocaleCode::Ko, november), "2026년 11월");
+
+        assert_eq!(format_event_count(LocaleCode::Uk, 1), "1 подія");
+        assert_eq!(format_event_count(LocaleCode::Uk, 3), "3 події");
+        assert_eq!(format_event_count(LocaleCode::Uk, 12), "12 подій");
+        assert_eq!(format_event_count(LocaleCode::Uk, 22), "22 події");
+        assert_eq!(format_calendar_count(LocaleCode::Uk, 5), "5 календарів");
+        assert_eq!(format_event_count(LocaleCode::De, 1), "1 Termin");
+        assert_eq!(format_event_count(LocaleCode::Fr, 0), "Aucun événement");
+        assert_eq!(format_calendar_count(LocaleCode::Fr, 1), "1 calendrier");
+        assert_eq!(format_event_count(LocaleCode::ZhHans, 2), "2 个事件");
+        assert_eq!(format_event_count(LocaleCode::Ko, 2), "일정 2개");
+        for locale in LocaleCode::ALL {
+            assert!(!format_event_count(locale, 0).is_empty());
+            assert!(!month_name(locale, 12).is_empty());
+            for day in Weekday::ALL {
+                assert!(!weekday_short(locale, day).is_empty());
+                assert!(!weekday_letter(locale, day).is_empty());
+            }
+        }
 
         assert_eq!(
             format_active_calendars_heading(LocaleCode::Ru, 3),
@@ -1297,12 +2613,23 @@ mod tests {
         assert_eq!(format_short_date(LocaleCode::Ru, nov13), "Пт, 13 нояб.");
         assert_eq!(format_short_date(LocaleCode::Es, nov13), "vie, 13 nov");
         assert_eq!(format_short_date(LocaleCode::Ja, nov13), "11月13日 (金)");
-        for locale in [
-            LocaleCode::En,
-            LocaleCode::Ru,
-            LocaleCode::Es,
-            LocaleCode::Ja,
-        ] {
+        assert_eq!(format_short_date(LocaleCode::De, nov13), "Fr., 13. Nov.");
+        assert_eq!(format_short_date(LocaleCode::Fr, nov13), "ven. 13 nov.");
+        assert_eq!(
+            format_short_date(LocaleCode::PtBr, nov13),
+            "sex., 13 de nov."
+        );
+        assert_eq!(format_short_date(LocaleCode::Uk, nov13), "Пт, 13 лист.");
+        assert_eq!(
+            format_short_date(LocaleCode::ZhHans, nov13),
+            "11月13日 周五"
+        );
+        assert_eq!(format_short_date(LocaleCode::Ko, nov13), "11월 13일 (금)");
+        assert_eq!(format_starts_in(LocaleCode::De, 90), "in 1 Std. 30 Min.");
+        assert_eq!(format_starts_in(LocaleCode::Uk, 5), "через 5 хв");
+        assert_eq!(format_starts_in(LocaleCode::ZhHans, 90), "1小时30分钟后");
+        assert_eq!(format_starts_in(LocaleCode::Ko, 90), "1시간 30분 후");
+        for locale in LocaleCode::ALL {
             let copy = agenda_copy(locale);
             for text in [
                 copy.now,
@@ -1318,12 +2645,7 @@ mod tests {
 
     #[test]
     fn manual_update_copy_is_present_for_every_language() {
-        for locale in [
-            LocaleCode::En,
-            LocaleCode::Ru,
-            LocaleCode::Es,
-            LocaleCode::Ja,
-        ] {
+        for locale in LocaleCode::ALL {
             let strings = catalog(locale);
             assert!(!strings.download_release_button.is_empty());
             assert!(strings.manual_update_notes.contains("GitHub"));
@@ -1341,6 +2663,12 @@ pub fn weekday_letter(locale: LocaleCode, day: Weekday) -> &'static str {
         LocaleCode::Ru => ["П", "В", "С", "Ч", "П", "С", "В"],
         LocaleCode::Es => ["L", "M", "X", "J", "V", "S", "D"],
         LocaleCode::Ja => ["月", "火", "水", "木", "金", "土", "日"],
+        LocaleCode::De => ["M", "D", "M", "D", "F", "S", "S"],
+        LocaleCode::Fr => ["L", "M", "M", "J", "V", "S", "D"],
+        LocaleCode::PtBr => ["S", "T", "Q", "Q", "S", "S", "D"],
+        LocaleCode::Uk => ["П", "В", "С", "Ч", "П", "С", "Н"],
+        LocaleCode::ZhHans => ["一", "二", "三", "四", "五", "六", "日"],
+        LocaleCode::Ko => ["월", "화", "수", "목", "금", "토", "일"],
     };
     letters[day.monday_index() as usize]
 }
@@ -1728,12 +3056,480 @@ const JA_SETTINGS: SettingsText = SettingsText {
     release_notes_desc: "各バージョンの変更点",
 };
 
+const DE_SETTINGS: SettingsText = SettingsText {
+    window_title: "Lightcal-Einstellungen",
+    close: "Schließen",
+    connected_accounts: "Verbundene Konten",
+    add_account: "Konto hinzufügen",
+    read_only_note: "Schreibgeschützt. Lightcal ändert Ihre Termine nie.",
+    connect_heading: "Kalender verbinden",
+    connect_note: "Lightcal liest Termine, ändert sie aber nie.",
+    google_title: "Google Kalender",
+    google_desc: "Im Browser anmelden",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Geschäfts-, Schul- oder privates Konto",
+    ics_title: "Privater ICS-Link",
+    ics_desc: "Jeder Kalender, der einen Link teilt",
+    windows_title: "Windows-Kalender",
+    windows_desc: "Kalender, die bereits auf diesem PC sind",
+    windows_detail: "Auf diesem PC",
+    signing_note:
+        "Ihr Browser wurde geöffnet. Lightcal fordert nur Lesezugriff auf Ihre Kalender an.",
+    open_browser_again: "Browser erneut öffnen",
+    cancel: "Abbrechen",
+    ics_heading: "Kalenderlink hinzufügen",
+    ics_field_label: "Kalenderadresse (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Private Links sind wie ein Kennwort. Nur auf diesem PC gespeichert.",
+    ics_detail: "Privater ICS-Link",
+    subscribe: "Abonnieren",
+    refresh: "Aktualisieren",
+    more: "Weitere Kontoaktionen",
+    back: "Zurück",
+    no_selection_hint: "Markieren Sie die Kalender, deren Termine Sie sehen möchten.",
+    cancelled_text: "Anmeldung abgebrochen. Ihre Konten sind unverändert.",
+    try_again: "Wiederholen",
+    disconnect: "Trennen",
+    turn_off: "Ausschalten",
+    sign_in: "Anmelden",
+    open_privacy: "Einstellungen öffnen",
+    access_expired: "Zugriff abgelaufen. Melden Sie sich an, um Termine zu aktualisieren.",
+    access_denied: "Kalenderzugriff ist in den Windows-Datenschutzeinstellungen deaktiviert.",
+    no_calendars: "Für dieses Konto wurden keine Kalender gefunden.",
+    offline_plain: "Offline. Gespeicherte Termine werden angezeigt.",
+    checking_account: "Wird geprüft…",
+    shortcut_recording: "Tastenkombination drücken…",
+    shortcut_clear: "Kürzel löschen",
+    about_tagline: "Ein kleiner Kalender für den Infobereich",
+    check_now: "Jetzt prüfen",
+    view_release: "Version ansehen",
+    details: "Details",
+    not_checked_short: "Nicht geprüft",
+    checking_short: "Wird geprüft…",
+    up_to_date_short: "Aktuell",
+    offline_short: "Offline",
+    problem_short: "Prüfung fehlgeschlagen",
+    idle_title: "Nach Updates suchen",
+    checking_title: "Suche nach Updates…",
+    up_to_date_title: "Lightcal ist auf dem neuesten Stand",
+    offline_title: "Sie sind offline",
+    problem_title: "Suche nach Updates fehlgeschlagen",
+    manual_note: "Lightcal sucht nur auf Anfrage.",
+    auto_note: "Lightcal sucht auch beim Start und täglich.",
+    release_page_note:
+        "Öffnet die Release-Seite auf GitHub. Es wird nichts ohne Ihre Zustimmung heruntergeladen.",
+    auto_check_label: "Automatisch nach Updates suchen",
+    github_title: "GitHub-Repository",
+    github_desc: "Quellcode und Issues",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal im Web",
+    sponsor_label: "Unterstützen",
+    sponsor_monthly_title: "Auf GitHub sponsern",
+    sponsor_monthly_desc: "Lightcal monatlich unterstützen",
+    sponsor_once_title: "Einmalige Unterstützung",
+    sponsor_once_desc: "Einmal Danke sagen",
+    license_title: "GPL-3.0-only",
+    license_desc: "Lizenz und Drittanbieterhinweise",
+    release_notes_title: "Versionshinweise",
+    release_notes_desc: "Was sich in jeder Version geändert hat",
+};
+
+const FR_SETTINGS: SettingsText = SettingsText {
+    window_title: "Paramètres de Lightcal",
+    close: "Fermer",
+    connected_accounts: "Comptes connectés",
+    add_account: "Ajouter un compte",
+    read_only_note: "Lecture seule. Lightcal ne modifie jamais vos événements.",
+    connect_heading: "Connecter un calendrier",
+    connect_note: "Lightcal lit les événements. Il ne les modifie jamais.",
+    google_title: "Google Agenda",
+    google_desc: "Connexion dans votre navigateur",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Compte professionnel, scolaire ou personnel",
+    ics_title: "Lien ICS privé",
+    ics_desc: "Tout calendrier partagé par lien",
+    windows_title: "Calendriers Windows",
+    windows_desc: "Calendriers déjà sur ce PC",
+    windows_detail: "Sur ce PC",
+    signing_note: "Votre navigateur est ouvert. Lightcal demande uniquement un accès en lecture à vos calendriers.",
+    open_browser_again: "Rouvrir le navigateur",
+    cancel: "Annuler",
+    ics_heading: "Ajouter un lien de calendrier",
+    ics_field_label: "Adresse du calendrier (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Un lien privé vaut un mot de passe. Stocké uniquement sur ce PC.",
+    ics_detail: "Lien ICS privé",
+    subscribe: "S’abonner",
+    refresh: "Actualiser",
+    more: "Autres actions du compte",
+    back: "Retour",
+    no_selection_hint: "Cochez les calendriers dont vous voulez voir les événements.",
+    cancelled_text: "Connexion annulée. Vos comptes n’ont pas changé.",
+    try_again: "Réessayer",
+    disconnect: "Déconnecter",
+    turn_off: "Désactiver",
+    sign_in: "Se connecter",
+    open_privacy: "Ouvrir les paramètres",
+    access_expired: "Accès expiré. Connectez-vous pour actualiser les événements.",
+    access_denied: "L’accès au calendrier est désactivé dans les paramètres de confidentialité de Windows.",
+    no_calendars: "Aucun calendrier trouvé pour ce compte.",
+    offline_plain: "Hors connexion. Événements enregistrés affichés.",
+    checking_account: "Vérification…",
+    shortcut_recording: "Appuyez sur une combinaison de touches…",
+    shortcut_clear: "Effacer le raccourci",
+    about_tagline: "Un petit calendrier pour la zone de notification",
+    check_now: "Rechercher",
+    view_release: "Voir la version",
+    details: "Détails",
+    not_checked_short: "Non vérifié",
+    checking_short: "Recherche…",
+    up_to_date_short: "À jour",
+    offline_short: "Hors connexion",
+    problem_short: "Échec",
+    idle_title: "Rechercher des mises à jour",
+    checking_title: "Recherche de mises à jour…",
+    up_to_date_title: "Lightcal est à jour",
+    offline_title: "Vous êtes hors connexion",
+    problem_title: "Impossible de rechercher les mises à jour",
+    manual_note: "Lightcal ne vérifie qu’à votre demande.",
+    auto_note: "Lightcal vérifie aussi au démarrage et chaque jour.",
+    release_page_note: "Ouvre la page de version sur GitHub. Rien n’est téléchargé sans votre accord.",
+    auto_check_label: "Rechercher les mises à jour automatiquement",
+    github_title: "Dépôt GitHub",
+    github_desc: "Code source et tickets",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal sur le web",
+    sponsor_label: "Soutenir",
+    sponsor_monthly_title: "Sponsoriser sur GitHub",
+    sponsor_monthly_desc: "Soutenir Lightcal chaque mois",
+    sponsor_once_title: "Soutien ponctuel",
+    sponsor_once_desc: "Dire merci une fois",
+    license_title: "GPL-3.0-only",
+    license_desc: "Licence et mentions de tiers",
+    release_notes_title: "Notes de version",
+    release_notes_desc: "Les changements de chaque version",
+};
+
+const PT_BR_SETTINGS: SettingsText = SettingsText {
+    window_title: "Configurações do Lightcal",
+    close: "Fechar",
+    connected_accounts: "Contas conectadas",
+    add_account: "Adicionar conta",
+    read_only_note: "Somente leitura. O Lightcal nunca altera seus eventos.",
+    connect_heading: "Conectar um calendário",
+    connect_note: "O Lightcal lê os eventos. Nunca os altera.",
+    google_title: "Google Agenda",
+    google_desc: "Entre pelo navegador",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Conta corporativa, de estudante ou pessoal",
+    ics_title: "Link ICS privado",
+    ics_desc: "Qualquer calendário que compartilhe um link",
+    windows_title: "Calendários do Windows",
+    windows_desc: "Calendários que já estão neste PC",
+    windows_detail: "Neste PC",
+    signing_note:
+        "Abrimos seu navegador. O Lightcal pede apenas acesso de leitura aos seus calendários.",
+    open_browser_again: "Abrir o navegador de novo",
+    cancel: "Cancelar",
+    ics_heading: "Adicionar link de calendário",
+    ics_field_label: "Endereço do calendário (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Links privados funcionam como uma senha. Salvo apenas neste PC.",
+    ics_detail: "Link ICS privado",
+    subscribe: "Assinar",
+    refresh: "Atualizar",
+    more: "Mais ações da conta",
+    back: "Voltar",
+    no_selection_hint: "Marque os calendários cujos eventos você quer ver.",
+    cancelled_text: "Entrada cancelada. Suas contas não foram alteradas.",
+    try_again: "Tentar novamente",
+    disconnect: "Desconectar",
+    turn_off: "Desativar",
+    sign_in: "Entrar",
+    open_privacy: "Abrir configurações",
+    access_expired: "O acesso expirou. Entre para atualizar os eventos.",
+    access_denied:
+        "O acesso ao calendário está desativado nas configurações de privacidade do Windows.",
+    no_calendars: "Nenhum calendário encontrado nesta conta.",
+    offline_plain: "Offline. Mostrando eventos salvos.",
+    checking_account: "Verificando…",
+    shortcut_recording: "Pressione uma combinação de teclas…",
+    shortcut_clear: "Limpar atalho",
+    about_tagline: "Um pequeno calendário para a bandeja",
+    check_now: "Verificar agora",
+    view_release: "Ver versão",
+    details: "Detalhes",
+    not_checked_short: "Não verificado",
+    checking_short: "Verificando…",
+    up_to_date_short: "Atualizado",
+    offline_short: "Offline",
+    problem_short: "Falha ao verificar",
+    idle_title: "Verificar atualizações",
+    checking_title: "Verificando atualizações…",
+    up_to_date_title: "Você está atualizado",
+    offline_title: "Você está offline",
+    problem_title: "Não foi possível verificar atualizações",
+    manual_note: "O Lightcal só verifica quando você pede.",
+    auto_note: "O Lightcal também verifica ao iniciar e diariamente.",
+    release_page_note: "Abre a página da versão no GitHub. Nada é baixado até você escolher.",
+    auto_check_label: "Verificar atualizações automaticamente",
+    github_title: "Repositório no GitHub",
+    github_desc: "Código-fonte e issues",
+    koona_title: "koona.app",
+    koona_desc: "O Lightcal na web",
+    sponsor_label: "Patrocinar",
+    sponsor_monthly_title: "Patrocinar no GitHub",
+    sponsor_monthly_desc: "Apoie o Lightcal todo mês",
+    sponsor_once_title: "Apoio único",
+    sponsor_once_desc: "Envie um agradecimento avulso",
+    license_title: "GPL-3.0-only",
+    license_desc: "Licença e avisos de terceiros",
+    release_notes_title: "Notas da versão",
+    release_notes_desc: "O que mudou em cada versão",
+};
+
+const UK_SETTINGS: SettingsText = SettingsText {
+    window_title: "Налаштування Lightcal",
+    close: "Закрити",
+    connected_accounts: "Під’єднані облікові записи",
+    add_account: "Додати",
+    read_only_note: "Лише читання. Lightcal ніколи не змінює ваші події.",
+    connect_heading: "Під’єднайте календар",
+    connect_note: "Lightcal читає події й ніколи їх не змінює.",
+    google_title: "Google Календар",
+    google_desc: "Вхід у браузері",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "Робочий, навчальний або особистий обліковий запис",
+    ics_title: "Приватне посилання ICS",
+    ics_desc: "Будь-який календар із посиланням",
+    windows_title: "Календарі Windows",
+    windows_desc: "Календарі, уже наявні на цьому ПК",
+    windows_detail: "На цьому ПК",
+    signing_note: "Ми відкрили браузер. Lightcal просить лише доступ до читання календарів.",
+    open_browser_again: "Відкрити браузер знову",
+    cancel: "Скасувати",
+    ics_heading: "Додати посилання на календар",
+    ics_field_label: "Адреса календаря (.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "Приватне посилання — як пароль. Зберігається лише на цьому ПК.",
+    ics_detail: "Приватне посилання ICS",
+    subscribe: "Підписатися",
+    refresh: "Оновити",
+    more: "Інші дії з обліковим записом",
+    back: "Назад",
+    no_selection_hint: "Позначте календарі, події яких хочете бачити.",
+    cancelled_text: "Вхід скасовано. Облікові записи не змінено.",
+    try_again: "Ще раз",
+    disconnect: "Від’єднати",
+    turn_off: "Вимкнути",
+    sign_in: "Увійти",
+    open_privacy: "Відкрити параметри",
+    access_expired: "Термін доступу минув. Увійдіть, щоб оновити події.",
+    access_denied: "Доступ до календарів вимкнено в параметрах конфіденційності Windows.",
+    no_calendars: "Для цього облікового запису календарів не знайдено.",
+    offline_plain: "Немає мережі. Показано збережені події.",
+    checking_account: "Перевірка…",
+    shortcut_recording: "Натисніть сполучення клавіш…",
+    shortcut_clear: "Очистити сполучення",
+    about_tagline: "Невеликий календар у треї",
+    check_now: "Перевірити",
+    view_release: "Переглянути випуск",
+    details: "Докладніше",
+    not_checked_short: "Не перевірено",
+    checking_short: "Перевірка…",
+    up_to_date_short: "Актуальна версія",
+    offline_short: "Немає мережі",
+    problem_short: "Не вдалося",
+    idle_title: "Перевірити оновлення",
+    checking_title: "Перевірка оновлень…",
+    up_to_date_title: "Встановлено останню версію",
+    offline_title: "Немає підключення до мережі",
+    problem_title: "Не вдалося перевірити оновлення",
+    manual_note: "Lightcal перевіряє лише на ваш запит.",
+    auto_note: "Lightcal також перевіряє під час запуску та щодня.",
+    release_page_note:
+        "Відкриється сторінка випуску на GitHub. Нічого не завантажиться без вашого рішення.",
+    auto_check_label: "Автоматично перевіряти оновлення",
+    github_title: "Репозиторій GitHub",
+    github_desc: "Вихідний код і задачі",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal в інтернеті",
+    sponsor_label: "Підтримати",
+    sponsor_monthly_title: "Спонсорство на GitHub",
+    sponsor_monthly_desc: "Підтримувати Lightcal щомісяця",
+    sponsor_once_title: "Разова підтримка",
+    sponsor_once_desc: "Подякувати один раз",
+    license_title: "GPL-3.0-only",
+    license_desc: "Ліцензія та сторонні компоненти",
+    release_notes_title: "Список змін",
+    release_notes_desc: "Що змінилося в кожній версії",
+};
+
+const ZH_HANS_SETTINGS: SettingsText = SettingsText {
+    window_title: "Lightcal 设置",
+    close: "关闭",
+    connected_accounts: "已连接的帐户",
+    add_account: "添加帐户",
+    read_only_note: "只读。Lightcal 绝不会更改你的事件。",
+    connect_heading: "连接日历",
+    connect_note: "Lightcal 只读取事件，绝不会更改。",
+    google_title: "Google 日历",
+    google_desc: "在浏览器中登录",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "工作、学校或个人帐户",
+    ics_title: "私有 ICS 链接",
+    ics_desc: "任何可共享链接的日历",
+    windows_title: "Windows 日历",
+    windows_desc: "这台电脑上已有的日历",
+    windows_detail: "在这台电脑上",
+    signing_note: "已在浏览器中打开。Lightcal 只请求读取你的日历。",
+    open_browser_again: "再次打开浏览器",
+    cancel: "取消",
+    ics_heading: "添加日历链接",
+    ics_field_label: "日历地址（.ics）",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "私有链接如同密码，仅保存在这台电脑上。",
+    ics_detail: "私有 ICS 链接",
+    subscribe: "订阅",
+    refresh: "刷新",
+    more: "更多帐户操作",
+    back: "返回",
+    no_selection_hint: "勾选要查看其事件的日历。",
+    cancelled_text: "已取消登录。你的帐户未发生变化。",
+    try_again: "重试",
+    disconnect: "断开连接",
+    turn_off: "关闭",
+    sign_in: "登录",
+    open_privacy: "打开设置",
+    access_expired: "访问权限已过期。请登录以更新事件。",
+    access_denied: "Windows 隐私设置中已关闭日历访问权限。",
+    no_calendars: "此帐户中未找到日历。",
+    offline_plain: "处于脱机状态。正在显示已保存的事件。",
+    checking_account: "正在检查…",
+    shortcut_recording: "请按组合键…",
+    shortcut_clear: "清除快捷键",
+    about_tagline: "托盘里的小日历",
+    check_now: "立即检查",
+    view_release: "查看版本",
+    details: "详细信息",
+    not_checked_short: "未检查",
+    checking_short: "正在检查…",
+    up_to_date_short: "已是最新",
+    offline_short: "脱机",
+    problem_short: "无法检查",
+    idle_title: "检查更新",
+    checking_title: "正在检查更新…",
+    up_to_date_title: "你使用的是最新版本",
+    offline_title: "你处于脱机状态",
+    problem_title: "无法检查更新",
+    manual_note: "Lightcal 仅在你请求时检查。",
+    auto_note: "Lightcal 还会在启动时和每天检查。",
+    release_page_note: "将打开 GitHub 发布页面。在你选择之前不会下载任何内容。",
+    auto_check_label: "自动检查更新",
+    github_title: "GitHub 仓库",
+    github_desc: "源代码和问题反馈",
+    koona_title: "koona.app",
+    koona_desc: "Lightcal 官网",
+    sponsor_label: "赞助",
+    sponsor_monthly_title: "在 GitHub 上赞助",
+    sponsor_monthly_desc: "每月支持 Lightcal",
+    sponsor_once_title: "一次性支持",
+    sponsor_once_desc: "送上一次感谢",
+    license_title: "GPL-3.0-only",
+    license_desc: "许可证和第三方声明",
+    release_notes_title: "发行说明",
+    release_notes_desc: "每个版本的更改内容",
+};
+
+const KO_SETTINGS: SettingsText = SettingsText {
+    window_title: "Lightcal 설정",
+    close: "닫기",
+    connected_accounts: "연결된 계정",
+    add_account: "계정 추가",
+    read_only_note: "읽기 전용입니다. Lightcal은 일정을 변경하지 않습니다.",
+    connect_heading: "캘린더 연결",
+    connect_note: "Lightcal은 일정을 읽기만 하고 변경하지 않습니다.",
+    google_title: "Google 캘린더",
+    google_desc: "브라우저에서 로그인",
+    outlook_title: "Microsoft Outlook",
+    outlook_desc: "회사, 학교 또는 개인 계정",
+    ics_title: "비공개 ICS 링크",
+    ics_desc: "링크를 공유하는 모든 캘린더",
+    windows_title: "Windows 캘린더",
+    windows_desc: "이 PC에 이미 있는 캘린더",
+    windows_detail: "이 PC",
+    signing_note: "브라우저를 열었습니다. Lightcal은 캘린더 읽기 권한만 요청합니다.",
+    open_browser_again: "브라우저 다시 열기",
+    cancel: "취소",
+    ics_heading: "캘린더 링크 추가",
+    ics_field_label: "캘린더 주소(.ics)",
+    ics_placeholder: "https://calendar.example.com/basic.ics",
+    ics_privacy: "비공개 링크는 암호처럼 취급하세요. 이 PC에만 저장됩니다.",
+    ics_detail: "비공개 ICS 링크",
+    subscribe: "구독",
+    refresh: "새로 고침",
+    more: "기타 계정 작업",
+    back: "뒤로",
+    no_selection_hint: "일정을 보려는 캘린더를 선택하세요.",
+    cancelled_text: "로그인이 취소되었습니다. 계정은 변경되지 않았습니다.",
+    try_again: "다시 시도",
+    disconnect: "연결 끊기",
+    turn_off: "끄기",
+    sign_in: "로그인",
+    open_privacy: "설정 열기",
+    access_expired: "액세스가 만료되었습니다. 일정을 업데이트하려면 로그인하세요.",
+    access_denied: "Windows 개인 정보 설정에서 캘린더 액세스가 꺼져 있습니다.",
+    no_calendars: "이 계정에 캘린더가 없습니다.",
+    offline_plain: "오프라인입니다. 저장된 일정을 표시합니다.",
+    checking_account: "확인 중…",
+    shortcut_recording: "키 조합을 누르세요…",
+    shortcut_clear: "바로 가기 키 지우기",
+    about_tagline: "트레이용 작은 캘린더",
+    check_now: "지금 확인",
+    view_release: "릴리스 보기",
+    details: "자세히",
+    not_checked_short: "확인 안 함",
+    checking_short: "확인 중…",
+    up_to_date_short: "최신 상태",
+    offline_short: "오프라인",
+    problem_short: "확인 실패",
+    idle_title: "업데이트 확인",
+    checking_title: "업데이트 확인 중…",
+    up_to_date_title: "최신 상태입니다",
+    offline_title: "오프라인 상태입니다",
+    problem_title: "업데이트를 확인할 수 없습니다",
+    manual_note: "Lightcal은 요청할 때만 확인합니다.",
+    auto_note: "Lightcal은 시작할 때와 매일 한 번씩도 확인합니다.",
+    release_page_note:
+        "GitHub 릴리스 페이지를 엽니다. 직접 선택하기 전에는 아무것도 다운로드되지 않습니다.",
+    auto_check_label: "자동으로 업데이트 확인",
+    github_title: "GitHub 리포지토리",
+    github_desc: "소스 코드 및 이슈",
+    koona_title: "koona.app",
+    koona_desc: "웹에서 보는 Lightcal",
+    sponsor_label: "후원",
+    sponsor_monthly_title: "GitHub에서 후원",
+    sponsor_monthly_desc: "매달 Lightcal 후원하기",
+    sponsor_once_title: "일회성 후원",
+    sponsor_once_desc: "한 번 감사의 마음 전하기",
+    license_title: "GPL-3.0-only",
+    license_desc: "라이선스 및 타사 고지",
+    release_notes_title: "릴리스 정보",
+    release_notes_desc: "각 버전의 변경 사항",
+};
+
 pub fn settings_text(locale: LocaleCode) -> &'static SettingsText {
     match locale {
         LocaleCode::En => &EN_SETTINGS,
         LocaleCode::Ru => &RU_SETTINGS,
         LocaleCode::Es => &ES_SETTINGS,
         LocaleCode::Ja => &JA_SETTINGS,
+        LocaleCode::De => &DE_SETTINGS,
+        LocaleCode::Fr => &FR_SETTINGS,
+        LocaleCode::PtBr => &PT_BR_SETTINGS,
+        LocaleCode::Uk => &UK_SETTINGS,
+        LocaleCode::ZhHans => &ZH_HANS_SETTINGS,
+        LocaleCode::Ko => &KO_SETTINGS,
     }
 }
 
@@ -1744,6 +3540,12 @@ pub fn signing_in_title(locale: LocaleCode, provider: &str) -> String {
         LocaleCode::Ru => format!("Завершите вход в {provider}"),
         LocaleCode::Es => format!("Termina de iniciar sesión en {provider}"),
         LocaleCode::Ja => format!("{provider} へのサインインを完了してください"),
+        LocaleCode::De => format!("Anmeldung bei {provider} abschließen"),
+        LocaleCode::Fr => format!("Terminez la connexion à {provider}"),
+        LocaleCode::PtBr => format!("Conclua o login em {provider}"),
+        LocaleCode::Uk => format!("Завершіть вхід у {provider}"),
+        LocaleCode::ZhHans => format!("请完成 {provider} 登录"),
+        LocaleCode::Ko => format!("{provider} 로그인을 완료하세요"),
     }
 }
 
@@ -1762,6 +3564,24 @@ pub fn updated_ago(locale: LocaleCode, minutes: i64, clock: &str) -> String {
         (LocaleCode::Ja, m) if m < 1 => "たった今更新".into(),
         (LocaleCode::Ja, m) if m < 60 => format!("{m} 分前に更新"),
         (LocaleCode::Ja, _) => format!("{clock} に更新"),
+        (LocaleCode::De, m) if m < 1 => "Gerade aktualisiert".into(),
+        (LocaleCode::De, m) if m < 60 => format!("Vor {m} Min. aktualisiert"),
+        (LocaleCode::De, _) => format!("Um {clock} aktualisiert"),
+        (LocaleCode::Fr, m) if m < 1 => "Mis à jour à l’instant".into(),
+        (LocaleCode::Fr, m) if m < 60 => format!("Mis à jour il y a {m} min"),
+        (LocaleCode::Fr, _) => format!("Mis à jour à {clock}"),
+        (LocaleCode::PtBr, m) if m < 1 => "Atualizado agora".into(),
+        (LocaleCode::PtBr, m) if m < 60 => format!("Atualizado há {m} min"),
+        (LocaleCode::PtBr, _) => format!("Atualizado às {clock}"),
+        (LocaleCode::Uk, m) if m < 1 => "Оновлено щойно".into(),
+        (LocaleCode::Uk, m) if m < 60 => format!("Оновлено {m} хв тому"),
+        (LocaleCode::Uk, _) => format!("Оновлено о {clock}"),
+        (LocaleCode::ZhHans, m) if m < 1 => "刚刚更新".into(),
+        (LocaleCode::ZhHans, m) if m < 60 => format!("{m} 分钟前更新"),
+        (LocaleCode::ZhHans, _) => format!("更新于 {clock}"),
+        (LocaleCode::Ko, m) if m < 1 => "방금 업데이트됨".into(),
+        (LocaleCode::Ko, m) if m < 60 => format!("{m}분 전 업데이트됨"),
+        (LocaleCode::Ko, _) => format!("{clock}에 업데이트됨"),
     }
 }
 
@@ -1772,6 +3592,14 @@ pub fn offline_saved_at(locale: LocaleCode, clock: &str) -> String {
         LocaleCode::Ru => format!("Нет сети. Показаны события, сохранённые в {clock}."),
         LocaleCode::Es => format!("Sin conexión. Se muestran los eventos guardados a las {clock}."),
         LocaleCode::Ja => format!("オフラインです。{clock} に保存した予定を表示しています。"),
+        LocaleCode::De => format!("Offline. Termine von {clock} werden angezeigt."),
+        LocaleCode::Fr => {
+            format!("Hors connexion. Affichage des événements enregistrés à {clock}.")
+        }
+        LocaleCode::PtBr => format!("Offline. Mostrando eventos salvos às {clock}."),
+        LocaleCode::Uk => format!("Немає мережі. Показано події, збережені о {clock}."),
+        LocaleCode::ZhHans => format!("脱机。显示 {clock} 保存的事件。"),
+        LocaleCode::Ko => format!("오프라인입니다. {clock}에 저장된 일정을 표시합니다."),
     }
 }
 
@@ -1782,6 +3610,12 @@ pub fn update_available_short(locale: LocaleCode, version: &str) -> String {
         LocaleCode::Ru => format!("Доступна {version}"),
         LocaleCode::Es => format!("Versión {version} disponible"),
         LocaleCode::Ja => format!("{version} があります"),
+        LocaleCode::De => format!("Version {version} verfügbar"),
+        LocaleCode::Fr => format!("Version {version} disponible"),
+        LocaleCode::PtBr => format!("Versão {version} disponível"),
+        LocaleCode::Uk => format!("Доступна {version}"),
+        LocaleCode::ZhHans => format!("{version} 可用"),
+        LocaleCode::Ko => format!("{version} 사용 가능"),
     }
 }
 
@@ -1803,6 +3637,24 @@ pub fn shortcut_conflict_text(
         (LocaleCode::Es, false) => format!("{candidate} no se puede usar como atajo."),
         (LocaleCode::Ja, true) => format!("{candidate} は他のアプリが使用しています。"),
         (LocaleCode::Ja, false) => format!("{candidate} はショートカットに使えません。"),
+        (LocaleCode::De, true) => {
+            format!("{candidate} wird bereits von einer anderen App verwendet.")
+        }
+        (LocaleCode::De, false) => {
+            format!("{candidate} kann nicht als Tastenkürzel verwendet werden.")
+        }
+        (LocaleCode::Fr, true) => format!("Une autre application utilise déjà {candidate}."),
+        (LocaleCode::Fr, false) => format!("{candidate} ne peut pas servir de raccourci."),
+        (LocaleCode::PtBr, true) => format!("Outro app já usa {candidate}."),
+        (LocaleCode::PtBr, false) => format!("{candidate} não pode ser usado como atalho."),
+        (LocaleCode::Uk, true) => {
+            format!("Сполучення {candidate} уже використовує інший застосунок.")
+        }
+        (LocaleCode::Uk, false) => format!("Сполучення {candidate} не можна використати."),
+        (LocaleCode::ZhHans, true) => format!("{candidate} 已被其他应用占用。"),
+        (LocaleCode::ZhHans, false) => format!("{candidate} 不能用作快捷键。"),
+        (LocaleCode::Ko, true) => format!("다른 앱이 이미 {candidate} 키를 사용하고 있습니다."),
+        (LocaleCode::Ko, false) => format!("{candidate} 키는 바로 가기 키로 사용할 수 없습니다."),
     };
     let second = match (locale, previous) {
         (LocaleCode::En, Some(p)) => format!("Lightcal kept your previous shortcut, {p}."),
@@ -1813,8 +3665,22 @@ pub fn shortcut_conflict_text(
         (LocaleCode::Es, None) => "No hay ningún atajo asignado.".to_string(),
         (LocaleCode::Ja, Some(p)) => format!("以前のショートカット {p} はそのまま使えます。"),
         (LocaleCode::Ja, None) => "ショートカットは設定されていません。".to_string(),
+        (LocaleCode::De, Some(p)) => format!("Lightcal behält Ihr bisheriges Tastenkürzel {p}."),
+        (LocaleCode::De, None) => "Es ist kein Tastenkürzel festgelegt.".to_string(),
+        (LocaleCode::Fr, Some(p)) => format!("Lightcal a conservé votre raccourci précédent, {p}."),
+        (LocaleCode::Fr, None) => "Aucun raccourci n’est défini.".to_string(),
+        (LocaleCode::PtBr, Some(p)) => format!("O Lightcal manteve seu atalho anterior, {p}."),
+        (LocaleCode::PtBr, None) => "Nenhum atalho definido.".to_string(),
+        (LocaleCode::Uk, Some(p)) => format!("Lightcal залишив попереднє сполучення {p}."),
+        (LocaleCode::Uk, None) => "Сполучення не задано.".to_string(),
+        (LocaleCode::ZhHans, Some(p)) => format!("Lightcal 保留了之前的快捷键 {p}。"),
+        (LocaleCode::ZhHans, None) => "未设置快捷键。".to_string(),
+        (LocaleCode::Ko, Some(p)) => {
+            format!("Lightcal은 이전 바로 가기 키 {p}을(를) 유지했습니다.")
+        }
+        (LocaleCode::Ko, None) => "설정된 바로 가기 키가 없습니다.".to_string(),
     };
-    if locale == LocaleCode::Ja {
+    if matches!(locale, LocaleCode::Ja | LocaleCode::ZhHans) {
         format!("{first}{second}")
     } else {
         format!("{first} {second}")
