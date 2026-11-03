@@ -387,6 +387,21 @@ impl From<CalendarDateSize> for DateSize {
     }
 }
 
+/// Settings › Calendar › Koi pond: store the switch and refresh the UI. Shared with the
+/// headless test so it exercises the production handler.
+fn wire_koi_pond(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_toggle_show_koi(move || {
+        let mut c = ctrl.borrow_mut();
+        c.prefs.show_koi = !c.prefs.show_koi;
+        c.persist();
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
+}
+
 /// Settings › Calendar › Date size: store the choice and refresh the UI. Shared with the
 /// headless test so it exercises the production handler.
 fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
@@ -708,6 +723,7 @@ impl AppController {
         ui.set_desc_highlight_current_month_text(strings.desc_highlight_current_month.into());
         ui.set_label_show_event_dots_text(strings.label_show_event_dots.into());
         ui.set_desc_show_event_dots_text(strings.desc_show_event_dots.into());
+        ui.set_label_show_koi_text(strings.label_show_koi.into());
         ui.set_label_date_size_text(strings.label_date_size.into());
         ui.set_date_size_standard_label(strings.date_size_standard.into());
         ui.set_date_size_large_label(strings.date_size_large.into());
@@ -972,6 +988,7 @@ impl AppController {
         ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
+        ui.set_show_koi(self.prefs.show_koi);
         ui.set_date_size(self.prefs.date_size.into());
         ui.set_auto_check_updates(self.prefs.auto_check_updates);
         let (check_title, check_description) = match locale {
@@ -3548,6 +3565,7 @@ fn main() {
             }
         });
     }
+    wire_koi_pond(&ui, &ctrl);
     wire_date_size(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);

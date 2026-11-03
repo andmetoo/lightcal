@@ -898,6 +898,8 @@ export component SettingsView inherits Rectangle {
     in property <bool> show-week-numbers;
     in property <string> label-show-event-dots-text;
     in property <bool> show-event-dots;
+    in property <string> label-show-koi-text;
+    in property <bool> show-koi;
     in property <string> label-date-size-text;
     in property <string> date-size-standard-label;
     in property <string> date-size-large-label;
@@ -961,6 +963,7 @@ export component SettingsView inherits Rectangle {
     callback toggle-gray-weekday(int);
     callback toggle-show-week-numbers();
     callback toggle-show-event-dots();
+    callback toggle-show-koi();
     callback select-date-size(CalendarDateSize);
     callback select-first-weekday-option(bool);
     callback add-calendar-account();
@@ -1179,12 +1182,22 @@ export component SettingsView inherits Rectangle {
                     }
                     Row {
                         title: root.label-show-event-dots-text;
-                        divider: false;
                         Centered {
                             Switch {
                                 label: root.label-show-event-dots-text;
                                 checked: root.show-event-dots;
                                 toggled => { root.toggle-show-event-dots(); }
+                            }
+                        }
+                    }
+                    Row {
+                        title: root.label-show-koi-text;
+                        divider: false;
+                        Centered {
+                            Switch {
+                                label: root.label-show-koi-text;
+                                checked: root.show-koi;
+                                toggled => { root.toggle-show-koi(); }
                             }
                         }
                     }

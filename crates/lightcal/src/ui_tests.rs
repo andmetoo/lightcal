@@ -1037,6 +1037,55 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
 }
 
 #[test]
+fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-koi-pond-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 0;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    wire_koi_pond(&ui, &ctrl);
+    ui.show().unwrap();
+    ctrl.borrow().sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.draw_if_needed(|_| {});
+    // Koi pond is the last Calendar row, below the fold.
+    scroll(&ui, -1000.0);
+    window.draw_if_needed(|_| {});
+    assert!(!ui.get_show_koi());
+
+    // The row title shares the label; press the switch itself.
+    let switch = ElementHandle::find_by_accessible_label(&ui, "Koi pond")
+        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Checkbox))
+        .expect("Koi pond switch");
+    let center = |e: &ElementHandle| {
+        let (p, s) = (e.absolute_position(), e.size());
+        (p.x + s.width / 2.0, p.y + s.height / 2.0)
+    };
+    let (x, y) = center(&switch);
+    click(&ui, x, y);
+    assert!(ctrl.borrow().prefs.show_koi);
+    assert!(ui.get_show_koi());
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert!(saved.preferences.show_koi);
+
+    click(&ui, x, y);
+    assert!(!ctrl.borrow().prefs.show_koi);
+    assert!(!ui.get_show_koi());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn date_size_control_saves_the_choice_and_grows_the_calendar() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);

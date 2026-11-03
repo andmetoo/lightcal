@@ -1,0 +1,247 @@
+// Koi pond: a few koi swimming slowly behind the calendar grid (ADR 0013).
+// Each fish is drawn from its spine in units of its length: the nose sits at u = 0.5,
+// the tail fin ends near u = −0.62, and v runs across the body. The fish lives in a
+// small square box, so the software renderer repaints only the boxes that move.
+
+import { Theme } from "theme.slint";
+
+struct KoiPose {
+    heading: angle,
+    // Tail beat, −1 … 1.
+    wag: float,
+    // Body length in logical px.
+    size: float,
+}
+
+// One fish of the school: its loop (frequencies a and b, phases p and q, half-spans
+// ax and ay as fractions of the pond), loop and tail-beat periods in seconds, length
+// in logical px, and colors.
+struct KoiSwim {
+    a: float,
+    b: float,
+    p: angle,
+    q: angle,
+    ax: float,
+    ay: float,
+    period: float,
+    beat: float,
+    size: float,
+    body: color,
+    fin: color,
+    head: color,
+    back: color,
+    tail: color,
+}
+
+global KoiMath {
+    // Half of the box side, in body lengths; the box holds the bent tail at any heading.
+    out property <float> half: 0.72;
+
+    // Sideways spine offset at u: none at the nose, growing toward the tail.
+    public pure function bend(p: KoiPose, u: float) -> float {
+        p.wag * 0.12 * p.size * (0.5 - u) * (0.5 - u)
+    }
+    public pure function x(p: KoiPose, u: float, v: float) -> float {
+        root.half * p.size + u * p.size * cos(p.heading) - (v * p.size + root.bend(p, u)) * sin(p.heading)
+    }
+    public pure function y(p: KoiPose, u: float, v: float) -> float {
+        root.half * p.size + u * p.size * sin(p.heading) + (v * p.size + root.bend(p, u)) * cos(p.heading)
+    }
+}
+
+component KoiShape inherits Path {
+    in property <KoiPose> pose;
+    width: 100%;
+    height: 100%;
+    viewbox-width: 2 * KoiMath.half * root.pose.size;
+    viewbox-height: 2 * KoiMath.half * root.pose.size;
+}
+
+// Pectoral fins, one on each side behind the head.
+component KoiFins inherits KoiShape {
+    MoveTo { x: KoiMath.x(root.pose, 0.24, 0.10); y: KoiMath.y(root.pose, 0.24, 0.10); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.20, 0.22); control-1-y: KoiMath.y(root.pose, 0.20, 0.22);
+        control-2-x: KoiMath.x(root.pose, 0.10, 0.30); control-2-y: KoiMath.y(root.pose, 0.10, 0.30);
+        x: KoiMath.x(root.pose, 0.04, 0.27); y: KoiMath.y(root.pose, 0.04, 0.27);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.08, 0.20); control-1-y: KoiMath.y(root.pose, 0.08, 0.20);
+        control-2-x: KoiMath.x(root.pose, 0.12, 0.14); control-2-y: KoiMath.y(root.pose, 0.12, 0.14);
+        x: KoiMath.x(root.pose, 0.14, 0.11); y: KoiMath.y(root.pose, 0.14, 0.11);
+    }
+    Close { }
+    MoveTo { x: KoiMath.x(root.pose, 0.24, -0.10); y: KoiMath.y(root.pose, 0.24, -0.10); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.20, -0.22); control-1-y: KoiMath.y(root.pose, 0.20, -0.22);
+        control-2-x: KoiMath.x(root.pose, 0.10, -0.30); control-2-y: KoiMath.y(root.pose, 0.10, -0.30);
+        x: KoiMath.x(root.pose, 0.04, -0.27); y: KoiMath.y(root.pose, 0.04, -0.27);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.08, -0.20); control-1-y: KoiMath.y(root.pose, 0.08, -0.20);
+        control-2-x: KoiMath.x(root.pose, 0.12, -0.14); control-2-y: KoiMath.y(root.pose, 0.12, -0.14);
+        x: KoiMath.x(root.pose, 0.14, -0.11); y: KoiMath.y(root.pose, 0.14, -0.11);
+    }
+    Close { }
+}
+
+// Forked tail fin, which swings the most.
+component KoiTail inherits KoiShape {
+    MoveTo { x: KoiMath.x(root.pose, -0.33, 0.03); y: KoiMath.y(root.pose, -0.33, 0.03); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.42, 0.06); control-1-y: KoiMath.y(root.pose, -0.42, 0.06);
+        control-2-x: KoiMath.x(root.pose, -0.55, 0.16); control-2-y: KoiMath.y(root.pose, -0.55, 0.16);
+        x: KoiMath.x(root.pose, -0.62, 0.15); y: KoiMath.y(root.pose, -0.62, 0.15);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.58, 0.08); control-1-y: KoiMath.y(root.pose, -0.58, 0.08);
+        control-2-x: KoiMath.x(root.pose, -0.55, 0.03); control-2-y: KoiMath.y(root.pose, -0.55, 0.03);
+        x: KoiMath.x(root.pose, -0.52, 0); y: KoiMath.y(root.pose, -0.52, 0);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.55, -0.03); control-1-y: KoiMath.y(root.pose, -0.55, -0.03);
+        control-2-x: KoiMath.x(root.pose, -0.58, -0.08); control-2-y: KoiMath.y(root.pose, -0.58, -0.08);
+        x: KoiMath.x(root.pose, -0.62, -0.15); y: KoiMath.y(root.pose, -0.62, -0.15);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.55, -0.16); control-1-y: KoiMath.y(root.pose, -0.55, -0.16);
+        control-2-x: KoiMath.x(root.pose, -0.42, -0.06); control-2-y: KoiMath.y(root.pose, -0.42, -0.06);
+        x: KoiMath.x(root.pose, -0.33, -0.03); y: KoiMath.y(root.pose, -0.33, -0.03);
+    }
+    Close { }
+}
+
+// Body outline from the nose round to the tail root and back.
+component KoiBody inherits KoiShape {
+    MoveTo { x: KoiMath.x(root.pose, 0.5, 0); y: KoiMath.y(root.pose, 0.5, 0); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.5, 0.08); control-1-y: KoiMath.y(root.pose, 0.5, 0.08);
+        control-2-x: KoiMath.x(root.pose, 0.3, 0.135); control-2-y: KoiMath.y(root.pose, 0.3, 0.135);
+        x: KoiMath.x(root.pose, 0.1, 0.13); y: KoiMath.y(root.pose, 0.1, 0.13);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.1, 0.125); control-1-y: KoiMath.y(root.pose, -0.1, 0.125);
+        control-2-x: KoiMath.x(root.pose, -0.25, 0.06); control-2-y: KoiMath.y(root.pose, -0.25, 0.06);
+        x: KoiMath.x(root.pose, -0.36, 0.025); y: KoiMath.y(root.pose, -0.36, 0.025);
+    }
+    LineTo { x: KoiMath.x(root.pose, -0.36, -0.025); y: KoiMath.y(root.pose, -0.36, -0.025); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, -0.25, -0.06); control-1-y: KoiMath.y(root.pose, -0.25, -0.06);
+        control-2-x: KoiMath.x(root.pose, -0.1, -0.125); control-2-y: KoiMath.y(root.pose, -0.1, -0.125);
+        x: KoiMath.x(root.pose, 0.1, -0.13); y: KoiMath.y(root.pose, 0.1, -0.13);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, 0.3, -0.135); control-1-y: KoiMath.y(root.pose, 0.3, -0.135);
+        control-2-x: KoiMath.x(root.pose, 0.5, -0.08); control-2-y: KoiMath.y(root.pose, 0.5, -0.08);
+        x: KoiMath.x(root.pose, 0.5, 0); y: KoiMath.y(root.pose, 0.5, 0);
+    }
+    Close { }
+}
+
+// An oval color patch centred at (u, v) with half-axes ru along and rv across the body.
+component KoiSpot inherits KoiShape {
+    in property <float> u;
+    in property <float> v;
+    in property <float> ru;
+    in property <float> rv;
+    // Bézier handle length for a quarter ellipse.
+    property <float> k: 0.55;
+    MoveTo { x: KoiMath.x(root.pose, root.u + root.ru, root.v); y: KoiMath.y(root.pose, root.u + root.ru, root.v); }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, root.u + root.ru, root.v + root.k * root.rv);
+        control-1-y: KoiMath.y(root.pose, root.u + root.ru, root.v + root.k * root.rv);
+        control-2-x: KoiMath.x(root.pose, root.u + root.k * root.ru, root.v + root.rv);
+        control-2-y: KoiMath.y(root.pose, root.u + root.k * root.ru, root.v + root.rv);
+        x: KoiMath.x(root.pose, root.u, root.v + root.rv); y: KoiMath.y(root.pose, root.u, root.v + root.rv);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, root.u - root.k * root.ru, root.v + root.rv);
+        control-1-y: KoiMath.y(root.pose, root.u - root.k * root.ru, root.v + root.rv);
+        control-2-x: KoiMath.x(root.pose, root.u - root.ru, root.v + root.k * root.rv);
+        control-2-y: KoiMath.y(root.pose, root.u - root.ru, root.v + root.k * root.rv);
+        x: KoiMath.x(root.pose, root.u - root.ru, root.v); y: KoiMath.y(root.pose, root.u - root.ru, root.v);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, root.u - root.ru, root.v - root.k * root.rv);
+        control-1-y: KoiMath.y(root.pose, root.u - root.ru, root.v - root.k * root.rv);
+        control-2-x: KoiMath.x(root.pose, root.u - root.k * root.ru, root.v - root.rv);
+        control-2-y: KoiMath.y(root.pose, root.u - root.k * root.ru, root.v - root.rv);
+        x: KoiMath.x(root.pose, root.u, root.v - root.rv); y: KoiMath.y(root.pose, root.u, root.v - root.rv);
+    }
+    CubicTo {
+        control-1-x: KoiMath.x(root.pose, root.u + root.k * root.ru, root.v - root.rv);
+        control-1-y: KoiMath.y(root.pose, root.u + root.k * root.ru, root.v - root.rv);
+        control-2-x: KoiMath.x(root.pose, root.u + root.ru, root.v - root.k * root.rv);
+        control-2-y: KoiMath.y(root.pose, root.u + root.ru, root.v - root.k * root.rv);
+        x: KoiMath.x(root.pose, root.u + root.ru, root.v); y: KoiMath.y(root.pose, root.u + root.ru, root.v);
+    }
+    Close { }
+}
+
+component Koi inherits Rectangle {
+    // Centre of the fish in the pond, in logical px.
+    in property <length> cx;
+    in property <length> cy;
+    in property <KoiPose> pose;
+    in property <color> body;
+    in property <color> fin;
+    // Head, back and tail patches; transparent leaves a patch out.
+    in property <color> head-spot;
+    in property <color> back-spot;
+    in property <color> tail-spot;
+
+    x: root.cx - KoiMath.half * root.pose.size * 1px;
+    y: root.cy - KoiMath.half * root.pose.size * 1px;
+    width: 2 * KoiMath.half * root.pose.size * 1px;
+    height: self.width;
+
+    KoiFins { pose: root.pose; fill: root.fin; }
+    KoiTail { pose: root.pose; fill: root.fin; }
+    KoiBody {
+        pose: root.pose;
+        fill: root.body;
+        // A faint edge keeps a white koi visible on the light popup.
+        stroke: Theme.dark ? transparent : #00000048;
+        stroke-width: 0.8px;
+    }
+    KoiSpot { pose: root.pose; fill: root.head-spot; u: 0.3; v: 0; ru: 0.11; rv: 0.075; }
+    KoiSpot { pose: root.pose; fill: root.back-spot; u: 0.0; v: 0.025; ru: 0.15; rv: 0.08; }
+    KoiSpot { pose: root.pose; fill: root.tail-spot; u: -0.22; v: -0.015; ru: 0.07; rv: 0.045; }
+}
+
+// The pond fills its parent. Every koi follows its own slow loop
+// (x = sin(a·θ + p), y = sin(b·θ + q) around the centre) and points along the
+// loop's tangent. Nothing is drawn, and nothing animates, unless the pond is shown.
+export component KoiPond inherits Rectangle {
+    property <float> t: animation-tick() / 1s;
+    // Faint enough that every date reads over a fish.
+    opacity: 0.5;
+    property <[KoiSwim]> school: [
+        // Kohaku: white with red patches, on a wide oval.
+        { a: 1, b: 1, p: 0deg, q: 90deg, ax: 0.38, ay: 0.36, period: 46, beat: 1.3, size: 46,
+          body: #F6F1E9, fin: #F6F1E9C0, head: #E04A2A, back: #E04A2A, tail: #00000000 },
+        // Yamabuki ogon: plain gold, on a figure eight.
+        { a: -1, b: 2, p: 60deg, q: 0deg, ax: 0.42, ay: 0.30, period: 64, beat: 1.1, size: 40,
+          body: #F2A93B, fin: #F2A93BC0, head: #F8CB72, back: #00000000, tail: #00000000 },
+        // Showa: dark with red and white patches, on a tall figure eight.
+        { a: 2, b: 1, p: 0deg, q: 200deg, ax: 0.30, ay: 0.38, period: 80, beat: 1.5, size: 36,
+          body: #34302E, fin: #34302EB0, head: #E04A2A, back: #F6F1E9, tail: #E04A2A },
+    ];
+
+    for fish in root.school : Koi {
+        property <angle> theta: root.t * 360deg / fish.period;
+        cx: root.width / 2 + fish.ax * root.width * sin(fish.a * self.theta + fish.p);
+        cy: root.height / 2 + fish.ay * root.height * sin(fish.b * self.theta + fish.q);
+        pose: {
+            heading: atan2(fish.ay * root.height / 1px * fish.b * cos(fish.b * self.theta + fish.q),
+                fish.ax * root.width / 1px * fish.a * cos(fish.a * self.theta + fish.p)),
+            wag: 0.8 * sin(root.t * 360deg / fish.beat + fish.p),
+            size: fish.size,
+        };
+        body: fish.body;
+        fin: fish.fin;
+        head-spot: fish.head;
+        back-spot: fish.back;
+        tail-spot: fish.tail;
+    }
+}

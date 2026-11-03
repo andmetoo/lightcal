@@ -750,6 +750,15 @@ fn render_calendar_boards(
     shot(ctrl, "today-no-weeks-light")?;
     ctrl.prefs.show_week_numbers = true;
 
+    // Koi pond behind the grid.
+    ctrl.prefs.show_koi = true;
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("koi-{}", theme.as_str()))?;
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.prefs.show_koi = false;
+
     // Event details: Friday 13 November, Design review expanded.
     ctrl.cal_state
         .select_date(LocalDate::new(2026, 11, 13).unwrap());

@@ -102,6 +102,7 @@ export component AppWindow inherits Window {
     in property <string> desc-highlight-current-month-text: "Show the current-month indicator";
     in property <string> label-show-event-dots-text: "Show event dots on dates";
     in property <string> desc-show-event-dots-text: "Render up to 3 semantic color dots beneath days with scheduled events";
+    in property <string> label-show-koi-text: "Koi pond";
     in property <string> label-tray-mode-text: "Tray / Status Bar icon mode";
     in property <string> desc-tray-mode-text: "Date, weekday and date, or time. This changes Lightcal's icon only.";
     in property <string> label-tray-palette-text: "Tray / Status Bar icon palette";
@@ -201,6 +202,8 @@ export component AppWindow inherits Window {
     // Redesigned Settings View State & Dropdowns
     in property <bool> highlight-current-month: true;
     in property <bool> show-event-dots: true;
+    // Koi swimming behind the calendar grid; off by default (ADR 0013).
+    in property <bool> show-koi: false;
     // Standard 14 px, Large 16 px, Larger 18 px (week rows 34 px, popup 444 px tall).
     in property <CalendarDateSize> date-size: CalendarDateSize.standard;
     in property <string> label-date-size-text: "Date size";
@@ -317,6 +320,7 @@ export component AppWindow inherits Window {
     callback select-update-channel(string);
     callback toggle-highlight-current-month();
     callback toggle-show-event-dots();
+    callback toggle-show-koi();
     callback select-date-size(CalendarDateSize);
     callback toggle-auto-check-updates();
     callback reset-shortcut();
@@ -424,6 +428,7 @@ export component AppWindow inherits Window {
         iso-weeks: root.iso-weeks;
         cells: root.cells;
         show-event-dots: root.show-event-dots;
+        show-koi: root.show-koi;
         date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
         agenda-title: root.agenda-title;
@@ -477,6 +482,8 @@ export component AppWindow inherits Window {
         show-week-numbers: root.show-week-numbers;
         label-show-event-dots-text: root.label-show-event-dots-text;
         show-event-dots: root.show-event-dots;
+        label-show-koi-text: root.label-show-koi-text;
+        show-koi: root.show-koi;
         label-date-size-text: root.label-date-size-text;
         date-size-standard-label: root.date-size-standard-label;
         date-size-large-label: root.date-size-large-label;
@@ -540,6 +547,7 @@ export component AppWindow inherits Window {
         toggle-gray-weekday(arg0) => { root.toggle-gray-weekday(arg0); }
         toggle-show-week-numbers() => { root.toggle-show-week-numbers(); }
         toggle-show-event-dots() => { root.toggle-show-event-dots(); }
+        toggle-show-koi() => { root.toggle-show-koi(); }
         select-date-size(arg0) => { root.select-date-size(arg0); }
         select-first-weekday-option(arg0) => { root.select-first-weekday-option(arg0); }
         add-calendar-account() => { root.add-calendar-account(); }
