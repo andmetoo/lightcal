@@ -715,6 +715,16 @@ pub fn main_window_is_open() -> Option<bool> {
     Some(unsafe { IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 })
 }
 
+/// Whether the application window is the foreground window: false while it sits behind
+/// another app, on another virtual desktop, or under the lock screen.
+#[cfg(windows)]
+pub fn main_window_is_foreground() -> bool {
+    let hwnd = find_lightcal_hwnd();
+    // SAFETY: GetForegroundWindow only reads shell state.
+    !hwnd.is_null()
+        && unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() } == hwnd
+}
+
 /// Windows Settings › Accessibility › Visual effects › Animation effects. Reads as on
 /// when the query fails, which matches the Windows default.
 #[cfg(windows)]

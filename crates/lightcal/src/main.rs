@@ -424,19 +424,41 @@ fn animation_effects_enabled() -> bool {
     }
 }
 
-/// The koi move only while the calendar shows the pond on screen and Windows animation
+/// Whether the popup is on screen and in front: not hidden, minimized, behind another
+/// app, on another virtual desktop or under the lock screen.
+fn popup_in_front() -> bool {
+    #[cfg(windows)]
+    {
+        popup_on_screen() && lightcal::platform::windows::main_window_is_foreground()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+/// The koi move only while the calendar shows the pond in front and Windows animation
 /// effects are on; otherwise they hold still.
 fn koi_should_swim(ui: &AppWindow) -> bool {
-    ui.get_show_koi() && !ui.get_settings_open() && popup_on_screen() && animation_effects_enabled()
+    ui.get_show_koi() && !ui.get_settings_open() && popup_in_front() && animation_effects_enabled()
+}
+
+/// Pond time now, from one epoch, so the koi carry on where real time puts them.
+fn set_koi_clock_now(ui: &AppWindow) {
+    let secs = KOI_EPOCH.with(|epoch| epoch.elapsed().as_secs_f64());
+    ui.set_koi_clock((secs % KOI_CLOCK_WRAP_SECS) as f32);
 }
 
 /// Starts the koi clock when the pond should swim. The timer stops itself once the popup
-/// hides or minimizes, the pond closes or animation effects go off, so a hidden Lightcal
-/// never wakes for the koi; showing or restoring the popup starts it again.
+/// hides, minimizes or loses the foreground, the pond closes or animation effects go off,
+/// so an unseen Lightcal never wakes for the koi. Showing, restoring or activating the
+/// popup and turning animation effects back on start it again.
 fn wake_koi(ui: &AppWindow) {
     if KOI_TIMER.with(|timer| timer.running()) || !koi_should_swim(ui) {
         return;
     }
+    // The first frame shows the current pose, not the one from when the koi last stopped.
+    set_koi_clock_now(ui);
     let ui_weak = ui.as_weak();
     KOI_TIMER.with(|timer| {
         timer.start(slint::TimerMode::Repeated, KOI_FRAME, move || {
@@ -447,8 +469,7 @@ fn wake_koi(ui: &AppWindow) {
                 KOI_TIMER.with(|timer| timer.stop());
                 return;
             }
-            let secs = KOI_EPOCH.with(|epoch| epoch.elapsed().as_secs_f64());
-            ui.set_koi_clock((secs % KOI_CLOCK_WRAP_SECS) as f32);
+            set_koi_clock_now(&ui);
         });
     });
 }
@@ -1719,6 +1740,7 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
 fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWND) {
     let restore_ui = ui.as_weak();
     let snapshot_ui = ui.as_weak();
+    let wake_ui = ui.as_weak();
     let install = |hwnd| {
         // SAFETY: `hwnd` is this process's live application window, owned by the UI thread.
         unsafe {
@@ -1728,7 +1750,6 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     // Runs before the restored window paints, so its first frame is complete.
                     if let Some(ui) = restore_ui.upgrade() {
                         request_full_repaint(&ui);
-                        wake_koi(&ui);
                     }
                 },
                 move || {
@@ -1739,6 +1760,18 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     ui.window().take_snapshot().ok()
                 },
             )
+            .inspect(|hooks| {
+                // Activation and animation-setting changes restart the koi clock. Deferred
+                // out of the window procedure, so the foreground check sees the new state.
+                hooks.set_on_wake(move || {
+                    let ui_weak = wake_ui.clone();
+                    slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                        if let Some(ui) = ui_weak.upgrade() {
+                            wake_koi(&ui);
+                        }
+                    });
+                });
+            })
         }
     };
     // SAFETY: as above; `ensure` ignores a null handle.

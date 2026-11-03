@@ -26,10 +26,14 @@ popup is hidden and must not make dates harder to read.
   the wrap is seamless and the f32 clock stays precise however long Lightcal
   runs. Each fish lives in its own small box so the software renderer
   repaints only the boxes that move.
-- The clock runs only while the pond is shown, the popup is on screen and
-  Windows **Animation effects** is on. Its timer stops itself when the popup
-  hides or minimizes, and showing or restoring the popup starts it again. With
-  Animation effects off the koi stay still.
+- The clock runs only while the pond is shown, the popup is the foreground
+  window and Windows **Animation effects** is on. Its timer stops itself when
+  the popup hides, minimizes, falls behind another app, moves to another
+  virtual desktop or sits under the lock screen. Showing or activating the
+  popup, or turning Animation effects back on, starts it again from the current
+  pond time. With Animation effects off the koi stay still.
+- A test reads the school from Slint and checks that the 960 s wrap is a whole
+  number of every loop period and tail beat.
 - Labels: Koi pond, Пруд с карпами кои, Estanque koi, 鯉の池.
 
 ## Consequences

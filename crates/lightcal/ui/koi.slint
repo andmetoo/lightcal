@@ -17,8 +17,8 @@ struct KoiPose {
 
 // One fish of the school: its loop (frequencies a and b, phases p and q, half-spans
 // ax and ay as fractions of the pond), loop and tail-beat periods in seconds, length
-// in logical px, and colors.
-struct KoiSwim {
+// in logical px, and colors (the fins are the body color, partly transparent).
+export struct KoiSwim {
     a: float,
     b: float,
     p: angle,
@@ -29,7 +29,6 @@ struct KoiSwim {
     beat: float,
     size: float,
     body: color,
-    fin: color,
     head: color,
     back: color,
     tail: color,
@@ -38,6 +37,11 @@ struct KoiSwim {
 global KoiMath {
     // Half of the box side, in body lengths; the box holds the bent tail at any heading.
     out property <float> half: 0.72;
+
+    // Side of a fish's box, in logical px units, for a body this long.
+    public pure function box(size: float) -> float {
+        2 * root.half * size
+    }
 
     // Sideways spine offset at u: none at the nose, growing toward the tail.
     public pure function bend(p: KoiPose, u: float) -> float {
@@ -55,8 +59,8 @@ component KoiShape inherits Path {
     in property <KoiPose> pose;
     width: 100%;
     height: 100%;
-    viewbox-width: 2 * KoiMath.half * root.pose.size;
-    viewbox-height: 2 * KoiMath.half * root.pose.size;
+    viewbox-width: KoiMath.box(root.pose.size);
+    viewbox-height: KoiMath.box(root.pose.size);
 }
 
 // Pectoral fins, one on each side behind the head.
@@ -186,15 +190,15 @@ component Koi inherits Rectangle {
     in property <length> cy;
     in property <KoiPose> pose;
     in property <color> body;
-    in property <color> fin;
+    property <color> fin: root.body.transparentize(0.27);
     // Head, back and tail patches; transparent leaves a patch out.
     in property <color> head-spot;
     in property <color> back-spot;
     in property <color> tail-spot;
 
-    x: root.cx - KoiMath.half * root.pose.size * 1px;
-    y: root.cy - KoiMath.half * root.pose.size * 1px;
-    width: 2 * KoiMath.half * root.pose.size * 1px;
+    width: KoiMath.box(root.pose.size) * 1px;
+    x: root.cx - self.width / 2;
+    y: root.cy - self.width / 2;
     height: self.width;
 
     KoiFins { pose: root.pose; fill: root.fin; }
@@ -212,28 +216,33 @@ component Koi inherits Rectangle {
     KoiSpot { pose: root.pose; fill: root.tail-spot; u: -0.22; v: -0.015; ru: 0.07; rv: 0.045; }
 }
 
+// The school, exported so a Rust test can check that the clock wrap in main.rs is a whole
+// number of every loop period and tail beat.
+export global KoiSchool {
+    out property <[KoiSwim]> fish: [
+        // Kohaku: white with red patches, on a wide oval.
+        { a: 1, b: 1, p: 0deg, q: 90deg, ax: 0.38, ay: 0.36, period: 48, beat: 1.2, size: 46,
+          body: #F6F1E9, head: #E04A2A, back: #E04A2A, tail: #00000000 },
+        // Yamabuki ogon: plain gold, on a figure eight.
+        { a: -1, b: 2, p: 60deg, q: 0deg, ax: 0.42, ay: 0.30, period: 64, beat: 1.6, size: 40,
+          body: #F2A93B, head: #F8CB72, back: #00000000, tail: #00000000 },
+        // Showa: dark with red and white patches, on a tall figure eight.
+        { a: 2, b: 1, p: 0deg, q: 200deg, ax: 0.30, ay: 0.38, period: 80, beat: 1.0, size: 36,
+          body: Theme.dark ? #4A4441 : #34302E, head: #E04A2A, back: #F6F1E9, tail: #E04A2A },
+    ];
+}
+
 // The pond fills its parent. Every koi follows its own slow loop
 // (x = sin(a·θ + p), y = sin(b·θ + q) around the centre) and points along the
-// loop's tangent. Rust advances `clock` (seconds) while the popup is on screen and
-// wraps it every 960 s, a whole number of every loop and tail beat below, so the
+// loop's tangent. Rust advances `clock` (seconds) while the popup is in front and
+// wraps it every 960 s, a whole number of every loop and tail beat in KoiSchool, so the
 // wrap is seamless and the value stays small enough for exact float math.
 export component KoiPond inherits Rectangle {
     in property <float> clock;
     // Faint enough that every date reads over a fish.
     opacity: 0.5;
-    property <[KoiSwim]> school: [
-        // Kohaku: white with red patches, on a wide oval.
-        { a: 1, b: 1, p: 0deg, q: 90deg, ax: 0.38, ay: 0.36, period: 48, beat: 1.2, size: 46,
-          body: #F6F1E9, fin: #F6F1E9C0, head: #E04A2A, back: #E04A2A, tail: #00000000 },
-        // Yamabuki ogon: plain gold, on a figure eight.
-        { a: -1, b: 2, p: 60deg, q: 0deg, ax: 0.42, ay: 0.30, period: 64, beat: 1.6, size: 40,
-          body: #F2A93B, fin: #F2A93BC0, head: #F8CB72, back: #00000000, tail: #00000000 },
-        // Showa: dark with red and white patches, on a tall figure eight.
-        { a: 2, b: 1, p: 0deg, q: 200deg, ax: 0.30, ay: 0.38, period: 80, beat: 1.0, size: 36,
-          body: Theme.dark ? #4A4441 : #34302E, fin: Theme.dark ? #4A4441B0 : #34302EB0, head: #E04A2A, back: #F6F1E9, tail: #E04A2A },
-    ];
 
-    for fish in root.school : Koi {
+    for fish in KoiSchool.fish : Koi {
         property <angle> theta: root.clock * 360deg / fish.period;
         cx: root.width / 2 + fish.ax * root.width * sin(fish.a * self.theta + fish.p);
         cy: root.height / 2 + fish.ay * root.height * sin(fish.b * self.theta + fish.q);
@@ -247,7 +256,6 @@ export component KoiPond inherits Rectangle {
             size: fish.size,
         };
         body: fish.body;
-        fin: fish.fin;
         head-spot: fish.head;
         back-spot: fish.back;
         tail-spot: fish.tail;

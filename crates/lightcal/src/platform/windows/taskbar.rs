@@ -35,6 +35,9 @@ struct HookState {
     previews_requested: Cell<bool>,
     minimized: Cell<bool>,
     on_restore: Box<dyn Fn()>,
+    /// Runs when the window becomes active or Windows animation effects change; see
+    /// `WindowHooks::set_on_wake`.
+    on_wake: RefCell<Option<Box<dyn Fn()>>>,
     /// Set once the subclass is registered and cleared on `WM_NCDESTROY`, so a destroyed
     /// window whose handle is reused never counts. comctl32's `GetWindowSubclass` could
     /// answer this, but the comctl32 that unmanifested test binaries load exports it only by
@@ -85,6 +88,7 @@ impl WindowHooks {
             previews_requested: Cell::new(false),
             minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
             on_restore: Box::new(on_restore),
+            on_wake: RefCell::new(None),
             attached: Cell::new(false),
         });
         let reference = &*state as *const HookState as usize;
@@ -112,6 +116,12 @@ impl WindowHooks {
                 4,
             );
         }
+    }
+
+    /// Sets the callback for the window becoming active and for a change to Windows
+    /// Animation effects. It runs inside the window procedure, like `on_restore`.
+    pub fn set_on_wake(&self, on_wake: impl Fn() + 'static) {
+        *self.state.on_wake.borrow_mut() = Some(Box::new(on_wake));
     }
 
     /// Whether these hooks are still attached to `hwnd` (not to a destroyed window whose
@@ -239,6 +249,7 @@ unsafe extern "system" fn hook_proc(
                 guarded("restore", || (state.on_restore)());
             }
         }
+        _ if wakes(message, wp) => wake(state),
         WM_DWMSENDICONICTHUMBNAIL | WM_DWMSENDICONICLIVEPREVIEWBITMAP => {
             guarded("preview", || {
                 send_preview(hwnd, message, lp, &state.preview)
@@ -248,6 +259,24 @@ unsafe extern "system" fn hook_proc(
         _ => {}
     }
     DefSubclassProc(hwnd, message, wp, lp)
+}
+
+/// Activation (the low word of wParam is WA_INACTIVE, 0, on deactivation) and a change
+/// to Windows Animation effects.
+fn wakes(message: u32, wp: WPARAM) -> bool {
+    match message {
+        WM_ACTIVATE => wp & 0xFFFF != 0,
+        WM_SETTINGCHANGE => wp as u32 == SPI_SETCLIENTAREAANIMATION,
+        _ => false,
+    }
+}
+
+fn wake(state: &HookState) {
+    if let Ok(on_wake) = state.on_wake.try_borrow() {
+        if let Some(on_wake) = on_wake.as_ref() {
+            guarded("wake", on_wake);
+        }
+    }
 }
 
 unsafe fn send_preview(hwnd: HWND, message: u32, lp: LPARAM, state: &PreviewState) {
@@ -404,6 +433,16 @@ mod tests {
         assert!(!leaves_minimized(&minimized, SIZE_MINIMIZED));
         assert!(leaves_minimized(&minimized, SIZE_MAXIMIZED));
         assert!(!leaves_minimized(&minimized, SIZE_MAXSHOW));
+    }
+    #[test]
+    fn only_activation_and_animation_setting_changes_wake() {
+        assert!(wakes(WM_ACTIVATE, 1)); // WA_ACTIVE
+        assert!(wakes(WM_ACTIVATE, 2)); // WA_CLICKACTIVE
+        assert!(wakes(WM_ACTIVATE, 0x0001_0001)); // WA_ACTIVE, minimized
+        assert!(!wakes(WM_ACTIVATE, 0)); // WA_INACTIVE
+        assert!(wakes(WM_SETTINGCHANGE, SPI_SETCLIENTAREAANIMATION as usize));
+        assert!(!wakes(WM_SETTINGCHANGE, SPI_SETWORKAREA as usize));
+        assert!(!wakes(WM_SIZE, 1));
     }
     #[test]
     fn hooks_report_native_restores_from_minimized() {

@@ -1049,6 +1049,28 @@ fn date_size_sets_calendar_height_from_theme_metrics() {
 }
 
 #[test]
+fn koi_clock_wraps_on_a_whole_number_of_every_loop_and_tail_beat() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let school = ui.global::<KoiSchool>().get_fish();
+    assert!(school.row_count() > 0);
+    // Periods arrive as f32, so allow for their rounding.
+    let whole = |value: f64| (value - value.round()).abs() < 1e-3;
+    for fish in school.iter() {
+        // Whole loop frequencies bring every fish back to the same pose after each lap.
+        assert!(whole(fish.a.into()) && whole(fish.b.into()), "{fish:?}");
+        for period in [fish.period, fish.beat] {
+            assert!(
+                whole(KOI_CLOCK_WRAP_SECS / f64::from(period)),
+                "{KOI_CLOCK_WRAP_SECS} s is not a whole number of {period} s"
+            );
+        }
+    }
+}
+
+#[test]
 fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
