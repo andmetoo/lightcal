@@ -35,9 +35,12 @@ struct HookState {
     previews_requested: Cell<bool>,
     minimized: Cell<bool>,
     on_restore: Box<dyn Fn()>,
-    /// Runs when the window becomes active or Windows animation effects change; see
-    /// `WindowHooks::set_on_wake`.
+    /// Runs when the window becomes active, a system setting changes, the session locks or
+    /// unlocks, or the display turns off or on; see `WindowHooks::set_on_wake`.
     on_wake: RefCell<Option<Box<dyn Fn()>>>,
+    /// Session and display notifications, registered by `subscribe_session_and_display`.
+    session_registered: Cell<bool>,
+    display_notify: Cell<windows_sys::Win32::System::Power::HPOWERNOTIFY>,
     /// Set once the subclass is registered and cleared on `WM_NCDESTROY`, so a destroyed
     /// window whose handle is reused never counts. comctl32's `GetWindowSubclass` could
     /// answer this, but the comctl32 that unmanifested test binaries load exports it only by
@@ -89,6 +92,8 @@ impl WindowHooks {
             minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
             on_restore: Box::new(on_restore),
             on_wake: RefCell::new(None),
+            session_registered: Cell::new(false),
+            display_notify: Cell::new(0),
             attached: Cell::new(false),
         });
         let reference = &*state as *const HookState as usize;
@@ -118,10 +123,39 @@ impl WindowHooks {
         }
     }
 
-    /// Sets the callback for the window becoming active and for a change to Windows
-    /// Animation effects. It runs inside the window procedure, like `on_restore`.
+    /// Sets the callback for the window becoming active, a system setting change, a session
+    /// lock or unlock and the display turning off or on. It runs inside the window
+    /// procedure, like `on_restore`.
     pub fn set_on_wake(&self, on_wake: impl Fn() + 'static) {
         *self.state.on_wake.borrow_mut() = Some(Box::new(on_wake));
+    }
+
+    /// Asks Windows for session lock and unlock and display on and off notifications to this
+    /// window. Windows reports the display state right away, which also sets
+    /// `shell::set_display_on`. Repeated calls register once; Drop unregisters.
+    pub fn subscribe_session_and_display(&self) {
+        use windows_sys::Win32::System::Power::RegisterPowerSettingNotification;
+        use windows_sys::Win32::System::RemoteDesktop::{
+            WTSRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
+        };
+        use windows_sys::Win32::System::SystemServices::GUID_CONSOLE_DISPLAY_STATE;
+        // SAFETY: both register this live window for notifications, undone in Drop.
+        unsafe {
+            if !self.state.session_registered.get() {
+                self.state
+                    .session_registered
+                    .set(WTSRegisterSessionNotification(self.hwnd, NOTIFY_FOR_THIS_SESSION) != 0);
+            }
+            if self.state.display_notify.get() == 0 {
+                self.state
+                    .display_notify
+                    .set(RegisterPowerSettingNotification(
+                        self.hwnd as _,
+                        &GUID_CONSOLE_DISPLAY_STATE,
+                        DEVICE_NOTIFY_WINDOW_HANDLE,
+                    ));
+            }
+        }
     }
 
     /// Whether these hooks are still attached to `hwnd` (not to a destroyed window whose
@@ -143,6 +177,16 @@ impl WindowHooks {
 
 impl Drop for WindowHooks {
     fn drop(&mut self) {
+        use windows_sys::Win32::System::Power::UnregisterPowerSettingNotification;
+        use windows_sys::Win32::System::RemoteDesktop::WTSUnRegisterSessionNotification;
+        unsafe {
+            if self.state.session_registered.get() {
+                WTSUnRegisterSessionNotification(self.hwnd);
+            }
+            if self.state.display_notify.get() != 0 {
+                UnregisterPowerSettingNotification(self.state.display_notify.get());
+            }
+        }
         if self.state.attached.get() {
             unsafe {
                 RemoveWindowSubclass(self.hwnd, Some(hook_proc), SUBCLASS_ID);
@@ -249,6 +293,12 @@ unsafe extern "system" fn hook_proc(
                 guarded("restore", || (state.on_restore)());
             }
         }
+        WM_POWERBROADCAST if wp as u32 == PBT_POWERSETTINGCHANGE => {
+            if let Some(on) = display_state(lp) {
+                crate::platform::windows::shell::set_display_on(on);
+                wake(state);
+            }
+        }
         _ if wakes(message, wp) => wake(state),
         WM_DWMSENDICONICTHUMBNAIL | WM_DWMSENDICONICLIVEPREVIEWBITMAP => {
             guarded("preview", || {
@@ -261,14 +311,26 @@ unsafe extern "system" fn hook_proc(
     DefSubclassProc(hwnd, message, wp, lp)
 }
 
-/// Activation (the low word of wParam is WA_INACTIVE, 0, on deactivation) and a change
-/// to Windows Animation effects.
+/// Activation (the low word of wParam is WA_INACTIVE, 0, on deactivation), any system
+/// setting change (the Settings app need not name Animation effects) and a session change
+/// such as lock or unlock.
 fn wakes(message: u32, wp: WPARAM) -> bool {
     match message {
         WM_ACTIVATE => wp & 0xFFFF != 0,
-        WM_SETTINGCHANGE => wp as u32 == SPI_SETCLIENTAREAANIMATION,
+        WM_SETTINGCHANGE | WM_WTSSESSION_CHANGE => true,
         _ => false,
     }
+}
+
+/// The console display state from a `PBT_POWERSETTINGCHANGE` broadcast: `Some(false)` when
+/// it turned off, `Some(true)` when on or dimmed, `None` for other power settings.
+unsafe fn display_state(lp: LPARAM) -> Option<bool> {
+    use windows_sys::Win32::System::Power::POWERBROADCAST_SETTING;
+    use windows_sys::Win32::System::SystemServices::GUID_CONSOLE_DISPLAY_STATE;
+    let setting = (lp as *const POWERBROADCAST_SETTING).as_ref()?;
+    let (a, b) = (setting.PowerSetting, GUID_CONSOLE_DISPLAY_STATE);
+    let same = a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4;
+    (same && setting.DataLength >= 1).then(|| setting.Data[0] != 0)
 }
 
 fn wake(state: &HookState) {
@@ -435,13 +497,34 @@ mod tests {
         assert!(!leaves_minimized(&minimized, SIZE_MAXSHOW));
     }
     #[test]
-    fn only_activation_and_animation_setting_changes_wake() {
+    fn display_state_reads_only_the_console_display_setting() {
+        use windows_sys::Win32::System::Power::POWERBROADCAST_SETTING;
+        use windows_sys::Win32::System::SystemServices::{
+            GUID_CONSOLE_DISPLAY_STATE, GUID_SESSION_DISPLAY_STATUS,
+        };
+        let setting = |guid, data| POWERBROADCAST_SETTING {
+            PowerSetting: guid,
+            DataLength: 4,
+            Data: [data],
+        };
+        let read = |s: &POWERBROADCAST_SETTING| unsafe {
+            display_state(s as *const POWERBROADCAST_SETTING as LPARAM)
+        };
+        assert_eq!(read(&setting(GUID_CONSOLE_DISPLAY_STATE, 0)), Some(false));
+        assert_eq!(read(&setting(GUID_CONSOLE_DISPLAY_STATE, 1)), Some(true));
+        assert_eq!(read(&setting(GUID_CONSOLE_DISPLAY_STATE, 2)), Some(true)); // dimmed
+        assert_eq!(read(&setting(GUID_SESSION_DISPLAY_STATUS, 0)), None);
+        assert_eq!(unsafe { display_state(0) }, None);
+    }
+    #[test]
+    fn activation_setting_and_session_changes_wake() {
         assert!(wakes(WM_ACTIVATE, 1)); // WA_ACTIVE
         assert!(wakes(WM_ACTIVATE, 2)); // WA_CLICKACTIVE
         assert!(wakes(WM_ACTIVATE, 0x0001_0001)); // WA_ACTIVE, minimized
         assert!(!wakes(WM_ACTIVATE, 0)); // WA_INACTIVE
         assert!(wakes(WM_SETTINGCHANGE, SPI_SETCLIENTAREAANIMATION as usize));
-        assert!(!wakes(WM_SETTINGCHANGE, SPI_SETWORKAREA as usize));
+        assert!(wakes(WM_SETTINGCHANGE, 0));
+        assert!(wakes(WM_WTSSESSION_CHANGE, 7)); // WTS_SESSION_LOCK
         assert!(!wakes(WM_SIZE, 1));
     }
     #[test]

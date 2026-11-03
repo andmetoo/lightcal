@@ -1077,20 +1077,6 @@ fn koi_pace_follows_what_the_user_can_see() {
     assert_eq!(koi_pace(true, false, still), KoiPace::Watch);
 }
 
-thread_local! {
-    static FAKE_VIEW: Cell<lightcal::platform::WindowView> = const {
-        Cell::new(lightcal::platform::WindowView {
-            on_screen: false,
-            seen: false,
-            animation_effects: true,
-        })
-    };
-}
-
-fn fake_view() -> lightcal::platform::WindowView {
-    FAKE_VIEW.with(Cell::get)
-}
-
 #[test]
 fn koi_clock_swims_watches_and_stops_with_the_window() {
     use lightcal::platform::WindowView;
@@ -1099,56 +1085,47 @@ fn koi_clock_swims_watches_and_stops_with_the_window() {
     slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
     let ui = AppWindow::new().unwrap();
     ui.set_show_koi(true);
-    KOI_VIEW.with(|probe| probe.set(fake_view));
-    let set_view = |on_screen, seen, animation_effects| {
-        FAKE_VIEW.with(|view| {
-            view.set(WindowView {
-                on_screen,
-                seen,
-                animation_effects,
-            })
-        })
+    let view = |on_screen, seen, animation_effects| WindowView {
+        on_screen,
+        seen,
+        animation_effects,
     };
-    let timer = || KOI_TIMER.with(|t| t.running().then(|| t.interval()));
+    let swimming = || KOI_TIMER.with(|t| t.running());
+    let watching = || KOI_WATCHING.with(Cell::get);
 
-    // Hidden: no timer at all.
-    wake_koi(&ui);
-    assert_eq!(timer(), None);
+    // Hidden: nothing runs.
+    wake_koi_with(&ui, view(false, false, true));
+    assert!(!swimming() && !watching());
 
     // Shown and seen: swims, and the first frame already has the current time.
     ui.set_koi_clock(-1.0);
-    set_view(true, true, true);
-    wake_koi(&ui);
-    assert_eq!(timer(), Some(KOI_FRAME));
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(swimming() && !watching());
+    assert_eq!(KOI_TIMER.with(|t| t.interval()), KOI_FRAME);
     assert!(ui.get_koi_clock() >= 0.0);
 
-    // Covered: the koi hold still and a slow check watches for the window to show again.
-    set_view(true, false, true);
+    // Covered: the koi hold still with no timer and wait for window changes.
     ui.set_koi_clock(-1.0);
-    wake_koi(&ui);
-    assert_eq!(timer(), Some(KOI_WATCH));
+    wake_koi_with(&ui, view(true, false, true));
+    assert!(!swimming() && watching());
     assert_eq!(ui.get_koi_clock(), -1.0);
 
-    // Uncovered again: the next check swims.
-    set_view(true, true, true);
-    wake_koi(&ui);
-    assert_eq!(timer(), Some(KOI_FRAME));
+    // Uncovered again: swims, and stops watching.
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(swimming() && !watching());
 
-    // Animation effects off: still, watched.
-    set_view(true, true, false);
-    wake_koi(&ui);
-    assert_eq!(timer(), Some(KOI_WATCH));
+    // Animation effects off: still and watching.
+    wake_koi_with(&ui, view(true, true, false));
+    assert!(!swimming() && watching());
 
-    // Settings open, or hidden: the timer stops.
-    set_view(true, true, true);
+    // Settings open, or hidden: nothing runs.
     ui.set_settings_open(true);
-    wake_koi(&ui);
-    assert_eq!(timer(), None);
+    wake_koi_with(&ui, view(true, true, true));
+    assert!(!swimming() && !watching());
     ui.set_settings_open(false);
-    wake_koi(&ui);
-    set_view(false, false, true);
-    wake_koi(&ui);
-    assert_eq!(timer(), None);
+    wake_koi_with(&ui, view(true, false, true));
+    wake_koi_with(&ui, view(false, false, true));
+    assert!(!swimming() && !watching());
 }
 
 #[test]

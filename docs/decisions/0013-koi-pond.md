@@ -21,22 +21,28 @@ popup is hidden and must not make dates harder to read.
   koi have a faint outline: dark in the light theme, light in the dark theme,
   where the showa body is also lightened.
 - The fish are vector paths in `ui/koi.slint` with no image assets. Their
-  pose comes from a pond clock in seconds that Rust advances 32 times a second
-  (two ticks of the default Windows timer, so frames stay evenly spaced) and wraps every 960 s, a whole number of every loop and tail beat, so
-  the wrap is seamless and the f32 clock stays precise however long Lightcal
-  runs. Each fish lives in its own small box so the software renderer
+  pose comes from a pond clock in seconds that Rust advances 32 times a
+  second (two ticks of the default Windows timer, so frames stay evenly
+  spaced) and wraps every 960 s, a whole number of every loop and tail beat,
+  so the wrap is seamless and the f32 clock stays precise however long
+  Lightcal runs. Each fish lives in its own small box so the software renderer
   repaints only the boxes that move.
 - The koi swim while the pond is shown, the popup can be seen and Windows
-  **Animation effects** is on. "Seen" means on screen, not cloaked on another
-  virtual desktop, not under the lock screen, and not completely covered:
-  five points across the window are hit-tested, so a popup shown without
-  activation, or partly behind another app, still swims.
+  **Animation effects** is on. "Seen" means on screen with the display on,
+  not cloaked on another virtual desktop, not under the lock screen, and not
+  completely covered. Coverage is checked at five points against the windows
+  above the popup in z-order; layered and click-through windows (overlays,
+  often translucent) never count as covering, so a popup shown without
+  activation, partly behind another app, or under an overlay still swims.
+  While swimming, visibility is re-checked twice a second, not every frame.
 - When the popup is on screen but unseen, or Animation effects is off, the koi
-  hold still and the timer checks once a second for that to change. When the
-  popup hides or minimizes, the pond closes or settings open, the timer stops
-  entirely. Showing, restoring or activating the popup, or an Animation effects
-  change, re-checks at once, and swimming always resumes from the current pond
-  time.
+  hold still and no timer runs. Events wake them instead: another app's
+  window coming to the foreground, moving, resizing, minimizing or restoring
+  (a WinEvent hook installed only while waiting), the popup being activated,
+  any system setting change, a session lock or unlock, and the display turning
+  on or off. When the popup hides or minimizes, the pond closes or settings
+  open, nothing runs or listens until the popup is shown, restored or
+  settings close. Swimming always resumes from the current pond time.
 - A test reads the school from Slint and checks that the 960 s wrap is a whole
   number of every loop period and tail beat.
 - Labels: Koi pond, Пруд с карпами кои, Estanque koi, 鯉の池.
@@ -44,7 +50,7 @@ popup is hidden and must not make dates harder to read.
 ## Consequences
 
 - While the popup is open with the pond on, Lightcal repaints the koi about
-  32 times a second, and checks once a second while it is open but unseen.
+  32 times a second, and runs no timer while it is open but unseen.
   [Validation](../validation.md) records 0 CPU with the pond on and the popup
   hidden; the cost while the popup is open is not measured yet.
 - Headless snapshots pin the pond clock, so `calendar-koi-*.png` are

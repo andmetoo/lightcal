@@ -308,8 +308,8 @@ mod tests {
 pub struct WindowView {
     /// Shown and not minimized.
     pub on_screen: bool,
-    /// On screen, not cloaked on another virtual desktop, not under the lock screen and not
-    /// completely covered by other windows.
+    /// On screen with the display on, not cloaked on another virtual desktop, not under the
+    /// lock screen and not completely covered by opaque windows.
     pub seen: bool,
     /// Windows Settings › Accessibility › Visual effects › Animation effects.
     pub animation_effects: bool,
@@ -335,4 +335,19 @@ pub fn main_window_view() -> WindowView {
             animation_effects: true,
         }
     }
+}
+
+/// Calls `on_change` when another app's window changes in a way that can uncover this one
+/// (foreground, move or resize, minimize or restore). Does nothing off Windows.
+pub fn watch_window_changes(on_change: impl Fn() + 'static) {
+    #[cfg(windows)]
+    windows::watch_window_changes(on_change);
+    #[cfg(not(windows))]
+    drop(on_change);
+}
+
+/// Stops `watch_window_changes`.
+pub fn stop_watching_window_changes() {
+    #[cfg(windows)]
+    windows::stop_watching_window_changes();
 }

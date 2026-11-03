@@ -408,25 +408,27 @@ const KOI_CLOCK_WRAP_SECS: f64 = 960.0;
 /// 31.25 ms (32 frames a second) is two ticks of Windows' default 15.625 ms timer, so
 /// frames stay evenly spaced even where the timer wait is not high resolution.
 const KOI_FRAME: std::time::Duration = std::time::Duration::from_micros(31_250);
-/// While the popup is on screen but unseen or still, a check a second notices when the
-/// koi may swim again (a covering window moved, the session unlocked).
-const KOI_WATCH: std::time::Duration = std::time::Duration::from_secs(1);
+/// While the koi swim, the window is checked again every 16th frame (twice a second):
+/// visibility changes slowly and each check costs a dozen system calls.
+const KOI_CHECK_EVERY: u32 = 16;
 
 thread_local! {
     static KOI_TIMER: slint::Timer = slint::Timer::default();
     static KOI_EPOCH: std::time::Instant = std::time::Instant::now();
-    /// Reads the native window; tests replace it with a fake.
-    static KOI_VIEW: std::cell::Cell<fn() -> lightcal::platform::WindowView> =
-        std::cell::Cell::new(lightcal::platform::main_window_view);
+    static KOI_FRAMES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    /// Whether other apps' window changes are being watched for the koi.
+    static KOI_WATCHING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// What the koi clock does next.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KoiPace {
-    /// Pond off, settings open, or the popup hidden or minimized: no timer at all.
+    /// Pond off, settings open, or the popup hidden or minimized: nothing runs. Showing,
+    /// restoring or closing settings wakes the koi.
     Off,
-    /// On screen but not seen (covered, cloaked, locked) or Animation effects off: the koi
-    /// hold still and a slow check waits for that to change.
+    /// On screen but unseen (display off, locked, cloaked, covered) or Animation effects
+    /// off: the koi hold still with no timer. Window, session, display and setting changes
+    /// wake them.
     Watch,
     Swim,
 }
@@ -447,34 +449,65 @@ fn set_koi_clock_now(ui: &AppWindow) {
     ui.set_koi_clock((secs % KOI_CLOCK_WRAP_SECS) as f32);
 }
 
-/// Sets the koi clock's pace from the window as it is now. Off stops the timer, so a hidden
-/// Lightcal never wakes for the koi; Watch checks once a second; Swim advances the pond
-/// every frame. Showing, restoring or activating the popup, closing settings and an
-/// Animation effects change call this; the timer calls it on every tick.
+/// Re-checks the koi against the native window as it is now.
 fn wake_koi(ui: &AppWindow) {
-    let view = KOI_VIEW.with(|probe| probe.get()());
+    wake_koi_with(ui, lightcal::platform::main_window_view());
+}
+
+/// Sets the koi from this window view: Swim runs the frame timer, Watch stops it and
+/// listens for other windows changing, Off stops both.
+fn wake_koi_with(ui: &AppWindow, view: lightcal::platform::WindowView) {
     let pace = koi_pace(ui.get_show_koi(), ui.get_settings_open(), view);
-    let interval = match pace {
-        KoiPace::Off => {
-            KOI_TIMER.with(|timer| timer.stop());
-            return;
-        }
-        KoiPace::Watch => KOI_WATCH,
-        KoiPace::Swim => {
-            // Also before the first frame, so it never shows the pose the koi stopped in.
-            set_koi_clock_now(ui);
-            KOI_FRAME
-        }
-    };
+    watch_koi_window_changes(ui, pace == KoiPace::Watch);
+    if pace != KoiPace::Swim {
+        KOI_TIMER.with(|timer| timer.stop());
+        return;
+    }
+    // Also before the first frame, so it never shows the pose the koi stopped in.
+    set_koi_clock_now(ui);
     KOI_TIMER.with(|timer| {
         if timer.running() {
-            if timer.interval() != interval {
-                timer.set_interval(interval);
-            }
             return;
         }
+        KOI_FRAMES.with(|frames| frames.set(0));
         let ui_weak = ui.as_weak();
-        timer.start(slint::TimerMode::Repeated, interval, move || {
+        timer.start(slint::TimerMode::Repeated, KOI_FRAME, move || {
+            if let Some(ui) = ui_weak.upgrade() {
+                koi_frame(&ui);
+            }
+        });
+    });
+}
+
+/// One koi frame: advance the clock, and every `KOI_CHECK_EVERY` frames check the window.
+fn koi_frame(ui: &AppWindow) {
+    let frame = KOI_FRAMES.with(|frames| {
+        let next = frames.get().wrapping_add(1);
+        frames.set(next);
+        next
+    });
+    if frame.is_multiple_of(KOI_CHECK_EVERY) || !ui.get_show_koi() || ui.get_settings_open() {
+        wake_koi(ui);
+    } else {
+        set_koi_clock_now(ui);
+    }
+}
+
+/// Starts or stops listening for other apps' windows changing, which is how covered koi
+/// learn that they may swim again.
+fn watch_koi_window_changes(ui: &AppWindow, watch: bool) {
+    if KOI_WATCHING.with(|watching| watching.replace(watch)) == watch {
+        return;
+    }
+    if !watch {
+        lightcal::platform::stop_watching_window_changes();
+        return;
+    }
+    let ui_weak = ui.as_weak();
+    lightcal::platform::watch_window_changes(move || {
+        // Deferred out of the event callback, which may stop this watch.
+        let ui_weak = ui_weak.clone();
+        slint::Timer::single_shot(std::time::Duration::ZERO, move || {
             if let Some(ui) = ui_weak.upgrade() {
                 wake_koi(&ui);
             }
@@ -1769,8 +1802,8 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                 },
             )
             .inspect(|hooks| {
-                // Activation and animation-setting changes restart the koi clock. Deferred
-                // out of the window procedure, so the foreground check sees the new state.
+                // Activation, setting, session and display changes re-check the koi, deferred
+                // out of the window procedure so the check sees the new state.
                 hooks.set_on_wake(move || {
                     let ui_weak = wake_ui.clone();
                     slint::Timer::single_shot(std::time::Duration::ZERO, move || {
@@ -1779,6 +1812,7 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                         }
                     });
                 });
+                hooks.subscribe_session_and_display();
             })
         }
     };
