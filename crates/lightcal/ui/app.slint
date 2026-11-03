@@ -16,8 +16,6 @@ export component AppWindow inherits Window {
     title: "Lightcal";
     no-frame: true;
     default-font-family: Theme.font-family;
-    in property <image> window-icon;
-    icon: root.window-icon;
     // Aliases Theme.dark so every module reads the active palette.
     in-out property <bool> dark-mode <=> Theme.dark;
     in property <bool> settings-open: false;

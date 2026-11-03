@@ -5,7 +5,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     Graphics::{Dwm::*, Gdi::*},
-    System::Diagnostics::Debug::OutputDebugStringW,
+    System::{Diagnostics::Debug::OutputDebugStringW, Threading::GetCurrentThreadId},
     UI::{Shell::*, WindowsAndMessaging::*},
 };
 
@@ -38,6 +38,9 @@ struct HookState {
     /// Runs when the window becomes active, a system setting changes, the session locks or
     /// unlocks, or the display turns off or on; see `WindowHooks::set_on_wake`.
     on_wake: RefCell<Option<Box<dyn Fn()>>>,
+    /// Runs when the DPI, the display or a system setting (such as the taskbar's place)
+    /// changes; see `WindowHooks::set_on_display_change`.
+    on_display_change: RefCell<Option<Box<dyn Fn()>>>,
     /// Session and display notifications, registered by `subscribe_session_and_display`.
     session_registered: Cell<bool>,
     display_notify: Cell<windows_sys::Win32::System::Power::HPOWERNOTIFY>,
@@ -92,6 +95,7 @@ impl WindowHooks {
             minimized: Cell::new(unsafe { IsIconic(hwnd) } != 0),
             on_restore: Box::new(on_restore),
             on_wake: RefCell::new(None),
+            on_display_change: RefCell::new(None),
             session_registered: Cell::new(false),
             display_notify: Cell::new(0),
             attached: Cell::new(false),
@@ -128,6 +132,12 @@ impl WindowHooks {
     /// procedure, like `on_restore`.
     pub fn set_on_wake(&self, on_wake: impl Fn() + 'static) {
         *self.state.on_wake.borrow_mut() = Some(Box::new(on_wake));
+    }
+
+    /// Sets the callback for a DPI, display or system setting change, which can change the
+    /// shell's icon sizes. It runs inside the window procedure, like `on_restore`.
+    pub fn set_on_display_change(&self, on_display_change: impl Fn() + 'static) {
+        *self.state.on_display_change.borrow_mut() = Some(Box::new(on_display_change));
     }
 
     /// Asks Windows for session lock and unlock and display on and off notifications to this
@@ -230,6 +240,13 @@ impl WindowHookSlot {
         }
     }
 
+    /// Whether hooks are attached to a live window, which then reports display changes.
+    pub fn is_attached(&self) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|hooks| hooks.state.attached.get())
+    }
+
     pub fn invalidate_preview(&self) {
         if let Some(hooks) = &self.0 {
             hooks.invalidate_preview();
@@ -241,6 +258,218 @@ impl Default for WindowHookSlot {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The icon Alt+Tab and an unpinned taskbar button show for the application window. A
+/// pinned button draws its shortcut's static icon instead and ignores this one (ADR 0010).
+/// Slint 1.18.1's winit backend forwards a window icon only when the image's cache key
+/// changes, and pixel-buffer images have none, so a rendered icon never reaches Windows
+/// that way. The `slint_still_needs_the_native_window_icon` test (main.rs) fails on any
+/// Slint update, so this is checked again before Slint can start setting a second icon.
+///
+/// `K` describes what the pixels are drawn from; the icon is rebuilt only when it changes.
+pub struct WindowIcon<K> {
+    /// The inputs `icons` were built from.
+    key: Option<K>,
+    icons: Option<IconPair>,
+    /// The inputs of the last failed build and when it failed, so a failure is retried
+    /// after `RETRY_AFTER` rather than on every update.
+    failed: Option<(K, std::time::Instant)>,
+    /// Windows given `icons`; each one still showing them is moved to rebuilt icons before
+    /// the old handles are destroyed, so none keeps drawing a dead icon.
+    windows: Vec<HWND>,
+}
+
+/// Square straight-alpha RGBA pixels for one icon size.
+pub struct IconPixels {
+    pub rgba: Vec<u8>,
+    pub size: u32,
+}
+
+/// The window's big icon and a small one rendered at the shell's small-icon size, so
+/// wherever Windows draws the small icon it does not shrink the large raster and blur its
+/// numerals. Which of the two each shell surface uses is Windows' choice.
+struct IconPair {
+    big: HICON,
+    small: HICON,
+}
+
+impl IconPair {
+    unsafe fn new(big: &IconPixels, small: &IconPixels) -> Option<Self> {
+        let big = create_icon(&big.rgba, big.size)?;
+        match create_icon(&small.rgba, small.size) {
+            Some(small) => Some(Self { big, small }),
+            None => {
+                DestroyIcon(big);
+                None
+            }
+        }
+    }
+
+    unsafe fn show_on(&self, hwnd: HWND) {
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG as WPARAM, self.big as LPARAM);
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL as WPARAM, self.small as LPARAM);
+    }
+}
+
+impl Drop for IconPair {
+    fn drop(&mut self) {
+        unsafe {
+            DestroyIcon(self.big);
+            DestroyIcon(self.small);
+        }
+    }
+}
+
+const RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
+
+impl<K: PartialEq> WindowIcon<K> {
+    pub const fn new() -> Self {
+        Self {
+            key: None,
+            icons: None,
+            failed: None,
+            windows: Vec::new(),
+        }
+    }
+
+    /// Rebuilds the icons from `render` (big, small) when `key` differs from the last
+    /// one, then shows them on `hwnd`.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` must be null or a live window owned by this thread.
+    pub unsafe fn update(
+        &mut self,
+        hwnd: HWND,
+        key: K,
+        render: impl FnOnce() -> (IconPixels, IconPixels),
+    ) {
+        let retry_due = match &self.failed {
+            Some((failed, at)) => *failed != key || at.elapsed() >= RETRY_AFTER,
+            None => true,
+        };
+        if self.key.as_ref() != Some(&key) && retry_due {
+            let (big, small) = render();
+            match IconPair::new(&big, &small) {
+                Some(icons) => {
+                    self.key = Some(key);
+                    self.failed = None;
+                    if let Some(old) = self.icons.take() {
+                        self.forget_windows_not_showing(old.big);
+                        for &window in &self.windows {
+                            icons.show_on(window);
+                        }
+                        // `old` is destroyed here, once no window shows it.
+                    }
+                    self.icons = Some(icons);
+                }
+                None => self.failed = Some((key, std::time::Instant::now())),
+            }
+        }
+        self.attach(hwnd);
+    }
+
+    /// Shows the current icons on `hwnd` unless that window already shows them. Asking
+    /// the window, not comparing handles, also covers a new window that reuses an old
+    /// handle.
+    ///
+    /// # Safety
+    ///
+    /// As for [`WindowIcon::update`].
+    pub unsafe fn attach(&mut self, hwnd: HWND) {
+        let Some(icons) = &self.icons else {
+            return;
+        };
+        if hwnd.is_null() {
+            return;
+        }
+        if shown_icon(hwnd) != icons.big {
+            icons.show_on(hwnd);
+        }
+        let thread = GetCurrentThreadId();
+        self.windows
+            .retain(|&window| window != hwnd && owned_by(window, thread));
+        self.windows.push(hwnd);
+    }
+
+    /// Keeps only remembered windows that still show `icon`. A handle no longer owned by
+    /// this thread (closed, or reused by another window) is dropped before any message
+    /// is sent, so a hung window elsewhere can never block this thread.
+    fn forget_windows_not_showing(&mut self, icon: HICON) {
+        let thread = unsafe { GetCurrentThreadId() };
+        self.windows
+            .retain(|&window| owned_by(window, thread) && unsafe { shown_icon(window) } == icon);
+    }
+}
+
+impl<K: PartialEq> Default for WindowIcon<K> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K> Drop for WindowIcon<K> {
+    fn drop(&mut self) {
+        let Some(icons) = &self.icons else {
+            return;
+        };
+        // Windows still alive go back to no icon rather than keep destroyed handles.
+        let thread = unsafe { GetCurrentThreadId() };
+        for &window in &self.windows {
+            if owned_by(window, thread) && unsafe { shown_icon(window) } == icons.big {
+                unsafe {
+                    SendMessageW(window, WM_SETICON, ICON_BIG as WPARAM, 0);
+                    SendMessageW(window, WM_SETICON, ICON_SMALL as WPARAM, 0);
+                }
+            }
+        }
+    }
+}
+
+fn owned_by(hwnd: HWND, thread: u32) -> bool {
+    unsafe { GetWindowThreadProcessId(hwnd, std::ptr::null_mut()) == thread }
+}
+
+unsafe fn shown_icon(hwnd: HWND) -> HICON {
+    SendMessageW(hwnd, WM_GETICON, ICON_BIG as WPARAM, 0) as HICON
+}
+
+/// Builds a 32-bit icon with per-pixel alpha from straight-alpha RGBA.
+unsafe fn create_icon(rgba: &[u8], size: u32) -> Option<HICON> {
+    if size == 0 || rgba.len() != (size * size * 4) as usize {
+        return None;
+    }
+    let bgra: Vec<u8> = rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|&[r, g, b, a]| [b, g, r, a])
+        .collect();
+    let color = Bitmap::from_bgra(size, size, &bgra)?;
+    // An all-zero mask: the color bitmap's alpha decides transparency. Monochrome rows
+    // are padded to 16 bits.
+    let mask_bits = vec![0u8; size.div_ceil(16) as usize * 2 * size as usize];
+    let mask = Bitmap(CreateBitmap(
+        size as i32,
+        size as i32,
+        1,
+        1,
+        mask_bits.as_ptr().cast(),
+    ));
+    if mask.0.is_null() {
+        return None;
+    }
+    let info = ICONINFO {
+        fIcon: 1,
+        xHotspot: 0,
+        yHotspot: 0,
+        hbmMask: mask.0,
+        hbmColor: color.0,
+    };
+    // The icon keeps its own copies of both bitmaps.
+    let icon = CreateIconIndirect(&info);
+    (!icon.is_null()).then_some(icon)
 }
 
 /// Tracks the minimized state from a `WM_SIZE` kind and reports a restore from it.
@@ -283,6 +512,13 @@ unsafe extern "system" fn hook_proc(
     data: usize,
 ) -> LRESULT {
     let state = &*(data as *const HookState);
+    if changes_display(message) {
+        if let Ok(callback) = state.on_display_change.try_borrow() {
+            if let Some(callback) = callback.as_ref() {
+                guarded("display change", callback);
+            }
+        }
+    }
     match message {
         WM_NCDESTROY => {
             RemoveWindowSubclass(hwnd, Some(hook_proc), SUBCLASS_ID);
@@ -320,6 +556,12 @@ fn wakes(message: u32, wp: WPARAM) -> bool {
         WM_SETTINGCHANGE | WM_WTSSESSION_CHANGE => true,
         _ => false,
     }
+}
+
+/// A DPI or display change, or a system setting change such as the taskbar moving to
+/// another monitor, any of which can change the shell's icon sizes.
+fn changes_display(message: u32) -> bool {
+    matches!(message, WM_DPICHANGED | WM_DISPLAYCHANGE | WM_SETTINGCHANGE)
 }
 
 /// The console display state from a `PBT_POWERSETTINGCHANGE` broadcast: `Some(false)` when
@@ -410,6 +652,12 @@ impl Bitmap {
         max_h: u32,
     ) -> Option<Self> {
         let (w, h, pixels) = preview_pixels(image, max_w, max_h)?;
+        Self::from_bgra(w, h, &pixels)
+    }
+
+    /// A top-down 32-bit DIB section holding `bgra`, which must be `w` × `h` pixels.
+    unsafe fn from_bgra(w: u32, h: u32, bgra: &[u8]) -> Option<Self> {
+        debug_assert_eq!(bgra.len(), (w * h * 4) as usize);
         let mut info: BITMAPINFO = std::mem::zeroed();
         info.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
         info.bmiHeader.biWidth = w as i32;
@@ -429,7 +677,7 @@ impl Bitmap {
         if bitmap.is_null() {
             return None;
         }
-        std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits as *mut u8, pixels.len());
+        std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits as *mut u8, bgra.len());
         Some(Self(bitmap))
     }
 }
@@ -470,6 +718,124 @@ mod tests {
             &[50, 40, 240, 255]
         );
     }
+
+    /// The size and first pixel (BGRA) of the color bitmap behind `icon`.
+    fn icon_size_and_first_pixel(icon: HICON) -> (i32, [u8; 4]) {
+        unsafe {
+            let mut info: ICONINFO = std::mem::zeroed();
+            assert_ne!(GetIconInfo(icon, &mut info), 0);
+            let mut bitmap: BITMAP = std::mem::zeroed();
+            GetObjectW(
+                info.hbmColor,
+                std::mem::size_of::<BITMAP>() as i32,
+                &mut bitmap as *mut _ as _,
+            );
+            assert_eq!(bitmap.bmBitsPixel, 32);
+            let size = bitmap.bmWidth;
+            let mut header: BITMAPINFO = std::mem::zeroed();
+            header.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+            header.bmiHeader.biWidth = size;
+            header.bmiHeader.biHeight = -size;
+            header.bmiHeader.biPlanes = 1;
+            header.bmiHeader.biBitCount = 32;
+            header.bmiHeader.biCompression = BI_RGB;
+            let mut pixels = vec![0u8; (size * size * 4) as usize];
+            let dc = GetDC(std::ptr::null_mut());
+            let rows = GetDIBits(
+                dc,
+                info.hbmColor,
+                0,
+                size as u32,
+                pixels.as_mut_ptr().cast(),
+                &mut header,
+                DIB_RGB_COLORS,
+            );
+            ReleaseDC(std::ptr::null_mut(), dc);
+            DeleteObject(info.hbmColor);
+            DeleteObject(info.hbmMask);
+            assert_eq!(rows, size);
+            (size, [pixels[0], pixels[1], pixels[2], pixels[3]])
+        }
+    }
+
+    fn solid(rgba: [u8; 4], size: u32) -> IconPixels {
+        IconPixels {
+            rgba: rgba.repeat((size * size) as usize),
+            size,
+        }
+    }
+
+    #[test]
+    fn window_icon_follows_new_pixels_and_new_windows() {
+        let first = crate::platform::windows::test_window::TestWindow::new("Lightcal icon test");
+        let second = crate::platform::windows::test_window::TestWindow::new("Lightcal icon test");
+        let icon_of = |hwnd: HWND, kind: u32| unsafe {
+            SendMessageW(hwnd, WM_GETICON, kind as WPARAM, 0) as HICON
+        };
+        const TEAL: [u8; 4] = [20, 160, 150, 255];
+        const CORAL: [u8; 4] = [200, 40, 50, 255];
+        let mut icon = WindowIcon::new();
+        unsafe { icon.update(first.0, 1, || (solid(TEAL, 64), solid(TEAL, 24))) };
+        let shown = icon_of(first.0, ICON_BIG);
+        assert!(!shown.is_null());
+        assert_eq!(icon_size_and_first_pixel(shown), (64, [150, 160, 20, 255]));
+        // The small icon is its own raster at the small size, not the big one shrunk.
+        assert_eq!(
+            icon_size_and_first_pixel(icon_of(first.0, ICON_SMALL)),
+            (24, [150, 160, 20, 255])
+        );
+
+        // The same key neither renders nor sends again.
+        unsafe { icon.update(first.0, 1, || unreachable!()) };
+        assert_eq!(icon_of(first.0, ICON_BIG), shown);
+
+        // A new window shares the icons, so the first window's handles stay alive.
+        unsafe { icon.attach(second.0) };
+        assert_eq!(icon_of(second.0, ICON_BIG), shown);
+        assert_eq!(icon_size_and_first_pixel(icon_of(first.0, ICON_BIG)).0, 64);
+
+        // New pixels reach both windows, so neither keeps the destroyed old handles.
+        unsafe { icon.update(second.0, 2, || (solid(CORAL, 64), solid(CORAL, 24))) };
+        let coral = icon_of(second.0, ICON_BIG);
+        assert_ne!(coral, shown);
+        assert_eq!(icon_size_and_first_pixel(coral), (64, [50, 40, 200, 255]));
+        assert_eq!(icon_of(first.0, ICON_BIG), coral);
+
+        // A window that lost its icon (as a recreated window reusing a handle would) gets
+        // it back even though the handle is the one remembered.
+        unsafe {
+            SendMessageW(second.0, WM_SETICON, ICON_BIG as WPARAM, 0);
+            icon.attach(second.0);
+        }
+        assert_eq!(icon_of(second.0, ICON_BIG), coral);
+        assert_eq!(unsafe { create_icon(&solid(TEAL, 64).rgba, 32) }, None);
+
+        // A failed build keeps the last icon, is not retried at once for the same key,
+        // and does not block a build for new inputs.
+        let broken = || {
+            (
+                solid(TEAL, 64),
+                IconPixels {
+                    rgba: Vec::new(),
+                    size: 24,
+                },
+            )
+        };
+        unsafe { icon.update(second.0, 3, broken) };
+        assert_eq!(icon_of(second.0, ICON_BIG), coral);
+        unsafe { icon.update(second.0, 3, || unreachable!()) };
+        unsafe { icon.update(second.0, 4, || (solid(TEAL, 64), solid(TEAL, 24))) };
+        assert_eq!(
+            icon_size_and_first_pixel(icon_of(second.0, ICON_BIG)).1,
+            [150, 160, 20, 255]
+        );
+
+        // Dropping clears the icons from windows rather than leave destroyed handles.
+        drop(icon);
+        assert!(icon_of(first.0, ICON_BIG).is_null());
+        assert!(icon_of(second.0, ICON_SMALL).is_null());
+    }
+
     #[test]
     fn preview_fits_dwm_bounds_and_uses_premultiplied_bgra() {
         let image = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
@@ -526,6 +892,22 @@ mod tests {
         assert!(wakes(WM_SETTINGCHANGE, 0));
         assert!(wakes(WM_WTSSESSION_CHANGE, 7)); // WTS_SESSION_LOCK
         assert!(!wakes(WM_SIZE, 1));
+    }
+    #[test]
+    fn dpi_display_and_setting_changes_report_a_display_change() {
+        let window = crate::platform::windows::test_window::TestWindow::new("Lightcal dpi test");
+        let changes = std::rc::Rc::new(Cell::new(0));
+        let counter = changes.clone();
+        let hooks = unsafe { WindowHooks::install(window.0, || {}, || None) }.unwrap();
+        hooks.set_on_display_change(move || counter.set(counter.get() + 1));
+        for message in [WM_DPICHANGED, WM_DISPLAYCHANGE, WM_SETTINGCHANGE] {
+            // A null RECT makes WM_DPICHANGED's default handling a no-op for the test window.
+            unsafe { SendMessageW(window.0, message, 0, 0) };
+        }
+        assert_eq!(changes.get(), 3);
+        unsafe { SendMessageW(window.0, WM_SIZE, 0, 0) };
+        assert_eq!(changes.get(), 3);
+        assert!(!changes_display(WM_ACTIVATE));
     }
     #[test]
     fn hooks_report_native_restores_from_minimized() {
@@ -691,6 +1073,7 @@ mod tests {
         let mut slot = WindowHookSlot::new();
         unsafe { slot.ensure(std::ptr::null_mut(), install) };
         assert_eq!(installs.get(), 0);
+        assert!(!slot.is_attached());
 
         let first = crate::platform::windows::test_window::TestWindow::new("Lightcal slot test");
         // Repeated shows of the same window keep its hooks and only re-request previews.
@@ -699,12 +1082,17 @@ mod tests {
             slot.ensure(first.0, install);
         }
         assert_eq!(installs.get(), 1);
+        assert!(slot.is_attached());
         assert!(slot.0.as_ref().unwrap().state.previews_requested.get());
         slot.invalidate_preview();
 
         // A destroyed window, even if Windows reuses its handle, gets fresh hooks.
         let first_hwnd = first.0;
         drop(first);
+        assert!(
+            !slot.is_attached(),
+            "a destroyed window reports no display changes"
+        );
         let second = crate::platform::windows::test_window::TestWindow::new("Lightcal slot test");
         unsafe { slot.ensure(second.0, install) };
         assert_eq!(installs.get(), 2);

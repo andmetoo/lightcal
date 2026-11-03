@@ -60,9 +60,8 @@ pub(crate) mod test_window {
 }
 
 pub use icon::{
-    encode_ico_from_pngs, generate_multi_size_ico, render_native_tray_icon,
-    render_squircle_icon_generic, render_squircle_icon_rgba_64, render_tray_icon_rgba,
-    render_tray_icon_variant_rgba,
+    encode_ico_from_pngs, generate_multi_size_ico, render_squircle_icon_generic,
+    render_squircle_icon_rgba_64, render_tray_icon_rgba, render_tray_icon_variant_rgba,
 };
 pub use provider::{
     load_provider_snapshot_async, query_calendar_provider, query_windows_calendar_store,

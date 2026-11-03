@@ -7,11 +7,13 @@ use lightcal::i18n::{
     format_event_count, format_month_year, format_sync_status, format_update_status, weekday_short,
 };
 #[cfg(windows)]
-use lightcal::platform::windows::render_native_tray_icon;
+use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
 use lightcal::platform::windows::{
     bring_to_foreground, primary_work_area, query_calendar_provider, render_squircle_icon_rgba_64,
     system_prefers_dark_mode, ShortcutManager, SingleInstance, StartupManager,
 };
+#[cfg(windows)]
+use lightcal::platform::windows::{icon::native_small_icon_size, render_squircle_icon_generic};
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
     DateSize, LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
@@ -706,16 +708,8 @@ impl AppController {
                 ui.set_colored_icon_preview(image);
             }
         }
-        let rgba64 = render_squircle_icon_rgba_64(
-            self.prefs.tray_icon_mode,
-            self.prefs.tray_icon_monochrome,
-            self.cal_state.today.day,
-            self.cal_state.today.weekday(),
-            (now.hour() as u8, now.minute() as u8),
-            lightcal::platform::windows::icon::taskbar_prefers_dark_mode(dark_mode),
-        );
-        let pixel_buf = SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(&rgba64, 64, 64);
-        ui.set_window_icon(Image::from_rgba8(pixel_buf));
+        #[cfg(windows)]
+        self.sync_icons(now);
 
         let grid = self.cal_state.build_grid(
             &self.provider.occurrences,
@@ -1296,18 +1290,6 @@ impl AppController {
 
         #[cfg(windows)]
         if let Some(tray) = &self.tray_icon {
-            let now = chrono::Local::now();
-            let (rgba, icon_size) = render_native_tray_icon(
-                self.prefs.tray_icon_mode,
-                self.prefs.tray_icon_monochrome,
-                self.cal_state.today.day,
-                self.cal_state.today.weekday(),
-                (now.hour() as u8, now.minute() as u8),
-                dark_mode,
-            );
-            if let Ok(icon) = tray_icon::Icon::from_rgba(rgba, icon_size, icon_size) {
-                let _ = tray.set_icon(Some(icon));
-            }
             let tip = format!(
                 "Lightcal · {}",
                 format_date_line(locale, self.cal_state.today, true)
@@ -1319,6 +1301,48 @@ impl AppController {
 
         #[cfg(windows)]
         invalidate_taskbar_preview();
+    }
+
+    /// Redraws the tray icon and the window icon (Alt+Tab and an unpinned taskbar button)
+    /// from the current date, time, preferences and shell theme and icon size. A UI sync
+    /// calls it,
+    /// and so does a DPI, display or system setting change (`ensure_window_hooks`).
+    /// The tray icon is handed to Explorer only when its inputs changed, so a setting
+    /// broadcast or a UI sync that changes nothing does not make it flicker.
+    /// Inputs are recorded only once the tray took them, so a failed update (Explorer
+    /// restarting, say) is retried on the next sync. `now` is the caller's clock reading,
+    /// so the icons and the live time text agree.
+    #[cfg(windows)]
+    fn sync_icons(&self, now: chrono::DateTime<chrono::Local>) {
+        let inputs = self.icon_inputs(now);
+        let shown = sync_tray(
+            SYNCED_ICONS.with(|synced| synced.get()),
+            inputs,
+            || match &self.tray_icon {
+                Some(tray) => {
+                    tray_icon_image(inputs).is_some_and(|icon| tray.set_icon(Some(icon)).is_ok())
+                }
+                None => true,
+            },
+        );
+        SYNCED_ICONS.with(|synced| synced.set(shown));
+        set_native_window_icon(inputs);
+    }
+
+    /// What the tray and window icons show at `now`. The shell theme is read once here,
+    /// so both icons always use the same ink.
+    #[cfg(windows)]
+    fn icon_inputs(&self, now: chrono::DateTime<chrono::Local>) -> IconInputs {
+        IconInputs::new(
+            self.prefs.tray_icon_mode,
+            self.prefs.tray_icon_monochrome,
+            self.cal_state.today.day,
+            self.cal_state.today.weekday(),
+            (now.hour() as u8, now.minute() as u8),
+            lightcal::platform::windows::icon::taskbar_prefers_dark_mode(resolve_dark_mode(
+                self.prefs.theme,
+            )),
+        )
     }
 
     /// Settings › Calendar › Date size. The window resizes when Settings closes.
@@ -1812,12 +1836,22 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                         }
                     });
                 });
+                // The tray and window icons follow the shell's icon size and theme, redrawn
+                // after the change is complete, like the koi.
+                hooks.set_on_display_change(|| {
+                    slint::Timer::single_shot(std::time::Duration::ZERO, || {
+                        lightcal::platform::windows::icon::forget_small_icon_size();
+                        sync_icons_if_idle();
+                    });
+                });
                 hooks.subscribe_session_and_display();
             })
         }
     };
     // SAFETY: as above; `ensure` ignores a null handle.
     WINDOW_HOOKS.with(|slot| unsafe { slot.borrow_mut().ensure(hwnd, install) });
+    // SAFETY: as above; `attach` ignores a null handle.
+    WINDOW_ICON.with(|icon| unsafe { icon.borrow_mut().attach(hwnd) });
 }
 
 /// Makes the next frame repaint and present every pixel, not only the dirty regions.
@@ -1863,6 +1897,109 @@ fn apply_window_chrome(ui: &AppWindow) {
     }
     #[cfg(not(windows))]
     let _ = ui;
+}
+
+/// What the tray and window icons are drawn from. A mode keeps only the inputs it draws,
+/// so the date icon is not rebuilt each minute.
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct IconInputs {
+    mode: TrayIconMode,
+    monochrome: bool,
+    day: u8,
+    weekday: Option<Weekday>,
+    hour_min: Option<(u8, u8)>,
+    dark_taskbar: bool,
+    /// The shell's small-icon size, which follows the taskbar's DPI: the tray icon and the
+    /// window's small icon.
+    small_size: u32,
+}
+
+#[cfg(windows)]
+impl IconInputs {
+    fn new(
+        mode: TrayIconMode,
+        monochrome: bool,
+        day: u8,
+        weekday: Weekday,
+        hour_min: (u8, u8),
+        dark_taskbar: bool,
+    ) -> Self {
+        Self {
+            mode,
+            monochrome,
+            day,
+            weekday: (mode == TrayIconMode::WeekdayAndDate).then_some(weekday),
+            hour_min: (mode == TrayIconMode::TimeAndDate).then_some(hour_min),
+            dark_taskbar,
+            small_size: native_small_icon_size(),
+        }
+    }
+
+    fn render(&self, size: u32) -> IconPixels {
+        IconPixels {
+            rgba: render_squircle_icon_generic(
+                size as usize,
+                self.mode,
+                self.monochrome,
+                self.day,
+                self.weekday.unwrap_or(Weekday::Monday),
+                self.hour_min.unwrap_or((0, 0)),
+                self.dark_taskbar,
+            ),
+            size,
+        }
+    }
+}
+
+/// Shows the rendered icon in Alt+Tab and on an unpinned taskbar button; see `WindowIcon`.
+/// The icon is rendered again only when one of its inputs changes.
+#[cfg(windows)]
+fn set_native_window_icon(inputs: IconInputs) {
+    let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+    // SAFETY: `find_lightcal_hwnd` returns null or this thread's live application window.
+    WINDOW_ICON.with(|icon| unsafe {
+        icon.borrow_mut().update(hwnd, inputs, || {
+            (inputs.render(64), inputs.render(inputs.small_size))
+        })
+    });
+}
+
+/// What the tray shows after offering it `inputs` while it shows `shown`: `send` runs
+/// only when they differ, and the new inputs are recorded only if it succeeds, so a failed
+/// update is retried on the next sync.
+#[cfg(windows)]
+fn sync_tray(
+    shown: Option<IconInputs>,
+    inputs: IconInputs,
+    send: impl FnOnce() -> bool,
+) -> Option<IconInputs> {
+    if shown == Some(inputs) || send() {
+        Some(inputs)
+    } else {
+        shown
+    }
+}
+
+/// The tray image for `inputs`, drawn at the shell's exact small-icon size so Windows does
+/// not resample it and blur the numerals (ADR 0010).
+#[cfg(windows)]
+fn tray_icon_image(inputs: IconInputs) -> Option<tray_icon::Icon> {
+    let small = inputs.render(inputs.small_size);
+    tray_icon::Icon::from_rgba(small.rgba, small.size, small.size).ok()
+}
+
+/// Redraws the icons unless the controller is borrowed, as it is while a controller
+/// callback runs a nested message loop (a menu or dialog) in which this timer can fire.
+/// A skipped refresh is caught up by the next UI sync.
+#[cfg(windows)]
+fn sync_icons_if_idle() {
+    let ctrl = ACTIVE_CONTROLLER.with(|active| active.borrow().as_ref().and_then(|c| c.upgrade()));
+    if let Some(ctrl) = ctrl {
+        if let Ok(ctrl) = ctrl.try_borrow() {
+            ctrl.sync_icons(chrono::Local::now());
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -1950,6 +2087,11 @@ impl TrayMenuItems {
 thread_local! {
     #[cfg(windows)]
     static WINDOW_HOOKS: RefCell<lightcal::platform::windows::taskbar::WindowHookSlot> = const { RefCell::new(lightcal::platform::windows::taskbar::WindowHookSlot::new()) };
+    #[cfg(windows)]
+    static WINDOW_ICON: RefCell<WindowIcon<IconInputs>> = const { RefCell::new(WindowIcon::new()) };
+    /// What the icons were last synced to; see `AppController::sync_icons`.
+    #[cfg(windows)]
+    static SYNCED_ICONS: std::cell::Cell<Option<IconInputs>> = const { std::cell::Cell::new(None) };
     static ACTIVE_CONTROLLER: std::cell::RefCell<Option<std::rc::Weak<std::cell::RefCell<AppController>>>> = const { std::cell::RefCell::new(None) };
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }
@@ -2780,14 +2922,17 @@ fn main() {
         quit_item_id,
     ) = {
         let now = chrono::Local::now();
-        let dark_mode = resolve_dark_mode(prefs.theme);
-        let (rgba, icon_size) = render_native_tray_icon(
+        // Built like every later update (`AppController::sync_icons`), which then knows the
+        // tray already shows these inputs.
+        let icon_inputs = IconInputs::new(
             prefs.tray_icon_mode,
             prefs.tray_icon_monochrome,
             today.day,
             today.weekday(),
             (now.hour() as u8, now.minute() as u8),
-            dark_mode,
+            lightcal::platform::windows::icon::taskbar_prefers_dark_mode(resolve_dark_mode(
+                prefs.theme,
+            )),
         );
         let menu = muda::Menu::new();
         let labels = lightcal::i18n::tray_menu_copy(prefs.locale());
@@ -2815,18 +2960,19 @@ fn main() {
             "Lightcal · {}",
             format_date_line(prefs.locale(), today, true)
         );
-        let tray = tray_icon::Icon::from_rgba(rgba, icon_size, icon_size)
-            .ok()
-            .and_then(|icon| {
-                tray_icon::TrayIconBuilder::new()
-                    .with_menu(Box::new(menu))
-                    // Left clicks toggle the calendar; only right clicks open this menu.
-                    .with_menu_on_left_click(false)
-                    .with_tooltip(&initial_tip)
-                    .with_icon(icon)
-                    .build()
-                    .ok()
-            });
+        let tray = tray_icon_image(icon_inputs).and_then(|icon| {
+            tray_icon::TrayIconBuilder::new()
+                .with_menu(Box::new(menu))
+                // Left clicks toggle the calendar; only right clicks open this menu.
+                .with_menu_on_left_click(false)
+                .with_tooltip(&initial_tip)
+                .with_icon(icon)
+                .build()
+                .ok()
+        });
+        if tray.is_some() {
+            SYNCED_ICONS.with(|synced| synced.set(Some(icon_inputs)));
+        }
         let items = TrayMenuItems {
             open: open_item.clone(),
             today: today_item.clone(),
@@ -3091,6 +3237,14 @@ fn main() {
 
                 if now.timestamp() / 60 != last_minute {
                     last_minute = now.timestamp() / 60;
+                    // Display changes reach the hooked window while it is on screen, but
+                    // not reliably while it is hidden in the tray (or never shown yet), so
+                    // the icon size is asked again each minute until it is visible.
+                    let reported = WINDOW_HOOKS.with(|slot| slot.borrow().is_attached())
+                        && lightcal::platform::windows::main_window_is_open() == Some(true);
+                    if !reported {
+                        lightcal::platform::windows::icon::forget_small_icon_size();
+                    }
                     refresh_tray = true;
                 }
 
@@ -3909,6 +4063,90 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slint_still_needs_the_native_window_icon() {
+        // Slint 1.18.1's winit backend drops icons built from pixel buffers (see
+        // `WindowIcon`). Any Slint update, a patch release included, may fix that: check
+        // whether `Image::from_rgba8` icons reach the window on their own, and if they do,
+        // remove `WindowIcon` instead of updating the version here.
+        let lock = include_str!("../../../Cargo.lock");
+        let versions: Vec<&str> = lock
+            .split("[[package]]")
+            .filter(|package| {
+                package
+                    .lines()
+                    .any(|line| line.trim() == "name = \"slint\"")
+            })
+            .filter_map(|package| {
+                package
+                    .lines()
+                    .find_map(|line| line.trim().strip_prefix("version = "))
+            })
+            .collect();
+        assert_eq!(
+            versions,
+            ["\"1.18.1\""],
+            "Slint changed: re-check whether WindowIcon is still needed"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn tray_is_sent_only_changed_inputs_and_keeps_them_only_on_success() {
+        let date = |day| {
+            IconInputs::new(
+                TrayIconMode::DateOnly,
+                false,
+                day,
+                Weekday::Monday,
+                (9, 0),
+                true,
+            )
+        };
+        let (third, fourth) = (date(3), date(4));
+        // Unchanged inputs are not sent again.
+        assert_eq!(
+            sync_tray(Some(third), third, || unreachable!()),
+            Some(third)
+        );
+        // Changed inputs are sent and kept when the tray takes them.
+        assert_eq!(sync_tray(Some(third), fourth, || true), Some(fourth));
+        assert_eq!(sync_tray(None, third, || true), Some(third));
+        // A failed send keeps what the tray still shows, so the next sync tries again.
+        assert_eq!(sync_tray(Some(third), fourth, || false), Some(third));
+        assert_eq!(sync_tray(None, third, || false), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn window_icon_key_changes_only_with_what_the_mode_draws() {
+        let key =
+            |mode, weekday, hour_min| IconInputs::new(mode, false, 3, weekday, hour_min, true);
+        let date = TrayIconMode::DateOnly;
+        assert_eq!(
+            key(date, Weekday::Monday, (9, 0)),
+            key(date, Weekday::Tuesday, (9, 1))
+        );
+        let weekday = TrayIconMode::WeekdayAndDate;
+        assert_eq!(
+            key(weekday, Weekday::Monday, (9, 0)),
+            key(weekday, Weekday::Monday, (9, 1))
+        );
+        assert_ne!(
+            key(weekday, Weekday::Monday, (9, 0)),
+            key(weekday, Weekday::Tuesday, (9, 0))
+        );
+        let time = TrayIconMode::TimeAndDate;
+        assert_ne!(
+            key(time, Weekday::Monday, (9, 0)),
+            key(time, Weekday::Monday, (9, 1))
+        );
+        assert_ne!(
+            key(date, Weekday::Monday, (9, 0)),
+            key(time, Weekday::Monday, (9, 0))
+        );
+    }
 
     #[test]
     fn panicking_calendar_load_becomes_an_error_instead_of_unwinding() {

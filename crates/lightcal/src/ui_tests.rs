@@ -1356,3 +1356,39 @@ fn the_app_reads_the_native_window_for_header_motion() {
     // "Lightcal" window in this process, so it reports off screen.
     assert!(!popup_on_screen());
 }
+
+#[cfg(windows)]
+#[test]
+fn display_change_refresh_follows_preferences_and_skips_a_busy_controller() {
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-icon-refresh-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let ctrl = Rc::new(RefCell::new(controller(&dir)));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = Some(Rc::downgrade(&ctrl)));
+    let synced = || SYNCED_ICONS.with(|synced| synced.get());
+
+    sync_icons_if_idle();
+    let first = synced().expect("an idle controller syncs the icons");
+    assert_eq!(first.mode, ctrl.borrow().prefs.tray_icon_mode);
+    assert_eq!(
+        first.small_size,
+        lightcal::platform::windows::icon::native_small_icon_size()
+    );
+
+    // A busy controller (a callback running a nested message loop) is skipped, not borrowed.
+    {
+        let mut busy = ctrl.borrow_mut();
+        busy.prefs.tray_icon_mode = TrayIconMode::TimeAndDate;
+        sync_icons_if_idle();
+    }
+    assert_eq!(synced(), Some(first));
+
+    // The next refresh catches up with what changed meanwhile.
+    sync_icons_if_idle();
+    assert_eq!(synced().unwrap().mode, TrayIconMode::TimeAndDate);
+    assert!(synced().unwrap().hour_min.is_some());
+
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
+    let _ = std::fs::remove_dir_all(dir);
+}
