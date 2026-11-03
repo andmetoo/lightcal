@@ -36,6 +36,9 @@ export global Theme {
     out property <color> hover: dark ? #2A2A2A : #F0F0F0;
     out property <color> press: dark ? #313131 : #E8E8E8;
     out property <color> selected: dark ? #313131 : #E8E8E8;
+    // Selected day tile: the palette's Selected fill, one clear step above the moving
+    // hover highlight (ADR 0015).
+    out property <color> day-selected: dark ? #3A3A3A : #E0E0E0;
     // Flat shaded-weekday band behind calendar columns.
     out property <color> weekend-band: dark ? #1F1F1F : #F7F7F7;
     // Modal scrim behind in-window dialogs.
@@ -131,4 +134,14 @@ export global Theme {
     public pure function calendar-height(size: CalendarDateSize) -> length {
         240px + 6 * root.week-row-height(size)
     }
+}
+
+// Motion durations (ADR 0016). Rust turns `enabled` off when Windows Animation effects is
+// off, and every transition then applies at once.
+export global Motion {
+    in property <bool> enabled: true;
+    // Colour, label and page fades.
+    out property <duration> fade: root.enabled ? 120ms : 0ms;
+    // Things that move: knobs, corners, opening details.
+    out property <duration> move: root.enabled ? 160ms : 0ms;
 }

@@ -31,7 +31,7 @@ expensive for a one-person project.
 - **Calendar.** One 44 px header row (month, previous, Today, next, settings);
   Today appears only away from today. Six fixed week rows. Weekend columns are a
   flat, barely tinted band. Today is a coral tile with a darker top band; the
-  selected day is a neutral fill; selected today adds a coral ring. Event dots
+  selected day is a neutral fill; selected today adds a coral ring (replaced by an underline in ADR 0016). Event dots
   stay at most three. The agenda shows all-day chips, time ranges, past events
   dimmed, **Now** and **in 3 h** on today, and an empty day links to the next
   event.

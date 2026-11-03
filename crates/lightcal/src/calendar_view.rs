@@ -13,7 +13,7 @@ use lightcal::i18n::{
     format_starts_in, month_name,
 };
 use lightcal::preferences::LocaleCode;
-use slint::{ModelRc, VecModel};
+use slint::{Model, ModelRc, VecModel};
 use std::{cell::RefCell, rc::Rc};
 
 /// Identifies one occurrence on one agenda day.
@@ -70,6 +70,11 @@ pub(crate) struct AgendaUiState {
     pub(crate) copy_generation: u64,
     /// Fixed local wall-clock time ([`local_minutes`]) for tests and snapshots.
     pub(crate) now_override: Option<i64>,
+    /// The event just expanded by a click, so only its details fade in. It lasts until those
+    /// details have faded in (the panel reports it), or the day changes, or Settings opens,
+    /// so a refresh right after the click cannot cancel the fade and details shown again
+    /// later (rows rebuilt, another day and back, Settings and back) appear at once.
+    pub(crate) fade: RefCell<Option<EventKey>>,
 }
 
 impl AppController {
@@ -116,6 +121,15 @@ impl AppController {
         } else {
             Some(key)
         };
+        *self.agenda.fade.borrow_mut() = self.agenda.expanded.clone();
+    }
+
+    /// The details of `row_key` have faded in: no later rebuild fades them again.
+    pub(crate) fn agenda_details_faded(&self, row_key: &str) {
+        let mut fade = self.agenda.fade.borrow_mut();
+        if fade.as_ref().map(EventKey::encode).as_deref() == Some(row_key) {
+            *fade = None;
+        }
     }
 
     /// Plain-text details of the event at `index` for the clipboard and the copy
@@ -233,8 +247,11 @@ impl AppController {
         ui.set_month_name_text(month_name(locale, month.month).into());
         ui.set_year_text(format!("{}{}", month.year, year_mark.unwrap_or_default()).into());
         ui.set_year_first(year_mark.is_some());
-        // Animate the Today slot only when this change happens in front of the user.
-        ui.set_header_motion((self.on_screen)());
+        // Animate the Today slot only when this change happens in front of the user, and
+        // only with Windows Animation effects on.
+        let motion = (self.on_screen)() && (self.animation_effects)();
+        ui.set_header_motion(motion);
+        crate::month_fade::show_month(ui, month, motion);
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());
@@ -314,9 +331,23 @@ impl AppController {
             })
             .collect();
         ui.set_agenda_chip_rows(ModelRc::new(VecModel::from(chip_rows)));
+        let fade_key = {
+            let mut fade = self.agenda.fade.borrow_mut();
+            if self.settings_open || fade.as_ref().is_some_and(|key| key.date != selected) {
+                *fade = None;
+            }
+            fade.as_ref().map(EventKey::encode).unwrap_or_default()
+        };
+        ui.set_agenda_fade_key(fade_key.into());
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
-        ui.set_agenda_events(ModelRc::new(VecModel::from(timed)));
+        let shown = ui.get_agenda_events();
+        update_rows_in_place(
+            &shown,
+            timed,
+            |a, b| a.key == b.key,
+            |rows| ui.set_agenda_events(rows),
+        );
         ui.set_agenda_empty(events.is_empty());
         ui.set_agenda_empty_text(format_event_count(locale, 0).into());
         let next = events
@@ -356,6 +387,20 @@ pub(crate) fn connect_agenda_callbacks(
     reload: impl Fn(slint::Weak<AppWindow>) + 'static,
 ) {
     use slint::ComponentHandle;
+    {
+        // Reported while Slint builds the panel, possibly during a sync that holds the
+        // controller: then it is handled right after.
+        let ctrl = Rc::clone(ctrl);
+        ui.on_agenda_details_faded(move |row_key| match ctrl.try_borrow() {
+            Ok(c) => c.agenda_details_faded(&row_key),
+            Err(_) => {
+                let ctrl = Rc::clone(&ctrl);
+                slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                    ctrl.borrow().agenda_details_faded(&row_key);
+                });
+            }
+        });
+    }
     {
         let ctrl = Rc::clone(ctrl);
         let weak = ui.as_weak();
@@ -513,9 +558,57 @@ fn detail_time(locale: LocaleCode, event: &CalendarOccurrence) -> String {
     }
 }
 
+/// Updates the rows already shown when they are the same rows (`same_row` pairwise), so
+/// Slint keeps each row and its transitions (an opening details panel, Copy → Copied)
+/// instead of rebuilding them on every sync. Different rows, such as another day's
+/// events, get a new model, so no transition plays between unrelated rows.
+fn update_rows_in_place<T: Clone + PartialEq + 'static>(
+    shown: &ModelRc<T>,
+    rows: Vec<T>,
+    same_row: impl Fn(&T, &T) -> bool,
+    publish: impl FnOnce(ModelRc<T>),
+) {
+    if let Some(model) = shown.as_any().downcast_ref::<VecModel<T>>() {
+        let same = model.row_count() == rows.len()
+            && rows.iter().enumerate().all(|(index, row)| {
+                model
+                    .row_data(index)
+                    .is_some_and(|shown| same_row(&shown, row))
+            });
+        if same {
+            for (index, row) in rows.into_iter().enumerate() {
+                if model.row_data(index).as_ref() != Some(&row) {
+                    model.set_row_data(index, row);
+                }
+            }
+            return;
+        }
+    }
+    publish(ModelRc::new(VecModel::from(rows)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rows_stay_in_place_only_when_they_are_the_same_rows() {
+        let shown = ModelRc::new(VecModel::from(vec![(1, "a"), (2, "b")]));
+        let same_key = |a: &(i32, &str), b: &(i32, &str)| a.0 == b.0;
+        // Same events, new data (Copy → Copied): updated in place.
+        let mut published = false;
+        update_rows_in_place(&shown, vec![(1, "a"), (2, "B")], same_key, |_| {
+            published = true
+        });
+        assert!(!published);
+        assert_eq!(shown.row_data(1), Some((2, "B")));
+        // Another day's events, same count: a new model, so no transition plays.
+        update_rows_in_place(&shown, vec![(3, "c"), (4, "d")], same_key, |_| {
+            published = true
+        });
+        assert!(published);
+        assert_eq!(shown.row_data(0), Some((1, "a")));
+    }
 
     #[test]
     fn adjacent_shaded_columns_merge_into_one_band() {

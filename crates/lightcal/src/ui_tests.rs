@@ -113,6 +113,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         last_refreshed: None,
         // Off screen unless a test says otherwise; never the process-wide native window.
         on_screen: || false,
+        // Settled, like snapshots; motion tests turn it on.
+        animation_effects: || false,
     }
 }
 
@@ -1024,6 +1026,104 @@ fn agenda_actions_use_the_row_that_was_rendered() {
 }
 
 #[test]
+fn agenda_details_fade_only_after_a_click_and_copied_crossfades() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    use std::time::Duration;
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-agenda-motion-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    lightcal::snapshot::use_test_time();
+    let mut ctrl = controller(&dir);
+    ctrl.animation_effects = || true;
+    ctrl.settings_open = false;
+    ctrl.provider = crate::snapshot_render::canvas_month();
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    // Friday 13 November has one event, so its actions are on screen (as in the snapshots).
+    ctrl.cal_state
+        .select_date(LocalDate::new(2026, 11, 13).unwrap());
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    let size = (352, 432);
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    ink_after(&window, size, Duration::from_millis(50));
+    let review = (0..ui.get_agenda_events().row_count())
+        .map(|row| ui.get_agenda_events().row_data(row).unwrap())
+        .find(|row| row.title == "Design review")
+        .expect("13 November has the design review");
+    // Changes over time: the first frame differs from one 400 ms later, which is steady.
+    let moves = || {
+        let first = ink_after(&window, size, Duration::ZERO);
+        let settled = ink_after(&window, size, Duration::from_millis(400));
+        assert_eq!(ink_after(&window, size, Duration::from_millis(50)), settled);
+        first != settled
+    };
+
+    // A click expands the review: its details fade in, even when a refresh syncs again
+    // before the next frame.
+    let faded = Rc::new(RefCell::new(Vec::new()));
+    let log = faded.clone();
+    ui.on_agenda_details_faded(move |key| log.borrow_mut().push(key));
+    ctrl.toggle_agenda_event(&review.key);
+    ctrl.sync_to_ui(&ui);
+    ctrl.sync_to_ui(&ui);
+    assert!(moves(), "details fade in after a click");
+    assert_eq!(*faded.borrow(), std::slice::from_ref(&review.key));
+    for key in faded.borrow().iter() {
+        ctrl.agenda_details_faded(key);
+    }
+    // A refresh brings another event that day: the rows are rebuilt, and the open details
+    // appear at once.
+    let mut extra = ctrl
+        .provider
+        .occurrences
+        .iter()
+        .find(|event| event.title == "Design review")
+        .unwrap()
+        .clone();
+    extra.event_id.push_str("-later");
+    extra.title = "Design follow-up".to_string();
+    ctrl.provider.occurrences.push(extra);
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "rebuilt rows do not fade the open details again");
+    // Another day and back: the still-open details appear at once.
+    let review_day = ctrl.cal_state.selected_date;
+    ctrl.cal_state.select_date(review_day.add_days(1));
+    ctrl.sync_to_ui(&ui);
+    ink_after(&window, size, Duration::from_millis(50));
+    ctrl.cal_state.select_date(review_day);
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "details shown again on their day do not fade");
+    // Any later sync leaves them as they are.
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "a sync does not fade them again");
+    // Settings and back rebuilds the calendar: the open details appear at once.
+    ctrl.settings_open = true;
+    ctrl.sync_to_ui(&ui);
+    ink_after(&window, size, Duration::from_millis(50));
+    ctrl.settings_open = false;
+    ctrl.sync_to_ui(&ui);
+    assert!(!moves(), "details shown with the view do not fade");
+    // Copy crossfades the action's label to Copied.
+    ctrl.copy_agenda_event(&review.key)
+        .expect("the review can be copied");
+    ctrl.sync_to_ui(&ui);
+    assert!(moves(), "Copy crossfades to Copied");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn date_size_sets_calendar_height_from_theme_metrics() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -1407,11 +1507,197 @@ fn header_animates_only_while_the_popup_is_on_screen() {
     assert!(!ui.get_header_motion());
 
     // On screen: every change synced animates, whatever triggered it (arrows, wheel,
-    // keys, the agenda's Next link).
+    // keys, the agenda's Next link), with Animation effects on.
     ctrl.on_screen = || true;
+    ctrl.animation_effects = || true;
     ctrl.cal_state.return_to_today();
     ctrl.sync_to_ui(&ui);
     assert!(ui.get_header_motion());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Ink in the window after `wait` on the test clock (`use_test_time`): how far its pixels
+/// are from white, summed. A fading panel shows what lies beneath it in its first frame,
+/// so its ink differs from the settled frame.
+fn ink_after(
+    window: &slint::platform::software_renderer::MinimalSoftwareWindow,
+    (width, height): (usize, usize),
+    wait: std::time::Duration,
+) -> u64 {
+    use slint::platform::software_renderer::PremultipliedRgbaColor;
+    lightcal::snapshot::advance_test_time(wait);
+    slint::platform::update_timers_and_animations();
+    window.request_redraw();
+    let mut pixels = vec![PremultipliedRgbaColor::default(); width * height];
+    window.draw_if_needed(|renderer| {
+        renderer.render(&mut pixels, width);
+    });
+    pixels
+        .iter()
+        .map(|p| 3 * 255 - u64::from(p.red) - u64::from(p.green) - u64::from(p.blue))
+        .sum()
+}
+
+#[test]
+fn opening_settings_shows_the_page_at_once() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    use std::time::Duration;
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-settings-open-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    lightcal::snapshot::use_test_time();
+    let mut ctrl = controller(&dir);
+    ctrl.animation_effects = || true;
+    ctrl.settings_open = false;
+    ctrl.sync_to_ui(&ui);
+    ui.show().unwrap();
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    ink_after(&window, (352, 432), Duration::from_millis(50));
+
+    // Only the window changes, as before motion: no fade over the resize.
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 2;
+    ctrl.sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(448, 360));
+    let size = (448, 360);
+    let first = ink_after(&window, size, Duration::ZERO);
+    let settled = ink_after(&window, size, Duration::from_millis(400));
+    assert_eq!(first, settled, "Settings opens without a fade");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn month_changes_fade_only_on_screen_with_animation_effects() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-month-fade-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.animation_effects = || true;
+    ctrl.settings_open = false;
+    ctrl.sync_to_ui(&ui);
+    let settled = |ui: &AppWindow| ui.get_month_fade() == 1.0;
+
+    // Off screen (hidden popup, tray Today, snapshots): settled.
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert!(settled(&ui));
+    assert!(ui.global::<Motion>().get_enabled());
+
+    // On screen: the new month fades in, in either direction; nothing moves.
+    ctrl.on_screen = || true;
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(ui.get_month_fade(), 0.0);
+    // A change during a fade carries on from the opacity on screen, never blanking again.
+    let fade = ui.get_month_fade();
+    ctrl.cal_state.navigate_months(-1);
+    ctrl.sync_to_ui(&ui);
+    assert!(ui.get_month_fade() >= fade);
+    // A sync in the same month leaves a fade alone; hiding settles it.
+    let fade = ui.get_month_fade();
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(ui.get_month_fade(), fade);
+    month_fade::settle_month_fade(&ui);
+    assert!(settled(&ui));
+    ctrl.cal_state.navigate_months(-1);
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(ui.get_month_fade(), 0.0);
+    month_fade::settle_month_fade(&ui);
+
+    // Animation effects off: no fade, no header motion, and every transition is instant.
+    ctrl.animation_effects = || false;
+    ctrl.cal_state.navigate_months(1);
+    ctrl.sync_to_ui(&ui);
+    assert!(settled(&ui));
+    assert!(!ui.get_header_motion());
+    assert!(!ui.global::<Motion>().get_enabled());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hover_follows_whole_day_cells_and_hides_for_arrow_keys() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-hover-follow-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.sync_to_ui(&ui);
+    let reported = Rc::new(RefCell::new(Vec::new()));
+    let log = reported.clone();
+    ui.on_hover_cell(move |index| log.borrow_mut().push(index));
+    ui.show().unwrap();
+    ui.window()
+        .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
+    window.set_size(slint::PhysicalSize::new(528, 648));
+
+    // The grid starts below the 44 px header and the 24 px weekday row, 12 px in.
+    let lead = if ui.get_show_week_numbers() {
+        24.0
+    } else {
+        0.0
+    };
+    let col_width = (352.0 - 24.0 - lead) / 7.0;
+    let at = |col: f32, row: f32, dx: f32, dy: f32| {
+        slint::LogicalPosition::new(12.0 + lead + col * col_width + dx, 68.0 + row * 32.0 + dy)
+    };
+    let move_to = |position| {
+        ui.window()
+            .dispatch_event(WindowEvent::PointerMoved { position })
+    };
+
+    move_to(at(2.0, 1.0, col_width / 2.0, 16.0));
+    assert_eq!(ui.get_hover_cell_index(), 9);
+    // Beside and above the 34 × 28 px tile is still the same cell, so a sweep along a row
+    // never leaves the grid between tiles.
+    move_to(at(2.0, 1.0, col_width - 1.0, 1.0));
+    assert_eq!(ui.get_hover_cell_index(), 9);
+    move_to(at(3.0, 1.0, 1.0, 16.0));
+    assert_eq!(ui.get_hover_cell_index(), 10);
+    move_to(at(3.0, 2.0, col_width / 2.0, 1.0));
+    assert_eq!(ui.get_hover_cell_index(), 17);
+    // The weekday letters are off the day rows.
+    move_to(slint::LogicalPosition::new(
+        12.0 + lead + 3.5 * col_width,
+        56.0,
+    ));
+    assert_eq!(ui.get_hover_cell_index(), -1);
+    assert_eq!(*reported.borrow(), [9, 10, 17, -1]);
+
+    // Arrow keys hide the highlight; the next pointer move, even within the cell, brings
+    // it back.
+    move_to(at(4.0, 3.0, col_width / 2.0, 16.0));
+    hover_follow::hide_hover_for_keys(&ui);
+    assert_eq!(ui.get_hover_cell_index(), -1);
+    move_to(at(4.0, 3.0, col_width / 2.0 + 1.0, 16.0));
+    assert_eq!(ui.get_hover_cell_index(), 25);
+    assert_eq!(*reported.borrow(), [9, 10, 17, -1, 25, 25]);
+
+    // A sync rebuilds the cells model but not the day tiles, so leaving the window after
+    // a click still reports leaving and the highlight cannot get stuck.
+    ctrl.sync_to_ui(&ui);
+    ui.window().dispatch_event(WindowEvent::PointerExited);
+    assert_eq!(ui.get_hover_cell_index(), -1);
+    assert_eq!(reported.borrow().last(), Some(&-1));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

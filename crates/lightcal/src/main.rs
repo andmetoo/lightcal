@@ -20,6 +20,8 @@ use lightcal::preferences::{
 };
 mod calendar_view;
 mod event_colors;
+mod hover_follow;
+mod month_fade;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -156,6 +158,9 @@ pub(crate) struct AppController {
     /// the native window (`popup_on_screen`); snapshots and tests pass a fixed answer so
     /// process-wide native state cannot leak between them.
     pub(crate) on_screen: fn() -> bool,
+    /// Windows Animation effects (ADR 0016). The app reads the system setting; snapshots
+    /// and tests pass a fixed answer.
+    pub(crate) animation_effects: fn() -> bool,
 }
 
 thread_local! {
@@ -616,19 +621,51 @@ fn calendar_height(ui: &AppWindow) -> f32 {
 
 fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
     let (logical_w, logical_h) = target_logical_size(settings_open, calendar_height(ui));
-    ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     #[cfg(windows)]
     {
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
         if !hwnd.is_null() {
-            unsafe {
-                lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h);
+            // One SetWindowPos sizes and moves the window together. Resizing through Slint
+            // first showed the new size in the old place for about 20 ms, then a jump.
+            let placed = unsafe {
+                lightcal::platform::windows::position_window_above_tray(hwnd, logical_w, logical_h)
+            };
+            if !placed {
+                // Windows clamped it to limits Slint still held for the previous view: give
+                // Slint the new size, then place the window again.
+                ui.window().set_size(LogicalSize::new(logical_w, logical_h));
+                let placed = unsafe {
+                    lightcal::platform::windows::position_window_above_tray(
+                        hwnd, logical_w, logical_h,
+                    )
+                };
+                if !placed {
+                    // Slint applies new limits once it handles events: place it again then,
+                    // for the view shown at that moment (it may have switched back).
+                    let ui_weak = ui.as_weak();
+                    slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+                        let Some(ui) = ui_weak.upgrade() else {
+                            return;
+                        };
+                        let (w, h) =
+                            target_logical_size(ui.get_settings_open(), calendar_height(&ui));
+                        let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+                        // SAFETY: find_lightcal_hwnd returns this process's live window, or
+                        // null, which the call ignores.
+                        unsafe {
+                            lightcal::platform::windows::position_window_above_tray(hwnd, w, h);
+                        }
+                        apply_window_chrome(&ui);
+                    });
+                }
             }
             apply_window_chrome(ui);
             return;
         }
     }
+
+    ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
     let scale = ui.window().scale_factor().max(1.0);
     // Frameless window geometry anchored cleanly right above the Windows Taskbar / System Tray.
@@ -763,8 +800,15 @@ impl AppController {
         if theme_changed {
             apply_window_chrome(ui);
         }
+        ui.global::<Motion>()
+            .set_enabled((self.animation_effects)());
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
+        if self.settings_open {
+            // The grid is gone; it is rebuilt with no highlight when Settings closes.
+            hover_follow::clear_hover(ui);
+            month_fade::settle_month_fade(ui);
+        }
 
         let now = chrono::Local::now();
         ui.set_live_day_text(self.cal_state.today.day.to_string().into());
@@ -2033,18 +2077,25 @@ fn popup_on_screen() -> bool {
 
 fn show_application_window(ui: &AppWindow) {
     let _ = ui.show();
+    // Showing places the window once; it is placed again only if that did not land.
     #[cfg(windows)]
-    {
+    let placed = {
         let (lw, lh) = target_logical_size(ui.get_settings_open(), calendar_height(ui));
         let hwnd = lightcal::platform::windows::find_lightcal_hwnd();
+        let placed = !hwnd.is_null()
+            && unsafe { lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh) };
         if !hwnd.is_null() {
-            unsafe {
-                lightcal::platform::windows::show_and_restore_window(hwnd, lw, lh);
-            }
             ensure_window_hooks(ui, hwnd);
         }
+        placed
+    };
+    #[cfg(not(windows))]
+    let placed = false;
+    if placed {
+        apply_window_chrome(ui);
+    } else {
+        sync_window_geometry(ui, ui.get_settings_open());
     }
-    sync_window_geometry(ui, ui.get_settings_open());
     ui.invoke_focus_calendar_keys();
     wake_koi(ui);
 }
@@ -2054,6 +2105,8 @@ fn hide_application_window(ui: &AppWindow) {
     // keeps its hover fill when the calendar opens again.
     ui.window()
         .dispatch_event(slint::platform::WindowEvent::PointerExited);
+    hover_follow::clear_hover(ui);
+    month_fade::settle_month_fade(ui);
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]
@@ -2111,6 +2164,9 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     let ui_weak = wake_ui.clone();
                     slint::Timer::single_shot(std::time::Duration::ZERO, move || {
                         if let Some(ui) = ui_weak.upgrade() {
+                            // Animation effects may have just been switched.
+                            ui.global::<Motion>()
+                                .set_enabled(lightcal::platform::animation_effects_enabled());
                             wake_koi(&ui);
                         }
                     });
@@ -3320,6 +3376,7 @@ fn main() {
         agenda: Default::default(),
         last_refreshed: None,
         on_screen: popup_on_screen,
+        animation_effects: lightcal::platform::animation_effects_enabled,
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;
@@ -3606,6 +3663,9 @@ fn main() {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
         ui.on_move_selection_by(move |delta| {
+            if let Some(w) = ui_weak.upgrade() {
+                hover_follow::hide_hover_for_keys(&w);
+            }
             let mut c = ctrl.borrow_mut();
             let previous_month = c.cal_state.displayed_month;
             c.cal_state.move_selection_by_days(delta);
@@ -4101,6 +4161,7 @@ fn main() {
         });
     }
     wire_koi_pond(&ui, &ctrl);
+    hover_follow::wire_hover_follow(&ui);
     wire_date_size(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);

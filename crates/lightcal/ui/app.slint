@@ -3,12 +3,12 @@
 // Modules: theme.slint (tokens), controls.slint (shared controls), types.slint (Rust structs),
 // calendar.slint (CalendarView), settings.slint (SettingsView with About).
 
-import { Theme } from "theme.slint";
+import { Theme, Motion } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
 import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption } from "types.slint";
 
-export { Theme }
+export { Theme, Motion }
 export { KoiSchool, KoiSwim } from "koi.slint";
 export { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
@@ -51,6 +51,14 @@ export component AppWindow inherits Window {
     in property <string> next-month-label: "Next month";
     in property <[ShadedBand]> shaded-bands: [];
     in-out property <bool> calendar-keyboard-nav: false;
+    // Hover follow (ADR 0015), driven by Rust's spring.
+    in property <float> hover-col;
+    in property <float> hover-row;
+    in property <float> hover-opacity: 0;
+    in-out property <int> hover-cell-index: -1;
+    // Month change fade (ADR 0016), driven by Rust.
+    in property <float> month-fade: 1;
+    callback hover-cell(int);
     // Set by Rust with the header data: the header animates only for changes made while
     // the popup is on screen, never for ones applied just before it opens.
     in property <bool> header-motion: false;
@@ -59,6 +67,9 @@ export component AppWindow inherits Window {
     in property <[AgendaChipRow]> agenda-chip-rows: [];
     in property <AgendaEventItem> agenda-expanded-chip;
     in property <bool> agenda-has-expanded-chip: false;
+    // The event whose details fade in: set by Rust for the sync after a click (ADR 0016).
+    in property <string> agenda-fade-key;
+    callback agenda-details-faded(string);
     in property <[AgendaEventItem]> agenda-events: [];
     in property <bool> agenda-empty: false;
     in property <string> agenda-empty-text: "No events";
@@ -171,7 +182,7 @@ export component AppWindow inherits Window {
     in property <string> updates-heading-text: "Updates";
     in property <string> about-link-text: "About Lightcal";
     in property <string> app-name-text: "Lightcal";
-    in property <string> about-version-text: "Version 1.1.0";
+    in property <string> about-version-text: "Version 1.1.1";
     in property <string> provider-readonly-tag-text: "Read-only";
     in property <string> shortcut-unset-text: "Not set";
     in property <string> license-short-text: "GPL-3.0-only";
@@ -430,11 +441,20 @@ export component AppWindow inherits Window {
         koi-clock: root.koi-clock;
         date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
+        hover-col: root.hover-col;
+        hover-row: root.hover-row;
+        hover-opacity: root.hover-opacity;
+        hover-index <=> root.hover-cell-index;
+        month-fade: root.month-fade;
+        hover-cell(arg0) => { root.hover-cell(arg0); }
         agenda-title: root.agenda-title;
         agenda-count: root.agenda-count;
         chip-rows: root.agenda-chip-rows;
         expanded-chip: root.agenda-expanded-chip;
         has-expanded-chip: root.agenda-has-expanded-chip;
+        fade-details-key: root.agenda-fade-key;
+        details-faded(arg0) => { root.agenda-details-faded(arg0); }
+        pointer-took-over() => { root.calendar-keyboard-nav = false; }
         agenda-events: root.agenda-events;
         agenda-empty: root.agenda-empty;
         empty-text: root.agenda-empty-text;
