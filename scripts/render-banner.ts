@@ -128,7 +128,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <rect x="96" y="482" width="3" height="24" rx="1.5" fill="#D73840"/>
   <text x="112" y="500" font-family="${text}" font-size="17" fill="#646464">Windows · Free and open source · GPL-3.0</text>
 
-  ${windowShot(shot("calendar-today-dark.png"), dark.x, dark.y, "back", "#FFFFFF14")}
+  ${windowShot(shot("calendar-koi-dark.png"), dark.x, dark.y, "back", "#FFFFFF14")}
   ${windowShot(shot("calendar-today-light.png"), light.x, light.y, "front", "#00000010")}
 </svg>`;
 
