@@ -101,6 +101,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         last_refreshed: None,
         // Snapshots are never on screen, so headers render settled.
         on_screen: || false,
+        animation_effects: || false,
     };
 
     let helper = HeadlessPlatform {

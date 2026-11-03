@@ -315,6 +315,19 @@ pub struct WindowView {
     pub animation_effects: bool,
 }
 
+/// Windows Settings › Accessibility › Visual effects › Animation effects. Off Windows it
+/// reads as on.
+pub fn animation_effects_enabled() -> bool {
+    #[cfg(windows)]
+    {
+        windows::animation_effects_enabled()
+    }
+    #[cfg(not(windows))]
+    {
+        true
+    }
+}
+
 /// Reads the native application window. Off Windows, and before the window exists, the
 /// window counts as off screen.
 pub fn main_window_view() -> WindowView {

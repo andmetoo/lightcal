@@ -13,7 +13,7 @@ use lightcal::i18n::{
     format_starts_in, month_name,
 };
 use lightcal::preferences::LocaleCode;
-use slint::{ModelRc, VecModel};
+use slint::{Model, ModelRc, VecModel};
 use std::{cell::RefCell, rc::Rc};
 
 /// Identifies one occurrence on one agenda day.
@@ -233,8 +233,11 @@ impl AppController {
         ui.set_month_name_text(month_name(locale, month.month).into());
         ui.set_year_text(format!("{}{}", month.year, year_mark.unwrap_or_default()).into());
         ui.set_year_first(year_mark.is_some());
-        // Animate the Today slot only when this change happens in front of the user.
-        ui.set_header_motion((self.on_screen)());
+        // Animate the Today slot only when this change happens in front of the user, and
+        // only with Windows Animation effects on.
+        let motion = (self.on_screen)() && (self.animation_effects)();
+        ui.set_header_motion(motion);
+        crate::month_slide::show_month(ui, month, motion);
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());
@@ -316,7 +319,8 @@ impl AppController {
         ui.set_agenda_chip_rows(ModelRc::new(VecModel::from(chip_rows)));
         ui.set_agenda_has_expanded_chip(expanded_chip.is_some());
         ui.set_agenda_expanded_chip(expanded_chip.unwrap_or_default());
-        ui.set_agenda_events(ModelRc::new(VecModel::from(timed)));
+        let shown = ui.get_agenda_events();
+        update_rows_in_place(&shown, timed, |rows| ui.set_agenda_events(rows));
         ui.set_agenda_empty(events.is_empty());
         ui.set_agenda_empty_text(format_event_count(locale, 0).into());
         let next = events
@@ -511,6 +515,27 @@ fn detail_time(locale: LocaleCode, event: &CalendarOccurrence) -> String {
         ),
         _ => time_range(locale, event),
     }
+}
+
+/// Updates the rows already shown when their number is unchanged, so Slint keeps each row
+/// and its transitions (an opening details panel, Copy → Copied) instead of rebuilding
+/// them on every sync. Otherwise publishes a new model.
+fn update_rows_in_place<T: Clone + PartialEq + 'static>(
+    shown: &ModelRc<T>,
+    rows: Vec<T>,
+    publish: impl FnOnce(ModelRc<T>),
+) {
+    if let Some(model) = shown.as_any().downcast_ref::<VecModel<T>>() {
+        if model.row_count() == rows.len() {
+            for (index, row) in rows.into_iter().enumerate() {
+                if model.row_data(index).as_ref() != Some(&row) {
+                    model.set_row_data(index, row);
+                }
+            }
+            return;
+        }
+    }
+    publish(ModelRc::new(VecModel::from(rows)));
 }
 
 #[cfg(test)]

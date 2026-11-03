@@ -4,6 +4,8 @@ Documentation baseline: October 29, 2026; updated for the public repository on N
 
 | Document | Purpose |
 | --- | --- |
+| [Calendar motion](decisions/0016-calendar-motion.md) | Copy, Settings, agenda and month-change transitions; Today underline |
+| [Calendar hover follow](decisions/0015-calendar-hover-follow.md) | One highlight springs after the pointer across the day grid; stronger selected fill |
 | [Ten languages](decisions/0014-ten-languages.md) | German, French, Brazilian Portuguese, Ukrainian, Simplified Chinese and Korean; two-column language menu |
 | [Koi pond](decisions/0013-koi-pond.md) | Optional koi swimming behind the calendar grid, off by default |
 | [Date size setting](decisions/0012-date-size.md) | Standard, Large and Larger day numbers; the 352 × 444 popup for Larger |

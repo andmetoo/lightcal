@@ -20,6 +20,8 @@ use lightcal::preferences::{
 };
 mod calendar_view;
 mod event_colors;
+mod hover_follow;
+mod month_slide;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -156,6 +158,9 @@ pub(crate) struct AppController {
     /// the native window (`popup_on_screen`); snapshots and tests pass a fixed answer so
     /// process-wide native state cannot leak between them.
     pub(crate) on_screen: fn() -> bool,
+    /// Windows Animation effects (ADR 0016). The app reads the system setting; snapshots
+    /// and tests pass a fixed answer.
+    pub(crate) animation_effects: fn() -> bool,
 }
 
 thread_local! {
@@ -763,8 +768,15 @@ impl AppController {
         if theme_changed {
             apply_window_chrome(ui);
         }
+        ui.global::<Motion>()
+            .set_enabled((self.animation_effects)());
         ui.set_settings_open(self.settings_open);
         ui.set_settings_tab(self.settings_tab);
+        if self.settings_open {
+            // The grid is gone; it is rebuilt with no highlight when Settings closes.
+            hover_follow::clear_hover(ui);
+            month_slide::settle_month_slide(ui);
+        }
 
         let now = chrono::Local::now();
         ui.set_live_day_text(self.cal_state.today.day.to_string().into());
@@ -2054,6 +2066,8 @@ fn hide_application_window(ui: &AppWindow) {
     // keeps its hover fill when the calendar opens again.
     ui.window()
         .dispatch_event(slint::platform::WindowEvent::PointerExited);
+    hover_follow::clear_hover(ui);
+    month_slide::settle_month_slide(ui);
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]
@@ -2111,6 +2125,9 @@ fn ensure_window_hooks(ui: &AppWindow, hwnd: windows_sys::Win32::Foundation::HWN
                     let ui_weak = wake_ui.clone();
                     slint::Timer::single_shot(std::time::Duration::ZERO, move || {
                         if let Some(ui) = ui_weak.upgrade() {
+                            // Animation effects may have just been switched.
+                            ui.global::<Motion>()
+                                .set_enabled(lightcal::platform::animation_effects_enabled());
                             wake_koi(&ui);
                         }
                     });
@@ -3320,6 +3337,7 @@ fn main() {
         agenda: Default::default(),
         last_refreshed: None,
         on_screen: popup_on_screen,
+        animation_effects: lightcal::platform::animation_effects_enabled,
     }));
     if let Some(warning) = loaded_warning {
         ctrl.borrow_mut().startup_warning = warning;
@@ -3606,6 +3624,9 @@ fn main() {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
         ui.on_move_selection_by(move |delta| {
+            if let Some(w) = ui_weak.upgrade() {
+                hover_follow::hide_hover_for_keys(&w);
+            }
             let mut c = ctrl.borrow_mut();
             let previous_month = c.cal_state.displayed_month;
             c.cal_state.move_selection_by_days(delta);
@@ -4101,6 +4122,7 @@ fn main() {
         });
     }
     wire_koi_pond(&ui, &ctrl);
+    hover_follow::wire_hover_follow(&ui);
     wire_date_size(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);

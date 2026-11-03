@@ -2,7 +2,7 @@
 // CSS sources: design/canvas/*.dc.html (.ib, .tb, .tg, .seg, .dd, .btn, .pb,
 // .kbd, .r, .card, .cap, .lnk). Colors and metrics come from `Theme`.
 
-import { Theme } from "theme.slint";
+import { Theme, Motion } from "theme.slint";
 
 // 24-unit stroke icons from the canvas boards (Lucide-style geometry).
 // Names: chevron-left, chevron-right, chevron-down, gear, close, check,
@@ -190,6 +190,36 @@ export component Switch inherits Rectangle {
     touch := TouchArea {
         enabled: root.enabled;
         clicked => { root.toggled(); }
+    }
+}
+
+// Fades in when created (ADR 0016): the agenda's details as a row expands. Slint does
+// not animate a property's first value, so the opacity follows the animation clock from
+// creation instead, and a timer pins it at 1 when done, so nothing redraws once settled.
+export component FadeIn inherits Rectangle {
+    in property <duration> fade-duration: Motion.fade;
+    // False shows it at once: for details that appear with the calendar itself, as it
+    // returns from Settings.
+    in property <bool> fade-on-create: true;
+    property <duration> born;
+    property <bool> done: !Motion.enabled;
+    init => {
+        root.born = animation-tick();
+        if (!root.fade-on-create) {
+            root.done = true;
+        }
+    }
+    opacity: root.done ? 1 : root.eased(clamp((animation-tick() - root.born) / root.fade-duration, 0, 1));
+
+    // Ease-out quadratic.
+    pure function eased(t: float) -> float {
+        1 - (1 - t) * (1 - t)
+    }
+
+    Timer {
+        interval: root.fade-duration;
+        running: !root.done;
+        triggered => { root.done = true; }
     }
 }
 

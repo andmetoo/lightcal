@@ -3,12 +3,12 @@
 // Modules: theme.slint (tokens), controls.slint (shared controls), types.slint (Rust structs),
 // calendar.slint (CalendarView), settings.slint (SettingsView with About).
 
-import { Theme } from "theme.slint";
+import { Theme, Motion } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
 import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption } from "types.slint";
 
-export { Theme }
+export { Theme, Motion }
 export { KoiSchool, KoiSwim } from "koi.slint";
 export { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
@@ -51,6 +51,15 @@ export component AppWindow inherits Window {
     in property <string> next-month-label: "Next month";
     in property <[ShadedBand]> shaded-bands: [];
     in-out property <bool> calendar-keyboard-nav: false;
+    // Hover follow (ADR 0015), driven by Rust's spring.
+    in property <float> hover-col;
+    in property <float> hover-row;
+    in property <float> hover-opacity: 0;
+    in-out property <int> hover-cell-index: -1;
+    // Month change slide (ADR 0016), driven by Rust.
+    in property <length> month-shift: 0px;
+    in property <float> month-fade: 1;
+    callback hover-cell(int);
     // Set by Rust with the header data: the header animates only for changes made while
     // the popup is on screen, never for ones applied just before it opens.
     in property <bool> header-motion: false;
@@ -430,6 +439,13 @@ export component AppWindow inherits Window {
         koi-clock: root.koi-clock;
         date-size: root.date-size;
         keyboard-nav: root.calendar-keyboard-nav;
+        hover-col: root.hover-col;
+        hover-row: root.hover-row;
+        hover-opacity: root.hover-opacity;
+        hover-index <=> root.hover-cell-index;
+        month-shift: root.month-shift;
+        month-fade: root.month-fade;
+        hover-cell(arg0) => { root.hover-cell(arg0); }
         agenda-title: root.agenda-title;
         agenda-count: root.agenda-count;
         chip-rows: root.agenda-chip-rows;
