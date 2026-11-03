@@ -22,8 +22,8 @@ Lightcal 1.1.1 is a small calendar that lives in the Windows tray. Click the tra
 | ![Lightcal calendar on Sunday 1 November with four events, light theme](docs/images/calendar-light.png) | ![The same calendar in the dark theme](docs/images/calendar-dark.png) |
 | **Event details** | **Accounts** |
 | ![An expanded event with time, duration, location, calendar, Copy and Open](docs/images/event-details.png) | ![Settings, Accounts tab with a connected Google Calendar and selected calendars](docs/images/settings-accounts.png) |
-
-![About Lightcal, version 1.1.1, with the update check and project links](docs/images/about.png)
+| **Koi pond** | **About** |
+| ![Three koi swimming behind the dark calendar grid](docs/images/calendar-koi-dark.png) | ![About Lightcal, version 1.1.1, with the update check and project links](docs/images/about.png) |
 
 These are headless renders of the real Slint UI (`--render-snapshots`) with sample events; no account was used.
 
