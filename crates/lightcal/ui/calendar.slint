@@ -335,8 +335,7 @@ export component CalendarView inherits Rectangle {
     // The cell last reported (row × 7 + column), or −1; Rust resets it for arrow keys.
     in-out property <int> hover-index: -1;
     callback hover-cell(int);
-    // Month change slide (ADR 0016): Rust moves the day rows in from 8 px and fades them in.
-    in property <length> month-shift: 0px;
+    // Month change fade (ADR 0016): Rust fades the day rows in.
     in property <float> month-fade: 1;
     // Agenda
     in property <string> agenda-title;
@@ -569,7 +568,7 @@ export component CalendarView inherits Rectangle {
         }
 
         for row in [0, 1, 2, 3, 4, 5] : Rectangle {
-            x: root.month-shift;
+            x: 0px;
             opacity: root.month-fade;
             y: 24px + row * root.row-height;
             width: grid.width;
@@ -692,10 +691,8 @@ export component CalendarView inherits Rectangle {
 
                 // The whole cell, gaps included, so a sweep along a row never leaves the
                 // grid between tiles.
-                // Offset against the month slide, so clicks and hover always use the
-                // settled grid while the rows move.
                 TouchArea {
-                    x: -(grid.col-width - pill.width) / 2 - root.month-shift;
+                    x: -(grid.col-width - pill.width) / 2;
                     y: -pill.y;
                     width: grid.col-width;
                     height: root.row-height;

@@ -56,8 +56,7 @@ export component AppWindow inherits Window {
     in property <float> hover-row;
     in property <float> hover-opacity: 0;
     in-out property <int> hover-cell-index: -1;
-    // Month change slide (ADR 0016), driven by Rust.
-    in property <length> month-shift: 0px;
+    // Month change fade (ADR 0016), driven by Rust.
     in property <float> month-fade: 1;
     callback hover-cell(int);
     // Set by Rust with the header data: the header animates only for changes made while
@@ -443,7 +442,6 @@ export component AppWindow inherits Window {
         hover-row: root.hover-row;
         hover-opacity: root.hover-opacity;
         hover-index <=> root.hover-cell-index;
-        month-shift: root.month-shift;
         month-fade: root.month-fade;
         hover-cell(arg0) => { root.hover-cell(arg0); }
         agenda-title: root.agenda-title;

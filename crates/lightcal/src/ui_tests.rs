@@ -1474,24 +1474,20 @@ fn opening_settings_shows_the_page_at_once() {
 }
 
 #[test]
-fn month_changes_slide_only_on_screen_with_animation_effects() {
+fn month_changes_fade_only_on_screen_with_animation_effects() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-    let window_handle = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
-    slint::platform::set_platform(Box::new(HeadlessPlatform {
-        window: window_handle.clone(),
-    }))
-    .unwrap();
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform { window })).unwrap();
     let ui = AppWindow::new().unwrap();
-    let window = window_handle;
     let dir = std::env::temp_dir().join(format!(
-        "lightcal-month-slide-{}",
+        "lightcal-month-fade-{}",
         lightcal::calendars::random_key().unwrap()
     ));
     let mut ctrl = controller(&dir);
     ctrl.animation_effects = || true;
     ctrl.settings_open = false;
     ctrl.sync_to_ui(&ui);
-    let settled = |ui: &AppWindow| (ui.get_month_shift(), ui.get_month_fade()) == (0.0, 1.0);
+    let settled = |ui: &AppWindow| ui.get_month_fade() == 1.0;
 
     // Off screen (hidden popup, tray Today, snapshots): settled.
     ctrl.cal_state.navigate_months(1);
@@ -1499,48 +1495,28 @@ fn month_changes_slide_only_on_screen_with_animation_effects() {
     assert!(settled(&ui));
     assert!(ui.global::<Motion>().get_enabled());
 
-    // On screen: forward enters from the right.
+    // On screen: the new month fades in, in either direction; nothing moves.
     ctrl.on_screen = || true;
     ctrl.cal_state.navigate_months(1);
     ctrl.sync_to_ui(&ui);
-    assert_eq!((ui.get_month_shift(), ui.get_month_fade()), (8.0, 0.0));
-    // Clicks use the settled grid while the rows slide: a point 4 px inside the second
-    // column's left edge selects the second column, not the first.
-    let lead = if ui.get_show_week_numbers() {
-        24.0
-    } else {
-        0.0
-    };
-    let col_width = (352.0 - 24.0 - lead) / 7.0;
-    let selected = Rc::new(Cell::new(-1));
-    let picked = selected.clone();
-    ui.on_select_cell(move |index| picked.set(index));
-    ui.show().unwrap();
-    ui.window()
-        .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
-    window.set_size(slint::PhysicalSize::new(528, 648));
-    click(&ui, 12.0 + lead + col_width + 4.0, 68.0 + 16.0);
-    assert_eq!(selected.get(), 1);
-    // A change during a slide carries on from where the rows are, never jumping to the
-    // other side or blanking the grid.
-    let (shift, fade) = (ui.get_month_shift(), ui.get_month_fade());
+    assert_eq!(ui.get_month_fade(), 0.0);
+    // A change during a fade carries on from the opacity on screen, never blanking again.
+    let fade = ui.get_month_fade();
     ctrl.cal_state.navigate_months(-1);
     ctrl.sync_to_ui(&ui);
-    assert!((0.0..=shift).contains(&ui.get_month_shift()));
     assert!(ui.get_month_fade() >= fade);
-    // A sync in the same month leaves a slide alone; hiding settles it.
-    let shift = ui.get_month_shift();
+    // A sync in the same month leaves a fade alone; hiding settles it.
+    let fade = ui.get_month_fade();
     ctrl.sync_to_ui(&ui);
-    assert_eq!(ui.get_month_shift(), shift);
-    month_slide::settle_month_slide(&ui);
+    assert_eq!(ui.get_month_fade(), fade);
+    month_fade::settle_month_fade(&ui);
     assert!(settled(&ui));
-    // Once settled, going back enters from the left.
     ctrl.cal_state.navigate_months(-1);
     ctrl.sync_to_ui(&ui);
-    assert_eq!(ui.get_month_shift(), -8.0);
-    month_slide::settle_month_slide(&ui);
+    assert_eq!(ui.get_month_fade(), 0.0);
+    month_fade::settle_month_fade(&ui);
 
-    // Animation effects off: no slide, no header motion, and every transition is instant.
+    // Animation effects off: no fade, no header motion, and every transition is instant.
     ctrl.animation_effects = || false;
     ctrl.cal_state.navigate_months(1);
     ctrl.sync_to_ui(&ui);

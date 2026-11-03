@@ -45,15 +45,15 @@ be marked with an underline instead of a ring.
   sync (for example after Copy) no longer rebuilds them or restarts their
   transitions; another day's events get new rows, so nothing animates between
   unrelated events.
-- **Month change.** When the displayed month changes, the six day rows enter
-  from 8 px in the direction of travel (later months from the right) and fade
-  in, ease-out cubic over 180 ms. The weekday letters, shaded bands, koi and
-  hover highlight stay put, and clicks and hover use the settled grid while the
-  rows move. A month change during a slide carries on from the offset and
-  opacity on screen, so fast paging glides instead of blanking the grid. It
-  plays only for changes made while the popup is on screen with Animation
-  effects on; Rust drives it with a timer that runs
-  only during the slide, and hiding the popup or opening Settings settles it.
+- **Month change.** When the displayed month changes, the six day rows fade
+  in, ease-out cubic over 180 ms; nothing moves. An 8 px sideways slide was
+  tried first and removed at the owner's request, because it read as the
+  calendar shaking. The weekday letters, shaded bands, koi and hover highlight
+  stay as they are. A month change during a fade carries on from the opacity
+  on screen, so fast paging never blanks the grid. It plays only for changes
+  made while the popup is on screen with Animation effects on; Rust drives it
+  with a timer that runs only during the fade, and hiding the popup or opening
+  Settings settles it.
 - **Selected Today.** The 1.5 px coral ring is replaced by a 16 × 2 px coral
   underline, 1 px below the Today tile in the 4 px gap between week rows. The
   keyboard focus ring is unchanged.

@@ -21,7 +21,7 @@ use lightcal::preferences::{
 mod calendar_view;
 mod event_colors;
 mod hover_follow;
-mod month_slide;
+mod month_fade;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -788,7 +788,7 @@ impl AppController {
         if self.settings_open {
             // The grid is gone; it is rebuilt with no highlight when Settings closes.
             hover_follow::clear_hover(ui);
-            month_slide::settle_month_slide(ui);
+            month_fade::settle_month_fade(ui);
         }
 
         let now = chrono::Local::now();
@@ -2087,7 +2087,7 @@ fn hide_application_window(ui: &AppWindow) {
     ui.window()
         .dispatch_event(slint::platform::WindowEvent::PointerExited);
     hover_follow::clear_hover(ui);
-    month_slide::settle_month_slide(ui);
+    month_fade::settle_month_fade(ui);
     // Preserve the known working hide/show path for Slint's software renderer.
     let _ = ui.hide();
     #[cfg(windows)]

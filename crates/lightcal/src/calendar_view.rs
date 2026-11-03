@@ -237,7 +237,7 @@ impl AppController {
         // only with Windows Animation effects on.
         let motion = (self.on_screen)() && (self.animation_effects)();
         ui.set_header_motion(motion);
-        crate::month_slide::show_month(ui, month, motion);
+        crate::month_fade::show_month(ui, month, motion);
         ui.set_today_hidden(grid.is_current_month && is_today);
         ui.set_prev_month_label(copy.prev_month.into());
         ui.set_next_month_label(copy.next_month.into());
