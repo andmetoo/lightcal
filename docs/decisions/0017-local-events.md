@@ -226,7 +226,10 @@ What the code already offers:
   A failed write waiting out its backoff is tried again at once, so the
   grace period is spent on an attempt. If that last write fails, nothing is
   shown, the process exits at once, and the edit is lost; this is listed
-  with the known limits below.
+  with the known limits below. Quitting to install an update waits the
+  same way but keeps the single-instance lock until the process exits: the
+  installer replaces the executable then, so a launch meanwhile activates
+  the exiting process instead of running the old executable again.
 - **One writer at a time.** Each process takes an exclusive lock on
   `local-events.lock` in the data directory at startup, before it loads
   local events, and holds it until it exits. It uses the standard

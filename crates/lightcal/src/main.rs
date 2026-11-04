@@ -2803,38 +2803,62 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
     if failed {
         let weak = ui_weak.clone();
-        show_quit_prompt(ui_weak, Rc::new(move || quit_after_writes(&weak)));
+        show_quit_prompt(
+            ui_weak,
+            Rc::new(move || quit_after_writes(&weak, QuitKind::User)),
+        );
     } else {
-        quit_after_writes(ui_weak);
+        quit_after_writes(ui_weak, QuitKind::User);
     }
+}
+
+/// Why Lightcal quits, which decides whether a new launch may start while it exits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QuitKind {
+    /// The user's Quit: a relaunch starts normally while a write finishes (ADR 0017).
+    /// Only the tray's Quit item, which exists on Windows only, asks for it.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    User,
+    /// After launching the update installer, which waits for this process to exit and
+    /// then replaces its executable. The single-instance lock stays held until then, so
+    /// a launch meanwhile activates this process instead of running the old executable
+    /// again.
+    Update,
 }
 
 /// The first step of Quit's wait for `writer`, once the window and tray icon are hidden:
 /// - the shortcut or a second launch no longer shows the window while Lightcal exits;
-/// - the single-instance lock is released, so a new launch starts normally. The events
-///   lock stays held until the process ends, so the new instance waits for it in the
-///   background;
+/// - for the user's Quit, the single-instance lock is released, so a new launch starts
+///   normally. The events lock stays held until the process ends, so the new instance
+///   waits for it in the background;
 /// - a failed write waiting out its backoff is tried again at once, so the 2 s grace
 ///   period is spent on an attempt (after Quit anyway).
 ///
-/// `free_shortcut` unregisters the global shortcut and runs first, before the lock is
+/// `free_shortcut` unregisters the global shortcut and runs before the lock is
 /// released, so a relaunch can register it.
 fn begin_quit_wait(
     writer: &lightcal::local_events::Writer,
+    kind: QuitKind,
     free_shortcut: impl FnOnce() -> Result<(), String>,
 ) {
     QUITTING.with(|quitting| quitting.set(true));
-    if let Err(error) = free_shortcut() {
-        eprintln!("Lightcal: could not free the global shortcut before quitting: {error}");
+    if kind == QuitKind::User {
+        if let Err(error) = free_shortcut() {
+            eprintln!("Lightcal: could not free the global shortcut before quitting: {error}");
+        }
+        SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
     }
-    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
     writer.retry_now();
 }
 
 /// Quits once every local event change is written. With a write in progress the window
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
-/// on the writer (ADR 0017).
-fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
+/// on the writer (ADR 0017). Once that wait has begun, a further quit leaves it and its
+/// deadline alone.
+fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>, kind: QuitKind) {
+    if QUITTING.with(std::cell::Cell::get) {
+        return;
+    }
     let ctrl = active_controller();
     let writer = ctrl.as_ref().and_then(|c| c.borrow().local_writer.clone());
     let (Some(ctrl), Some(writer)) = (ctrl, writer.filter(|w| w.saving())) else {
@@ -2854,7 +2878,7 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
     // Runs whatever the window's state. `bind` waits for the hotkey thread to
     // unregister the shortcut.
     let shortcut_mgr = &mut c.shortcut_mgr;
-    begin_quit_wait(&writer, || shortcut_mgr.bind(None).map(|_| ()));
+    begin_quit_wait(&writer, kind, || shortcut_mgr.bind(None).map(|_| ()));
     drop(c);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let timer = slint::Timer::default();
@@ -3013,7 +3037,7 @@ fn start_install(ui_weak: slint::Weak<AppWindow>) {
         .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
             // The user already chose, before the installer started.
-            Ok(()) => quit_after_writes(&ui_weak),
+            Ok(()) => quit_after_writes(&ui_weak, QuitKind::Update),
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
                 ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {
