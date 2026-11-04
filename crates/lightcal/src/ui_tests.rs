@@ -2321,3 +2321,46 @@ fn quit_asks_first_only_after_a_failed_save() {
     writer.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_quit_prompt_keeps_lightcal_open_unless_told_otherwise() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let prompt = QuitPrompt::new().unwrap();
+    prompt.set_quit_label("Quit anyway".into());
+    prompt.set_keep_label("Keep Lightcal open".into());
+    let kept = Rc::new(Cell::new(0));
+    let quit = Rc::new(Cell::new(false));
+    let observed = kept.clone();
+    prompt.on_keep_open(move || observed.set(observed.get() + 1));
+    let observed = quit.clone();
+    prompt.on_quit_anyway(move || observed.set(true));
+    prompt.show().unwrap();
+    for key in [slint::platform::Key::Escape, slint::platform::Key::Return] {
+        let text = SharedString::from(key);
+        prompt
+            .window()
+            .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+        prompt
+            .window()
+            .dispatch_event(WindowEvent::KeyReleased { text });
+    }
+    assert_eq!(kept.get(), 2, "Escape and Enter keep Lightcal open");
+    assert!(!quit.get());
+    let button = ElementHandle::find_by_accessible_label(&prompt, "Quit anyway")
+        .next()
+        .expect("Quit anyway button");
+    let position = element_center(&button);
+    for event in [
+        WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        },
+        WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        },
+    ] {
+        prompt.window().dispatch_event(event);
+    }
+    assert!(quit.get(), "only Quit anyway quits");
+}

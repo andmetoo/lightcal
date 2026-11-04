@@ -17,13 +17,18 @@ pub fn reveal_in_explorer(file: &std::path::Path) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        // Explorer parses `/select,"path"` itself, so the path is passed raw and quoted.
         let _ = std::process::Command::new("explorer.exe")
-            .raw_arg(format!("/select,\"{}\"", file.display()))
+            .raw_arg(explorer_select_arg(file))
             .spawn();
     }
     #[cfg(not(windows))]
     let _ = file;
+}
+
+/// Explorer parses `/select,"path"` itself, so the path is passed raw and quoted; Windows
+/// paths cannot contain a quote, so nothing inside needs escaping.
+pub fn explorer_select_arg(file: &std::path::Path) -> String {
+    format!("/select,\"{}\"", file.display())
 }
 
 pub mod icon;
@@ -98,6 +103,16 @@ mod tests {
     use super::*;
     use crate::preferences::TrayIconMode;
     use calendar_core::Weekday;
+
+    #[test]
+    fn show_in_folder_selects_the_quoted_path() {
+        let path =
+            std::path::Path::new(r"C:UsersAlex SmithAppDataRoamingLightcallocal-events.json");
+        assert_eq!(
+            explorer_select_arg(path),
+            r#"/select,"C:UsersAlex SmithAppDataRoamingLightcallocal-events.json""#
+        );
+    }
 
     #[test]
     fn reexported_tray_icon_renders_valid_rgba() {

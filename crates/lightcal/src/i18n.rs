@@ -3772,7 +3772,7 @@ pub fn local_count_text(locale: LocaleCode, template: &str, n: usize, max: usize
 }
 
 /// 2,000 · 2.000 · 2 000 · 2000, as each language writes event counts.
-fn group_digits(locale: LocaleCode, n: usize) -> String {
+pub fn group_digits(locale: LocaleCode, n: usize) -> String {
     let separator = match locale {
         LocaleCode::En | LocaleCode::Ja | LocaleCode::ZhHans | LocaleCode::Ko => ",",
         LocaleCode::De | LocaleCode::PtBr => ".",

@@ -2658,11 +2658,38 @@ fn apply_local_write_report(report: lightcal::local_events::WriteReport) {
 thread_local! {
     /// The Quit prompt while it is open.
     static QUIT_PROMPT: RefCell<Option<QuitPrompt>> = const { RefCell::new(None) };
+    /// What Quit anyway goes on to do.
+    static QUIT_NEXT: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
 }
 
 /// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
 /// Lightcal open closes the prompt; Quit anyway goes on as Quit does.
-fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
+/// Hides the Quit prompt and frees it once the event that closed it has finished; it is
+/// never dropped inside one of its own callbacks.
+fn close_quit_prompt() {
+    QUIT_PROMPT.with(|slot| {
+        if let Some(prompt) = slot.borrow().as_ref() {
+            let _ = prompt.hide();
+        }
+    });
+    slint::Timer::single_shot(std::time::Duration::ZERO, || {
+        QUIT_PROMPT.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            // Shown again meanwhile (a second Quit): keep it.
+            if slot
+                .as_ref()
+                .is_some_and(|prompt| !prompt.window().is_visible())
+            {
+                slot.take();
+            }
+        });
+    });
+}
+
+/// Asks before quitting with a failed save, then runs `proceed` on Quit anyway: the
+/// usual quit, or the update install that ends with one.
+fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
+    QUIT_NEXT.with(|next| *next.borrow_mut() = Some(proceed.clone()));
     // A second Quit while the prompt is open brings that prompt back.
     let open = QUIT_PROMPT.with(|slot| slot.borrow().as_ref().map(|prompt| prompt.show().is_ok()));
     if open == Some(true) {
@@ -2674,7 +2701,7 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
     };
     let Ok(prompt) = QuitPrompt::new() else {
         // Without the prompt the choice cannot be offered; quitting stays possible.
-        quit_after_writes(ui_weak);
+        proceed();
         return;
     };
     let text = {
@@ -2691,26 +2718,17 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
     prompt.set_body(text.quit_text.into());
     prompt.set_quit_label(text.quit_anyway.into());
     prompt.set_keep_label(text.keep_open.into());
-    prompt.on_keep_open(|| {
-        QUIT_PROMPT.with(|slot| {
-            if let Some(prompt) = slot.borrow_mut().take() {
-                let _ = prompt.hide();
-            }
-        });
-    });
+    prompt.on_keep_open(close_quit_prompt);
     // The close button keeps Lightcal open, like Escape.
     prompt.window().on_close_requested(|| {
-        QUIT_PROMPT.with(|slot| slot.borrow_mut().take());
+        close_quit_prompt();
         slint::CloseRequestResponse::HideWindow
     });
-    let weak = ui_weak.clone();
-    prompt.on_quit_anyway(move || {
-        QUIT_PROMPT.with(|slot| {
-            if let Some(prompt) = slot.borrow_mut().take() {
-                let _ = prompt.hide();
-            }
-        });
-        quit_after_writes(&weak);
+    prompt.on_quit_anyway(|| {
+        close_quit_prompt();
+        if let Some(proceed) = QUIT_NEXT.with(|next| next.borrow_mut().take()) {
+            proceed();
+        }
     });
     let _ = prompt.show();
     QUIT_PROMPT.with(|slot| *slot.borrow_mut() = Some(prompt));
@@ -2730,7 +2748,8 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     let mut failed = false;
     with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
     if failed {
-        show_quit_prompt(ui_weak);
+        let weak = ui_weak.clone();
+        show_quit_prompt(ui_weak, Rc::new(move || quit_after_writes(&weak)));
     } else {
         quit_after_writes(ui_weak);
     }
@@ -2876,6 +2895,22 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
     if lightcal::installer::package_managed() {
         return;
     }
+    // Installing ends with Quit: with a failed save, ask first, before the installer
+    // starts and waits on this process.
+    let mut ask = false;
+    with_active_controller(&ui_weak, |c, _| {
+        ask = !c.install_busy && c.quit_needs_prompt()
+    });
+    if ask {
+        let weak = ui_weak.clone();
+        show_quit_prompt(&ui_weak, Rc::new(move || start_install(weak.clone())));
+    } else {
+        start_install(ui_weak);
+    }
+}
+
+/// Stages and launches the verified installer, then quits.
+fn start_install(ui_weak: slint::Weak<AppWindow>) {
     let mut directory = None;
     let mut failure_text = "";
     with_active_controller(&ui_weak, |ctrl, ui| {
@@ -2897,7 +2932,8 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
         })
         .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
-            Ok(()) => request_quit(&ui_weak),
+            // The user already chose, before the installer started.
+            Ok(()) => quit_after_writes(&ui_weak),
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
                 ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {

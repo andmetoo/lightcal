@@ -853,7 +853,7 @@ impl AppController {
             card.text = if count > MAX_EVENTS {
                 text.over_count
                     .replace("{events}", &format_event_count(locale, count))
-                    .replace("{max}", &local_count_text(locale, "{max}", 0, MAX_EVENTS))
+                    .replace("{max}", &lightcal::i18n::group_digits(locale, MAX_EVENTS))
             } else {
                 text.over_size.to_string()
             }

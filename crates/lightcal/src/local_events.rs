@@ -805,17 +805,25 @@ impl Storage {
     /// either (the unreadable or newer file may be the backup); returns where they went,
     /// main first.
     pub fn start_over(&self) -> Result<Vec<PathBuf>, String> {
-        let mut preserved = Vec::new();
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
         for path in [self.file_path(), self.backup_path()] {
-            if path.exists() {
-                preserved.push(
-                    self.move_aside(&path)
-                        .map_err(|e| format!("Failed to keep the events file: {e}"))?,
-                );
+            if !path.exists() {
+                continue;
+            }
+            match self.move_aside(&path) {
+                Ok(preserved) => moved.push((path, preserved)),
+                Err(error) => {
+                    // All or nothing: put back what was moved, so the files stay as the
+                    // card described them.
+                    for (original, preserved) in moved.iter().rev() {
+                        let _ = fs::rename(preserved, original);
+                    }
+                    return Err(format!("Failed to keep the events file: {error}"));
+                }
             }
         }
         self.save(&[], false)?;
-        Ok(preserved)
+        Ok(moved.into_iter().map(|(_, preserved)| preserved).collect())
     }
 }
 
@@ -1599,6 +1607,34 @@ mod tests {
         let fresh = storage.load();
         assert_eq!(fresh.access, Access::Editable);
         assert!(fresh.events.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_start_over_that_cannot_move_the_backup_changes_nothing() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = temp_dir("start-over-locked");
+        let storage = Storage::new(&dir);
+        fs::write(storage.file_path(), "{ broken").unwrap();
+        fs::write(storage.backup_path(), "{ broken too").unwrap();
+        // Held open without delete sharing, as a scanner might: it cannot be renamed.
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(storage.backup_path())
+            .unwrap();
+        assert!(storage.start_over().is_err());
+        drop(held);
+        assert_eq!(fs::read_to_string(storage.file_path()).unwrap(), "{ broken");
+        assert_eq!(
+            fs::read_to_string(storage.backup_path()).unwrap(),
+            "{ broken too"
+        );
+        assert!(
+            storage.preserved_files().is_empty(),
+            "the main file was put back"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 
