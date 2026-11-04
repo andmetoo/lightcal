@@ -9,7 +9,8 @@
 import { Theme, Motion } from "theme.slint";
 import { FadeIn, Icon, IconButton, TextButton } from "controls.slint";
 import { KoiPond } from "koi.slint";
-import { CalendarDateSize, DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand } from "types.slint";
+import { EventEditor, EditorPanel } from "editor.slint";
+import { CalendarDateSize, DayCellData, AgendaEventItem, AgendaChipRow, ShadedBand, LocalEditorText } from "types.slint";
 
 // Inline accent action inside the event details (.gb): 24 px, accent 12/500.
 component DetailAction inherits Rectangle {
@@ -18,6 +19,8 @@ component DetailAction inherits Rectangle {
     in property <string> alt-label;
     in property <bool> show-alt: false;
     in property <bool> external: false;
+    // Delete (.gb.del): error ink.
+    in property <bool> danger: false;
     in property <string> accessible-name;
     callback clicked();
 
@@ -43,7 +46,7 @@ component DetailAction inherits Rectangle {
                 text: root.label;
                 font-size: Theme.type-caption;
                 font-weight: Theme.weight-medium;
-                color: Theme.accent;
+                color: root.danger ? Theme.err : Theme.accent;
                 vertical-alignment: center;
                 opacity: root.show-alt ? 0 : 1;
                 animate opacity { duration: Motion.fade; easing: ease-in-out; }
@@ -82,10 +85,15 @@ component EventDetails inherits FadeIn {
     in property <string> copy-label;
     in property <string> copied-label;
     in property <string> open-label;
+    in property <LocalEditorText> local-text;
     // Chips are not joined to the panel, so it is rounded on every corner.
     in property <bool> joined: true;
     callback copy();
     callback open();
+    callback edit();
+    callback ask-delete();
+    callback confirm-delete();
+    callback keep();
 
     // Fades in as it opens (ADR 0016), while the row above squares its corners. Its layout
     // cannot be offset to slide: the panel takes its height from that layout.
@@ -136,9 +144,25 @@ component EventDetails inherits FadeIn {
                 overflow: elide;
             }
         }
+        if root.event.note != "" : HorizontalLayout {
+            spacing: 6px;
+            min-height: 16px;
+            VerticalLayout {
+                padding-top: 2px;
+                alignment: start;
+                Icon { name: "note"; size: 12px; color: Theme.ink2; }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.event.note;
+                font-size: Theme.type-caption;
+                color: Theme.ink2;
+                wrap: word-wrap;
+            }
+        }
         HorizontalLayout {
             spacing: 6px;
-            height: 24px;
+            height: root.event.is-local ? 16px : 24px;
             VerticalLayout {
                 alignment: center;
                 Rectangle {
@@ -156,7 +180,7 @@ component EventDetails inherits FadeIn {
                 vertical-alignment: center;
                 overflow: elide;
             }
-            HorizontalLayout {
+            if !root.event.is-local : HorizontalLayout {
                 spacing: 2px;
                 DetailAction {
                     label: root.copy-label;
@@ -169,6 +193,65 @@ component EventDetails inherits FadeIn {
                     external: true;
                     clicked => { root.open(); }
                 }
+            }
+        }
+        // Local events: their actions on a line of their own, so three translated labels
+        // fit (LocalLanguages board).
+        if root.event.is-local && !root.event.confirming : HorizontalLayout {
+            height: 24px;
+            spacing: 2px;
+            alignment: start;
+            DetailAction {
+                label: root.copy-label;
+                alt-label: root.copied-label;
+                show-alt: root.event.copied;
+                clicked => { root.copy(); }
+            }
+            if root.event.can-edit : DetailAction {
+                label: root.local-text.edit;
+                clicked => { root.edit(); }
+            }
+            if root.event.can-delete : DetailAction {
+                label: root.local-text.delete;
+                danger: true;
+                clicked => { root.ask-delete(); }
+            }
+        }
+        if root.event.is-local && root.event.confirming : HorizontalLayout {
+            height: 24px;
+            spacing: 6px;
+            accessible-role: groupbox;
+            accessible-label: root.local-text.delete-question;
+            Text {
+                horizontal-stretch: 1;
+                text: root.local-text.delete-question;
+                font-size: Theme.type-caption;
+                font-weight: Theme.weight-semibold;
+                color: Theme.ink;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Rectangle {
+                width: delete-text.preferred-width + 20px;
+                border-radius: 5px;
+                background: delete-touch.has-hover ? #B02718 : #C42B1C;
+                accessible-role: button;
+                accessible-label: root.local-text.delete;
+                delete-text := Text {
+                    text: root.local-text.delete;
+                    font-size: Theme.type-caption;
+                    font-weight: Theme.weight-medium;
+                    color: #FFFFFF;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                delete-touch := TouchArea {
+                    clicked => { root.confirm-delete(); }
+                }
+            }
+            DetailAction {
+                label: root.local-text.cancel;
+                clicked => { root.keep(); }
             }
         }
     }
@@ -365,6 +448,44 @@ export component CalendarView inherits Rectangle {
     callback copy-event(string);
     callback open-event(string);
     callback go-next-event();
+
+    // ---------- Local events (ADR 0017) ----------
+    in property <LocalEditorText> local-text;
+    // The editor replaces the agenda; the panel replaces it when events cannot be added.
+    in property <bool> editor-open: false;
+    in property <bool> editor-editing: false;
+    in-out property <string> editor-title;
+    in-out property <bool> editor-all-day;
+    in-out property <string> editor-start;
+    in-out property <string> editor-end;
+    in-out property <string> editor-location;
+    in-out property <string> editor-note;
+    in property <string> editor-title-error;
+    in property <string> editor-time-error;
+    in property <bool> editor-start-invalid: false;
+    in property <string> editor-limit-error;
+    in property <string> editor-date;
+    in property <bool> panel-open: false;
+    in property <string> panel-title;
+    in property <string> panel-message;
+    in property <bool> panel-warn: false;
+    in property <bool> panel-accounts: false;
+    // Amber or red strip at the top of the agenda (over the limits, restored, unavailable).
+    in property <string> strip-text;
+    in property <bool> strip-error: false;
+    in property <string> strip-action;
+    callback new-event();
+    callback new-event-on(int);
+    callback save-editor();
+    callback cancel-editor();
+    callback toggle-editor-all-day();
+    callback edit-event(string);
+    callback ask-delete-event(string);
+    callback confirm-delete-event(string);
+    callback keep-event(string);
+    callback strip-action-clicked();
+    callback panel-open-accounts();
+    callback panel-back();
 
     // The event just expanded by a click: only its details fade in. Rust sets it for one
     // sync, so details shown again later appear at once (ADR 0016).
@@ -633,6 +754,12 @@ export component CalendarView inherits Rectangle {
                         : pill.cell.is-selected ? Theme.day-selected
                         : transparent;
                 }
+                // The day the edited event is on (.d.edit): a 1 px ring.
+                if root.editor-open && pill.cell.is-selected && !pill.cell.is-today : Rectangle {
+                    border-radius: Theme.radius-day;
+                    border-width: 1px;
+                    border-color: Theme.toggle-off;
+                }
                 // Today: coral tile under a 5 px darker band.
                 if pill.cell.is-today : Rectangle {
                     y: 5px;
@@ -707,6 +834,10 @@ export component CalendarView inherits Rectangle {
                     // After arrow keys hide the highlight, the next pointer move brings it back.
                     // Real movement, never a hover change alone, also ends keyboard mode.
                     pointer-event(event) => {
+                        if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                            root.new-event-on(pill.index);
+                            return;
+                        }
                         if (event.kind == PointerEventKind.move) {
                             if (root.keyboard-nav) {
                                 root.pointer-took-over();
@@ -730,12 +861,49 @@ export component CalendarView inherits Rectangle {
         background: Theme.popup-line;
     }
 
-    HorizontalLayout {
+    if root.editor-open : EventEditor {
+        x: root.content-x;
+        y: root.agenda-top + 1px;
+        width: root.content-width;
+        height: root.height - self.y - 4px;
+        text: root.local-text;
+        editing: root.editor-editing;
+        title <=> root.editor-title;
+        all-day <=> root.editor-all-day;
+        start <=> root.editor-start;
+        end <=> root.editor-end;
+        location <=> root.editor-location;
+        note <=> root.editor-note;
+        title-error: root.editor-title-error;
+        time-error: root.editor-time-error;
+        start-invalid: root.editor-start-invalid;
+        limit-error: root.editor-limit-error;
+        date-text: root.editor-date;
+        save => { root.save-editor(); }
+        cancel => { root.cancel-editor(); }
+        toggle-all-day => { root.toggle-editor-all-day(); }
+    }
+
+    if root.panel-open && !root.editor-open : EditorPanel {
+        x: root.content-x;
+        y: root.agenda-top + 1px;
+        width: root.content-width;
+        height: root.height - self.y - 12px;
+        title: root.panel-title;
+        message: root.panel-message;
+        warn: root.panel-warn;
+        show-accounts: root.panel-accounts;
+        text: root.local-text;
+        open-accounts => { root.panel-open-accounts(); }
+        back => { root.panel-back(); }
+    }
+
+    if !root.editor-open && !root.panel-open : HorizontalLayout {
         x: root.content-x + 4px;
-        y: root.agenda-top + 1px + 10px;
-        width: root.content-width - 8px;
-        height: 16px;
-        spacing: 8px;
+        y: root.agenda-top + 1px + 6px;
+        width: root.content-width - 4px;
+        height: 24px;
+        spacing: 6px;
         Text {
             horizontal-stretch: 1;
             text: root.agenda-title;
@@ -753,9 +921,25 @@ export component CalendarView inherits Rectangle {
             horizontal-alignment: right;
             vertical-alignment: center;
         }
+        // New event (.ib.sm): 24 px, a 14 px plus.
+        Rectangle {
+            width: 24px;
+            border-radius: Theme.radius-control;
+            background: plus-touch.pressed ? Theme.press : (plus-touch.has-hover ? Theme.hover : transparent);
+            accessible-role: button;
+            accessible-label: root.local-text.new-event-key;
+            Icon {
+                name: "plus";
+                size: 14px;
+                color: Theme.ink2;
+            }
+            plus-touch := TouchArea {
+                clicked => { root.new-event(); }
+            }
+        }
     }
 
-    agenda := Flickable {
+    if !root.editor-open && !root.panel-open : agenda := Flickable {
         x: root.content-x;
         y: root.agenda-top + 1px + 10px + 16px + 6px;
         width: root.content-width;
@@ -766,6 +950,66 @@ export component CalendarView inherits Rectangle {
         list := VerticalLayout {
             width: agenda.width;
             alignment: start;
+
+            if root.strip-text != "" : HorizontalLayout {
+                padding-left: 4px;
+                padding-right: 4px;
+                padding-bottom: 6px;
+                Rectangle {
+                    border-radius: Theme.radius-control;
+                    background: root.strip-error ? Theme.err-bg : Theme.warn-bg;
+                    accessible-role: text;
+                    accessible-label: root.strip-text;
+                    HorizontalLayout {
+                        padding: 6px;
+                        padding-left: 8px;
+                        spacing: 8px;
+                        VerticalLayout {
+                            padding-top: 1px;
+                            alignment: start;
+                            Icon {
+                                name: "warning";
+                                size: 14px;
+                                color: root.strip-error ? Theme.err : Theme.warn;
+                            }
+                        }
+                        Text {
+                            horizontal-stretch: 1;
+                            text: root.strip-text;
+                            font-size: Theme.type-caption;
+                            color: root.strip-error ? Theme.err : Theme.warn;
+                            wrap: word-wrap;
+                        }
+                        if root.strip-action != "" : VerticalLayout {
+                            alignment: start;
+                            Rectangle {
+                                height: 16px;
+                                width: action-text.preferred-width + 4px;
+                                accessible-role: button;
+                                accessible-label: root.strip-action;
+                                action-text := Text {
+                                    text: root.strip-action;
+                                    font-size: Theme.type-caption;
+                                    font-weight: Theme.weight-medium;
+                                    color: root.strip-error ? Theme.err : Theme.warn;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                Rectangle {
+                                    x: 2px;
+                                    y: parent.height - 2px;
+                                    width: parent.width - 4px;
+                                    height: 1px;
+                                    background: action-text.color;
+                                }
+                                TouchArea {
+                                    clicked => { root.strip-action-clicked(); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             if root.chip-rows.length > 0 : VerticalLayout {
                 padding-left: 4px;
@@ -798,8 +1042,13 @@ export component CalendarView inherits Rectangle {
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;
                     open-label: root.open-label;
+                    local-text: root.local-text;
                     copy => { root.copy-event(root.expanded-chip.key); }
                     open => { root.open-event(root.expanded-chip.key); }
+                    edit => { root.edit-event(root.expanded-chip.key); }
+                    ask-delete => { root.ask-delete-event(root.expanded-chip.key); }
+                    confirm-delete => { root.confirm-delete-event(root.expanded-chip.key); }
+                    keep => { root.keep-event(root.expanded-chip.key); }
                 }
             }
 
@@ -821,8 +1070,13 @@ export component CalendarView inherits Rectangle {
                     copy-label: root.copy-label;
                     copied-label: root.copied-label;
                     open-label: root.open-label;
+                    local-text: root.local-text;
                     copy => { root.copy-event(ev.key); }
                     open => { root.open-event(ev.key); }
+                    edit => { root.edit-event(ev.key); }
+                    ask-delete => { root.ask-delete-event(ev.key); }
+                    confirm-delete => { root.confirm-delete-event(ev.key); }
+                    keep => { root.keep-event(ev.key); }
                 }
             }
 
@@ -838,6 +1092,35 @@ export component CalendarView inherits Rectangle {
                         font-size: Theme.type-body;
                         color: Theme.ink2;
                         vertical-alignment: center;
+                    }
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    Rectangle {
+                        height: 26px;
+                        width: add-row.preferred-width + 8px;
+                        border-radius: Theme.radius-control;
+                        background: add-touch.pressed ? Theme.press : (add-touch.has-hover ? Theme.hover : transparent);
+                        accessible-role: button;
+                        accessible-label: root.local-text.add-event;
+                        add-row := HorizontalLayout {
+                            x: 4px;
+                            spacing: 5px;
+                            VerticalLayout {
+                                alignment: center;
+                                Icon { name: "plus"; size: 12px; weight: 2.25; color: Theme.accent; }
+                            }
+                            Text {
+                                text: root.local-text.add-event;
+                                font-size: Theme.type-caption;
+                                font-weight: Theme.weight-medium;
+                                color: Theme.accent;
+                                vertical-alignment: center;
+                            }
+                        }
+                        add-touch := TouchArea {
+                            clicked => { root.new-event(); }
+                        }
                     }
                 }
                 if root.next-event-text != "" : HorizontalLayout {

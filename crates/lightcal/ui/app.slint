@@ -6,7 +6,7 @@
 import { Theme, Motion } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption } from "types.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption, LocalEditorText } from "types.slint";
 
 export { Theme, Motion }
 export { KoiSchool, KoiSwim } from "koi.slint";
@@ -82,6 +82,42 @@ export component AppWindow inherits Window {
     callback copy-agenda-event(string);
     callback open-agenda-event(string);
     callback go-next-event();
+
+    // Local events (ADR 0017). The field text lives here, so it survives a trip to
+    // Settings, which rebuilds the calendar view.
+    in property <LocalEditorText> local-text;
+    in property <bool> editor-open: false;
+    in property <bool> editor-editing: false;
+    in-out property <string> editor-title;
+    in-out property <bool> editor-all-day;
+    in-out property <string> editor-start;
+    in-out property <string> editor-end;
+    in-out property <string> editor-location;
+    in-out property <string> editor-note;
+    in property <string> editor-title-error;
+    in property <string> editor-time-error;
+    in property <bool> editor-start-invalid: false;
+    in property <string> editor-limit-error;
+    in property <string> editor-date;
+    in property <bool> panel-open: false;
+    in property <string> panel-title;
+    in property <string> panel-message;
+    in property <bool> panel-warn: false;
+    in property <bool> panel-accounts: false;
+    in property <string> strip-text;
+    in property <bool> strip-error: false;
+    in property <string> strip-action;
+    // Selected day, or the cell index for right-click (−1 for the selected day).
+    callback new-event(int);
+    callback save-editor();
+    callback cancel-editor();
+    callback edit-event(string);
+    callback ask-delete-event(string);
+    callback confirm-delete-event(string);
+    callback keep-event(string);
+    callback strip-action-clicked();
+    callback panel-open-accounts();
+    callback panel-back();
 
     // Settings Localized Strings & State
     in property <string> settings-title-text: "Settings";
@@ -371,6 +407,24 @@ export component AppWindow inherits Window {
                 }
                 return reject;
             }
+            // The editor and the panel take Escape themselves; this covers focus that left
+            // their fields, such as a click on a day to move the event.
+            if (event.text == Key.Escape && !root.settings-open && root.editor-open) {
+                root.cancel-editor();
+                return accept;
+            }
+            if (event.text == Key.Escape && !root.settings-open && root.panel-open) {
+                root.panel-back();
+                return accept;
+            }
+            // N opens the editor for the selected day: calendar view only, no dialog,
+            // editor or modifier. A focused field takes the key before it gets here.
+            if (!root.settings-open && !root.editor-open
+                && !event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta
+                && (event.text == "n" || event.text == "N")) {
+                root.new-event(-1);
+                return accept;
+            }
             if (event.text == Key.Escape) {
                 if (root.settings-open) {
                     root.close-settings();
@@ -472,6 +526,40 @@ export component AppWindow inherits Window {
         toggle-event(arg0) => { root.toggle-agenda-event(arg0); }
         copy-event(arg0) => { root.copy-agenda-event(arg0); }
         open-event(arg0) => { root.open-agenda-event(arg0); }
+        local-text: root.local-text;
+        editor-open: root.editor-open;
+        editor-editing: root.editor-editing;
+        editor-title <=> root.editor-title;
+        editor-all-day <=> root.editor-all-day;
+        editor-start <=> root.editor-start;
+        editor-end <=> root.editor-end;
+        editor-location <=> root.editor-location;
+        editor-note <=> root.editor-note;
+        editor-title-error: root.editor-title-error;
+        editor-time-error: root.editor-time-error;
+        editor-start-invalid: root.editor-start-invalid;
+        editor-limit-error: root.editor-limit-error;
+        editor-date: root.editor-date;
+        panel-open: root.panel-open;
+        panel-title: root.panel-title;
+        panel-message: root.panel-message;
+        panel-warn: root.panel-warn;
+        panel-accounts: root.panel-accounts;
+        strip-text: root.strip-text;
+        strip-error: root.strip-error;
+        strip-action: root.strip-action;
+        new-event() => { root.calendar-keyboard-nav = false; root.new-event(-1); }
+        new-event-on(arg0) => { root.calendar-keyboard-nav = false; root.new-event(arg0); }
+        save-editor() => { root.save-editor(); }
+        cancel-editor() => { root.cancel-editor(); root.focus-calendar-keys(); }
+        toggle-editor-all-day() => { root.editor-all-day = !root.editor-all-day; }
+        edit-event(arg0) => { root.edit-event(arg0); }
+        ask-delete-event(arg0) => { root.ask-delete-event(arg0); }
+        confirm-delete-event(arg0) => { root.confirm-delete-event(arg0); }
+        keep-event(arg0) => { root.keep-event(arg0); }
+        strip-action-clicked() => { root.strip-action-clicked(); }
+        panel-open-accounts() => { root.panel-open-accounts(); }
+        panel-back() => { root.panel-back(); root.focus-calendar-keys(); }
         go-next-event() => { root.calendar-keyboard-nav = false; root.go-next-event(); }
     }
 
