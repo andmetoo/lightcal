@@ -2817,9 +2817,16 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
 /// - a failed write waiting out its backoff is tried again at once, so the 2 s grace
 ///   period is spent on an attempt (after Quit anyway).
 ///
-/// The caller frees the global shortcut first, so a relaunch can register it.
-fn begin_quit_wait(writer: &lightcal::local_events::Writer) {
+/// `free_shortcut` unregisters the global shortcut and runs first, before the lock is
+/// released, so a relaunch can register it.
+fn begin_quit_wait(
+    writer: &lightcal::local_events::Writer,
+    free_shortcut: impl FnOnce() -> Result<(), String>,
+) {
     QUITTING.with(|quitting| quitting.set(true));
+    if let Err(error) = free_shortcut() {
+        eprintln!("Lightcal: could not free the global shortcut before quitting: {error}");
+    }
     SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
     writer.retry_now();
 }
@@ -2834,12 +2841,10 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
         let _ = slint::quit_event_loop();
         return;
     };
-    // The global shortcut is freed before the single-instance lock, so a relaunch can
-    // register it. `bind` waits for the hotkey thread to unregister it.
+    // `bind` waits for the hotkey thread to unregister the shortcut.
     with_active_controller(ui_weak, |c, _| {
-        let _ = c.shortcut_mgr.bind(None);
+        begin_quit_wait(&writer, || c.shortcut_mgr.bind(None).map(|_| ()));
     });
-    begin_quit_wait(&writer);
     // Window and tray icon go at once.
     with_active_controller(ui_weak, |_c, ui| {
         hide_application_window(ui);
@@ -3958,7 +3963,7 @@ fn main() {
     {
         // 1. Single-instance activation listener sleeping on Win32 kernel event (0.0% CPU)
         let ui_weak_act = ui.as_weak();
-        _single_instance.listen_for_activation(move || {
+        let _ = _single_instance.listen_for_activation(move || {
             let ui_w = ui_weak_act.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_w, |c, w| {

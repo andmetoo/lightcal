@@ -701,8 +701,11 @@ pub struct SingleInstanceGuard {
     /// Manual-reset and unnamed; set on drop to end the activation listener.
     #[cfg(windows)]
     stop: windows_sys::Win32::Foundation::HANDLE,
-    /// Set on drop. Without a stop event, a listener that wakes after the drop passes the
-    /// activation on to the new instance and ends.
+    /// Set on drop. The stop event is the normal way to end the listener: it wakes the
+    /// listener at once and costs nothing while it sleeps. This flag covers a missing stop
+    /// event (CreateEventW failed): the listener then also wakes every
+    /// `FALLBACK_POLL` to check it, and one that wakes for an activation after the drop
+    /// passes it on to the new instance instead of taking it.
     #[cfg(windows)]
     released: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
@@ -722,14 +725,16 @@ impl SingleInstanceGuard {
 
     /// Listens for activation events asynchronously on a background thread sleeping
     /// on the Windows kernel event (0.0% CPU usage), dispatching `on_activate` when signaled.
-    pub fn listen_for_activation<F>(&self, on_activate: F)
+    ///
+    /// Returns the listener thread, which ends once the guard is dropped.
+    pub fn listen_for_activation<F>(&self, on_activate: F) -> Option<std::thread::JoinHandle<()>>
     where
         F: Fn() + Send + 'static,
     {
         #[cfg(windows)]
         {
             use windows_sys::Win32::Foundation::{
-                CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, WAIT_OBJECT_0,
+                CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, WAIT_OBJECT_0, WAIT_TIMEOUT,
             };
             use windows_sys::Win32::System::Threading::{
                 GetCurrentProcess, WaitForMultipleObjects, INFINITE,
@@ -750,27 +755,34 @@ impl SingleInstanceGuard {
                 };
                 (ok != 0 && !dup.is_null()).then_some(dup)
             };
-            let Some(dup_event) = duplicate(self.event) else {
-                return;
-            };
+            let dup_event = duplicate(self.event)?;
             // Stop comes first: when both are set, the wait reports the lower index and
             // leaves the activation event set for the new instance. Without a stop event
-            // (it could not be created) the listener still hears activations.
+            // (it could not be created) the listener still hears activations, and polls
+            // `released` to end.
             let raw: Vec<isize> = duplicate(self.stop)
                 .into_iter()
                 .chain([dup_event])
                 .map(|h| h as isize)
                 .collect();
             let released = self.released.clone();
-            std::thread::spawn(move || {
+            Some(std::thread::spawn(move || {
                 use std::sync::atomic::Ordering;
                 use windows_sys::Win32::System::Threading::SetEvent;
                 let handles: Vec<windows_sys::Win32::Foundation::HANDLE> =
                     raw.iter().map(|&h| h as _).collect();
                 let count = handles.len() as u32;
+                let timeout = if count == 1 {
+                    FALLBACK_POLL.as_millis() as u32
+                } else {
+                    INFINITE
+                };
                 loop {
                     let res =
-                        unsafe { WaitForMultipleObjects(count, handles.as_ptr(), 0, INFINITE) };
+                        unsafe { WaitForMultipleObjects(count, handles.as_ptr(), 0, timeout) };
+                    if res == WAIT_TIMEOUT && !released.load(Ordering::Acquire) {
+                        continue;
+                    }
                     if res != WAIT_OBJECT_0 + count - 1 {
                         break;
                     }
@@ -786,14 +798,19 @@ impl SingleInstanceGuard {
                         CloseHandle(handle);
                     }
                 }
-            });
+            }))
         }
         #[cfg(not(windows))]
         {
             let _ = on_activate;
+            None
         }
     }
 }
+
+/// How often a listener without a stop event checks whether its guard was dropped.
+#[cfg(windows)]
+const FALLBACK_POLL: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[cfg(windows)]
 impl Drop for SingleInstanceGuard {
@@ -1802,10 +1819,13 @@ mod tests {
         // once, and the old listener leaves its activations alone.
         let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let late_clone = late.clone();
-        guard.listen_for_activation(move || {
-            late_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-        });
+        let listener = guard
+            .listen_for_activation(move || {
+                late_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .unwrap();
         drop(guard);
+        listener.join().unwrap();
         let relaunch = match SingleInstance::acquire(&app_id) {
             SingleInstance::FirstInstance(g) => g,
             SingleInstance::AlreadyRunning => panic!("A relaunch should start normally"),
@@ -1836,9 +1856,11 @@ mod tests {
         guard.stop = std::ptr::null_mut();
         let activated = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let observed = activated.clone();
-        guard.listen_for_activation(move || {
-            observed.store(true, std::sync::atomic::Ordering::SeqCst);
-        });
+        let listener = guard
+            .listen_for_activation(move || {
+                observed.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .unwrap();
         assert!(matches!(
             SingleInstance::acquire(&app_id),
             SingleInstance::AlreadyRunning
@@ -1851,9 +1873,9 @@ mod tests {
         }
         assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
 
-        // Released early (Quit while a write is pending), the listener can't be stopped,
-        // but the next activation it wakes for goes on to the relaunched instance, and
-        // the listener thread ends there.
+        // Released early (Quit while a write is pending). The activation that follows at
+        // once wakes the old listener, which is blocked on the event well inside its poll
+        // interval: it passes the activation on and ends.
         activated.store(false, std::sync::atomic::Ordering::SeqCst);
         drop(guard);
         let relaunch = match SingleInstance::acquire(&app_id) {
@@ -1864,15 +1886,21 @@ mod tests {
             SingleInstance::acquire(&app_id),
             SingleInstance::AlreadyRunning
         ));
+        // The relaunch looks only once the old listener has ended, so the old one alone
+        // could have taken the activation.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while !relaunch.check_activation_requested() {
+        while !listener.is_finished() {
             assert!(
                 std::time::Instant::now() < deadline,
-                "the relaunch hears the activation"
+                "the old listener ends after the release"
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(!activated.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(
+            relaunch.check_activation_requested(),
+            "the activation went on to the relaunch"
+        );
     }
 
     #[test]

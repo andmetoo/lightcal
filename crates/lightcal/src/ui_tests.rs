@@ -2544,7 +2544,13 @@ fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
     assert!(writer.last_write_failed());
     std::fs::remove_file(&blocked).unwrap();
 
-    begin_quit_wait(&writer);
+    let freed_first = Cell::new(false);
+    begin_quit_wait(&writer, || {
+        // Still held: the shortcut goes before the lock. A failure is only logged.
+        freed_first.set(SINGLE_INSTANCE.with(|slot| slot.borrow().is_some()));
+        Err("not registered in tests".into())
+    });
+    assert!(freed_first.get(), "the shortcut is freed before the lock");
     let quitting = QUITTING.with(std::cell::Cell::get);
     QUITTING.with(|quitting| quitting.set(false));
     assert!(quitting);
