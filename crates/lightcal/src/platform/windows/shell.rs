@@ -701,6 +701,10 @@ pub struct SingleInstanceGuard {
     /// Manual-reset and unnamed; set on drop to end the activation listener.
     #[cfg(windows)]
     stop: windows_sys::Win32::Foundation::HANDLE,
+    /// Set on drop. Without a stop event, a listener that wakes after the drop passes the
+    /// activation on to the new instance and ends.
+    #[cfg(windows)]
+    released: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SingleInstanceGuard {
@@ -757,18 +761,25 @@ impl SingleInstanceGuard {
                 .chain([dup_event])
                 .map(|h| h as isize)
                 .collect();
+            let released = self.released.clone();
             std::thread::spawn(move || {
+                use std::sync::atomic::Ordering;
+                use windows_sys::Win32::System::Threading::SetEvent;
                 let handles: Vec<windows_sys::Win32::Foundation::HANDLE> =
                     raw.iter().map(|&h| h as _).collect();
                 let count = handles.len() as u32;
                 loop {
                     let res =
                         unsafe { WaitForMultipleObjects(count, handles.as_ptr(), 0, INFINITE) };
-                    if res == WAIT_OBJECT_0 + count - 1 {
-                        on_activate();
-                    } else {
+                    if res != WAIT_OBJECT_0 + count - 1 {
                         break;
                     }
+                    if released.load(Ordering::Acquire) {
+                        // Meant for the instance that now holds the lock.
+                        unsafe { SetEvent(handles[count as usize - 1]) };
+                        break;
+                    }
+                    on_activate();
                 }
                 for handle in handles {
                     unsafe {
@@ -789,6 +800,8 @@ impl Drop for SingleInstanceGuard {
     fn drop(&mut self) {
         use windows_sys::Win32::Foundation::CloseHandle;
         use windows_sys::Win32::System::Threading::SetEvent;
+        self.released
+            .store(true, std::sync::atomic::Ordering::Release);
         unsafe {
             if !self.stop.is_null() {
                 SetEvent(self.stop);
@@ -865,6 +878,7 @@ impl SingleInstance {
                 _mutex: mutex,
                 event,
                 stop,
+                released: Default::default(),
             })
         }
         #[cfg(not(windows))]
@@ -1836,6 +1850,29 @@ mod tests {
             std::thread::yield_now();
         }
         assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
+
+        // Released early (Quit while a write is pending), the listener can't be stopped,
+        // but the next activation it wakes for goes on to the relaunched instance, and
+        // the listener thread ends there.
+        activated.store(false, std::sync::atomic::Ordering::SeqCst);
+        drop(guard);
+        let relaunch = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("A relaunch should start normally"),
+        };
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !relaunch.check_activation_requested() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the relaunch hears the activation"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!activated.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]

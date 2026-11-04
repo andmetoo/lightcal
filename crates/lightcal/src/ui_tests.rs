@@ -2545,7 +2545,9 @@ fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
     std::fs::remove_file(&blocked).unwrap();
 
     begin_quit_wait(&writer);
-    assert!(QUITTING.with(std::cell::Cell::get));
+    let quitting = QUITTING.with(std::cell::Cell::get);
+    QUITTING.with(|quitting| quitting.set(false));
+    assert!(quitting);
     assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_none()));
     #[cfg(windows)]
     assert!(

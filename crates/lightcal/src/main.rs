@@ -2816,6 +2816,8 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
 ///   background;
 /// - a failed write waiting out its backoff is tried again at once, so the 2 s grace
 ///   period is spent on an attempt (after Quit anyway).
+///
+/// The caller frees the global shortcut first, so a relaunch can register it.
 fn begin_quit_wait(writer: &lightcal::local_events::Writer) {
     QUITTING.with(|quitting| quitting.set(true));
     SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
@@ -2832,6 +2834,11 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
         let _ = slint::quit_event_loop();
         return;
     };
+    // The global shortcut is freed before the single-instance lock, so a relaunch can
+    // register it. `bind` waits for the hotkey thread to unregister it.
+    with_active_controller(ui_weak, |c, _| {
+        let _ = c.shortcut_mgr.bind(None);
+    });
     begin_quit_wait(&writer);
     // Window and tray icon go at once.
     with_active_controller(ui_weak, |_c, ui| {
@@ -2847,7 +2854,12 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
         slint::TimerMode::Repeated,
         std::time::Duration::from_millis(50),
         move || {
-            if !writer.saving() || std::time::Instant::now() >= deadline {
+            // A retry that failed again waits out its backoff: nothing more can happen
+            // in the grace period, so Lightcal exits at once.
+            if !writer.saving()
+                || writer.last_write_failed()
+                || std::time::Instant::now() >= deadline
+            {
                 let _ = slint::quit_event_loop();
             }
         },
