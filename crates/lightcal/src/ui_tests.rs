@@ -2451,3 +2451,47 @@ fn the_panel_names_a_kept_file_only_when_one_is_at_fault() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn session_end_waits_at_most_a_second_for_the_last_write() {
+    use lightcal::local_events::{LocalEvent, Storage, Timing, Writer};
+    use std::time::{Duration, Instant};
+    assert!(
+        wait_for_writes_at_session_end(None),
+        "no writer, nothing to wait for"
+    );
+
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-session-end-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let event = LocalEvent::validated(
+        "local:session-end".into(),
+        "Before sign-out",
+        LocalDate::new(2026, 11, 12).unwrap(),
+        Timing::AllDay,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let storage = Storage::new(dir.join("ok"));
+    let writer = Writer::spawn(storage.clone(), |_| {}).unwrap();
+    assert!(writer.submit(vec![event.clone()], false));
+    assert!(wait_for_writes_at_session_end(Some(&writer)));
+    assert_eq!(storage.load().events.len(), 1);
+    writer.shutdown();
+
+    // A file where the data directory should be makes every save fail. The wait ends
+    // with the failed attempt, and never runs past SESSION_END_WAIT.
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn(Storage::new(&blocked), |_| {}).unwrap();
+    assert!(writer.submit(vec![event], false));
+    let started = Instant::now();
+    assert!(!wait_for_writes_at_session_end(Some(&writer)));
+    assert!(started.elapsed() < SESSION_END_WAIT + Duration::from_millis(500));
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -10,7 +10,7 @@ use lightcal::i18n::{
 use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
 use lightcal::platform::windows::{
     bring_to_foreground, primary_tray_area, query_calendar_provider, render_squircle_icon_rgba_64,
-    system_prefers_dark_mode, ShortcutManager, SingleInstance, StartupManager,
+    system_prefers_dark_mode, ShortcutManager, SingleInstance, SingleInstanceGuard, StartupManager,
 };
 #[cfg(windows)]
 use lightcal::platform::windows::{icon::native_small_icon_size, render_squircle_icon_generic};
@@ -2585,6 +2585,34 @@ thread_local! {
     static QUIT_WAIT: RefCell<Option<slint::Timer>> = const { RefCell::new(None) };
     /// Set when Quit starts waiting; the window is not shown again.
     static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The single-instance lock, dropped early when Quit waits for a write (ADR 0017).
+    static SINGLE_INSTANCE: RefCell<Option<SingleInstanceGuard>> = const { RefCell::new(None) };
+    /// The hidden window that hears sign-out and shutdown, alive while the app runs.
+    #[cfg(windows)]
+    static SESSION_END: RefCell<Option<lightcal::platform::windows::SessionEndWatch>> = const { RefCell::new(None) };
+}
+
+/// How long sign-out or shutdown waits for the local events writer's last attempt.
+#[cfg(any(windows, test))]
+const SESSION_END_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// At sign-out or shutdown, waits at most `SESSION_END_WAIT` for the writer's last
+/// attempt; true when nothing is left unsaved. This is the one place the UI thread waits
+/// on disk: the process ends right after (ADR 0017).
+#[cfg(any(windows, test))]
+fn wait_for_writes_at_session_end(writer: Option<&lightcal::local_events::Writer>) -> bool {
+    writer.is_none_or(|w| w.wait_saved(SESSION_END_WAIT))
+}
+
+/// The writer of the running controller, if any. Uses `try_borrow`, as Windows may send
+/// `WM_ENDSESSION` while the controller is borrowed by a nested message loop.
+#[cfg(windows)]
+fn session_end_writer() -> Option<lightcal::local_events::Writer> {
+    ACTIVE_CONTROLLER.with(|c| {
+        let ctrl = c.borrow().as_ref()?.upgrade()?;
+        let ctrl = ctrl.try_borrow().ok()?;
+        ctrl.local_writer.clone()
+    })
 }
 
 /// Takes the events lock and loads local events on a background thread. Local events show
@@ -2787,6 +2815,9 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
     // Window and tray icon go at once, and the shortcut or a second launch no longer
     // shows the window while Lightcal exits.
     QUITTING.with(|quitting| quitting.set(true));
+    // A new launch starts normally while this one exits. The events lock stays held
+    // until the process ends, so the new instance waits for it in the background.
+    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
     with_active_controller(ui_weak, |_c, ui| {
         hide_application_window(ui);
         #[cfg(windows)]
@@ -3917,6 +3948,13 @@ fn main() {
             });
         });
 
+        // Sign-out and shutdown: never delay the session, and give the local events
+        // writer at most 1 s for its last attempt (ADR 0017).
+        let session_end = lightcal::platform::windows::SessionEndWatch::new(|| {
+            wait_for_writes_at_session_end(session_end_writer().as_ref());
+        });
+        SESSION_END.with(|slot| *slot.borrow_mut() = session_end);
+
         // 2. Event-driven system tray clicks (dispatches directly on mouse events, no busy polling)
         let ui_weak_tray = ui.as_weak();
         tray_icon::TrayIconEvent::set_event_handler(Some(move |ev| {
@@ -4843,7 +4881,9 @@ fn main() {
         });
     }
 
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(_single_instance));
     slint::run_event_loop_until_quit().expect("Failed to run Slint event loop");
+    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
 }
 
 #[cfg(test)]

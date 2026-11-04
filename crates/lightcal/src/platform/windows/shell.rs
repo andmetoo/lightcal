@@ -688,11 +688,19 @@ pub enum SingleInstance {
 }
 
 /// Holds ownership handles of the single-instance synchronization primitives.
+///
+/// Dropping it releases the single-instance lock at once: a new launch then starts
+/// normally, and the activation listener stops, so it no longer takes activations meant
+/// for the new instance. Quit drops it early while it waits for a local events write
+/// (ADR 0017).
 pub struct SingleInstanceGuard {
     #[cfg(windows)]
     _mutex: windows_sys::Win32::Foundation::HANDLE,
     #[cfg(windows)]
     event: windows_sys::Win32::Foundation::HANDLE,
+    /// Manual-reset and unnamed; set on drop to end the activation listener.
+    #[cfg(windows)]
+    stop: windows_sys::Win32::Foundation::HANDLE,
 }
 
 impl SingleInstanceGuard {
@@ -720,38 +728,46 @@ impl SingleInstanceGuard {
                 CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, WAIT_OBJECT_0,
             };
             use windows_sys::Win32::System::Threading::{
-                GetCurrentProcess, WaitForSingleObject, INFINITE,
+                GetCurrentProcess, WaitForMultipleObjects, INFINITE,
             };
 
-            let mut dup_event = std::ptr::null_mut();
-            let ok = unsafe {
-                DuplicateHandle(
-                    GetCurrentProcess(),
-                    self.event,
-                    GetCurrentProcess(),
-                    &mut dup_event,
-                    0,
-                    0,
-                    DUPLICATE_SAME_ACCESS,
-                )
+            let duplicate = |handle| {
+                let mut dup = std::ptr::null_mut();
+                let ok = unsafe {
+                    DuplicateHandle(
+                        GetCurrentProcess(),
+                        handle,
+                        GetCurrentProcess(),
+                        &mut dup,
+                        0,
+                        0,
+                        DUPLICATE_SAME_ACCESS,
+                    )
+                };
+                (ok != 0 && !dup.is_null()).then_some(dup)
             };
-            if ok != 0 && !dup_event.is_null() {
-                let raw_handle = dup_event as isize;
-                std::thread::spawn(move || {
-                    let event_handle = raw_handle as windows_sys::Win32::Foundation::HANDLE;
-                    loop {
-                        let res = unsafe { WaitForSingleObject(event_handle, INFINITE) };
-                        if res == WAIT_OBJECT_0 {
-                            on_activate();
-                        } else {
-                            break;
-                        }
+            let (Some(dup_stop), Some(dup_event)) = (duplicate(self.stop), duplicate(self.event))
+            else {
+                return;
+            };
+            let raw = [dup_stop as isize, dup_event as isize];
+            std::thread::spawn(move || {
+                // Stop comes first: when both are set, the wait reports the lower index
+                // and leaves the activation event set for the new instance.
+                let handles = raw.map(|h| h as windows_sys::Win32::Foundation::HANDLE);
+                loop {
+                    let res = unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, INFINITE) };
+                    if res == WAIT_OBJECT_0 + 1 {
+                        on_activate();
+                    } else {
+                        break;
                     }
-                    unsafe {
-                        CloseHandle(event_handle);
-                    }
-                });
-            }
+                }
+                unsafe {
+                    CloseHandle(handles[0]);
+                    CloseHandle(handles[1]);
+                }
+            });
         }
         #[cfg(not(windows))]
         {
@@ -764,7 +780,12 @@ impl SingleInstanceGuard {
 impl Drop for SingleInstanceGuard {
     fn drop(&mut self) {
         use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::SetEvent;
         unsafe {
+            if !self.stop.is_null() {
+                SetEvent(self.stop);
+                CloseHandle(self.stop);
+            }
             if !self._mutex.is_null() {
                 CloseHandle(self._mutex);
             }
@@ -824,9 +845,18 @@ impl SingleInstance {
                 return SingleInstance::AlreadyRunning;
             }
 
+            let stop = unsafe {
+                CreateEventW(
+                    std::ptr::null(),
+                    1, // Manual reset: stays set once the guard is dropped
+                    0,
+                    std::ptr::null(),
+                )
+            };
             SingleInstance::FirstInstance(SingleInstanceGuard {
                 _mutex: mutex,
                 event,
+                stop,
             })
         }
         #[cfg(not(windows))]
@@ -834,6 +864,111 @@ impl SingleInstance {
             let _ = app_id;
             SingleInstance::FirstInstance(SingleInstanceGuard {})
         }
+    }
+}
+
+/// A hidden, untitled top-level window that hears sign-out and shutdown (ADR 0017).
+///
+/// `WM_QUERYENDSESSION` is answered at once, so Lightcal never prompts or delays the
+/// session. `WM_ENDSESSION` for an ending session runs `on_end` on the thread that made
+/// the watch, before the window procedure returns and Windows may end the process.
+/// Created on the UI thread, whose event loop dispatches its messages. A message-only
+/// window would not work: Windows sends these messages only to top-level windows.
+#[cfg(windows)]
+pub struct SessionEndWatch {
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    on_end: *mut Box<dyn Fn()>,
+}
+
+#[cfg(windows)]
+impl SessionEndWatch {
+    pub fn new(on_end: impl Fn() + 'static) -> Option<Self> {
+        use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, RegisterClassW, SetWindowLongPtrW, GWLP_USERDATA, WNDCLASSW,
+            WS_EX_TOOLWINDOW, WS_POPUP,
+        };
+        let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
+        let title = [0u16];
+        // SAFETY: the class name and title outlive the calls; the class is registered at
+        // most once per process (a second registration fails harmlessly).
+        let hwnd = unsafe {
+            let instance = GetModuleHandleW(std::ptr::null());
+            let wc = WNDCLASSW {
+                lpfnWndProc: Some(session_end_proc),
+                hInstance: instance,
+                lpszClassName: class.as_ptr(),
+                ..std::mem::zeroed()
+            };
+            RegisterClassW(&wc);
+            CreateWindowExW(
+                WS_EX_TOOLWINDOW,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP,
+                0,
+                0,
+                0,
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                instance,
+                std::ptr::null(),
+            )
+        };
+        if hwnd.is_null() {
+            return None;
+        }
+        let on_end: *mut Box<dyn Fn()> = Box::into_raw(Box::new(Box::new(on_end)));
+        // SAFETY: the pointer stays valid until Drop destroys the window first.
+        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, on_end as isize) };
+        Some(Self { hwnd, on_end })
+    }
+
+    /// The watch window, for tests that send it session messages.
+    pub fn hwnd(&self) -> windows_sys::Win32::Foundation::HWND {
+        self.hwnd
+    }
+}
+
+#[cfg(windows)]
+impl Drop for SessionEndWatch {
+    fn drop(&mut self) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+        // SAFETY: the window is destroyed before the callback it points to is freed.
+        unsafe {
+            DestroyWindow(self.hwnd);
+            drop(Box::from_raw(self.on_end));
+        }
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn session_end_proc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    message: u32,
+    wp: windows_sys::Win32::Foundation::WPARAM,
+    lp: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DefWindowProcW, GetWindowLongPtrW, GWLP_USERDATA, WM_ENDSESSION, WM_QUERYENDSESSION,
+    };
+    match message {
+        // Never prompt or delay the session.
+        WM_QUERYENDSESSION => 1,
+        WM_ENDSESSION => {
+            if wp != 0 {
+                let on_end = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const Box<dyn Fn()>;
+                if !on_end.is_null() {
+                    // A panic must not unwind into Windows.
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        (*on_end)();
+                    }));
+                }
+            }
+            0
+        }
+        _ => DefWindowProcW(hwnd, message, wp, lp),
     }
 }
 
@@ -1620,5 +1755,51 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
+
+        // Dropping the guard (Quit while a write is pending) lets a new launch start at
+        // once, and the old listener leaves its activations alone.
+        let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let late_clone = late.clone();
+        guard.listen_for_activation(move || {
+            late_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        drop(guard);
+        let relaunch = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("A relaunch should start normally"),
+        };
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(!late.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(relaunch.check_activation_requested());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn session_end_watch_never_delays_and_runs_only_when_the_session_ends() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SendMessageW, WM_ENDSESSION, WM_QUERYENDSESSION,
+        };
+        let ended = Rc::new(Cell::new(0));
+        let counter = ended.clone();
+        let watch = SessionEndWatch::new(move || counter.set(counter.get() + 1)).unwrap();
+        let hwnd = watch.hwnd();
+        assert_eq!(unsafe { SendMessageW(hwnd, WM_QUERYENDSESSION, 0, 0) }, 1);
+        assert_eq!(ended.get(), 0);
+        // A cancelled end (wParam FALSE) does nothing.
+        unsafe { SendMessageW(hwnd, WM_ENDSESSION, 0, 0) };
+        assert_eq!(ended.get(), 0);
+        unsafe { SendMessageW(hwnd, WM_ENDSESSION, 1, 0) };
+        assert_eq!(ended.get(), 1);
+        // A second watch registers the same class without trouble.
+        let second = SessionEndWatch::new(|| {}).unwrap();
+        drop(second);
+        drop(watch);
+        assert_eq!(Rc::strong_count(&ended), 1, "the callback is freed");
     }
 }
