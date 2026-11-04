@@ -176,6 +176,162 @@
       "x": 608,
       "y": 564,
       "page": "datesize"
+    },
+    "LocalCal.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 352,
+      "h": 432,
+      "title": "Editor · new event · light (right-click a day)",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalEditDark.dc.html": {
+      "x": 432,
+      "y": 0,
+      "w": 352,
+      "h": 432,
+      "title": "Editor · edit, ends 24:00 · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalInvalid.dc.html": {
+      "x": 864,
+      "y": 0,
+      "w": 352,
+      "h": 432,
+      "title": "Editor · validation · light",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalLimit.dc.html": {
+      "x": 1296,
+      "y": 0,
+      "w": 352,
+      "h": 432,
+      "title": "Editor · 2,000-event limit · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalEmpty.dc.html": {
+      "x": 1728,
+      "y": 0,
+      "w": 352,
+      "h": 432,
+      "title": "Empty day · Add event and + · light",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalDetails.dc.html": {
+      "x": 0,
+      "y": 552,
+      "w": 352,
+      "h": 432,
+      "title": "Local event details · Edit and Delete · light",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalConfirm.dc.html": {
+      "x": 432,
+      "y": 552,
+      "w": 352,
+      "h": 432,
+      "title": "Delete confirmation in the row · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalDeleteOnly.dc.html": {
+      "x": 864,
+      "y": 552,
+      "w": 352,
+      "h": 432,
+      "title": "Delete only, over the limits · light",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalBlocked.dc.html": {
+      "x": 1296,
+      "y": 552,
+      "w": 352,
+      "h": 432,
+      "title": "Unavailable · N or + pressed · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalRestored.dc.html": {
+      "x": 1728,
+      "y": 552,
+      "w": 352,
+      "h": 432,
+      "title": "Restored backup notice · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalSettings.dc.html": {
+      "x": 0,
+      "y": 1104,
+      "w": 448,
+      "h": 360,
+      "title": "Accounts · no account · light",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalSettingsDark.dc.html": {
+      "x": 528,
+      "y": 1104,
+      "w": 448,
+      "h": 360,
+      "title": "Accounts · On this PC and Google · dark",
+      "is_interactive": true,
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalQuit.dc.html": {
+      "x": 1056,
+      "y": 1104,
+      "w": 400,
+      "h": 188,
+      "title": "Quit after a failed save · light",
+      "radius": 8,
+      "page": "local"
+    },
+    "LocalNotices.dc.html": {
+      "x": 0,
+      "y": 1584,
+      "w": 1504,
+      "h": 940,
+      "title": "Local event notices and the Quit prompt",
+      "radius": 12,
+      "page": "local"
+    },
+    "LocalUnavailable.dc.html": {
+      "x": 1584,
+      "y": 1584,
+      "w": 1504,
+      "h": 940,
+      "title": "Unavailable states: Locked, NewerVersion, Damaged, Unreadable, CannotSave",
+      "radius": 12,
+      "page": "local"
+    },
+    "LocalLanguages.dc.html": {
+      "x": 0,
+      "y": 2644,
+      "w": 1800,
+      "h": 600,
+      "title": "German and Russian text length",
+      "radius": 12,
+      "page": "local"
     }
   },
   "createdOnFiles": {
@@ -207,6 +363,10 @@
     {
       "id": "datesize",
       "name": "Date size"
+    },
+    {
+      "id": "local",
+      "name": "Local events"
     }
   ],
   "noteOrder": [
@@ -217,7 +377,10 @@
     "title-states",
     "title-languages",
     "title-datesize",
-    "datesize-spec"
+    "datesize-spec",
+    "title-local",
+    "local-spec",
+    "local-questions"
   ],
   "notes": {
     "changes": {
@@ -291,6 +454,33 @@
       "y": 564,
       "page": "datesize",
       "text": "Owner decision, 2 Nov 2026: Date size setting\n• Standard 14 px: 34 × 28 tile, 32 px rows, popup 352 × 432.\n• Large 16 px: same tile, rows and popup.\n• Larger 18 px: 30 px tile, 34 px rows, popup 352 × 444; the agenda keeps its height.\n• Only day numbers grow; dots stay 2 px above the tile bottom and the number keeps a 3 px gap above them.\n• Windows display scale multiplies all of it: Large at 150 % draws 24 px dates.\n• The boards place digits with browser text metrics; Slint draws them about a pixel lower. The app snapshots (calendar-large-light.png, calendar-larger-*.png) are the pixel reference."
+    },
+    "title-local": {
+      "kind": "title1",
+      "maxW": 2080,
+      "text": "Local events (ADR 0017)",
+      "w": 240,
+      "x": 0,
+      "y": -300,
+      "page": "local"
+    },
+    "local-spec": {
+      "fill": "teal",
+      "size": 24,
+      "w": 560,
+      "x": 2160,
+      "y": 0,
+      "page": "local",
+      "text": "Stage 2 design, 4 Nov 2026 (ADR 0017)\n• Entry points: right-click a day (selects it, opens the editor), + in the agenda header, N (calendar view, no field focused, no dialog; n or N, no Ctrl or Alt), Add event on an empty day. Over the limits or unavailable, each opens a short explanation instead of the editor.\n• The editor replaces the agenda; the grid and the 352 × 432 popup stay. Visual and Tab order: Title, All day, Start, End, Location, Note, Save, Cancel. The footer stays pinned; the fields scroll.\n• The date is the selected day. Clicking a day while editing moves the event; its tile gets a 1 px outline.\n• Enter saves from single-line fields. In Note, Enter adds a line and Ctrl+Enter saves. Esc cancels: the root Escape handler needs an editor-open guard.\n• 24-hour HH:MM. Start 00:00–23:59, end 00:01–24:00 and after start; 24:00 stays 24:00 on the same date.\n• Save shows errors under their fields and focuses the first one. Limit errors sit above the footer.\n• Local details: note, On this PC · Local, then Copy · Edit · Delete on their own line. Delete asks in the row; focus starts on Cancel. Provider rows keep Copy · Open.\n• All-day chips become buttons, so local all-day events open the same details.\n• Accounts: On this PC is the first card (#0F766E), checked by default. With no account, Connect an account follows it.\n• Notices: quiet line, amber strip and red box, as for providers. Start over only for NewerVersion, Damaged and Unreadable."
+    },
+    "local-questions": {
+      "fill": "gray",
+      "size": 24,
+      "w": 560,
+      "x": 2160,
+      "y": 760,
+      "page": "local",
+      "text": "For the owner\n1. Save · Cancel follows the ADR order (Save first, the Windows dialog order). The ICS board puts the primary button last; one order should win.\n2. No date field: the grid picks the date. A keyboard user changes it by cancelling and selecting another day. Add a date stepper?\n3. Show in folder opens Explorer at the kept file. It is small but not in the ADR.\n4. The legacy Windows calendars provider shows ‘On this PC’ as its detail line. Rename it so two rows never share that label.\n5. The Accounts footnote becomes ‘Accounts are read-only. Only events on this PC can be edited.’\n6. Restored, delete-only and unavailable also show a strip at the top of the agenda, since most people never open Settings.\nBuild notes: solid fills, rounded rects, 1–2 px borders, no blur."
     }
   },
   "order": [
@@ -311,7 +501,23 @@
     "DateSizeLarger.dc.html",
     "DateSizeLargerDark.dc.html",
     "DateSizeScale150.dc.html",
-    "SettingsDateSize.dc.html"
+    "SettingsDateSize.dc.html",
+    "LocalCal.dc.html",
+    "LocalEditDark.dc.html",
+    "LocalInvalid.dc.html",
+    "LocalLimit.dc.html",
+    "LocalEmpty.dc.html",
+    "LocalDetails.dc.html",
+    "LocalConfirm.dc.html",
+    "LocalDeleteOnly.dc.html",
+    "LocalBlocked.dc.html",
+    "LocalRestored.dc.html",
+    "LocalSettings.dc.html",
+    "LocalSettingsDark.dc.html",
+    "LocalQuit.dc.html",
+    "LocalNotices.dc.html",
+    "LocalUnavailable.dc.html",
+    "LocalLanguages.dc.html"
   ],
   "title": "Lightcal Refresh"
 }

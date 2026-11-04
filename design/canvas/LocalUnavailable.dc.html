@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal local events unavailable states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.cap2{font:600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020}
+.cap3{font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;margin-top:2px}
+.win{border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.10);align-self:flex-start}
+</style>
+</helmet>
+<div style="width: 1504px; height: 940px; box-sizing: border-box; padding: 40px; background: #FAFAFA; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px; row-gap: 36px; align-content: start">
+  <sc-for list="{{cells}}" as="w" hint-placeholder-count="6">
+    <div style="display: flex; flex-direction: column; gap: 12px; height: 412px">
+      <div><div class="cap2">{{w.name}}</div><div class="cap3">{{w.desc}}</div></div>
+      <sc-if value="{{w.settings}}" hint-placeholder-val="{{true}}">
+        <div class="win" style="width: 448px; height: 360px"><dc-import name="LocalSettings" mode="{{w.mode}}" theme="{{w.theme}}" lang="en" hint-size="448px,360px"></dc-import></div>
+      </sc-if>
+      <sc-if value="{{w.quit}}" hint-placeholder-val="{{false}}">
+        <div class="win" style="width: 400px; height: 188px"><dc-import name="LocalQuit" theme="{{w.theme}}" hint-size="400px,188px"></dc-import></div>
+      </sc-if>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1504,"height":940}}'>
+var CELLS = [{"name":"Locked · light","desc":"Another Lightcal still holds the lock. Loading, then read only after 3 s; keeps trying.","mode":"locked","theme":"light","quit":false,"settings":true},{"name":"NewerVersion · light","desc":"Red. Never falls back to last_good. Start over is allowed.","mode":"newer","theme":"light","quit":false,"settings":true},{"name":"Damaged · dark","desc":"Red. File and backup unreadable as events; names the kept file. Start over is allowed.","mode":"damaged","theme":"dark","quit":false,"settings":true},{"name":"Unreadable · light","desc":"Red with the system error. The file is left untouched. Start over is allowed.","mode":"unreadable","theme":"light","quit":false,"settings":true},{"name":"CannotSave · dark","desc":"Red, no Start over: the file is fine. A restart may help.","mode":"cannotsave","theme":"dark","quit":false,"settings":true},{"name":"Start over confirmation · light","desc":"Inline. Delete-style red button; focus starts on Cancel.","mode":"startover","theme":"light","quit":false,"settings":true}];
+class Component extends DCLogic {
+  renderVals() { return { cells: CELLS }; }
+}
+</script>
+</body>
+</html>

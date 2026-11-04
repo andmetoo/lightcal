@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal settings, Accounts with On this PC</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit}
+.st{--page:#F3F3F3;--card:#FFFFFF;--cardline:#E8E8E8;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--hover:#F0F0F0;--accent:#00796B;--toggleoff:#838383;--avatar:#E6F4F1;--warn:#8A5300;--warnbg:#FFF4E0;--err:#B3261E;--errbg:#FDECEA;--mono:#3A3A3A}
+.st.dark{--page:#191919;--card:#222222;--cardline:#2A2A2A;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2E2E2E;--ctrl:#2A2A2A;--ctrlline:#333333;--ctrlbottom:#3F3F3F;--hover:#2A2A2A;--accent:#53B9AB;--toggleoff:#7B7B7B;--avatar:#1C2E2B;--warn:#F2B866;--warnbg:#33291A;--err:#FF8A80;--errbg:#3A2220;--mono:#D0D0D0}
+.f{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif}
+.cap{width:46px;height:32px;border:0;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.cap:hover{background:#C42B1C;color:#FFFFFF}
+.tab{position:relative;height:40px;padding:0 12px;display:inline-flex;align-items:center;gap:8px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:6px;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink)}
+.tab.on::after{content:"";position:absolute;left:50%;bottom:3px;width:16px;height:3px;margin-left:-8px;border-radius:1.5px;background:var(--accent)}
+.card{background:var(--card);border:1px solid var(--cardline);border-radius:8px;overflow:hidden;flex-shrink:0}
+.btn{height:28px;padding:0 10px;border-radius:6px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);display:inline-flex;align-items:center;gap:6px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);cursor:pointer;box-sizing:border-box;white-space:nowrap;flex-shrink:0}
+.btn:hover{background:var(--hover)}
+.btn.sm{height:26px;font-size:12px;padding:0 8px}
+.danger{height:26px;padding:0 10px;border:0;border-radius:6px;background:#C42B1C;color:#FFFFFF;font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.ib{width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+.ib:hover{background:var(--hover);color:var(--ink)}
+.cr{position:relative;height:30px;padding:0 12px;display:flex;align-items:center;gap:10px;font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);border-radius:6px;margin:0 4px}
+.cb{width:16px;height:16px;border-radius:4px;border:1px solid var(--toggleoff);background:transparent;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0;margin-left:auto;cursor:pointer;color:#FFFFFF;flex-shrink:0}
+.cb.on{background:#00796B;border-color:#00796B}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lnk{font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);text-decoration:none;border-radius:4px;padding:2px 4px;margin-left:-4px}
+.lnk:hover{color:var(--ink);background:var(--hover)}
+.prov{width:100%;height:40px;border:0;background:transparent;display:flex;align-items:center;gap:12px;padding:0 12px;font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);text-align:left;cursor:pointer;position:relative;box-sizing:border-box}
+.prov:hover{background:var(--hover)}
+.prov+.prov::before{content:"";position:absolute;left:12px;right:12px;top:0;height:1px;background:var(--line)}
+.prov small{display:block;font:400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);margin-top:1px}
+.pi{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font:700 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#FFFFFF}
+.note{font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2)}
+.quiet{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid var(--line);font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2)}
+.amber{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:var(--warnbg);color:var(--warn);font:500 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif}
+.redbox{margin:0 8px 8px;display:flex;gap:8px;padding:8px 10px;border-radius:6px;background:var(--errbg);color:var(--err);font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif}
+.quiet svg,.amber svg,.redbox svg{flex-shrink:0;margin-top:1px}
+.file{font:400 11px/15px 'Cascadia Mono',Consolas,monospace;color:var(--mono);word-break:break-all}
+.row2{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+</style>
+</helmet>
+<div class="{{rootCls}}" lang="{{lang}}" style="width: 448px; height: 360px; box-sizing: border-box; background: var(--page); color: var(--ink); display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 32px; display: flex; align-items: center; flex-shrink: 0">
+    <div style="flex-grow: 1; display: flex; align-items: center; gap: 8px; padding-left: 12px">
+      <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="4" width="56" height="56" rx="14" fill="#D73840"></rect><path d="M4 18A14 14 0 0 1 18 4H46A14 14 0 0 1 60 18Z" fill="#A92A31"></path><rect x="18" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="25" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="18" y="41" width="12" height="12" rx="3" fill="#FFFFFF" fill-opacity=".55"></rect><rect x="34" y="41" width="12" height="12" rx="3" fill="#FFFFFF"></rect></svg>
+      <span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{t.window}}</span>
+    </div>
+    <button class="cap" aria-label="{{t.close}}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+  </div>
+  <nav aria-label="Settings sections" style="height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--cardline); flex-shrink: 0">
+    <a class="tab" href="SettingsCalendar.dc.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg>{{t.tabCal}}</a>
+    <a class="tab on" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>{{t.tabAcc}}</a>
+    <a class="tab" href="SettingsApp.dc.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M8 9h8M8 15h5"></path></svg>{{t.tabApp}}</a>
+  </nav>
+  <div style="flex-grow: 1; min-height: 0; overflow: hidden; padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box">
+    <sc-if value="{{hasAccounts}}" hint-placeholder-val="{{true}}">
+      <div style="height: 28px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0">
+        <span style="font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{t.connected}}</span>
+        <button class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>{{t.addAccount}}</button>
+      </div>
+    </sc-if>
+
+    <div class="card">
+      <div style="height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px">
+        <span style="width: 28px; height: 28px; border-radius: 8px; background: #0F766E; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg></span>
+        <div style="flex-grow: 1; min-width: 0">
+          <div style="font: 600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{t.local}}</div>
+          <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{sub}}</div>
+        </div>
+        <button class="{{cbCls}}" role="checkbox" aria-checked="{{onStr}}" aria-label="{{t.show}}" onClick="{{toggle}}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: {{tick}}"><path d="M20 6 9 17l-5-5"></path></svg></button>
+      </div>
+
+      <sc-if value="{{n.quiet}}" hint-placeholder-val="{{false}}">
+        <div class="quiet" role="status">
+          <sc-if value="{{n.spin}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="var(--line)" stroke-width="2.5"></circle><path d="M21 12a9 9 0 0 0-9-9" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"></path></svg></sc-if>
+          <sc-if value="{{n.check}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg></sc-if>
+          <span style="flex-grow: 1">{{n.text}}</span>
+          <sc-if value="{{n.ok}}" hint-placeholder-val="{{false}}"><button class="btn sm" onClick="{{dismiss}}">{{t.ok}}</button></sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{n.amber}}" hint-placeholder-val="{{false}}">
+        <div class="amber" role="status">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01"></path></svg>
+          <div style="flex-grow: 1; min-width: 0">
+            <div>{{n.text}}</div>
+            <sc-if value="{{n.hasFile}}" hint-placeholder-val="{{false}}"><div class="file" style="margin-top: 3px; color: var(--warn)">{{n.file}}</div></sc-if>
+            <sc-if value="{{n.hasActs}}" hint-placeholder-val="{{true}}">
+              <div class="row2">
+                <sc-if value="{{n.folder}}" hint-placeholder-val="{{false}}"><button class="btn sm">{{t.folder}}</button></sc-if>
+                <sc-if value="{{n.retry}}" hint-placeholder-val="{{false}}"><button class="btn sm">{{t.tryNow}}</button></sc-if>
+                <sc-if value="{{n.ok}}" hint-placeholder-val="{{false}}"><button class="btn sm" onClick="{{dismiss}}">{{t.ok}}</button></sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{n.red}}" hint-placeholder-val="{{false}}">
+        <div class="redbox" role="alert">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+          <div style="flex-grow: 1; min-width: 0">
+            <div style="font-weight: 600">{{n.head}}</div>
+            <div style="margin-top: 2px; color: var(--ink2)">{{n.text}}</div>
+            <sc-if value="{{n.hasFile}}" hint-placeholder-val="{{false}}"><div class="file" style="margin-top: 3px">{{n.file}}</div></sc-if>
+            <sc-if value="{{n.hasActs}}" hint-placeholder-val="{{true}}">
+              <div class="row2">
+                <sc-if value="{{n.confirm}}" hint-placeholder-val="{{false}}"><button class="danger" onClick="{{dismiss}}">{{t.startOver}}</button><button class="btn sm" onClick="{{back}}" style="outline: 2px solid var(--accent); outline-offset: 1px">{{t.cancel}}</button></sc-if>
+                <sc-if value="{{n.folder}}" hint-placeholder-val="{{false}}"><button class="btn sm">{{t.folder}}</button></sc-if>
+                <sc-if value="{{n.startOver}}" hint-placeholder-val="{{false}}"><button class="btn sm" onClick="{{ask}}">{{t.startOver}}</button></sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{hasAccounts}}" hint-placeholder-val="{{true}}">
+      <div class="card" style="padding-bottom: 4px">
+        <div style="height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px">
+          <div style="width: 28px; height: 28px; border-radius: 14px; background: var(--avatar); color: var(--accent); display: flex; align-items: center; justify-content: center; font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; flex-shrink: 0">A</div>
+          <div style="flex-grow: 1; min-width: 0">
+            <div style="font: 600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{t.google}}</div>
+            <div style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">alex@example.com · {{t.updated}}</div>
+          </div>
+          <button class="ib" aria-label="{{t.refresh}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg></button>
+          <button class="ib" aria-label="{{t.more}}" aria-haspopup="menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></button>
+        </div>
+        <div style="height: 1px; background: var(--line); margin: 0 12px 4px"></div>
+        <div class="cr"><span style="width: 10px; height: 10px; border-radius: 5px; background: #D9822B; flex-shrink: 0"></span><span>{{t.personal}}</span><button class="cb on" role="checkbox" aria-checked="true" aria-label="{{t.personal}}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></button></div>
+        <div class="cr"><span style="width: 10px; height: 10px; border-radius: 5px; background: #3B82C4; flex-shrink: 0"></span><span>{{t.work}}</span><button class="cb on" role="checkbox" aria-checked="true" aria-label="{{t.work}}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></button></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; padding: 0 4px; font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); flex-shrink: 0">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+        {{t.readOnly}}
+      </div>
+    </sc-if>
+
+    <sc-if value="{{noAccounts}}" hint-placeholder-val="{{false}}">
+      <div style="padding: 4px 2px 0; flex-shrink: 0">
+        <div style="font: 600 15px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif">{{t.connect}}</div>
+        <div class="note" style="margin-top: 2px">{{t.connectNote}}</div>
+      </div>
+      <div class="card">
+        <button class="prov"><span class="pi" style="background: #3B82C4">G</span><span>{{t.google}}<small>{{t.googleDesc}}</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+        <button class="prov"><span class="pi" style="background: #0B6A9E">O</span><span>Microsoft Outlook<small>{{t.outlookDesc}}</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+        <button class="prov"><span class="pi" style="background: #646464"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"></path></svg></span><span>{{t.ics}}<small>{{t.icsDesc}}</small></span><svg style="margin-left: auto; color: var(--ink2)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+      </div>
+    </sc-if>
+  </div>
+  <div style="height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--cardline); flex-shrink: 0">
+    <a class="lnk" href="WinAbout.dc.html">{{t.about}}</a>
+    <span style="display: flex; align-items: center; gap: 12px"><a class="lnk" href="https://github.com/sponsors/andmetoo" style="display: inline-flex; align-items: center; gap: 5px; margin-left: 0"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 L4.6 13.8 A5 5 0 0 1 12 6.6 A5 5 0 0 1 19.4 13.8 Z" fill="#D73840" stroke="#D73840" stroke-width="1.5" stroke-linejoin="round"></path></svg>{{t.sponsor}}</a><span style="font: 400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink3)">{{t.version}}</span></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"mode":{"editor":"enum","options":["none","accounts","recovered","restored","skipped","overlimit","retrying","locked","newer","damaged","unreadable","cannotsave","startover"],"default":"none"},"lang":{"editor":"enum","options":["en","de","ru"],"default":"en"},"$preview":{"width":448,"height":360}}'>
+var LS_FILE = "%APPDATA%\\Lightcal\\local-events.preserved-1793800000.json";
+var LS_S = {
+  en: { window: "Lightcal settings", close: "Close", tabCal: "Calendar", tabAcc: "Accounts", tabApp: "App", connected: "Connected accounts", addAccount: "Add account",
+    local: "On this PC", label: "Local", show: "Show On this PC", events: "4 events", unavailable: "Unavailable", readOnlySub: "Read only", ok: "OK", folder: "Show in folder", tryNow: "Try now", startOver: "Start over", cancel: "Cancel",
+    google: "Google Calendar", updated: "Updated 2 min ago", refresh: "Refresh", more: "More account actions", personal: "Personal", work: "Work",
+    readOnly: "Accounts are read-only. Only events on this PC can be edited.",
+    connect: "Connect an account", connectNote: "Add Google, Outlook or a private ICS link to see those events here too. Lightcal never changes them.",
+    googleDesc: "Sign in in your browser", outlookDesc: "Work, school or personal account", ics: "Private ICS link", icsDesc: "Any calendar that shares a link",
+    about: "About Lightcal", sponsor: "Sponsor", version: "Version 1.1.2",
+    recovered: "Recovered a save that hadn’t finished. Your latest changes are here.",
+    restored: "Restored an earlier copy. Changes made since then may be missing. The damaged file is kept:",
+    skipped: "3 events in the file couldn’t be read and were skipped. A copy of the file is kept before the next save.",
+    over: "2,140 events, 2,000 at most. Delete events in the calendar to add or edit again.",
+    retrying: "Couldn’t save your last change: access is denied. It’s kept in Lightcal and saved again in 20 s.",
+    locked: "Another Lightcal is still saving these events. Read only until it finishes.",
+    newerHead: "Saved by a newer Lightcal", newer: "Update Lightcal to see and edit these events. The file is kept:",
+    damagedHead: "Events on this PC couldn’t be read", damaged: "The file and its backup are damaged. The file is kept:",
+    unreadableHead: "Windows didn’t allow reading the events file", unreadable: "Access is denied. (os error 5) Close any app that has the file open, then restart Lightcal.",
+    cannotHead: "Can’t save events on this PC", cannot: "Lightcal couldn’t start saving: the disk is full. Events are shown read only. Restart Lightcal to try again.",
+    startHead: "Start over with no events?", start: "The kept file stays where it is. Nothing else is deleted." },
+  de: { window: "Lightcal-Einstellungen", close: "Schließen", tabCal: "Kalender", tabAcc: "Konten", tabApp: "App", connected: "Verbundene Konten", addAccount: "Konto hinzufügen",
+    local: "Auf diesem PC", label: "Lokal", show: "Auf diesem PC anzeigen", events: "4 Termine", unavailable: "Nicht verfügbar", readOnlySub: "Schreibgeschützt", ok: "OK", folder: "Im Ordner zeigen", tryNow: "Jetzt versuchen", startOver: "Neu beginnen", cancel: "Abbrechen",
+    google: "Google Kalender", updated: "Vor 2 Min. aktualisiert", refresh: "Aktualisieren", more: "Weitere Kontoaktionen", personal: "Privat", work: "Arbeit",
+    readOnly: "Konten sind schreibgeschützt. Nur Termine auf diesem PC lassen sich bearbeiten.",
+    connect: "Konto verbinden", connectNote: "Fügen Sie Google, Outlook oder einen privaten ICS-Link hinzu, um auch diese Termine hier zu sehen. Lightcal ändert sie nie.",
+    googleDesc: "Im Browser anmelden", outlookDesc: "Geschäfts-, Schul- oder privates Konto", ics: "Privater ICS-Link", icsDesc: "Jeder Kalender, der einen Link teilt",
+    about: "Über Lightcal", sponsor: "Unterstützen", version: "Version 1.1.2",
+    restored: "Eine frühere Kopie wurde wiederhergestellt. Seitdem vorgenommene Änderungen fehlen eventuell. Die beschädigte Datei bleibt erhalten:" },
+  ru: { window: "Настройки Lightcal", close: "Закрыть", tabCal: "Календарь", tabAcc: "Аккаунты", tabApp: "Приложение", connected: "Подключённые аккаунты", addAccount: "Добавить",
+    local: "На этом ПК", label: "Локальный", show: "Показывать «На этом ПК»", events: "4 события", unavailable: "Недоступно", readOnlySub: "Только чтение", ok: "ОК", folder: "Показать в папке", tryNow: "Повторить", startOver: "Начать заново", cancel: "Отмена",
+    google: "Google Календарь", updated: "Обновлено 2 мин назад", refresh: "Обновить", more: "Другие действия с аккаунтом", personal: "Личное", work: "Работа",
+    readOnly: "Аккаунты только для чтения. Изменять можно только события на этом ПК.",
+    connect: "Подключите аккаунт", connectNote: "Добавьте Google, Outlook или закрытую ссылку ICS, чтобы видеть здесь и эти события. Lightcal их не изменяет.",
+    googleDesc: "Вход в браузере", outlookDesc: "Рабочий, учебный или личный аккаунт", ics: "Закрытая ссылка ICS", icsDesc: "Любой календарь со ссылкой",
+    about: "О Lightcal", sponsor: "Поддержать", version: "Версия 1.1.2",
+    restored: "Восстановлена предыдущая копия. Изменений, сделанных после неё, может не быть. Повреждённый файл сохранён:" }
+};
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var lang = this.props.lang || "en";
+    var S = Object.assign({}, LS_S.en, LS_S[lang] || {});
+    var st = this.state || {};
+    var mode = st.mode || this.props.mode || "none";
+    var dark = (this.props.theme || "light") === "dark";
+    var on = st.on != null ? st.on : true;
+    var n = { quiet: false, amber: false, red: false, spin: false, check: false, ok: false, folder: false, retry: false, startOver: false, confirm: false, hasFile: false, file: LS_FILE, text: "", head: "" };
+    var sub = S.label + " · " + S.events;
+    if (mode === "recovered") { n.quiet = true; n.check = true; n.ok = true; n.text = S.recovered; }
+    if (mode === "locked") { n.quiet = true; n.spin = true; n.text = S.locked; sub = S.label + " · " + S.readOnlySub; }
+    if (mode === "restored") { n.amber = true; n.text = S.restored; n.hasFile = true; n.folder = true; n.ok = true; }
+    if (mode === "skipped") { n.amber = true; n.text = S.skipped; n.ok = true; sub = S.label + " · " + (lang === "en" ? "21 events" : S.events); }
+    if (mode === "overlimit") { n.amber = true; n.text = S.over; sub = S.label + " · " + (lang === "en" ? "2,140 events · delete only" : S.events); }
+    if (mode === "retrying") { n.amber = true; n.text = S.retrying; n.retry = true; }
+    if (mode === "newer") { n.red = true; n.head = S.newerHead; n.text = S.newer; n.hasFile = true; n.folder = true; n.startOver = true; sub = S.label + " · " + S.unavailable; }
+    if (mode === "damaged") { n.red = true; n.head = S.damagedHead; n.text = S.damaged; n.hasFile = true; n.folder = true; n.startOver = true; sub = S.label + " · " + S.unavailable; }
+    if (mode === "unreadable") { n.red = true; n.head = S.unreadableHead; n.text = S.unreadable; n.hasFile = true; n.file = "%APPDATA%\\Lightcal\\local-events.json"; n.folder = true; n.startOver = true; sub = S.label + " · " + S.unavailable; }
+    if (mode === "cannotsave") { n.red = true; n.head = S.cannotHead; n.text = S.cannot; sub = S.label + " · " + S.readOnlySub; }
+    if (mode === "startover") { n.red = true; n.head = S.startHead; n.text = S.start; n.hasFile = true; n.confirm = true; sub = S.label + " · " + S.unavailable; }
+    n.hasActs = n.ok || n.folder || n.retry || n.startOver || n.confirm;
+    var hasAccounts = mode !== "none";
+    return {
+      t: S, lang: lang, n: n, sub: sub,
+      rootCls: "st f" + (dark ? " dark" : ""),
+      hasAccounts: hasAccounts, noAccounts: !hasAccounts,
+      onStr: String(on), cbCls: "cb" + (on ? " on" : ""), tick: on ? "1" : "0",
+      toggle: function () { self.setState({ on: !on }); },
+      dismiss: function () { self.setState({ mode: "accounts" }); },
+      ask: function () { self.setState({ mode: "startover" }); },
+      back: function () { self.setState({ mode: self.props.mode === "startover" ? "damaged" : (self.props.mode || "damaged") }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
