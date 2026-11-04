@@ -393,6 +393,9 @@ pub struct CalendarOccurrence {
     /// Provider web page for the event. Validate before opening; never fetch it.
     #[serde(default)]
     pub web_link: Option<String>,
+    /// Free-text note; only local events have one (ADR 0017). May span lines.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 impl CalendarOccurrence {

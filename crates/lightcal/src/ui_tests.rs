@@ -68,6 +68,13 @@ fn controller(dir: &std::path::Path) -> AppController {
             sources: Vec::new(),
             occurrences: Vec::new(),
         },
+        remote: ProviderSnapshot {
+            status: lightcal::platform::ProviderStatus::NoCalendars,
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        },
+        local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
+        local_writer: None,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -1769,4 +1776,63 @@ fn reanchor_runs_once_after_a_burst_of_changes() {
     lightcal::snapshot::advance_test_time(REANCHOR_QUIET * 3);
     slint::platform::update_timers_and_animations();
     assert_eq!(runs.get(), 1, "a single-shot move");
+}
+
+#[test]
+fn local_events_join_the_calendar_without_changing_provider_status() {
+    use lightcal::local_events::{samples, LocalEvents, SOURCE_ID};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-view-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    let today = ctrl.cal_state.today;
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    ctrl.set_remote_snapshot(ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::NoCalendars,
+        sources: Vec::new(),
+        occurrences: Vec::new(),
+    });
+    assert_eq!(
+        ctrl.provider.status,
+        lightcal::platform::ProviderStatus::NoCalendars,
+        "the local calendar never hides an empty provider"
+    );
+    assert_eq!(ctrl.provider.sources[0].id, SOURCE_ID);
+    assert_eq!(ctrl.provider.sources[0].name, "On this PC");
+    assert_eq!(ctrl.provider.occurrences.len(), 3);
+
+    // A provider refresh or failure leaves local events alone.
+    ctrl.set_remote_snapshot(ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::ProviderUnavailable("offline".into()),
+        sources: Vec::new(),
+        occurrences: Vec::new(),
+    });
+    assert_eq!(ctrl.provider.occurrences.len(), 3);
+    assert!(ctrl.remote.occurrences.is_empty());
+
+    // The name follows the language.
+    ctrl.prefs.set_locale(LocaleCode::De);
+    ctrl.refresh_local_view();
+    assert_eq!(ctrl.provider.sources[0].name, "Auf diesem PC");
+    assert_eq!(
+        ctrl.provider.status,
+        lightcal::platform::ProviderStatus::ProviderUnavailable("offline".into())
+    );
+
+    // Local dots appear only while the local calendar is selected.
+    let grid_with = |ctrl: &AppController| {
+        ctrl.cal_state
+            .build_grid(
+                &ctrl.provider.occurrences,
+                &ctrl.prefs.selected_calendar_ids,
+            )
+            .cells
+            .iter()
+            .map(|cell| cell.total_event_count)
+            .sum::<usize>()
+    };
+    assert_eq!(grid_with(&ctrl), 0);
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
+    assert!(grid_with(&ctrl) > 0);
 }

@@ -266,6 +266,7 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                         appt.Location().map(|h| h.to_string_lossy()).ok().as_deref(),
                     ),
                     web_link: None,
+                    note: None,
                 });
             }
         }

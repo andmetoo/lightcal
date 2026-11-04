@@ -479,6 +479,7 @@ fn parse_event(event: &Value, source: &str, color: &str) -> Result<CalendarOccur
             .flatten(),
         location: super::optional_text(event["location"].as_str()),
         web_link: super::event_link(event["htmlLink"].as_str()),
+        note: None,
     })
 }
 
