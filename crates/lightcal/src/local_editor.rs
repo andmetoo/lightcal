@@ -494,7 +494,10 @@ impl AppController {
                 ) && !self.local.is_loading();
                 (
                     text.panel_unavailable_title,
-                    if file_at_fault {
+                    if self.local.is_loading() {
+                        // Accounts has nothing to explain yet.
+                        text.panel_loading
+                    } else if file_at_fault {
                         text.panel_unavailable_text
                     } else {
                         text.panel_unavailable_why

@@ -2442,4 +2442,12 @@ fn the_panel_names_a_kept_file_only_when_one_is_at_fault() {
             "{reason:?}"
         );
     }
+    // Still loading: Accounts has nothing to explain yet, so the panel says so.
+    ctrl.local = LocalEvents::loading();
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(
+        ui.get_panel_message(),
+        "Events on this PC are still loading. Try again in a moment."
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
