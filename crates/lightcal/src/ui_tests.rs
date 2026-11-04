@@ -2487,11 +2487,23 @@ fn session_end_waits_at_most_a_second_for_the_last_write() {
     // with the failed attempt, and never runs past SESSION_END_WAIT.
     let blocked = dir.join("blocked");
     std::fs::write(&blocked, "not a directory").unwrap();
-    let writer = Writer::spawn(Storage::new(&blocked), |_| {}).unwrap();
+    let (sender, reports) = std::sync::mpsc::channel();
+    let writer = Writer::spawn(Storage::new(&blocked), move |report| {
+        let _ = sender.send(report);
+    })
+    .unwrap();
     assert!(writer.submit(vec![event], false));
+    reports.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(writer.last_write_failed());
     let started = Instant::now();
     assert!(!wait_for_writes_at_session_end(Some(&writer)));
     assert!(started.elapsed() < SESSION_END_WAIT + Duration::from_millis(500));
+
+    // Once the obstacle is gone, session end tries the failed write again at once
+    // instead of leaving it to the 5 s backoff.
+    std::fs::remove_file(&blocked).unwrap();
+    assert!(wait_for_writes_at_session_end(Some(&writer)));
+    assert_eq!(Storage::new(&blocked).load().events.len(), 1);
     writer.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

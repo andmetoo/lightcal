@@ -746,26 +746,36 @@ impl SingleInstanceGuard {
                 };
                 (ok != 0 && !dup.is_null()).then_some(dup)
             };
-            let (Some(dup_stop), Some(dup_event)) = (duplicate(self.stop), duplicate(self.event))
-            else {
+            let Some(dup_event) = duplicate(self.event) else {
                 return;
             };
-            let raw = [dup_stop as isize, dup_event as isize];
+            // Stop comes first: when both are set, the wait reports the lower index and
+            // leaves the activation event set for the new instance. Without a stop event
+            // (it could not be created) the listener still hears activations.
+            let raw: Vec<isize> = (!self.stop.is_null())
+                .then(|| duplicate(self.stop))
+                .flatten()
+                .into_iter()
+                .chain([dup_event])
+                .map(|h| h as isize)
+                .collect();
             std::thread::spawn(move || {
-                // Stop comes first: when both are set, the wait reports the lower index
-                // and leaves the activation event set for the new instance.
-                let handles = raw.map(|h| h as windows_sys::Win32::Foundation::HANDLE);
+                let handles: Vec<windows_sys::Win32::Foundation::HANDLE> =
+                    raw.iter().map(|&h| h as _).collect();
+                let count = handles.len() as u32;
                 loop {
-                    let res = unsafe { WaitForMultipleObjects(2, handles.as_ptr(), 0, INFINITE) };
-                    if res == WAIT_OBJECT_0 + 1 {
+                    let res =
+                        unsafe { WaitForMultipleObjects(count, handles.as_ptr(), 0, INFINITE) };
+                    if res == WAIT_OBJECT_0 + count - 1 {
                         on_activate();
                     } else {
                         break;
                     }
                 }
-                unsafe {
-                    CloseHandle(handles[0]);
-                    CloseHandle(handles[1]);
+                for handle in handles {
+                    unsafe {
+                        CloseHandle(handle);
+                    }
                 }
             });
         }
@@ -883,24 +893,31 @@ pub struct SessionEndWatch {
 #[cfg(windows)]
 impl SessionEndWatch {
     pub fn new(on_end: impl Fn() + 'static) -> Option<Self> {
+        use windows_sys::Win32::Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS};
         use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             CreateWindowExW, RegisterClassW, SetWindowLongPtrW, GWLP_USERDATA, WNDCLASSW,
             WS_EX_TOOLWINDOW, WS_POPUP,
         };
+        static REGISTERED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
         let title = [0u16];
-        // SAFETY: the class name and title outlive the calls; the class is registered at
-        // most once per process (a second registration fails harmlessly).
+        // SAFETY: the class name and title outlive the calls; the class is registered
+        // once per process.
         let hwnd = unsafe {
             let instance = GetModuleHandleW(std::ptr::null());
-            let wc = WNDCLASSW {
-                lpfnWndProc: Some(session_end_proc),
-                hInstance: instance,
-                lpszClassName: class.as_ptr(),
-                ..std::mem::zeroed()
-            };
-            RegisterClassW(&wc);
+            let registered = *REGISTERED.get_or_init(|| {
+                let wc = WNDCLASSW {
+                    lpfnWndProc: Some(session_end_proc),
+                    hInstance: instance,
+                    lpszClassName: class.as_ptr(),
+                    ..std::mem::zeroed()
+                };
+                RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS
+            });
+            if !registered {
+                return None;
+            }
             CreateWindowExW(
                 WS_EX_TOOLWINDOW,
                 class.as_ptr(),
@@ -926,7 +943,8 @@ impl SessionEndWatch {
     }
 
     /// The watch window, for tests that send it session messages.
-    pub fn hwnd(&self) -> windows_sys::Win32::Foundation::HWND {
+    #[cfg(test)]
+    pub(crate) fn hwnd(&self) -> windows_sys::Win32::Foundation::HWND {
         self.hwnd
     }
 }
@@ -960,7 +978,8 @@ unsafe extern "system" fn session_end_proc(
             if wp != 0 {
                 let on_end = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const Box<dyn Fn()>;
                 if !on_end.is_null() {
-                    // A panic must not unwind into Windows.
+                    // A panic must not unwind into Windows. The panic hook has already
+                    // reported it (the release profile unwinds; it does not abort).
                     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         (*on_end)();
                     }));

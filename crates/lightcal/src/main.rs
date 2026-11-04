@@ -2597,22 +2597,29 @@ thread_local! {
 const SESSION_END_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// At sign-out or shutdown, waits at most `SESSION_END_WAIT` for the writer's last
-/// attempt; true when nothing is left unsaved. This is the one place the UI thread waits
-/// on disk: the process ends right after (ADR 0017).
+/// attempt; true when nothing is left unsaved. A failed write waiting out its backoff is
+/// tried once more at once. This is the one place the UI thread waits on disk: the
+/// process ends right after (ADR 0017).
 #[cfg(any(windows, test))]
 fn wait_for_writes_at_session_end(writer: Option<&lightcal::local_events::Writer>) -> bool {
-    writer.is_none_or(|w| w.wait_saved(SESSION_END_WAIT))
+    writer.is_none_or(|w| {
+        w.retry_now();
+        w.wait_saved(SESSION_END_WAIT)
+    })
 }
 
 /// The writer of the running controller, if any. Uses `try_borrow`, as Windows may send
 /// `WM_ENDSESSION` while the controller is borrowed by a nested message loop.
 #[cfg(windows)]
 fn session_end_writer() -> Option<lightcal::local_events::Writer> {
-    ACTIVE_CONTROLLER.with(|c| {
-        let ctrl = c.borrow().as_ref()?.upgrade()?;
-        let ctrl = ctrl.try_borrow().ok()?;
-        ctrl.local_writer.clone()
-    })
+    let ctrl = active_controller()?;
+    let ctrl = ctrl.try_borrow().ok()?;
+    ctrl.local_writer.clone()
+}
+
+/// The running controller, if any.
+fn active_controller() -> Option<Rc<RefCell<AppController>>> {
+    ACTIVE_CONTROLLER.with(|c| c.borrow().as_ref()?.upgrade())
 }
 
 /// Takes the events lock and loads local events on a background thread. Local events show
@@ -2843,15 +2850,9 @@ fn with_active_controller<F>(ui_weak: &slint::Weak<AppWindow>, f: F)
 where
     F: FnOnce(&mut AppController, &AppWindow),
 {
-    ACTIVE_CONTROLLER.with(|c| {
-        if let Some(weak_ctrl) = c.borrow().as_ref() {
-            if let Some(ctrl) = weak_ctrl.upgrade() {
-                if let Some(ui) = ui_weak.upgrade() {
-                    f(&mut ctrl.borrow_mut(), &ui);
-                }
-            }
-        }
-    });
+    if let (Some(ctrl), Some(ui)) = (active_controller(), ui_weak.upgrade()) {
+        f(&mut ctrl.borrow_mut(), &ui);
+    }
 }
 
 fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint::Weak<AppWindow>) {
