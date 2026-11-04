@@ -2615,9 +2615,8 @@ fn start_local_events_load(
                     LOCAL_EVENTS_LOCK_TAKEN.store(true, std::sync::atomic::Ordering::Release);
                     Storage::new(&dir).load()
                 }
-                // Without the lock nothing may be written, so this is "can't save"
-                // (read only, never Start over), not an unreadable events file.
-                Err(error) => Loaded::unavailable(Unavailable::CannotSave {
+                // Without the lock nothing may be read or written: never Start over.
+                Err(error) => Loaded::unavailable(Unavailable::NoLock {
                     error: error.to_string(),
                 }),
             };

@@ -729,7 +729,12 @@ mod tests {
 fn display_path(path: &std::path::Path) -> String {
     let text = path.display().to_string();
     match std::env::var("APPDATA") {
-        Ok(appdata) if !appdata.is_empty() && text.starts_with(&appdata) => {
+        Ok(appdata)
+            if !appdata.is_empty()
+                && text
+                    .get(..appdata.len())
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&appdata)) =>
+        {
             format!("%APPDATA%{}", &text[appdata.len()..])
         }
         _ => text,
@@ -811,6 +816,12 @@ impl AppController {
                             .unreadable
                             .replace("{error}", error.trim_end_matches('.'));
                         red(&mut card, text.unreadable_head, body, true);
+                    }
+                    Unavailable::NoLock { error } => {
+                        let body = text.no_lock.replace("{error}", error.trim_end_matches('.'));
+                        red(&mut card, text.no_lock_head, body, false);
+                        card.file = "".into();
+                        card.folder = false;
                     }
                     Unavailable::CannotSave { error } => {
                         card.sub = format!("{label} · {}", text.read_only_sub).into();
@@ -981,6 +992,9 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
             );
             if !allowed {
                 c.start_over = StartOver::Idle;
+                if let Some(w) = weak.upgrade() {
+                    c.sync_to_ui(&w);
+                }
                 return;
             }
             let dir = c.store.dir().to_path_buf();
@@ -988,10 +1002,10 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
             if let Some(w) = weak.upgrade() {
                 c.sync_to_ui(&w);
             }
-            let weak = weak.clone();
+            let thread_weak = weak.clone();
             // The file work runs off the UI thread; the fresh, empty store, or the error,
             // comes back here.
-            let _ = std::thread::Builder::new()
+            let spawned = std::thread::Builder::new()
                 .name("lightcal-local-events-start-over".into())
                 .spawn(move || {
                     let storage = lightcal::local_events::Storage::new(&dir);
@@ -999,7 +1013,7 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
                         .start_over()
                         .map(|_| lightcal::local_events::LocalEvents::from_loaded(storage.load()));
                     let _ = slint::invoke_from_event_loop(move || {
-                        crate::with_active_controller(&weak, |c, w| {
+                        crate::with_active_controller(&thread_weak, |c, w| {
                             match result {
                                 Ok(local) => {
                                     c.start_over = StartOver::Idle;
@@ -1011,6 +1025,12 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
                         });
                     });
                 });
+            if let Err(error) = spawned {
+                c.start_over = StartOver::Failed(error.to_string());
+                if let Some(w) = weak.upgrade() {
+                    c.sync_to_ui(&w);
+                }
+            }
         });
     }
 }
@@ -1035,5 +1055,19 @@ mod card_tests {
                 std::path::MAIN_SEPARATOR
             )
         );
+    }
+}
+
+#[cfg(test)]
+mod path_case_tests {
+    use super::*;
+
+    #[test]
+    fn appdata_is_found_whatever_its_letter_case() {
+        let Ok(appdata) = std::env::var("APPDATA") else {
+            return;
+        };
+        let lower = std::path::Path::new(&appdata.to_ascii_lowercase()).join("Lightcal");
+        assert!(display_path(&lower).starts_with("%APPDATA%"));
     }
 }

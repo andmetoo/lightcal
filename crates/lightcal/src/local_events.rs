@@ -447,6 +447,9 @@ pub enum Unavailable {
     /// The file is fine but nothing can be saved this session (the writer did not
     /// start); a restart may help. Starting over is never offered for it.
     CannotSave { error: String },
+    /// The events lock could not be opened, so the file was never read: nothing is shown
+    /// and nothing may be written this session.
+    NoLock { error: String },
     /// The file exists but the system refused to read it.
     Unreadable { file: PathBuf, error: String },
 }

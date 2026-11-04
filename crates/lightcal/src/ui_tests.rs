@@ -2379,3 +2379,25 @@ fn closing_the_quit_prompt_keeps_lightcal_open() {
     slint::platform::update_timers_and_animations();
     assert!(crate::QUIT_ASK.with(|slot| slot.borrow().is_none()));
 }
+
+#[test]
+fn a_lock_file_failure_says_events_are_not_shown() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-no-lock-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::NoLock {
+        error: "Access is denied. (os error 5)".into(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.head, "Events on this PC couldn\u{2019}t be opened");
+    assert!(card.text.contains("Your events are not shown"));
+    assert!(
+        !card.text.contains("read only"),
+        "nothing is shown, so nothing is read only"
+    );
+    assert!(!card.start_over && !card.folder);
+}
