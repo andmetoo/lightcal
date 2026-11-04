@@ -75,7 +75,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         },
         local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
         local_writer: None,
-        demo_local_unsaved: false,
+        demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -1906,4 +1906,35 @@ fn nothing_shows_the_window_while_quit_waits_for_local_events() {
     let visible = ui.window().is_visible();
     crate::QUITTING.with(|quitting| quitting.set(false));
     assert!(!visible);
+}
+
+#[test]
+fn demo_mode_shows_its_calendars_without_saving_them() {
+    use lightcal::local_events::SOURCE_ID;
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-demo-shown-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.demo_shown.insert(SOURCE_ID.into());
+    ctrl.toggle_calendar("win-work".into());
+    assert!(ctrl.shown_calendar_ids().contains(SOURCE_ID));
+    let saved = |ctrl: &AppController| ctrl.store.load().preferences.selected_calendar_ids;
+    assert!(
+        saved(&ctrl).contains("win-work"),
+        "the user's toggle is saved"
+    );
+    assert!(
+        !saved(&ctrl).contains(SOURCE_ID),
+        "demo's own choice is not"
+    );
+
+    // Hiding a calendar only demo mode showed matches the saved selection.
+    ctrl.toggle_calendar(SOURCE_ID.into());
+    assert!(!ctrl.shown_calendar_ids().contains(SOURCE_ID));
+    assert!(!saved(&ctrl).contains(SOURCE_ID));
+    // Showing it again is the user's choice and is saved.
+    ctrl.toggle_calendar(SOURCE_ID.into());
+    assert!(saved(&ctrl).contains(SOURCE_ID));
+    let _ = std::fs::remove_dir_all(dir);
 }

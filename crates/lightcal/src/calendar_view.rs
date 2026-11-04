@@ -83,7 +83,7 @@ impl AppController {
         let mut events = self.cal_state.events_for_date(
             self.cal_state.selected_date,
             &self.provider.occurrences,
-            &self.prefs.selected_calendar_ids,
+            &self.shown_calendar_ids(),
         );
         sort_agenda(&mut events);
         events
@@ -173,7 +173,7 @@ impl AppController {
         let Some(date) = next_occurrence_after(
             self.cal_state.selected_date,
             &self.provider.occurrences,
-            &self.prefs.selected_calendar_ids,
+            &self.shown_calendar_ids(),
         )
         .map(|event| event.start_date) else {
             return false;
@@ -356,7 +356,7 @@ impl AppController {
                 next_occurrence_after(
                     selected,
                     &self.provider.occurrences,
-                    &self.prefs.selected_calendar_ids,
+                    &self.shown_calendar_ids(),
                 )
             })
             .flatten();

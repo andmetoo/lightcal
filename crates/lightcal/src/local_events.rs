@@ -1010,6 +1010,15 @@ impl LocalEvents {
         std::mem::take(&mut self.repair_pending)
     }
 
+    /// Nothing can be saved this session: the events show but cannot be changed. A more
+    /// specific reason the events are unavailable is kept.
+    pub fn mark_cannot_save(&mut self, error: String) {
+        if !matches!(self.access, Access::Unavailable(_)) {
+            self.access = Access::Unavailable(Unavailable::CannotSave { error });
+        }
+        self.repair_pending = false;
+    }
+
     /// Still waiting after the lock timeout: shown as unavailable, but the wait goes on.
     pub fn mark_lock_timeout(&mut self) {
         if self.loading {
@@ -1238,8 +1247,13 @@ impl Writer {
                             drop(state);
                             report(WriteReport::Failed(error));
                             state = lock.lock().unwrap_or_else(|e| e.into_inner());
+                            // Once shut down, each change is tried once: a failed one stays
+                            // unsaved rather than being retried in a loop.
+                            if requeued && state.shutdown {
+                                return;
+                            }
                             // Only a retry of the same change backs off further.
-                            if requeued && !state.shutdown {
+                            if requeued {
                                 let wait = retry;
                                 retry = (retry * 2).min(max_retry);
                                 // Wakes early when a new change arrives.
@@ -1877,6 +1891,43 @@ mod tests {
         storage.load();
         assert_eq!(storage.preserved_files().len(), 1);
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_shut_down_writer_stops_retrying_a_failing_save() {
+        let dir = temp_dir("writer-shutdown");
+        let blocked = dir.join("blocked");
+        fs::write(&blocked, "not a directory").unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let writer = Writer::spawn_with_backoff(
+            Storage::new(&blocked),
+            Duration::from_millis(20),
+            Duration::from_millis(20),
+            move |report| {
+                let _ = sender.send(report);
+            },
+        )
+        .unwrap();
+        writer.submit(vec![event(1, "Unsaved")], false);
+        writer.shutdown();
+        let mut failures = 0;
+        while let Ok(report) = receiver.recv_timeout(Duration::from_millis(300)) {
+            assert!(matches!(report, WriteReport::Failed(_)));
+            failures += 1;
+        }
+        // At most one attempt before the shutdown was seen and one after it.
+        assert!((1..=2).contains(&failures), "{failures} attempts");
+        assert!(writer.has_unsaved() && writer.last_write_failed());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_writer_that_cannot_save_keeps_the_events_read_only() {
+        let mut store = LocalEvents::in_memory(vec![event(1, "Kept")]);
+        store.mark_cannot_save("no thread".into());
+        assert_eq!(store.occurrences().len(), 1, "still shown");
+        assert_eq!(store.delete("local:test-1"), Err(EditError::ReadOnly));
+        assert!(!store.take_repair());
     }
 
     #[test]

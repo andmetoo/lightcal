@@ -116,9 +116,9 @@ pub(crate) struct AppController {
     pub(crate) local: lightcal::local_events::LocalEvents,
     /// Writes local events off the UI thread; `None` in demo mode, snapshots and tests.
     pub(crate) local_writer: Option<lightcal::local_events::Writer>,
-    /// Demo mode selected On this PC that the user had turned off; it is left out of
-    /// saved preferences until the user toggles it.
-    pub(crate) demo_local_unsaved: bool,
+    /// Calendars demo mode shows on top of the saved selection, never saved; empty
+    /// outside demo mode. Read through `shown_calendar_ids`.
+    pub(crate) demo_shown: std::collections::BTreeSet<String>,
     pub(crate) provider_request: u64,
     pub(crate) connection_busy: bool,
     pub(crate) connection_message: String,
@@ -853,12 +853,13 @@ impl AppController {
         let locale = self.prefs.locale();
         // Provider calendars only; the local calendar joins the Accounts counts with its
         // own row (ADR 0017, editor stage).
+        let shown = self.shown_calendar_ids();
         let active_count = self
             .provider
             .sources
             .iter()
             .filter(|source| source.id != lightcal::local_events::SOURCE_ID)
-            .filter(|source| self.prefs.selected_calendar_ids.contains(&source.id))
+            .filter(|source| shown.contains(&source.id))
             .count();
         let strings = catalog(locale);
         let dark_mode = resolve_dark_mode(self.prefs.theme);
@@ -913,10 +914,9 @@ impl AppController {
         #[cfg(windows)]
         self.sync_icons(now);
 
-        let grid = self.cal_state.build_grid(
-            &self.provider.occurrences,
-            &self.prefs.selected_calendar_ids,
-        );
+        let grid = self
+            .cal_state
+            .build_grid(&self.provider.occurrences, &self.shown_calendar_ids());
 
         ui.set_is_current_month(grid.is_current_month);
         ui.set_current_month_badge(strings.current_month_badge.into());
@@ -1749,16 +1749,33 @@ impl AppController {
     }
 
     fn persist(&self) {
-        if self.demo_local_unsaved {
-            // Demo mode selected On this PC for its samples; the saved choice stays off.
-            let mut prefs = self.prefs.clone();
-            prefs
-                .selected_calendar_ids
-                .remove(lightcal::local_events::SOURCE_ID);
-            let _ = self.store.save(&prefs);
+        let _ = self.store.save(&self.prefs);
+    }
+
+    /// The calendars whose events show: the saved selection plus what demo mode adds.
+    pub(crate) fn shown_calendar_ids(
+        &self,
+    ) -> std::borrow::Cow<'_, std::collections::BTreeSet<String>> {
+        if self.demo_shown.is_empty() {
+            std::borrow::Cow::Borrowed(&self.prefs.selected_calendar_ids)
         } else {
-            let _ = self.store.save(&self.prefs);
+            std::borrow::Cow::Owned(
+                self.prefs
+                    .selected_calendar_ids
+                    .union(&self.demo_shown)
+                    .cloned()
+                    .collect(),
+            )
         }
+    }
+
+    /// Shows or hides a calendar and saves the choice. A calendar only demo mode showed
+    /// is hidden, which already matches the saved selection.
+    pub(crate) fn toggle_calendar(&mut self, id: String) {
+        if !self.demo_shown.remove(&id) && !self.prefs.selected_calendar_ids.remove(&id) {
+            self.prefs.selected_calendar_ids.insert(id);
+        }
+        self.persist();
     }
 }
 
@@ -1799,6 +1816,7 @@ impl AppController {
 
         // Account cards list provider calendars only. The On this PC row arrives with the
         // editor design (ADR 0017); until then it would land in the Windows card.
+        let shown = self.shown_calendar_ids();
         let items: Vec<CalendarSourceItem> = self
             .provider
             .sources
@@ -1809,7 +1827,7 @@ impl AppController {
                 name: s.name.clone().into(),
                 account: s.account_label.clone().into(),
                 swatch: mark_color(&s.color_hex),
-                checked: self.prefs.selected_calendar_ids.contains(&s.id),
+                checked: shown.contains(&s.id),
                 removable: s.id.starts_with("ics:"),
             })
             .collect();
@@ -2570,7 +2588,12 @@ thread_local! {
 /// Takes the events lock and loads local events on a background thread. Local events show
 /// as loading meanwhile, and as unavailable after 3 s; the wait goes on and they load as
 /// soon as the lock is free.
-fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::PathBuf) {
+/// With `cannot_save`, the writer did not start and the events load read-only.
+fn start_local_events_load(
+    ui_weak: slint::Weak<AppWindow>,
+    dir: std::path::PathBuf,
+    cannot_save: Option<String>,
+) {
     let timeout_weak = ui_weak.clone();
     slint::Timer::single_shot(std::time::Duration::from_secs(3), move || {
         with_active_controller(&timeout_weak, |c, w| {
@@ -2596,7 +2619,10 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
                 }),
             };
             // Built here, off the UI thread.
-            let local = LocalEvents::from_loaded(loaded);
+            let mut local = LocalEvents::from_loaded(loaded);
+            if let Some(error) = cannot_save {
+                local.mark_cannot_save(error);
+            }
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_weak, |c, w| {
                     c.apply_local_events(local);
@@ -3399,27 +3425,27 @@ fn main() {
             .unwrap_or("")
             .to_string();
     }
-    if use_synthetic && prefs.selected_calendar_ids.is_empty() {
-        prefs.selected_calendar_ids.insert("win-work".to_string());
-        prefs
-            .selected_calendar_ids
-            .insert("win-personal".to_string());
-    }
-    // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
-    // The flag is saved with the next preference change; after that the selection is the
-    // user's. Demo mode always shows its sample local events, but saves the user's own
-    // choice (see `AppController::persist`).
-    let demo_local_unsaved = use_synthetic
-        && prefs.local_calendar_offered
-        && !prefs
-            .selected_calendar_ids
-            .contains(lightcal::local_events::SOURCE_ID);
-    if use_synthetic || !prefs.local_calendar_offered {
+    // Demo mode shows its sample calendars and sample local events without saving them
+    // into the user's selection.
+    let mut demo_shown = std::collections::BTreeSet::new();
+    if use_synthetic {
+        let mut forced = vec![lightcal::local_events::SOURCE_ID];
+        if prefs.selected_calendar_ids.is_empty() {
+            forced.extend(["win-work", "win-personal"]);
+        }
+        demo_shown.extend(
+            forced
+                .into_iter()
+                .filter(|id| !prefs.selected_calendar_ids.contains(*id))
+                .map(str::to_string),
+        );
+    } else if !prefs.local_calendar_offered {
+        // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
+        // The flag is saved with the next preference change; after that the selection
+        // is the user's.
         prefs
             .selected_calendar_ids
             .insert(lightcal::local_events::SOURCE_ID.to_string());
-    }
-    if !use_synthetic {
         prefs.local_calendar_offered = true;
     }
 
@@ -3557,29 +3583,25 @@ fn main() {
     // Demo mode never opens the real file or takes the lock; its sample events are kept
     // in memory and discarded on exit.
     let local_dir = store.dir().to_path_buf();
+    let mut local_cannot_save = None;
     let (local, local_writer) = if use_synthetic {
         (
             lightcal::local_events::LocalEvents::in_memory(lightcal::local_events::samples(today)),
             None,
         )
     } else {
-        use lightcal::local_events::{Loaded, LocalEvents, Storage, Unavailable, Writer};
+        use lightcal::local_events::{LocalEvents, Storage, Writer};
         match Writer::spawn(Storage::new(&local_dir), |_| {}) {
             Ok(writer) => (LocalEvents::loading(), Some(writer)),
-            // Nothing could be saved without the writer, so local events stay unavailable
+            // Nothing could be saved without the writer: the events still load, read-only,
             // rather than accept changes that would be lost.
             Err(error) => {
                 eprintln!("Lightcal: could not start the local events writer: {error}");
-                (
-                    LocalEvents::from_loaded(Loaded::unavailable(Unavailable::CannotSave {
-                        error: error.to_string(),
-                    })),
-                    None,
-                )
+                local_cannot_save = Some(error.to_string());
+                (LocalEvents::loading(), None)
             }
         }
     };
-    let load_local = local.is_loading();
 
     let ctrl = Rc::new(RefCell::new(AppController {
         store,
@@ -3589,7 +3611,7 @@ fn main() {
         remote: provider,
         local,
         local_writer,
-        demo_local_unsaved,
+        demo_shown,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -3646,8 +3668,8 @@ fn main() {
 
     // Adds the local calendar to the first view.
     ctrl.borrow_mut().refresh_local_view();
-    if load_local {
-        start_local_events_load(ui.as_weak(), local_dir);
+    if !use_synthetic {
+        start_local_events_load(ui.as_weak(), local_dir, local_cannot_save);
     }
     ctrl.borrow().sync_to_ui(&ui);
 
@@ -3908,7 +3930,7 @@ fn main() {
             let previous_month = c.cal_state.displayed_month;
             let grid = c
                 .cal_state
-                .build_grid(&c.provider.occurrences, &c.prefs.selected_calendar_ids);
+                .build_grid(&c.provider.occurrences, &c.shown_calendar_ids());
             if let Some(cell) = grid.cells.get(idx as usize) {
                 c.cal_state.select_date(cell.date);
             }
@@ -4141,15 +4163,7 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_toggle_calendar_source(move |id| {
             let mut c = ctrl.borrow_mut();
-            let key = id.to_string();
-            if key == lightcal::local_events::SOURCE_ID {
-                // The user's own choice now, in demo mode too.
-                c.demo_local_unsaved = false;
-            }
-            if !c.prefs.selected_calendar_ids.remove(&key) {
-                c.prefs.selected_calendar_ids.insert(key);
-            }
-            c.persist();
+            c.toggle_calendar(id.to_string());
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
             }
