@@ -1308,6 +1308,16 @@ impl Writer {
         state.pending.is_some() || state.busy
     }
 
+    /// Ends the backoff wait so a failed change is tried again at once (Try now).
+    pub fn retry_now(&self) {
+        let (lock, signal) = &*self.shared;
+        let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if state.pending.is_some() {
+            state.failed_superseded();
+            signal.notify_all();
+        }
+    }
+
     /// True when the last attempt failed and its change is still unsaved.
     pub fn last_write_failed(&self) -> bool {
         let state = self.shared.0.lock().unwrap_or_else(|e| e.into_inner());

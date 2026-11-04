@@ -11,6 +11,21 @@ pub fn system_fonts_dir() -> Option<std::path::PathBuf> {
         .map(|windows| std::path::PathBuf::from(windows).join("Fonts"))
 }
 
+/// Opens File Explorer with `file` selected (Show in folder). Only ever called on a
+/// user's click; nothing happens on other platforms.
+pub fn reveal_in_explorer(file: &std::path::Path) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Explorer parses `/select,"path"` itself, so the path is passed raw and quoted.
+        let _ = std::process::Command::new("explorer.exe")
+            .raw_arg(format!("/select,\"{}\"", file.display()))
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    let _ = file;
+}
+
 pub mod icon;
 pub mod provider;
 pub mod shell;

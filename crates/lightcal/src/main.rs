@@ -121,6 +121,10 @@ pub(crate) struct AppController {
     pub(crate) editor: Option<local_editor::EditorState>,
     /// Shown in place of the editor when local events cannot be added.
     pub(crate) editor_panel: Option<local_editor::EditorPanel>,
+    /// The last local event write failed with this message; cleared by a later save.
+    pub(crate) local_save_error: Option<String>,
+    /// Settings › Accounts asks "Start over with no events?".
+    pub(crate) start_over_confirm: bool,
     /// Calendars demo mode selected for its samples. They are in the selection while
     /// Lightcal runs but never saved (`persist`); empty outside demo mode.
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
@@ -856,13 +860,10 @@ impl AppController {
 
     pub(crate) fn sync_to_ui(&self, ui: &AppWindow) {
         let locale = self.prefs.locale();
-        // Provider calendars only; the local calendar joins the Accounts counts with its
-        // own row (ADR 0017, editor stage).
         let active_count = self
             .provider
             .sources
             .iter()
-            .filter(|source| source.id != lightcal::local_events::SOURCE_ID)
             .filter(|source| self.prefs.selected_calendar_ids.contains(&source.id))
             .count();
         let strings = catalog(locale);
@@ -2094,7 +2095,9 @@ impl AppController {
             close_label: st.close.into(),
             connected_accounts: st.connected_accounts.into(),
             add_account: st.add_account.into(),
-            read_only_note: st.read_only_note.into(),
+            read_only_note: lightcal::i18n::local_settings_text(locale)
+                .accounts_read_only
+                .into(),
             connect_heading: st.connect_heading.into(),
             connect_note: st.connect_note.into(),
             google_title: st.google_title.into(),
@@ -2634,10 +2637,91 @@ fn start_local_events_load(
     }
 }
 
+/// Shows a writer's outcome on the On this PC card.
+fn apply_local_write_report(report: lightcal::local_events::WriteReport) {
+    let Some(weak) = ACTIVE_UI.with(|u| u.borrow().clone()) else {
+        return;
+    };
+    with_active_controller(&weak, |c, w| {
+        c.local_save_error = match report {
+            lightcal::local_events::WriteReport::Saved => None,
+            lightcal::local_events::WriteReport::Failed(error) => Some(error),
+        };
+        c.sync_to_ui(w);
+    });
+}
+
+thread_local! {
+    /// The Quit prompt while it is open.
+    static QUIT_PROMPT: RefCell<Option<QuitPrompt>> = const { RefCell::new(None) };
+}
+
+/// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
+/// Lightcal open closes the prompt; Quit anyway goes on as Quit does.
+fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
+    let Some(ui) = ui_weak.upgrade() else {
+        let _ = slint::quit_event_loop();
+        return;
+    };
+    let Ok(prompt) = QuitPrompt::new() else {
+        // Without the prompt the choice cannot be offered; quitting stays possible.
+        quit_after_writes(ui_weak);
+        return;
+    };
+    let text = {
+        let mut locale = LocaleCode::En;
+        with_active_controller(ui_weak, |c, _| locale = c.prefs.locale());
+        lightcal::i18n::local_settings_text(locale)
+    };
+    let theme = ui.global::<Theme>();
+    prompt.global::<Theme>().set_dark(theme.get_dark());
+    prompt
+        .global::<Theme>()
+        .set_font_family(theme.get_font_family());
+    prompt.set_heading(text.quit_title.into());
+    prompt.set_body(text.quit_text.into());
+    prompt.set_quit_label(text.quit_anyway.into());
+    prompt.set_keep_label(text.keep_open.into());
+    prompt.on_keep_open(|| {
+        QUIT_PROMPT.with(|slot| {
+            if let Some(prompt) = slot.borrow_mut().take() {
+                let _ = prompt.hide();
+            }
+        });
+    });
+    let weak = ui_weak.clone();
+    prompt.on_quit_anyway(move || {
+        QUIT_PROMPT.with(|slot| {
+            if let Some(prompt) = slot.borrow_mut().take() {
+                let _ = prompt.hide();
+            }
+        });
+        quit_after_writes(&weak);
+    });
+    let _ = prompt.show();
+    QUIT_PROMPT.with(|slot| *slot.borrow_mut() = Some(prompt));
+}
+
+/// Quit, unless the last local event write failed: then the Quit prompt asks first.
+fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
+    let mut failed = false;
+    with_active_controller(ui_weak, |c, _| {
+        failed = c
+            .local_writer
+            .as_ref()
+            .is_some_and(lightcal::local_events::Writer::last_write_failed);
+    });
+    if failed {
+        show_quit_prompt(ui_weak);
+    } else {
+        quit_after_writes(ui_weak);
+    }
+}
+
 /// Quits once every local event change is written. With a write in progress the window
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
 /// on the writer (ADR 0017).
-fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
+fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
     let mut writer = None;
     with_active_controller(ui_weak, |c, _| writer = c.local_writer.clone());
     let Some(writer) = writer.filter(|w| w.saving()) else {
@@ -3593,7 +3677,11 @@ fn main() {
         )
     } else {
         use lightcal::local_events::{LocalEvents, Storage, Writer};
-        match Writer::spawn(Storage::new(&local_dir), |_| {}) {
+        // Each write's outcome reaches the On this PC card (failed, retrying, saved).
+        let report = |report: lightcal::local_events::WriteReport| {
+            let _ = slint::invoke_from_event_loop(move || apply_local_write_report(report));
+        };
+        match Writer::spawn(Storage::new(&local_dir), report) {
             Ok(writer) => (LocalEvents::loading(), Some(writer), None),
             // Nothing could be saved without the writer: the events still load, read-only,
             // rather than accept changes that would be lost.
@@ -3614,6 +3702,8 @@ fn main() {
         local_writer,
         editor: None,
         editor_panel: None,
+        local_save_error: None,
+        start_over_confirm: false,
         demo_shown,
         provider_request: 0,
         connection_busy: false,
@@ -3967,6 +4057,7 @@ fn main() {
             }
         });
     }
+    local_editor::connect_local_card_callbacks(&ui, &ctrl);
     local_editor::connect_local_editor_callbacks(&ui, &ctrl, move |weak| {
         request_visible_calendars(weak, use_synthetic)
     });

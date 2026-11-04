@@ -77,6 +77,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         local_writer: None,
         editor: None,
         editor_panel: None,
+        local_save_error: None,
+        start_over_confirm: false,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -497,12 +499,20 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("windows-disabled.png"), 448, 360)
         .unwrap();
-    click(&ui, 220.0, 286.0);
+    // The On this PC card sits above the provider list, so the Windows row is found by
+    // its label after scrolling it into view.
+    ui.set_settings_strings(SettingsStrings {
+        windows_title: "Windows calendars".into(),
+        ..ui.get_settings_strings()
+    });
+    scroll(&ui, -400.0);
+    let windows_row = labelled_center(&ui, "Windows calendars");
+    click(&ui, windows_row.x, windows_row.y);
     assert!(
         ui.get_legacy_windows_enabled(),
         "Fresh users can enable Windows calendars"
     );
-    click(&ui, 220.0, 286.0);
+    click(&ui, windows_row.x, windows_row.y);
     assert!(
         !ui.get_legacy_windows_enabled(),
         "The same provider row toggles them again"
@@ -584,7 +594,8 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-retry.png"), 448, 360)
         .unwrap();
-    click(&ui, 372.0, 146.0);
+    // The On this PC card (44 px and an 8 px gap, plus its border) sits above.
+    click(&ui, 372.0, 200.0);
     assert!(
         refreshed.get(),
         "A failed Google query still offers manual refresh"
@@ -602,7 +613,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-expired.png"), 448, 360)
         .unwrap();
-    click(&ui, 395.0, 193.0);
+    click(&ui, 395.0, 247.0);
     assert!(
         reconnected.get(),
         "An expired Google account offers Sign in"
@@ -624,7 +635,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("mixed-permission-denied.png"), 448, 360)
         .unwrap();
-    click(&ui, 220.0, 194.0);
+    click(&ui, 220.0, 248.0);
     assert!(
         selected.get(),
         "Windows permission denial must not remove a readable calendar's checkbox"
@@ -2121,4 +2132,84 @@ fn unavailable_local_events_open_the_panel_instead_of_the_editor() {
     ui.invoke_panel_back();
     assert!(!ui.get_panel_open());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_on_this_pc_card_shows_one_notice_at_a_time() {
+    use lightcal::local_events::{Loaded, LocalEvents, Notice, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-card-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+
+    // Editable with no notice: name, "Local · No events", the selection.
+    let card = ctrl.local_card();
+    assert_eq!(card.name, "On this PC");
+    assert_eq!(card.sub, "Local · No events");
+    assert_eq!(card.notice, 0);
+    assert!(!card.checked);
+
+    // A failed save: amber with Try now.
+    ctrl.local_save_error = Some("Access is denied. (os error 5)".into());
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 2);
+    assert!(card.retry);
+    assert!(card.text.contains("Access is denied. (os error 5)."));
+    ctrl.local_save_error = None;
+
+    // A damaged file: red, names the kept file, Show in folder and Start over, which asks.
+    let kept = dir.join("local-events.json");
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: kept.clone(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.sub, "Local · Unavailable");
+    assert_eq!(card.head, "Events on this PC couldn\u{2019}t be read");
+    assert!(card.file.ends_with("local-events.json"));
+    assert!(card.folder && card.start_over && !card.confirm);
+    assert_eq!(ctrl.local_card_file(), Some(kept));
+    ctrl.start_over_confirm = true;
+    let card = ctrl.local_card();
+    assert!(card.confirm);
+    assert_eq!(card.head, "Start over with no events?");
+    ctrl.start_over_confirm = false;
+
+    // The writer did not start: red, read only, never Start over.
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::CannotSave {
+        error: "the disk is full".into(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.sub, "Local · Read only");
+    assert!(!card.start_over && !card.folder);
+    ctrl.start_over_confirm = true;
+    assert!(
+        !ctrl.local_card().confirm,
+        "no Start over for a healthy file"
+    );
+    ctrl.start_over_confirm = false;
+
+    // Locked: a quiet line with the spinner.
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Locked));
+    let card = ctrl.local_card();
+    assert_eq!((card.notice, card.spinner), (1, true));
+
+    // A restored backup: amber, the damaged file, Show in folder and OK, which dismisses.
+    let mut loaded = Loaded::unavailable(Unavailable::Locked);
+    loaded.access = lightcal::local_events::Access::Editable;
+    loaded.notices = vec![
+        Notice::RecoveredUnfinishedSave,
+        Notice::RestoredBackup {
+            damaged: Some(dir.join("local-events.preserved-1.json")),
+        },
+    ];
+    ctrl.local = LocalEvents::from_loaded(loaded);
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 2);
+    assert!(card.ok && card.folder);
+    assert!(card.file.ends_with("local-events.preserved-1.json"));
+    ctrl.local.dismiss_notices();
+    assert_eq!(ctrl.local_card().notice, 0);
 }

@@ -85,6 +85,30 @@ export struct AgendaEventItem {
     confirming: bool,
 }
 
+// The On this PC card in Settings › Accounts (LocalSettings board). `notice` is 0 for
+// none, 1 for a quiet line, 2 for amber and 3 for the red box.
+export struct LocalCardData {
+    name: string,
+    sub: string,
+    checked: bool,
+    notice: int,
+    spinner: bool,
+    check: bool,
+    head: string,
+    text: string,
+    file: string,
+    ok: bool,
+    folder: bool,
+    retry: bool,
+    start-over: bool,
+    confirm: bool,
+    ok-label: string,
+    folder-label: string,
+    retry-label: string,
+    start-over-label: string,
+    cancel-label: string,
+}
+
 // Labels for the local event editor, its panels and row actions (ADR 0017).
 export struct LocalEditorText {
     new-event: string,

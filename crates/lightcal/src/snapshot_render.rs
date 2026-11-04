@@ -62,6 +62,8 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         local_writer: None,
         editor: None,
         editor_panel: None,
+        local_save_error: None,
+        start_over_confirm: false,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -807,6 +809,56 @@ fn render_local_event_boards(
     ctrl.open_new_editor();
     shot(ctrl, "panel-light")?;
     ctrl.close_editor_panel();
+
+    // Settings › Accounts: the On this PC card above the demo accounts, and its notices.
+    use lightcal::local_events::{Loaded, Notice, Unavailable};
+    ctrl.set_remote_snapshot(ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::NoCalendars,
+        sources: Vec::new(),
+        occurrences: Vec::new(),
+    });
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 1;
+    let settings_shot = |ctrl: &AppController, name: &str| {
+        ctrl.sync_to_ui(ui);
+        helper.render_to_png(
+            &out_dir.join(format!("local-settings-{name}.png")),
+            448,
+            360,
+        )
+    };
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    settings_shot(ctrl, "accounts-light")?;
+    let mut restored = Loaded::unavailable(Unavailable::Locked);
+    restored.access = lightcal::local_events::Access::Editable;
+    restored.events = samples(today);
+    restored.notices = vec![Notice::RestoredBackup {
+        damaged: Some(std::path::PathBuf::from(
+            r"C:\Users\alex\AppData\Roaming\Lightcal\local-events.preserved-1793800000.json",
+        )),
+    }];
+    ctrl.local = LocalEvents::from_loaded(restored);
+    settings_shot(ctrl, "restored-light")?;
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    ctrl.local_save_error = Some("Access is denied. (os error 5)".into());
+    ctrl.prefs.theme = ThemePreference::Dark;
+    settings_shot(ctrl, "retrying-dark")?;
+    ctrl.local_save_error = None;
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: std::path::PathBuf::from(r"C:\Users\alex\AppData\Roaming\Lightcal\local-events.json"),
+    }));
+    settings_shot(ctrl, "damaged-light")?;
+    ctrl.start_over_confirm = true;
+    settings_shot(ctrl, "start-over-light")?;
+    ctrl.start_over_confirm = false;
+    ctrl.prefs.set_locale(LocaleCode::De);
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    settings_shot(ctrl, "accounts-light-de")?;
+    ctrl.prefs.set_locale(LocaleCode::En);
+    ctrl.settings_open = false;
+    ctrl.settings_tab = 0;
+
     ctrl.local = LocalEvents::in_memory(Vec::new());
     ctrl.refresh_local_view();
     Ok(())
