@@ -4,6 +4,7 @@ Documentation baseline: October 29, 2026; updated for the public repository on N
 
 | Document | Purpose |
 | --- | --- |
+| [Local events (proposed)](decisions/0017-local-events.md) | Proposal for events created in Lightcal and stored only on this PC; awaiting the owner's decision |
 | [Calendar motion](decisions/0016-calendar-motion.md) | Copy, agenda and month-change transitions; Today underline; Settings unchanged |
 | [Calendar hover follow](decisions/0015-calendar-hover-follow.md) | One highlight springs after the pointer across the day grid; stronger selected fill |
 | [Ten languages](decisions/0014-ten-languages.md) | German, French, Brazilian Portuguese, Ukrainian, Simplified Chinese and Korean; two-column language menu |
