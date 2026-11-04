@@ -365,6 +365,10 @@ pub struct Preferences {
     pub windows_calendars_enabled: bool,
     #[serde(default)]
     pub auto_install_updates: bool,
+    /// Whether the local On this PC calendar was selected once (ADR 0017). Missing in
+    /// older files, so an upgrade selects it a single time and the user's choice sticks.
+    #[serde(default)]
+    pub local_calendar_offered: bool,
 }
 
 impl Default for Preferences {
@@ -397,6 +401,7 @@ impl Default for Preferences {
             google_client_secret: default_google_client_secret(),
             windows_calendars_enabled: false,
             auto_install_updates: false,
+            local_calendar_offered: false,
         }
     }
 }

@@ -68,6 +68,14 @@ fn controller(dir: &std::path::Path) -> AppController {
             sources: Vec::new(),
             occurrences: Vec::new(),
         },
+        remote: ProviderSnapshot {
+            status: lightcal::platform::ProviderStatus::NoCalendars,
+            sources: Vec::new(),
+            occurrences: Vec::new(),
+        },
+        local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
+        local_writer: None,
+        demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -1769,4 +1777,165 @@ fn reanchor_runs_once_after_a_burst_of_changes() {
     lightcal::snapshot::advance_test_time(REANCHOR_QUIET * 3);
     slint::platform::update_timers_and_animations();
     assert_eq!(runs.get(), 1, "a single-shot move");
+}
+
+#[test]
+fn local_events_join_the_calendar_without_changing_provider_status() {
+    use lightcal::local_events::{samples, LocalEvents, SOURCE_ID};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-view-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    let today = ctrl.cal_state.today;
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    ctrl.set_remote_snapshot(ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::NoCalendars,
+        sources: Vec::new(),
+        occurrences: Vec::new(),
+    });
+    assert_eq!(
+        ctrl.provider.status,
+        lightcal::platform::ProviderStatus::NoCalendars,
+        "the local calendar never hides an empty provider"
+    );
+    assert_eq!(ctrl.provider.sources[0].id, SOURCE_ID);
+    assert_eq!(ctrl.provider.sources[0].name, "On this PC");
+    assert_eq!(ctrl.provider.occurrences.len(), 3);
+
+    // A provider refresh or failure leaves local events alone.
+    ctrl.set_remote_snapshot(ProviderSnapshot {
+        status: lightcal::platform::ProviderStatus::ProviderUnavailable("offline".into()),
+        sources: Vec::new(),
+        occurrences: Vec::new(),
+    });
+    assert_eq!(ctrl.provider.occurrences.len(), 3);
+    assert!(ctrl.remote.occurrences.is_empty());
+
+    // The name follows the language.
+    ctrl.prefs.set_locale(LocaleCode::De);
+    ctrl.refresh_local_view();
+    assert_eq!(ctrl.provider.sources[0].name, "Auf diesem PC");
+    assert_eq!(
+        ctrl.provider.status,
+        lightcal::platform::ProviderStatus::ProviderUnavailable("offline".into())
+    );
+
+    // Local dots appear only while the local calendar is selected.
+    let grid_with = |ctrl: &AppController| {
+        ctrl.cal_state
+            .build_grid(
+                &ctrl.provider.occurrences,
+                &ctrl.prefs.selected_calendar_ids,
+            )
+            .cells
+            .iter()
+            .map(|cell| cell.total_event_count)
+            .sum::<usize>()
+    };
+    assert_eq!(grid_with(&ctrl), 0);
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
+    assert!(grid_with(&ctrl) > 0);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_recovered_local_load_is_saved_back_at_once() {
+    use lightcal::local_events::{LocalEvents, Storage, Writer};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-repair-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let storage = Storage::new(&dir);
+    let event = lightcal::local_events::LocalEvent::validated(
+        "local:repair".into(),
+        "Restored",
+        LocalDate::new(2026, 11, 12).unwrap(),
+        lightcal::local_events::Timing::AllDay,
+        None,
+        None,
+    )
+    .unwrap();
+    storage.save(std::slice::from_ref(&event), false).unwrap();
+    storage.save(std::slice::from_ref(&event), false).unwrap();
+    std::fs::remove_file(storage.file_path()).unwrap();
+
+    let mut ctrl = controller(&dir);
+    let writer = Writer::spawn(storage.clone(), |_| {}).unwrap();
+    ctrl.local_writer = Some(writer.clone());
+    ctrl.apply_local_events(LocalEvents::from_loaded(storage.load()));
+    assert!(writer.wait_saved(std::time::Duration::from_secs(5)));
+    assert!(storage.file_path().exists(), "the main file is repaired");
+    assert!(storage.load().notices.is_empty());
+    assert_eq!(ctrl.provider.occurrences.len(), 1);
+    writer.shutdown();
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn the_lock_timeout_marks_unavailable_only_while_the_lock_is_awaited() {
+    use lightcal::local_events::{Access, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-timeout-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::loading();
+    assert!(
+        !ctrl.local_lock_timeout(true),
+        "lock held: a slow read stays loading"
+    );
+    assert!(ctrl.local.is_loading());
+    assert!(ctrl.local_lock_timeout(false));
+    assert!(!ctrl.local.is_loading());
+    assert_eq!(
+        ctrl.local.access(),
+        &Access::Unavailable(Unavailable::Locked)
+    );
+    assert!(!ctrl.local_lock_timeout(false), "only once");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn nothing_shows_the_window_while_quit_waits_for_local_events() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    crate::QUITTING.with(|quitting| quitting.set(true));
+    // The shortcut, a second launch and the tray all show the window through here.
+    crate::show_application_window(&ui);
+    let visible = ui.window().is_visible();
+    crate::QUITTING.with(|quitting| quitting.set(false));
+    assert!(!visible);
+}
+
+#[test]
+fn demo_mode_shows_its_calendars_without_saving_them() {
+    use lightcal::local_events::SOURCE_ID;
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-demo-shown-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.demo_shown.insert(SOURCE_ID.into());
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
+    ctrl.toggle_calendar("win-work".into());
+    assert!(ctrl.prefs.selected_calendar_ids.contains(SOURCE_ID));
+    let saved = |ctrl: &AppController| ctrl.store.load().preferences.selected_calendar_ids;
+    assert!(
+        saved(&ctrl).contains("win-work"),
+        "the user's toggle is saved"
+    );
+    assert!(
+        !saved(&ctrl).contains(SOURCE_ID),
+        "demo's own choice is not"
+    );
+
+    // Hiding a calendar only demo mode showed matches the saved selection.
+    ctrl.toggle_calendar(SOURCE_ID.into());
+    assert!(!ctrl.prefs.selected_calendar_ids.contains(SOURCE_ID));
+    assert!(!saved(&ctrl).contains(SOURCE_ID));
+    // Showing it again is the user's choice and is saved.
+    ctrl.toggle_calendar(SOURCE_ID.into());
+    assert!(saved(&ctrl).contains(SOURCE_ID));
+    let _ = std::fs::remove_dir_all(dir);
 }

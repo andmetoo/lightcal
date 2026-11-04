@@ -540,9 +540,20 @@ fn time_range(locale: LocaleCode, event: &CalendarOccurrence) -> String {
         return catalog(locale).agenda_all_day.to_string();
     }
     match event.timed_span() {
-        Some((start, end)) if end > start => format!("{}–{}", clock(start), clock(end)),
+        Some((start, end)) if end > start => format!("{}–{}", clock(start), end_clock(event, end)),
         Some((start, _)) => clock(start),
         None => event.time_label.clone(),
+    }
+}
+
+/// The end time; a local event running to midnight ends at `24:00` on its own date
+/// (ADR 0017), never `00:00` of the next day.
+fn end_clock(event: &CalendarOccurrence, end: i64) -> String {
+    let midnight_after = local_minutes(event.start_date.add_days(1), 0);
+    if event.source_id == lightcal::local_events::SOURCE_ID && end == midnight_after {
+        "24:00".to_string()
+    } else {
+        clock(end)
     }
 }
 
@@ -631,5 +642,30 @@ mod tests {
         event.source_id = "graph:a".into();
         event.web_link = Some("https://example.org/owa/".into());
         assert!(openable_link(&event).is_none());
+    }
+
+    #[test]
+    fn a_local_event_running_to_midnight_ends_at_24_00() {
+        let date = LocalDate::new(2026, 11, 12).unwrap();
+        let local = lightcal::local_events::LocalEvent::validated(
+            "local:late".into(),
+            "Late",
+            date,
+            lightcal::local_events::Timing::Timed {
+                start: 23 * 60,
+                end: lightcal::local_events::END_OF_DAY,
+            },
+            None,
+            None,
+        )
+        .unwrap()
+        .to_occurrence();
+        assert_eq!(time_range(LocaleCode::En, &local), "23:00–24:00");
+        // Provider events keep their existing label.
+        let provider = CalendarOccurrence {
+            source_id: "google:primary".into(),
+            ..local
+        };
+        assert_eq!(time_range(LocaleCode::En, &provider), "23:00–00:00");
     }
 }

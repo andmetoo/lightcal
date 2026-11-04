@@ -55,7 +55,12 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         store,
         prefs,
         cal_state,
-        provider,
+        provider: provider.clone(),
+        remote: provider,
+        // Snapshots never open the real local events file.
+        local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
+        local_writer: None,
+        demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -704,6 +709,7 @@ pub(crate) fn canvas_month() -> ProviderSnapshot {
                 web_link: Some(format!(
                     "https://www.google.com/calendar/event?eid=Y2FudmFzLXtp{i}"
                 )),
+                note: None,
             }
         })
         .collect();

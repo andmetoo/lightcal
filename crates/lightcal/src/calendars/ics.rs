@@ -449,6 +449,7 @@ fn emit(
         location: super::optional_text(value(event, "LOCATION").map(unescape).as_deref()),
         // Private ICS links never get an Open action.
         web_link: None,
+        note: None,
     });
     Ok(())
 }

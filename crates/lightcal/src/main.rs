@@ -105,7 +105,20 @@ pub(crate) struct AppController {
     pub(crate) store: PreferencesStore,
     pub(crate) prefs: Preferences,
     pub(crate) cal_state: CalendarState,
+    /// What the calendar shows: the provider calendars plus the local calendar
+    /// ([ADR 0017](../../docs/decisions/0017-local-events.md)). Rebuilt by
+    /// `set_remote_snapshot` and `refresh_local_view`.
     pub(crate) provider: ProviderSnapshot,
+    /// Provider calendars as last loaded, without local events. Provider status comes
+    /// from here only.
+    pub(crate) remote: ProviderSnapshot,
+    /// Events the user created, held apart from the providers.
+    pub(crate) local: lightcal::local_events::LocalEvents,
+    /// Writes local events off the UI thread; `None` in demo mode, snapshots and tests.
+    pub(crate) local_writer: Option<lightcal::local_events::Writer>,
+    /// Calendars demo mode selected for its samples. They are in the selection while
+    /// Lightcal runs but never saved (`persist`); empty outside demo mode.
+    pub(crate) demo_shown: std::collections::BTreeSet<String>,
     pub(crate) provider_request: u64,
     pub(crate) connection_busy: bool,
     pub(crate) connection_message: String,
@@ -605,6 +618,8 @@ fn wire_language(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
         let mut c = ctrl.borrow_mut();
         let loc = LocaleCode::from_code_or_default(code.as_str());
         c.prefs.set_locale(loc);
+        // The local calendar's name is translated.
+        c.refresh_local_view();
         c.language_dropdown_open = false;
         c.persist();
         if let Some(w) = ui_weak.upgrade() {
@@ -779,12 +794,70 @@ fn format_compact_summary(locale: LocaleCode, date: LocalDate, count: usize) -> 
 }
 
 impl AppController {
+    /// Replaces the provider calendars and rebuilds what the calendar shows.
+    pub(crate) fn set_remote_snapshot(&mut self, snapshot: ProviderSnapshot) {
+        let status = snapshot.status.clone();
+        self.remote = snapshot;
+        self.rebuild_calendar_view(status);
+    }
+
+    /// Takes freshly loaded local events. A recovered or restored copy is written back at
+    /// once, so the main file is repaired and the notice does not return on the next
+    /// start.
+    pub(crate) fn apply_local_events(&mut self, local: lightcal::local_events::LocalEvents) {
+        self.local = local;
+        if self.local.take_repair() {
+            let (events, copy_first) = self.local.take_save();
+            if let Some(writer) = &self.local_writer {
+                let _ = writer.submit(events, copy_first);
+            }
+        }
+        self.refresh_local_view();
+    }
+
+    /// After the 3 s lock timeout: shows local events as unavailable when the lock is
+    /// still awaited, not when it is held and only the file read is slow. Returns whether
+    /// anything changed.
+    pub(crate) fn local_lock_timeout(&mut self, lock_taken: bool) -> bool {
+        if !self.local.is_loading() || lock_taken {
+            return false;
+        }
+        self.local.mark_lock_timeout();
+        self.refresh_local_view();
+        true
+    }
+
+    /// Rebuilds what the calendar shows after local events or the language changed,
+    /// keeping the provider status on screen.
+    pub(crate) fn refresh_local_view(&mut self) {
+        let status = self.provider.status.clone();
+        self.rebuild_calendar_view(status);
+    }
+
+    /// Provider sources and occurrences with the local calendar added. The status is the
+    /// providers' only, so the local calendar never hides an empty or failed provider.
+    fn rebuild_calendar_view(&mut self, status: lightcal::platform::ProviderStatus) {
+        let mut sources = Vec::with_capacity(self.remote.sources.len() + 1);
+        sources.push(lightcal::local_events::source(self.prefs.locale()));
+        sources.extend(self.remote.sources.iter().cloned());
+        let mut occurrences = self.remote.occurrences.clone();
+        occurrences.extend(self.local.occurrences());
+        self.provider = ProviderSnapshot {
+            status,
+            sources,
+            occurrences,
+        };
+    }
+
     pub(crate) fn sync_to_ui(&self, ui: &AppWindow) {
         let locale = self.prefs.locale();
+        // Provider calendars only; the local calendar joins the Accounts counts with its
+        // own row (ADR 0017, editor stage).
         let active_count = self
             .provider
             .sources
             .iter()
+            .filter(|source| source.id != lightcal::local_events::SOURCE_ID)
             .filter(|source| self.prefs.selected_calendar_ids.contains(&source.id))
             .count();
         let strings = catalog(locale);
@@ -1675,8 +1748,28 @@ impl AppController {
         self.persist();
     }
 
+    /// Saves the preferences. Calendars only demo mode selected are left out, so the
+    /// saved selection stays the user's.
     fn persist(&self) {
-        let _ = self.store.save(&self.prefs);
+        if self.demo_shown.is_empty() {
+            let _ = self.store.save(&self.prefs);
+            return;
+        }
+        let mut prefs = self.prefs.clone();
+        prefs
+            .selected_calendar_ids
+            .retain(|id| !self.demo_shown.contains(id));
+        let _ = self.store.save(&prefs);
+    }
+
+    /// Shows or hides a calendar and saves the choice, which is the user's from then on,
+    /// in demo mode too.
+    pub(crate) fn toggle_calendar(&mut self, id: String) {
+        self.demo_shown.remove(&id);
+        if !self.prefs.selected_calendar_ids.remove(&id) {
+            self.prefs.selected_calendar_ids.insert(id);
+        }
+        self.persist();
     }
 }
 
@@ -1715,10 +1808,13 @@ impl AppController {
                 .unwrap_or_else(|| fallback.to_string())
         };
 
+        // Account cards list provider calendars only. The On this PC row arrives with the
+        // editor design (ADR 0017); until then it would land in the Windows card.
         let items: Vec<CalendarSourceItem> = self
             .provider
             .sources
             .iter()
+            .filter(|s| s.id != lightcal::local_events::SOURCE_ID)
             .map(|s| CalendarSourceItem {
                 id: s.id.clone().into(),
                 name: s.name.clone().into(),
@@ -2074,6 +2170,10 @@ fn popup_on_screen() -> bool {
 }
 
 fn show_application_window(ui: &AppWindow) {
+    // Once Quit is waiting for local events to be written, nothing shows the window again.
+    if QUITTING.with(std::cell::Cell::get) {
+        return;
+    }
     let _ = ui.show();
     // Showing places the window once; it is placed again only if that did not land.
     #[cfg(windows)]
@@ -2464,6 +2564,104 @@ thread_local! {
     static ACTIVE_UI: std::cell::RefCell<Option<slint::Weak<AppWindow>>> = const { std::cell::RefCell::new(None) };
 }
 
+/// The events lock, held until the process exits (ADR 0017).
+static LOCAL_EVENTS_LOCK: std::sync::OnceLock<lightcal::local_events::EventsLock> =
+    std::sync::OnceLock::new();
+/// Set once the events lock is held, so a slow file read is not reported as locked.
+static LOCAL_EVENTS_LOCK_TAKEN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+thread_local! {
+    /// Polls the local events writer while Quit waits for it.
+    static QUIT_WAIT: RefCell<Option<slint::Timer>> = const { RefCell::new(None) };
+    /// Set when Quit starts waiting; the window is not shown again.
+    static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Takes the events lock and loads local events on a background thread. Local events show
+/// as loading meanwhile, and as unavailable after 3 s; the wait goes on and they load as
+/// soon as the lock is free.
+/// With `cannot_save`, the writer did not start and the events load read-only.
+fn start_local_events_load(
+    ui_weak: slint::Weak<AppWindow>,
+    dir: std::path::PathBuf,
+    cannot_save: Option<String>,
+) {
+    let timeout_weak = ui_weak.clone();
+    slint::Timer::single_shot(std::time::Duration::from_secs(3), move || {
+        with_active_controller(&timeout_weak, |c, w| {
+            let lock_taken = LOCAL_EVENTS_LOCK_TAKEN.load(std::sync::atomic::Ordering::Acquire);
+            if c.local_lock_timeout(lock_taken) {
+                c.sync_to_ui(w);
+            }
+        });
+    });
+    let spawned = std::thread::Builder::new()
+        .name("lightcal-local-events-load".into())
+        .spawn(move || {
+            use lightcal::local_events::{EventsLock, Loaded, LocalEvents, Storage, Unavailable};
+            let loaded = match EventsLock::acquire(&dir) {
+                Ok(lock) => {
+                    let _ = LOCAL_EVENTS_LOCK.set(lock);
+                    LOCAL_EVENTS_LOCK_TAKEN.store(true, std::sync::atomic::Ordering::Release);
+                    Storage::new(&dir).load()
+                }
+                Err(error) => Loaded::unavailable(Unavailable::Unreadable {
+                    file: dir.join("local-events.lock"),
+                    error: error.to_string(),
+                }),
+            };
+            // Built here, off the UI thread.
+            let mut local = LocalEvents::from_loaded(loaded);
+            if let Some(error) = cannot_save {
+                local.mark_cannot_save(error);
+            }
+            let _ = slint::invoke_from_event_loop(move || {
+                with_active_controller(&ui_weak, |c, w| {
+                    c.apply_local_events(local);
+                    c.sync_to_ui(w);
+                });
+            });
+        });
+    if spawned.is_err() {
+        eprintln!("Lightcal: could not start loading local events");
+    }
+}
+
+/// Quits once every local event change is written. With a write in progress the window
+/// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
+/// on the writer (ADR 0017).
+fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
+    let mut writer = None;
+    with_active_controller(ui_weak, |c, _| writer = c.local_writer.clone());
+    let Some(writer) = writer.filter(|w| w.saving()) else {
+        let _ = slint::quit_event_loop();
+        return;
+    };
+    // Window and tray icon go at once, and the shortcut or a second launch no longer
+    // shows the window while Lightcal exits.
+    QUITTING.with(|quitting| quitting.set(true));
+    with_active_controller(ui_weak, |_c, ui| {
+        hide_application_window(ui);
+        #[cfg(windows)]
+        if let Some(tray) = &_c.tray_icon {
+            let _ = tray.set_visible(false);
+        }
+    });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let timer = slint::Timer::default();
+    timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_millis(50),
+        move || {
+            if !writer.saving() || std::time::Instant::now() >= deadline {
+                let _ = slint::quit_event_loop();
+            }
+        },
+    );
+    QUIT_WAIT.with(|slot| *slot.borrow_mut() = Some(timer));
+}
+
 fn with_active_controller<F>(ui_weak: &slint::Weak<AppWindow>, f: F)
 where
     F: FnOnce(&mut AppController, &AppWindow),
@@ -2522,7 +2720,7 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
         ) {
             ctrl.last_refreshed = Some(chrono::Local::now());
         }
-        ctrl.provider = snapshot;
+        ctrl.set_remote_snapshot(snapshot);
         ctrl.sync_to_ui(ui);
     });
 }
@@ -2591,9 +2789,7 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
         })
         .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
-            Ok(()) => {
-                let _ = slint::quit_event_loop();
-            }
+            Ok(()) => request_quit(&ui_weak),
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
                 ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {
@@ -3222,11 +3418,31 @@ fn main() {
             .unwrap_or("")
             .to_string();
     }
-    if use_synthetic && prefs.selected_calendar_ids.is_empty() {
-        prefs.selected_calendar_ids.insert("win-work".to_string());
+    // Demo mode shows its sample calendars and sample local events without saving them
+    // into the user's selection.
+    let mut demo_shown = std::collections::BTreeSet::new();
+    if use_synthetic {
+        let mut forced = vec![lightcal::local_events::SOURCE_ID];
+        if prefs.selected_calendar_ids.is_empty() {
+            forced.extend(["win-work", "win-personal"]);
+        }
+        demo_shown.extend(
+            forced
+                .into_iter()
+                .filter(|id| !prefs.selected_calendar_ids.contains(*id))
+                .map(str::to_string),
+        );
         prefs
             .selected_calendar_ids
-            .insert("win-personal".to_string());
+            .extend(demo_shown.iter().cloned());
+    } else if !prefs.local_calendar_offered {
+        // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
+        // The flag is saved with the next preference change; after that the selection
+        // is the user's.
+        prefs
+            .selected_calendar_ids
+            .insert(lightcal::local_events::SOURCE_ID.to_string());
+        prefs.local_calendar_offered = true;
     }
 
     let today = current_local_date();
@@ -3360,11 +3576,37 @@ fn main() {
         )
     };
 
+    // Demo mode never opens the real file or takes the lock; its sample events are kept
+    // in memory and discarded on exit.
+    let local_dir = store.dir().to_path_buf();
+    let (local, local_writer, local_cannot_save) = if use_synthetic {
+        (
+            lightcal::local_events::LocalEvents::in_memory(lightcal::local_events::samples(today)),
+            None,
+            None,
+        )
+    } else {
+        use lightcal::local_events::{LocalEvents, Storage, Writer};
+        match Writer::spawn(Storage::new(&local_dir), |_| {}) {
+            Ok(writer) => (LocalEvents::loading(), Some(writer), None),
+            // Nothing could be saved without the writer: the events still load, read-only,
+            // rather than accept changes that would be lost.
+            Err(error) => {
+                eprintln!("Lightcal: could not start the local events writer: {error}");
+                (LocalEvents::loading(), None, Some(error.to_string()))
+            }
+        }
+    };
+
     let ctrl = Rc::new(RefCell::new(AppController {
         store,
         prefs,
         cal_state,
-        provider,
+        provider: provider.clone(),
+        remote: provider,
+        local,
+        local_writer,
+        demo_shown,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -3419,6 +3661,11 @@ fn main() {
         *c.borrow_mut() = Some(Rc::downgrade(&ctrl));
     });
 
+    // Adds the local calendar to the first view.
+    ctrl.borrow_mut().refresh_local_view();
+    if !use_synthetic {
+        start_local_events_load(ui.as_weak(), local_dir, local_cannot_save);
+    }
     ctrl.borrow().sync_to_ui(&ui);
 
     // If starting in tray, hide the window initially; otherwise show it.
@@ -3570,7 +3817,7 @@ fn main() {
                     // Opens only the allowlisted GitHub Sponsors page in the browser.
                     open_browser_link(lightcal::updater::SPONSOR_URL);
                 } else if id == quit_id {
-                    let _ = slint::quit_event_loop();
+                    request_quit(&ui_w);
                 }
             });
         }));
@@ -3911,11 +4158,7 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_toggle_calendar_source(move |id| {
             let mut c = ctrl.borrow_mut();
-            let key = id.to_string();
-            if !c.prefs.selected_calendar_ids.remove(&key) {
-                c.prefs.selected_calendar_ids.insert(key);
-            }
-            c.persist();
+            c.toggle_calendar(id.to_string());
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
             }
