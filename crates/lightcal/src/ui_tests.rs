@@ -2062,9 +2062,23 @@ fn the_local_event_editor_adds_edits_and_deletes_events() {
         button: PointerEventButton::Right,
     });
     assert!(ui.get_editor_open(), "right-click opens the editor");
+    // A second right-click while the editor is open only moves the date: what was
+    // typed stays.
+    ui.set_editor_title("Half typed".into());
+    let other = slint::LogicalPosition::new(230.0, 148.0);
+    ui.window().dispatch_event(WindowEvent::PointerPressed {
+        position: other,
+        button: PointerEventButton::Right,
+    });
+    ui.window().dispatch_event(WindowEvent::PointerReleased {
+        position: other,
+        button: PointerEventButton::Right,
+    });
+    assert!(ui.get_editor_open());
+    assert_eq!(ui.get_editor_title(), "Half typed");
     assert_eq!(
         ctrl.borrow().cal_state.selected_date,
-        LocalDate::new(2026, 11, 12).unwrap()
+        LocalDate::new(2026, 11, 13).unwrap()
     );
     ui.invoke_cancel_editor();
 
@@ -2120,5 +2134,31 @@ fn unavailable_local_events_open_the_panel_instead_of_the_editor() {
     assert!(ui.get_panel_accounts());
     ui.invoke_panel_back();
     assert!(!ui.get_panel_open());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn saving_an_event_in_demo_mode_keeps_on_this_pc_selected() {
+    use lightcal::local_events::SOURCE_ID;
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-demo-save-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    // Demo mode showed On this PC that the saved preferences have off.
+    ctrl.demo_shown.insert(SOURCE_ID.into());
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
+    ctrl.open_new_editor();
+    let fields = local_editor::EditorFields {
+        title: "Dentist".into(),
+        ..local_editor::EditorFields::blank()
+    };
+    assert!(ctrl.save_editor(&fields));
+    assert!(
+        ctrl.demo_shown.is_empty(),
+        "the save made it the user's choice"
+    );
+    let saved = ctrl.store.load().preferences.selected_calendar_ids;
+    assert!(saved.contains(SOURCE_ID));
     let _ = std::fs::remove_dir_all(dir);
 }

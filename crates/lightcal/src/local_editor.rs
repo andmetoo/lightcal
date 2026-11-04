@@ -192,6 +192,11 @@ impl AppController {
     /// Opens the editor for a new event on the selected day. Returns the fields to show,
     /// or `None` when the panel opened instead.
     pub(crate) fn open_new_editor(&mut self) -> Option<EditorFields> {
+        // An open editor stays as it is: a right-click on a day only moves its event,
+        // like a left-click, so nothing typed is lost.
+        if self.editor.is_some() {
+            return None;
+        }
         self.agenda.confirm_delete = None;
         if let Some(panel) = self.blocked_panel() {
             self.editor = None;
@@ -267,12 +272,14 @@ impl AppController {
             }
         };
         self.submit_local_save();
-        // A new event never disappears from view: saving selects On this PC again.
-        if self
+        // A new event never disappears from view: saving selects On this PC again, as
+        // the user's own choice, so demo mode saves it too.
+        let selected = self
             .prefs
             .selected_calendar_ids
-            .insert(SOURCE_ID.to_string())
-        {
+            .insert(SOURCE_ID.to_string());
+        let shown_by_demo = self.demo_shown.remove(SOURCE_ID);
+        if selected || shown_by_demo {
             self.persist();
         }
         self.editor = None;
