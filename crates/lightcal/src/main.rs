@@ -2147,6 +2147,10 @@ fn popup_on_screen() -> bool {
 }
 
 fn show_application_window(ui: &AppWindow) {
+    // Once Quit is waiting for local events to be written, nothing shows the window again.
+    if QUITTING.with(std::cell::Cell::get) {
+        return;
+    }
     let _ = ui.show();
     // Showing places the window once; it is placed again only if that did not land.
     #[cfg(windows)]
@@ -2547,6 +2551,8 @@ static LOCAL_EVENTS_LOCK_TAKEN: std::sync::atomic::AtomicBool =
 thread_local! {
     /// Polls the local events writer while Quit waits for it.
     static QUIT_WAIT: RefCell<Option<slint::Timer>> = const { RefCell::new(None) };
+    /// Set when Quit starts waiting; the window is not shown again.
+    static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Takes the events lock and loads local events on a background thread. Local events show
@@ -2601,7 +2607,9 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
         let _ = slint::quit_event_loop();
         return;
     };
-    // Window and tray icon go at once, so nothing can be reopened while Lightcal exits.
+    // Window and tray icon go at once, and the shortcut or a second launch no longer
+    // shows the window while Lightcal exits.
+    QUITTING.with(|quitting| quitting.set(true));
     with_active_controller(ui_weak, |_c, ui| {
         hide_application_window(ui);
         #[cfg(windows)]
@@ -3387,8 +3395,8 @@ fn main() {
     }
     // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
     // The flag is saved with the next preference change; after that the selection is the
-    // user's. Demo mode shows its sample local events.
-    if use_synthetic || !prefs.local_calendar_offered {
+    // user's, in demo mode too, since demo mode saves to the same preferences.
+    if !prefs.local_calendar_offered {
         prefs
             .selected_calendar_ids
             .insert(lightcal::local_events::SOURCE_ID.to_string());
@@ -3537,14 +3545,24 @@ fn main() {
             None,
         )
     } else {
-        (
-            lightcal::local_events::LocalEvents::loading(),
-            Some(lightcal::local_events::Writer::spawn(
-                lightcal::local_events::Storage::new(&local_dir),
-                |_| {},
-            )),
-        )
+        use lightcal::local_events::{Loaded, LocalEvents, Storage, Unavailable, Writer};
+        match Writer::spawn(Storage::new(&local_dir), |_| {}) {
+            Ok(writer) => (LocalEvents::loading(), Some(writer)),
+            // Nothing could be saved without the writer, so local events stay unavailable
+            // rather than accept changes that would be lost.
+            Err(error) => {
+                eprintln!("Lightcal: could not start the local events writer: {error}");
+                (
+                    LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Unreadable {
+                        file: Storage::new(&local_dir).file_path(),
+                        error: error.to_string(),
+                    })),
+                    None,
+                )
+            }
+        }
     };
+    let load_local = local.is_loading();
 
     let ctrl = Rc::new(RefCell::new(AppController {
         store,
@@ -3610,7 +3628,7 @@ fn main() {
 
     // Adds the local calendar to the first view.
     ctrl.borrow_mut().refresh_local_view();
-    if !use_synthetic {
+    if load_local {
         start_local_events_load(ui.as_weak(), local_dir);
     }
     ctrl.borrow().sync_to_ui(&ui);

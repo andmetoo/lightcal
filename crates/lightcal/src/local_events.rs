@@ -553,15 +553,26 @@ impl Storage {
             .collect()
     }
 
-    /// The newest temporary file that parses as this schema, with its time.
-    fn newest_valid_temp(&self) -> Option<(SystemTime, ParsedFile)> {
+    /// The newest temporary file that parses as this schema, with its time and path.
+    fn newest_valid_temp(&self) -> Option<(SystemTime, PathBuf, ParsedFile)> {
         self.temp_files()
             .into_iter()
             .filter_map(|path| match read(&path) {
-                ReadOutcome::Parsed(parsed) => Some((modified(&path)?, parsed)),
+                ReadOutcome::Parsed(parsed) => Some((modified(&path)?, path, parsed)),
                 _ => None,
             })
-            .max_by_key(|(time, _)| *time)
+            .max_by_key(|(time, _, _)| *time)
+    }
+
+    /// Events read from `source`, a temporary file or the backup that the next save
+    /// removes or overwrites. With skipped events, `source` itself is copied aside now,
+    /// since copying the main file on save would miss them.
+    fn loaded_from_copy(&self, parsed: ParsedFile, notices: Vec<Notice>, source: &Path) -> Loaded {
+        let mut loaded = Loaded::from_parsed(parsed, notices);
+        if loaded.copy_before_next_save && self.copy_aside(source).is_ok() {
+            loaded.copy_before_next_save = false;
+        }
+        loaded
     }
 
     /// Loads local events. Reads only, except that an unreadable main file is moved aside
@@ -585,8 +596,10 @@ impl Storage {
         let temp = self.newest_valid_temp();
         if let ReadOutcome::Parsed(parsed) = main {
             return match temp {
-                Some((time, newer)) if modified(&main_path).is_none_or(|main| time > main) => {
-                    Loaded::from_parsed(newer, vec![Notice::RecoveredUnfinishedSave])
+                Some((time, path, newer))
+                    if modified(&main_path).is_none_or(|main| time > main) =>
+                {
+                    self.loaded_from_copy(newer, vec![Notice::RecoveredUnfinishedSave], &path)
                 }
                 _ => Loaded::from_parsed(parsed, Vec::new()),
             };
@@ -600,16 +613,15 @@ impl Storage {
             return Loaded::unavailable(Unavailable::NewerVersion { file: backup_path });
         }
         let temp_wins = match (&temp, &backup) {
-            (Some(_), ReadOutcome::Missing) => true,
-            (Some((time, _)), ReadOutcome::Parsed(_)) => backup_time.is_none_or(|b| *time > b),
+            (Some((time, _, _)), ReadOutcome::Parsed(_)) => backup_time.is_none_or(|b| *time > b),
             (Some(_), _) => true,
             (None, _) => false,
         };
         let (parsed, recovered) = if temp_wins {
-            (temp.map(|(_, parsed)| parsed), true)
+            (temp.map(|(_, path, parsed)| (path, parsed)), true)
         } else {
             match backup {
-                ReadOutcome::Parsed(parsed) => (Some(parsed), false),
+                ReadOutcome::Parsed(parsed) => (Some((backup_path.clone(), parsed)), false),
                 ReadOutcome::Missing if !main_damaged => {
                     // Nothing was ever saved: a fresh, empty calendar.
                     return Loaded::from_parsed(
@@ -632,7 +644,7 @@ impl Storage {
                 _ => (None, false),
             }
         };
-        let Some(parsed) = parsed else {
+        let Some((source, parsed)) = parsed else {
             let file = if main_damaged { main_path } else { backup_path };
             return Loaded::unavailable(Unavailable::Damaged { file });
         };
@@ -652,7 +664,7 @@ impl Storage {
         } else {
             Notice::RestoredBackup { damaged }
         };
-        Loaded::from_parsed(parsed, vec![notice])
+        self.loaded_from_copy(parsed, vec![notice], &source)
     }
 
     /// A free `local-events.preserved-<seconds>[-n].json` path.
@@ -678,11 +690,13 @@ impl Storage {
         ))
     }
 
+    /// Keeps the newest preserved copies, by the time in their names: a rename or copy
+    /// keeps the old file's modified time, so a fresh copy could otherwise go first.
     fn prune_preserved(&self) {
         let Ok(entries) = fs::read_dir(&self.dir) else {
             return;
         };
-        let mut files: Vec<(SystemTime, PathBuf)> = entries
+        let mut files: Vec<((u64, u32), PathBuf)> = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path())
             .filter(|path| {
@@ -690,7 +704,7 @@ impl Storage {
                     .and_then(|name| name.to_str())
                     .is_some_and(|name| name.starts_with(PRESERVED_PREFIX))
             })
-            .filter_map(|path| Some((modified(&path)?, path)))
+            .map(|path| (preserved_order(&path), path))
             .collect();
         files.sort();
         if files.len() > MAX_PRESERVED_FILES {
@@ -773,6 +787,21 @@ impl Storage {
         self.save(&[], false)?;
         Ok(preserved)
     }
+}
+
+/// When a preserved copy was made: the seconds and attempt in its name. Names that do
+/// not parse sort first.
+fn preserved_order(path: &Path) -> (u64, u32) {
+    let stem = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_prefix(PRESERVED_PREFIX))
+        .and_then(|rest| rest.strip_suffix(".json"));
+    let Some(stem) = stem else {
+        return (0, 0);
+    };
+    let (seconds, attempt) = stem.split_once('-').unwrap_or((stem, "0"));
+    (seconds.parse().unwrap_or(0), attempt.parse().unwrap_or(0))
 }
 
 /// Puts `temp` in place of `main`, keeping the previous `main` as `backup`.
@@ -1009,9 +1038,6 @@ impl LocalEvents {
     /// Adds a new event and returns its ID.
     pub fn add(&mut self, draft: &EventDraft) -> Result<String, EditError> {
         self.check_writable()?;
-        if self.events.len() >= MAX_EVENTS {
-            return Err(EditError::TooManyEvents);
-        }
         let id = new_event_id().map_err(|_| EditError::Invalid(InvalidEvent::Id))?;
         let event = LocalEvent::from_draft(id.clone(), draft).map_err(EditError::Invalid)?;
         let bytes = self.bytes + event_bytes(&event);
@@ -1130,7 +1156,10 @@ pub struct Writer {
 
 impl Writer {
     /// Starts the writer with the ADR's backoff: 5 s, doubling up to 5 min.
-    pub fn spawn(storage: Storage, report: impl Fn(WriteReport) + Send + 'static) -> Self {
+    pub fn spawn(
+        storage: Storage,
+        report: impl Fn(WriteReport) + Send + 'static,
+    ) -> io::Result<Self> {
         Self::spawn_with_backoff(
             storage,
             Duration::from_secs(5),
@@ -1144,7 +1173,7 @@ impl Writer {
         first_retry: Duration,
         max_retry: Duration,
         report: impl Fn(WriteReport) + Send + 'static,
-    ) -> Self {
+    ) -> io::Result<Self> {
         let shared = Arc::new((Mutex::new(WriterState::default()), Condvar::new()));
         let thread_shared = Arc::clone(&shared);
         std::thread::Builder::new()
@@ -1175,12 +1204,13 @@ impl Writer {
                             report(WriteReport::Saved);
                         }
                         Err(error) => {
-                            state.failed = true;
-                            // A newer change replaces the failed one; otherwise retry it.
-                            if state.pending.is_none() {
-                                state.pending = Some((events, copy_first));
-                            } else if let Some(pending) = state.pending.as_mut() {
+                            // A newer change replaces the failed one and is written at
+                            // once; otherwise the failed one is retried after the backoff.
+                            if let Some(pending) = state.pending.as_mut() {
                                 pending.1 |= copy_first;
+                            } else {
+                                state.failed = true;
+                                state.pending = Some((events, copy_first));
                             }
                             signal.notify_all();
                             drop(state);
@@ -1202,9 +1232,8 @@ impl Writer {
                     }
                     state = lock.lock().unwrap_or_else(|e| e.into_inner());
                 }
-            })
-            .expect("start the local events writer");
-        Self { shared }
+            })?;
+        Ok(Self { shared })
     }
 
     /// Queues a write of `events`, replacing any write not started yet.
@@ -1604,6 +1633,65 @@ mod tests {
     }
 
     #[test]
+    fn skipped_events_in_a_recovered_temp_file_are_kept() {
+        let dir = temp_dir("skipped-temp");
+        let storage = Storage::new(&dir);
+        let original = r#"{"schema_version":1,"events":[
+            {"id":"local:a","title":"Ok","date":"2026-11-12","all_day":true},
+            {"id":"local:b","title":"Bad","date":"2026-13-01","all_day":true}]}"#;
+        let temp = dir.join(format!("{TEMP_PREFIX}9-0{TEMP_SUFFIX}"));
+        fs::write(&temp, original).unwrap();
+        let mut store = LocalEvents::from_loaded(storage.load());
+        assert_eq!(
+            store.notices(),
+            &[Notice::RecoveredUnfinishedSave, Notice::SkippedEvents(1)]
+        );
+        // The repair save removes the temp file; its copy stays.
+        let (events, copy) = store.take_save();
+        assert!(!copy, "already copied while loading");
+        storage.save(&events, copy).unwrap();
+        assert!(!temp.exists());
+        let preserved: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(PRESERVED_PREFIX)
+            })
+            .collect();
+        assert_eq!(preserved.len(), 1);
+        assert_eq!(fs::read_to_string(preserved[0].path()).unwrap(), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn pruning_keeps_the_newest_preserved_copies_by_name() {
+        let dir = temp_dir("prune");
+        let storage = Storage::new(&dir);
+        for n in 0..=MAX_PRESERVED_FILES as u64 {
+            fs::write(
+                dir.join(format!("{PRESERVED_PREFIX}{}.json", 1000 + n)),
+                "x",
+            )
+            .unwrap();
+        }
+        // The newest copy keeps an old file's modified time, as a rename or copy does.
+        let newest = dir.join(format!(
+            "{PRESERVED_PREFIX}{}-1.json",
+            1000 + MAX_PRESERVED_FILES as u64
+        ));
+        fs::write(&newest, "x").unwrap();
+        set_age(&newest, 86_400 * 30);
+        storage.prune_preserved();
+        assert!(newest.exists());
+        assert!(!dir.join(format!("{PRESERVED_PREFIX}1000.json")).exists());
+        assert!(!dir.join(format!("{PRESERVED_PREFIX}1001.json")).exists());
+        assert!(dir.join(format!("{PRESERVED_PREFIX}1002.json")).exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn an_oversized_file_loads_as_delete_only_until_it_fits() {
         let dir = temp_dir("oversized");
         let storage = Storage::new(&dir);
@@ -1682,7 +1770,8 @@ mod tests {
             move |report| {
                 let _ = sender.send(report);
             },
-        );
+        )
+        .unwrap();
         writer.submit(vec![event(1, "Waiting")], false);
         let first = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(first, WriteReport::Failed(_)));

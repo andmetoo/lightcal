@@ -1835,6 +1835,7 @@ fn local_events_join_the_calendar_without_changing_provider_status() {
     assert_eq!(grid_with(&ctrl), 0);
     ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
     assert!(grid_with(&ctrl) > 0);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -1859,7 +1860,7 @@ fn a_recovered_local_load_is_saved_back_at_once() {
     std::fs::remove_file(storage.file_path()).unwrap();
 
     let mut ctrl = controller(&dir);
-    let writer = Writer::spawn(storage.clone(), |_| {});
+    let writer = Writer::spawn(storage.clone(), |_| {}).unwrap();
     ctrl.local_writer = Some(writer.clone());
     ctrl.apply_local_events(LocalEvents::from_loaded(storage.load()));
     assert!(writer.wait_saved(std::time::Duration::from_secs(5)));
@@ -1891,4 +1892,5 @@ fn the_lock_timeout_marks_unavailable_only_while_the_lock_is_awaited() {
         &Access::Unavailable(Unavailable::Locked)
     );
     assert!(!ctrl.local_lock_timeout(false), "only once");
+    let _ = std::fs::remove_dir_all(dir);
 }
