@@ -36,7 +36,7 @@ Commit `Cargo.lock` for reproducible application dependencies. Pin the Rust tool
 2. Review all dependency licenses and produce third-party notices from the locked dependency set.
 3. Provide corresponding source and necessary build instructions with each GPL binary release. Preserve exact source revisions and any modifications to bundled dependencies.
 4. Decide signing/installer approach, key custody, and recovery with the owner. Never commit signing keys, certificates, tokens, or passwords.
-5. Publish a privacy statement matching actual behavior: manual update checks contact GitHub; About links open GitHub/koona.app in the browser on user action; read-only calendar access uses the Windows provider, Microsoft Graph, Google Calendar, or a private ICS URL the user adds. No telemetry is planned. Document exactly which permissions and connection metadata are involved.
+5. Publish a privacy statement matching actual behavior: manual update checks contact GitHub; About links open GitHub/koona.app in the browser on user action; read-only calendar access uses the Windows provider, Microsoft Graph, Google Calendar, or a private ICS URL the user adds; events the user creates are stored only on this PC as plain JSON ([ADR 0017](decisions/0017-local-events.md)). No telemetry is planned. Document exactly which permissions and connection metadata are involved.
 6. Build from a reviewed source revision, test on a clean machine, attach checksums and validation evidence, and obtain owner permission to publish.
 
 Automatic update installation, funding infrastructure, and additional contributor bureaucracy are deferred until needed. Manual update checking is required scope.
