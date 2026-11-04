@@ -1836,3 +1836,59 @@ fn local_events_join_the_calendar_without_changing_provider_status() {
     ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
     assert!(grid_with(&ctrl) > 0);
 }
+
+#[test]
+fn a_recovered_local_load_is_saved_back_at_once() {
+    use lightcal::local_events::{LocalEvents, Storage, Writer};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-repair-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let storage = Storage::new(&dir);
+    let event = lightcal::local_events::LocalEvent::validated(
+        "local:repair".into(),
+        "Restored",
+        LocalDate::new(2026, 11, 12).unwrap(),
+        lightcal::local_events::Timing::AllDay,
+        None,
+        None,
+    )
+    .unwrap();
+    storage.save(std::slice::from_ref(&event), false).unwrap();
+    storage.save(std::slice::from_ref(&event), false).unwrap();
+    std::fs::remove_file(storage.file_path()).unwrap();
+
+    let mut ctrl = controller(&dir);
+    let writer = Writer::spawn(storage.clone(), |_| {});
+    ctrl.local_writer = Some(writer.clone());
+    ctrl.apply_local_events(LocalEvents::from_loaded(storage.load()));
+    assert!(writer.wait_saved(std::time::Duration::from_secs(5)));
+    assert!(storage.file_path().exists(), "the main file is repaired");
+    assert!(storage.load().notices.is_empty());
+    assert_eq!(ctrl.provider.occurrences.len(), 1);
+    writer.shutdown();
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn the_lock_timeout_marks_unavailable_only_while_the_lock_is_awaited() {
+    use lightcal::local_events::{Access, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-timeout-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::loading();
+    assert!(
+        !ctrl.local_lock_timeout(true),
+        "lock held: a slow read stays loading"
+    );
+    assert!(ctrl.local.is_loading());
+    assert!(ctrl.local_lock_timeout(false));
+    assert!(!ctrl.local.is_loading());
+    assert_eq!(
+        ctrl.local.access(),
+        &Access::Unavailable(Unavailable::Locked)
+    );
+    assert!(!ctrl.local_lock_timeout(false), "only once");
+}

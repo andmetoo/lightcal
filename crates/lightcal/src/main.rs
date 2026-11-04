@@ -798,6 +798,32 @@ impl AppController {
         self.rebuild_calendar_view(status);
     }
 
+    /// Takes freshly loaded local events. A recovered or restored copy is written back at
+    /// once, so the main file is repaired and the notice does not return on the next
+    /// start.
+    pub(crate) fn apply_local_events(&mut self, local: lightcal::local_events::LocalEvents) {
+        self.local = local;
+        if self.local.take_repair() {
+            let (events, copy_first) = self.local.take_save();
+            if let Some(writer) = &self.local_writer {
+                writer.submit(events, copy_first);
+            }
+        }
+        self.refresh_local_view();
+    }
+
+    /// After the 3 s lock timeout: shows local events as unavailable when the lock is
+    /// still awaited, not when it is held and only the file read is slow. Returns whether
+    /// anything changed.
+    pub(crate) fn local_lock_timeout(&mut self, lock_taken: bool) -> bool {
+        if !self.local.is_loading() || lock_taken {
+            return false;
+        }
+        self.local.mark_lock_timeout();
+        self.refresh_local_view();
+        true
+    }
+
     /// Rebuilds what the calendar shows after local events or the language changed,
     /// keeping the provider status on screen.
     pub(crate) fn refresh_local_view(&mut self) {
@@ -2530,11 +2556,8 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
     let timeout_weak = ui_weak.clone();
     slint::Timer::single_shot(std::time::Duration::from_secs(3), move || {
         with_active_controller(&timeout_weak, |c, w| {
-            let waiting_for_lock =
-                !LOCAL_EVENTS_LOCK_TAKEN.load(std::sync::atomic::Ordering::Acquire);
-            if c.local.is_loading() && waiting_for_lock {
-                c.local.mark_lock_timeout();
-                c.refresh_local_view();
+            let lock_taken = LOCAL_EVENTS_LOCK_TAKEN.load(std::sync::atomic::Ordering::Acquire);
+            if c.local_lock_timeout(lock_taken) {
                 c.sync_to_ui(w);
             }
         });
@@ -2542,7 +2565,7 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
     let spawned = std::thread::Builder::new()
         .name("lightcal-local-events-load".into())
         .spawn(move || {
-            use lightcal::local_events::{EventsLock, Loaded, Storage, Unavailable};
+            use lightcal::local_events::{EventsLock, Loaded, LocalEvents, Storage, Unavailable};
             let loaded = match EventsLock::acquire(&dir) {
                 Ok(lock) => {
                     let _ = LOCAL_EVENTS_LOCK.set(lock);
@@ -2554,18 +2577,11 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
                     error: error.to_string(),
                 }),
             };
+            // Built here, off the UI thread.
+            let local = LocalEvents::from_loaded(loaded);
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_weak, |c, w| {
-                    c.local = lightcal::local_events::LocalEvents::from_loaded(loaded);
-                    // A recovered or restored copy is written back at once, so the main
-                    // file is repaired and the notice does not return on the next start.
-                    if c.local.take_repair() {
-                        let (events, copy_first) = c.local.take_save();
-                        if let Some(writer) = &c.local_writer {
-                            writer.submit(events, copy_first);
-                        }
-                    }
-                    c.refresh_local_view();
+                    c.apply_local_events(local);
                     c.sync_to_ui(w);
                 });
             });

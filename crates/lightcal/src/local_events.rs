@@ -355,7 +355,6 @@ pub fn serialize(events: &[LocalEvent]) -> String {
 struct ParsedFile {
     events: Vec<LocalEvent>,
     skipped: usize,
-    bytes: u64,
 }
 
 #[derive(Debug)]
@@ -399,11 +398,7 @@ fn parse(text: &str) -> ReadOutcome {
             _ => skipped += 1,
         }
     }
-    ReadOutcome::Parsed(ParsedFile {
-        events,
-        skipped,
-        bytes: text.len() as u64,
-    })
+    ReadOutcome::Parsed(ParsedFile { events, skipped })
 }
 
 fn read(path: &Path) -> ReadOutcome {
@@ -476,6 +471,8 @@ pub struct Loaded {
     /// The events came from a temporary file or the backup, so they should be saved
     /// right away to repair the main file.
     pub repair: bool,
+    /// The file size these events serialize to, the measure every limit check uses.
+    pub bytes: u64,
 }
 
 impl Loaded {
@@ -486,6 +483,7 @@ impl Loaded {
             notices: Vec::new(),
             copy_before_next_save: false,
             repair: false,
+            bytes: empty_file_bytes(),
         }
     }
 
@@ -499,7 +497,10 @@ impl Loaded {
         if parsed.skipped > 0 {
             notices.push(Notice::SkippedEvents(parsed.skipped));
         }
-        let access = if parsed.events.len() > MAX_EVENTS || parsed.bytes > MAX_FILE_BYTES {
+        // The same size measure the editor uses, so a file that loads as editable never
+        // refuses an edit that keeps it within the limits.
+        let bytes = file_bytes(&parsed.events);
+        let access = if parsed.events.len() > MAX_EVENTS || bytes > MAX_FILE_BYTES {
             Access::DeleteOnly
         } else {
             Access::Editable
@@ -510,6 +511,7 @@ impl Loaded {
             notices,
             copy_before_next_save: parsed.skipped > 0,
             repair,
+            bytes,
         }
     }
 }
@@ -614,7 +616,6 @@ impl Storage {
                         ParsedFile {
                             events: Vec::new(),
                             skipped: 0,
-                            bytes: 0,
                         },
                         Vec::new(),
                     );
@@ -886,13 +887,20 @@ pub struct LocalEvents {
     bytes: u64,
 }
 
-/// Bytes one event adds to the file, a slight overestimate (separators included).
-fn event_bytes(event: &LocalEvent) -> u64 {
-    (serialize(std::slice::from_ref(event)).len() - serialize(&[]).len()) as u64 + 2
+/// Size of a file with no events, computed once.
+fn empty_file_bytes() -> u64 {
+    static EMPTY: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *EMPTY.get_or_init(|| serialize(&[]).len() as u64)
 }
 
+/// Bytes one event adds to the file, a slight overestimate (separators included).
+fn event_bytes(event: &LocalEvent) -> u64 {
+    (serialize(std::slice::from_ref(event)).len() as u64).saturating_sub(empty_file_bytes()) + 2
+}
+
+/// Estimated size of the file for `events`; never below the real size.
 fn file_bytes(events: &[LocalEvent]) -> u64 {
-    serialize(&[]).len() as u64 + events.iter().map(event_bytes).sum::<u64>()
+    empty_file_bytes() + events.iter().map(event_bytes).sum::<u64>()
 }
 
 impl LocalEvents {
@@ -905,7 +913,7 @@ impl LocalEvents {
             notices: Vec::new(),
             copy_before_next_save: false,
             repair_pending: false,
-            bytes: 0,
+            bytes: empty_file_bytes(),
         }
     }
 
@@ -924,7 +932,7 @@ impl LocalEvents {
     }
 
     pub fn from_loaded(loaded: Loaded) -> Self {
-        let bytes = file_bytes(&loaded.events);
+        let bytes = loaded.bytes;
         let writable = !matches!(loaded.access, Access::Unavailable(_));
         Self {
             events: loaded.events,
@@ -1022,7 +1030,8 @@ impl LocalEvents {
             .position(|event| event.id == id)
             .ok_or(EditError::NotFound)?;
         let event = LocalEvent::from_draft(id.to_string(), draft).map_err(EditError::Invalid)?;
-        let bytes = self.bytes - event_bytes(&self.events[index]) + event_bytes(&event);
+        let bytes =
+            self.bytes.saturating_sub(event_bytes(&self.events[index])) + event_bytes(&event);
         Self::fits(self.events.len(), bytes)?;
         self.events[index] = event;
         self.bytes = bytes;
@@ -1766,6 +1775,19 @@ mod tests {
         assert!(store.bytes >= serialize(store.events()).len() as u64);
         store.delete(&id).unwrap();
         assert!(store.bytes >= serialize(store.events()).len() as u64);
+    }
+
+    #[test]
+    fn load_and_edit_use_the_same_size_measure() {
+        let dir = temp_dir("size-measure");
+        let storage = Storage::new(&dir);
+        let events: Vec<_> = (0..3).map(|n| event(n, "Sized")).collect();
+        storage.save(&events, false).unwrap();
+        let loaded = storage.load();
+        assert_eq!(loaded.bytes, file_bytes(&events));
+        let store = LocalEvents::from_loaded(loaded);
+        assert_eq!(store.bytes, file_bytes(store.events()));
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
