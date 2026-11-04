@@ -2846,7 +2846,7 @@ fn begin_quit_wait(
         if let Err(error) = free_shortcut() {
             eprintln!("Lightcal: could not free the global shortcut before quitting: {error}");
         }
-        SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
+        SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = None);
     }
     writer.retry_now();
 }
@@ -4937,7 +4937,7 @@ fn main() {
 
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(_single_instance));
     slint::run_event_loop_until_quit().expect("Failed to run Slint event loop");
-    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = None);
 }
 
 #[cfg(test)]
