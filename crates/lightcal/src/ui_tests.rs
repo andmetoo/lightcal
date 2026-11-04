@@ -75,6 +75,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         },
         local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
         local_writer: None,
+        editor: None,
+        editor_panel: None,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -821,7 +823,8 @@ fn agenda_rows_expand_in_place_and_the_next_link_selects_its_day() {
         "Next: Fri 13 Nov · Design review →"
     );
     assert!(!ui.get_today_hidden());
-    click(&ui, 60.0, 338.0);
+    // Add event comes first (LocalCal board), so Next sits one 26 px line lower.
+    click(&ui, 60.0, 364.0);
     assert_eq!(
         ctrl.borrow().cal_state.selected_date,
         LocalDate::new(2026, 11, 13).unwrap()
@@ -1937,5 +1940,185 @@ fn demo_mode_shows_its_calendars_without_saving_them() {
     // Showing it again is the user's choice and is saved.
     ctrl.toggle_calendar(SOURCE_ID.into());
     assert!(saved(&ctrl).contains(SOURCE_ID));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+fn press_key(ui: &AppWindow, text: SharedString) {
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text });
+}
+
+fn type_text(ui: &AppWindow, text: &str) {
+    for ch in text.chars() {
+        press_key(ui, ch.to_string().into());
+    }
+}
+
+/// Holds Ctrl while `key` is pressed and released.
+fn press_with_ctrl(ui: &AppWindow, key: SharedString) {
+    let control = SharedString::from(slint::platform::Key::Control);
+    ui.window().dispatch_event(WindowEvent::KeyPressed {
+        text: control.clone(),
+    });
+    press_key(ui, key);
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: control });
+}
+
+#[test]
+fn the_local_event_editor_adds_edits_and_deletes_events() {
+    use lightcal::local_events::SOURCE_ID;
+    let platform = HeadlessPlatform::new();
+    let window = platform.window.clone();
+    slint::platform::set_platform(Box::new(platform)).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-editor-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.refresh_local_view();
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    calendar_view::connect_agenda_callbacks(&ui, &ctrl, |_| {});
+    local_editor::connect_local_editor_callbacks(&ui, &ctrl, |_| {});
+    ctrl.borrow().sync_to_ui(&ui);
+    ui.show().unwrap();
+    window.set_size(slint::PhysicalSize::new(352, 432));
+    ui.invoke_focus_calendar_keys();
+    let return_key = || SharedString::from(slint::platform::Key::Return);
+
+    // N opens the editor on the selected day, with the title focused; Enter saves.
+    press_key(&ui, "N".into());
+    assert!(ui.get_editor_open(), "N opens the editor");
+    assert!(!ui.get_editor_editing());
+    type_text(&ui, "Dentist");
+    assert_eq!(ui.get_editor_title(), "Dentist", "the title has the focus");
+    press_key(&ui, return_key());
+    assert!(!ui.get_editor_open(), "Enter in the title saves");
+    {
+        let c = ctrl.borrow();
+        assert_eq!(c.local.events().len(), 1);
+        assert!(
+            c.prefs.selected_calendar_ids.contains(SOURCE_ID),
+            "saving selects On this PC, so the event stays in view"
+        );
+    }
+    let saved = ui.get_agenda_events().row_data(0).unwrap();
+    assert_eq!(saved.title, "Dentist");
+    assert_eq!(saved.time_label, "09:00–10:00");
+    assert!(saved.is_local && saved.expanded && saved.can_edit && saved.can_delete);
+    assert!(!saved.can_open);
+
+    // An empty title and reversed times are both reported; nothing is saved.
+    ui.invoke_edit_event(saved.key.clone());
+    assert!(ui.get_editor_editing());
+    assert_eq!(ui.get_editor_title(), "Dentist");
+    ui.set_editor_title("".into());
+    ui.set_editor_start("18:00".into());
+    ui.set_editor_end("17:30".into());
+    ui.invoke_save_editor();
+    assert!(ui.get_editor_open());
+    assert_eq!(ui.get_editor_title_error(), "Add a title.");
+    assert_eq!(ui.get_editor_time_error(), "End must be after start.");
+
+    // Ctrl+Enter in the multi-line note saves (ADR 0017): it reaches the editor before
+    // the note can turn it into a line break.
+    ui.set_editor_title("Dentist".into());
+    ui.set_editor_start("09:00".into());
+    ui.set_editor_end("10:00".into());
+    // Tab moves through the fields in order: Location, then the note (below the fold).
+    ui.invoke_cancel_editor();
+    ui.invoke_edit_event(saved.key.clone());
+    click_label(&ui, "Location");
+    press_key(&ui, SharedString::from(slint::platform::Key::Tab));
+    type_text(&ui, "Card");
+    press_with_ctrl(&ui, return_key());
+    assert!(!ui.get_editor_open(), "Ctrl+Enter in the note saves");
+    assert_eq!(
+        ctrl.borrow().local.events()[0].note.as_deref(),
+        Some("Card"),
+        "no line break was added"
+    );
+
+    // Escape cancels without saving.
+    ui.invoke_focus_calendar_keys();
+    press_key(&ui, "n".into());
+    type_text(&ui, "Discarded");
+    press_key(&ui, SharedString::from(slint::platform::Key::Escape));
+    assert!(!ui.get_editor_open(), "Escape cancels");
+    assert_eq!(ctrl.borrow().local.events().len(), 1);
+
+    // Right-clicking a day selects it and opens the editor there.
+    let position = slint::LogicalPosition::new(188.0, 148.0);
+    ui.window().dispatch_event(WindowEvent::PointerPressed {
+        position,
+        button: PointerEventButton::Right,
+    });
+    ui.window().dispatch_event(WindowEvent::PointerReleased {
+        position,
+        button: PointerEventButton::Right,
+    });
+    assert!(ui.get_editor_open(), "right-click opens the editor");
+    assert_eq!(
+        ctrl.borrow().cal_state.selected_date,
+        LocalDate::new(2026, 11, 12).unwrap()
+    );
+    ui.invoke_cancel_editor();
+
+    // Delete asks first, in the row.
+    {
+        let mut c = ctrl.borrow_mut();
+        let first = LocalDate::new(2026, 11, 1).unwrap();
+        c.cal_state.select_date(first);
+        c.sync_to_ui(&ui);
+    }
+    let row = ui.get_agenda_events().row_data(0).unwrap();
+    ui.invoke_ask_delete_event(row.key.clone());
+    assert!(ui.get_agenda_events().row_data(0).unwrap().confirming);
+    ui.invoke_keep_event(row.key.clone());
+    assert!(!ui.get_agenda_events().row_data(0).unwrap().confirming);
+    ui.invoke_confirm_delete_event(row.key.clone());
+    assert_eq!(
+        ctrl.borrow().local.events().len(),
+        1,
+        "Delete needs its question"
+    );
+    ui.invoke_ask_delete_event(row.key.clone());
+    ui.invoke_confirm_delete_event(row.key.clone());
+    assert!(ctrl.borrow().local.events().is_empty());
+    assert!(ui.get_agenda_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn unavailable_local_events_open_the_panel_instead_of_the_editor() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    let platform = HeadlessPlatform::new();
+    slint::platform::set_platform(Box::new(platform)).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-panel-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: dir.join("local-events.json"),
+    }));
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    local_editor::connect_local_editor_callbacks(&ui, &ctrl, |_| {});
+    ctrl.borrow().sync_to_ui(&ui);
+    assert_eq!(ui.get_strip_text(), "Events on this PC are unavailable.");
+    assert!(ui.get_strip_error());
+    ui.invoke_new_event(-1);
+    assert!(!ui.get_editor_open());
+    assert!(ui.get_panel_open());
+    assert_eq!(ui.get_panel_title(), "Can\u{2019}t add events right now");
+    assert!(ui.get_panel_accounts());
+    ui.invoke_panel_back();
+    assert!(!ui.get_panel_open());
     let _ = std::fs::remove_dir_all(dir);
 }

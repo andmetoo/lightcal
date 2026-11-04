@@ -21,6 +21,7 @@ use lightcal::preferences::{
 mod calendar_view;
 mod event_colors;
 mod hover_follow;
+mod local_editor;
 mod month_fade;
 mod snapshot_render;
 #[cfg(test)]
@@ -116,6 +117,10 @@ pub(crate) struct AppController {
     pub(crate) local: lightcal::local_events::LocalEvents,
     /// Writes local events off the UI thread; `None` in demo mode, snapshots and tests.
     pub(crate) local_writer: Option<lightcal::local_events::Writer>,
+    /// The local event editor while it is open.
+    pub(crate) editor: Option<local_editor::EditorState>,
+    /// Shown in place of the editor when local events cannot be added.
+    pub(crate) editor_panel: Option<local_editor::EditorPanel>,
     /// Calendars demo mode selected for its samples. They are in the selection while
     /// Lightcal runs but never saved (`persist`); empty outside demo mode.
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
@@ -987,6 +992,7 @@ impl AppController {
         ui.set_active_calendars_label(format_calendar_count(locale, active_count).into());
         ui.set_back_to_calendar_text(strings.back_to_calendar.into());
         self.sync_calendar_view(ui, &grid);
+        self.sync_local_editor(ui);
 
         let compact_events = if selected_total_events > 0 {
             selected_total_events.min(2)
@@ -3606,6 +3612,8 @@ fn main() {
         remote: provider,
         local,
         local_writer,
+        editor: None,
+        editor_panel: None,
         demo_shown,
         provider_request: 0,
         connection_busy: false,
@@ -3959,6 +3967,9 @@ fn main() {
             }
         });
     }
+    local_editor::connect_local_editor_callbacks(&ui, &ctrl, move |weak| {
+        request_visible_calendars(weak, use_synthetic)
+    });
     calendar_view::connect_agenda_callbacks(&ui, &ctrl, move |weak| {
         request_visible_calendars(weak, use_synthetic)
     });

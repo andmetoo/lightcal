@@ -76,6 +76,37 @@ export struct AgendaEventItem {
     can-open: bool,
     expanded: bool,
     copied: bool,
+    // Local events (ADR 0017): note line, Edit and Delete in place of Open, and the inline
+    // delete confirmation.
+    note: string,
+    is-local: bool,
+    can-edit: bool,
+    can-delete: bool,
+    confirming: bool,
+}
+
+// Labels for the local event editor, its panels and row actions (ADR 0017).
+export struct LocalEditorText {
+    new-event: string,
+    edit-event: string,
+    new-event-key: string,
+    title: string,
+    all-day: string,
+    start: string,
+    end: string,
+    location: string,
+    note: string,
+    date: string,
+    date-hint: string,
+    save: string,
+    save-hint: string,
+    cancel: string,
+    add-event: string,
+    edit: string,
+    delete: string,
+    delete-question: string,
+    open-accounts: string,
+    back: string,
 }
 
 // One line of all-day chips; Rust wraps chips into lines.

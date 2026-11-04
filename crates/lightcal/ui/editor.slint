@@ -1,0 +1,469 @@
+// Local event editor and its panel (ADR 0017; design/canvas LocalCal board, `.in`,
+// `.sw`, `.em`, `.pbs` and `.bs` styles). The editor replaces the agenda below the month
+// grid; the popup keeps its size. Field text lives on AppWindow, so it survives Settings.
+
+import { Theme } from "theme.slint";
+import { Icon, Switch } from "controls.slint";
+import { LocalEditorText } from "types.slint";
+
+// 26 px field frame: hairline border, red when invalid, 2 px accent edge while focused.
+component FieldFrame inherits Rectangle {
+    in property <bool> focused: false;
+    in property <bool> invalid: false;
+
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.invalid ? Theme.err : Theme.control-line;
+    background: Theme.control;
+
+    if root.focused : Rectangle {
+        x: 1px;
+        y: parent.height - 2px;
+        width: parent.width - 2px;
+        height: 2px;
+        border-bottom-left-radius: 4px;
+        border-bottom-right-radius: 4px;
+        background: Theme.accent;
+    }
+
+    @children
+}
+
+// One-line input with an optional leading icon and placeholder.
+component LineField inherits FieldFrame {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> label;
+    in property <string> icon;
+    in property <bool> centered: false;
+    callback accepted();
+
+    height: 26px;
+    focused: input.has-focus;
+
+    if root.icon != "" : Icon {
+        x: 8px;
+        y: 7px;
+        name: root.icon;
+        size: 12px;
+        color: Theme.ink3;
+    }
+    if root.text == "" : Text {
+        x: input.x;
+        width: input.width;
+        height: parent.height;
+        text: root.placeholder;
+        font-size: Theme.type-body;
+        color: Theme.ink3;
+        vertical-alignment: center;
+        horizontal-alignment: root.centered ? center : left;
+        overflow: elide;
+    }
+    input := TextInput {
+        accessible-label: root.label;
+        x: root.icon != "" ? 26px : (root.centered ? 4px : 8px);
+        width: parent.width - self.x - (root.centered ? 4px : 8px);
+        height: parent.height;
+        text <=> root.text;
+        single-line: true;
+        font-size: Theme.type-body;
+        color: Theme.ink;
+        vertical-alignment: center;
+        horizontal-alignment: root.centered ? center : left;
+        accepted => { root.accepted(); }
+    }
+
+    public function focus-input() {
+        input.focus();
+    }
+}
+
+// Multi-line note: grows with its text from one 16 px line; the editor scrolls while
+// Save and Cancel stay pinned below it.
+component NoteField inherits FieldFrame {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> label;
+
+    property <length> line: 16px;
+    height: max(root.line, input.preferred-height) + 10px;
+    focused: input.has-focus;
+
+    Icon {
+        x: 8px;
+        y: 7px;
+        name: "note";
+        size: 12px;
+        color: Theme.ink3;
+    }
+    if root.text == "" : Text {
+        x: 26px;
+        y: 5px;
+        width: parent.width - 34px;
+        height: root.line;
+        text: root.placeholder;
+        font-size: Theme.type-body;
+        color: Theme.ink3;
+        vertical-alignment: center;
+    }
+    input := TextInput {
+        x: 26px;
+        y: 5px;
+        width: parent.width - 34px;
+        height: parent.height - 10px;
+        accessible-label: root.label;
+        text <=> root.text;
+        single-line: false;
+        wrap: word-wrap;
+        font-size: Theme.type-body;
+        color: Theme.ink;
+    }
+}
+
+// Red error line under a field (.em).
+component ErrorLine inherits HorizontalLayout {
+    in property <string> text;
+
+    spacing: 5px;
+    padding-left: 2px;
+    padding-right: 2px;
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+    VerticalLayout {
+        padding-top: 2px;
+        alignment: LayoutAlignment.start;
+        Icon {
+            name: "alert";
+            size: 12px;
+            weight: 2.25;
+            color: Theme.err;
+        }
+    }
+    Text {
+        horizontal-stretch: 1;
+        text: root.text;
+        font-size: Theme.type-caption;
+        color: Theme.err;
+        wrap: word-wrap;
+    }
+}
+
+// The All day switch as a keyboard control: Space toggles it.
+component AllDaySwitch inherits FocusScope {
+    in property <bool> checked;
+    in property <string> label;
+    callback toggled();
+
+    width: row.preferred-width;
+    height: 26px;
+    accessible-role: checkbox;
+    accessible-checked: root.checked;
+    accessible-label: root.label;
+    key-pressed(event) => {
+        if (event.text == " ") {
+            root.toggled();
+            return accept;
+        }
+        reject
+    }
+
+    if root.has-focus : Rectangle {
+        border-radius: 5px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+    row := HorizontalLayout {
+        padding-left: 2px;
+        padding-right: 6px;
+        spacing: 8px;
+        VerticalLayout {
+            alignment: center;
+            Switch {
+                checked: root.checked;
+                label: root.label;
+                toggled => { root.toggled(); }
+            }
+        }
+        Text {
+            text: root.label;
+            font-size: Theme.type-body;
+            color: Theme.ink;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// 26 px footer button: primary teal (.pbs) or secondary outline (.bs).
+component FooterButton inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> primary: false;
+    callback clicked();
+
+    height: 26px;
+    width: text.preferred-width + (root.primary ? 24px : 20px);
+    border-radius: 5px;
+    border-width: root.primary ? 0px : 1px;
+    border-color: Theme.control-line;
+    background: root.primary
+        ? (touch.has-hover ? Theme.primary-hover : Theme.primary)
+        : (touch.has-hover ? Theme.hover : Theme.control);
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-description: root.hint;
+
+    text := Text {
+        text: root.label;
+        font-size: Theme.type-caption;
+        font-weight: Theme.weight-medium;
+        color: root.primary ? Theme.on-primary : Theme.ink;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component EventEditor inherits FocusScope {
+    in property <LocalEditorText> text;
+    in property <bool> editing: false;
+    in-out property <string> title;
+    in-out property <bool> all-day;
+    in-out property <string> start;
+    in-out property <string> end;
+    in-out property <string> location;
+    in-out property <string> note;
+    in property <string> title-error;
+    in property <string> time-error;
+    in property <string> limit-error;
+    // Ends the time fields' red border when only the start is wrong.
+    in property <bool> start-invalid: false;
+    in property <string> date-text;
+    callback save();
+    callback cancel();
+    callback toggle-all-day();
+
+    accessible-role: groupbox;
+    accessible-label: root.editing ? root.text.edit-event : root.text.new-event;
+
+    // Escape cancels and Ctrl+Enter or Ctrl+S saves from every field, before a field can
+    // take the key (the note would add a line break for Ctrl+Enter).
+    capture-key-pressed(event) => {
+        if (event.text == Key.Escape) {
+            root.cancel();
+            return accept;
+        }
+        if (event.modifiers.control && (event.text == Key.Return || event.text == "s" || event.text == "S")) {
+            root.save();
+            return accept;
+        }
+        reject
+    }
+
+    init => {
+        title-field.focus-input();
+    }
+
+    VerticalLayout {
+        Flickable {
+            vertical-stretch: 1;
+            content-height: max(self.height, fields.preferred-height);
+            fields := VerticalLayout {
+                width: parent.width;
+                padding-top: 6px;
+                padding-left: 4px;
+                padding-right: 4px;
+                padding-bottom: 4px;
+                spacing: 5px;
+                alignment: LayoutAlignment.start;
+
+                title-field := LineField {
+                    text <=> root.title;
+                    placeholder: root.text.title;
+                    label: root.text.title;
+                    invalid: root.title-error != "";
+                    accepted => { root.save(); }
+                }
+                if root.title-error != "" : ErrorLine { text: root.title-error; }
+
+                HorizontalLayout {
+                    spacing: 6px;
+                    min-height: 26px;
+                    AllDaySwitch {
+                        checked: root.all-day;
+                        label: root.text.all-day;
+                        toggled => { root.toggle-all-day(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    if !root.all-day : LineField {
+                        width: 56px;
+                        centered: true;
+                        text <=> root.start;
+                        placeholder: "09:00";
+                        label: root.text.start;
+                        invalid: root.start-invalid;
+                        accepted => { root.save(); }
+                    }
+                    if !root.all-day : Text {
+                        text: "–";
+                        font-size: Theme.type-body;
+                        color: Theme.ink3;
+                        vertical-alignment: center;
+                        accessible-role: none;
+                    }
+                    if !root.all-day : LineField {
+                        width: 56px;
+                        centered: true;
+                        text <=> root.end;
+                        placeholder: "10:00";
+                        label: root.text.end;
+                        invalid: root.time-error != "";
+                        accepted => { root.save(); }
+                    }
+                }
+                if root.time-error != "" : ErrorLine { text: root.time-error; }
+
+                LineField {
+                    text <=> root.location;
+                    icon: "pin";
+                    placeholder: root.text.location;
+                    label: root.text.location;
+                    accepted => { root.save(); }
+                }
+                NoteField {
+                    text <=> root.note;
+                    placeholder: root.text.note;
+                    label: root.text.note;
+                }
+            }
+        }
+
+        if root.limit-error != "" : VerticalLayout {
+            Rectangle { height: 1px; background: Theme.popup-line; }
+            ErrorLine {
+                padding: 6px;
+                text: root.limit-error;
+            }
+        }
+
+        Rectangle { height: 1px; background: Theme.popup-line; }
+        HorizontalLayout {
+            height: 36px;
+            padding-left: 4px;
+            padding-right: 4px;
+            spacing: 6px;
+            HorizontalLayout {
+                horizontal-stretch: 1;
+                spacing: 6px;
+                accessible-role: AccessibleRole.text;
+                accessible-label: root.text.date + ": " + root.date-text;
+                accessible-description: root.text.date-hint;
+                VerticalLayout {
+                    alignment: center;
+                    Icon { name: "calendar"; size: 12px; color: Theme.ink2; }
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.date-text;
+                    font-size: Theme.type-caption;
+                    font-weight: Theme.weight-medium;
+                    color: Theme.ink2;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                FooterButton {
+                    primary: true;
+                    label: root.text.save;
+                    hint: root.text.save-hint;
+                    clicked => { root.save(); }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                FooterButton {
+                    label: root.text.cancel;
+                    hint: "Esc";
+                    clicked => { root.cancel(); }
+                }
+            }
+        }
+    }
+}
+
+// Shown in place of the editor when events cannot be added: unavailable (red, with
+// Open Accounts) or over the limits (amber).
+export component EditorPanel inherits FocusScope {
+    in property <string> title;
+    in property <string> message;
+    in property <bool> warn: false;
+    in property <bool> show-accounts: false;
+    in property <LocalEditorText> text;
+    callback open-accounts();
+    callback back();
+
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.title + ". " + root.message;
+    capture-key-pressed(event) => {
+        if (event.text == Key.Escape) {
+            root.back();
+            return accept;
+        }
+        reject
+    }
+    init => {
+        self.focus();
+    }
+
+    VerticalLayout {
+        padding-left: 20px;
+        padding-right: 20px;
+        spacing: 6px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: root.warn ? Theme.warn-bg : Theme.err-bg;
+                Icon {
+                    name: "alert";
+                    size: 16px;
+                    color: root.warn ? Theme.warn : Theme.err;
+                }
+            }
+        }
+        Text {
+            text: root.title;
+            font-size: Theme.type-body;
+            font-weight: Theme.weight-semibold;
+            color: Theme.ink;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        Text {
+            text: root.message;
+            font-size: Theme.type-caption;
+            color: Theme.ink2;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            padding-top: 4px;
+            spacing: 8px;
+            alignment: center;
+            if root.show-accounts : FooterButton {
+                label: root.text.open-accounts;
+                clicked => { root.open-accounts(); }
+            }
+            FooterButton {
+                label: root.text.back;
+                clicked => { root.back(); }
+            }
+        }
+    }
+}

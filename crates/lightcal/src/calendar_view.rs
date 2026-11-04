@@ -27,6 +27,20 @@ pub(crate) struct EventKey {
 impl EventKey {
     const SEPARATOR: char = '\u{1f}';
 
+    /// The key of the local event `event_id` on `date`.
+    pub(crate) fn for_local(date: LocalDate, event_id: &str) -> Self {
+        Self {
+            date,
+            source_id: lightcal::local_events::SOURCE_ID.to_string(),
+            event_id: event_id.to_string(),
+        }
+    }
+
+    /// The local event ID this key names, if it names one.
+    pub(crate) fn local_event_id(&self) -> Option<&str> {
+        (self.source_id == lightcal::local_events::SOURCE_ID).then_some(self.event_id.as_str())
+    }
+
     fn for_event(date: LocalDate, event: &CalendarOccurrence) -> Self {
         Self {
             date,
@@ -66,6 +80,8 @@ impl EventKey {
 pub(crate) struct AgendaUiState {
     pub(crate) expanded: Option<EventKey>,
     pub(crate) copied: Option<EventKey>,
+    /// The local event whose row asks "Delete event?".
+    pub(crate) confirm_delete: Option<EventKey>,
     /// Increments on every Copy so a stale "Copied" timeout does not clear a newer one.
     pub(crate) copy_generation: u64,
     /// Fixed local wall-clock time ([`local_minutes`]) for tests and snapshots.
@@ -98,7 +114,7 @@ impl AppController {
     }
 
     /// Resolves a row key from Slint to the current occurrence; `None` if it disappeared.
-    fn agenda_key(&self, row_key: &str) -> Option<(EventKey, CalendarOccurrence)> {
+    pub(crate) fn agenda_key(&self, row_key: &str) -> Option<(EventKey, CalendarOccurrence)> {
         let key = EventKey::decode(row_key)?;
         if key.date != self.cal_state.selected_date {
             return None;
@@ -116,6 +132,7 @@ impl AppController {
             return;
         };
         self.agenda.copied = None;
+        self.agenda.confirm_delete = None;
         self.agenda.expanded = if self.agenda.expanded.as_ref() == Some(&key) {
             None
         } else {
@@ -142,6 +159,9 @@ impl AppController {
         lines.push(format!("{date} · {}", detail_time(locale, &event)));
         if let Some(location) = &event.location {
             lines.push(location.clone());
+        }
+        if let Some(note) = &event.note {
+            lines.extend(note.lines().map(str::to_string));
         }
         lines.push(self.provider_line(&event));
         if let Some(link) = openable_link(&event) {
@@ -280,6 +300,11 @@ impl AppController {
         );
 
         let timings = agenda_timings(&events, is_today, self.now_minutes());
+        let local_access = self.local.access();
+        let local_ready = !self.local.is_loading();
+        let can_edit = local_ready && *local_access == lightcal::local_events::Access::Editable;
+        let can_delete =
+            local_ready && !matches!(local_access, lightcal::local_events::Access::Unavailable(_));
         let mut chips = Vec::new();
         let mut timed = Vec::new();
         let mut expanded_chip = None;
@@ -314,6 +339,11 @@ impl AppController {
                 can_open: openable_link(event).is_some(),
                 expanded: self.agenda.expanded.as_ref() == Some(&key),
                 copied: self.agenda.copied.as_ref() == Some(&key),
+                note: event.note.clone().unwrap_or_default().into(),
+                is_local: key.local_event_id().is_some(),
+                can_edit: key.local_event_id().is_some() && can_edit,
+                can_delete: key.local_event_id().is_some() && can_delete,
+                confirming: self.agenda.confirm_delete.as_ref() == Some(&key),
             };
             if event.is_all_day {
                 if item.expanded {

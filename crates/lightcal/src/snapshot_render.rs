@@ -60,6 +60,8 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         // Snapshots never open the real local events file.
         local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
         local_writer: None,
+        editor: None,
+        editor_panel: None,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -594,6 +596,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         }
     }
     render_calendar_boards(&mut ctrl, &ui, &helper, out_dir)?;
+    render_local_event_boards(&mut ctrl, &ui, &helper, out_dir)?;
     let _ = std::fs::remove_dir_all(&temp_dir);
     Ok(())
 }
@@ -718,6 +721,95 @@ pub(crate) fn canvas_month() -> ProviderSnapshot {
         sources: sources.to_vec(),
         occurrences,
     }
+}
+
+/// Local event states from the LocalCal board (ADR 0017): details with Edit and Delete,
+/// the delete question, the editor (new, invalid, German) and the unavailable panel. The
+/// events are the in-memory demo samples; nothing is written.
+fn render_local_event_boards(
+    ctrl: &mut AppController,
+    ui: &AppWindow,
+    helper: &HeadlessPlatform,
+    out_dir: &Path,
+) -> std::io::Result<()> {
+    use crate::local_editor::EditorFields;
+    use lightcal::local_events::{samples, LocalEvents, SOURCE_ID};
+    let today = LocalDate::new(2026, 11, 1).unwrap();
+    ctrl.local = LocalEvents::in_memory(samples(today));
+    ctrl.set_remote_snapshot(canvas_month());
+    ctrl.prefs.selected_calendar_ids = ctrl
+        .provider
+        .sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect();
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
+    ctrl.settings_open = false;
+    ctrl.cal_state =
+        CalendarState::new(today, ctrl.prefs.first_weekday, ctrl.prefs.gray_weekdays());
+    ctrl.agenda = Default::default();
+    ctrl.agenda.now_override = Some(calendar_core::local_minutes(today, 14 * 60 + 5));
+    ctrl.prefs.set_locale(LocaleCode::En);
+    let shot = |ctrl: &AppController, name: &str| {
+        ctrl.sync_to_ui(ui);
+        helper.render_to_png(&out_dir.join(format!("local-{name}.png")), 352, 432)
+    };
+
+    // The Dentist sample is tomorrow: details, then its delete question.
+    ctrl.cal_state.select_date(today.add_days(1));
+    let key = ctrl.agenda_key_at(0);
+    ctrl.toggle_agenda_event(&key);
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        shot(ctrl, &format!("details-{}", theme.as_str()))?;
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    ctrl.ask_delete_event(&key);
+    shot(ctrl, "confirm-light")?;
+    ctrl.keep_event();
+    ctrl.agenda.expanded = None;
+
+    // A new event on an empty day, then the same editor with both errors.
+    ctrl.cal_state
+        .select_date(LocalDate::new(2026, 11, 12).unwrap());
+    shot(ctrl, "empty-light")?;
+    for theme in [ThemePreference::Light, ThemePreference::Dark] {
+        ctrl.prefs.theme = theme;
+        let fields = ctrl.open_new_editor().expect("editable");
+        fields.write(ui);
+        ui.set_editor_title("Team dinner".into());
+        shot(ctrl, &format!("editor-new-{}", theme.as_str()))?;
+        ctrl.cancel_editor();
+    }
+    ctrl.prefs.theme = ThemePreference::Light;
+    let invalid = EditorFields {
+        title: String::new(),
+        start: "18:00".into(),
+        end: "17:30".into(),
+        ..EditorFields::blank()
+    };
+    for locale in [LocaleCode::En, LocaleCode::De] {
+        ctrl.prefs.set_locale(locale);
+        ctrl.open_new_editor();
+        invalid.write(ui);
+        ctrl.save_editor(&invalid);
+        shot(ctrl, &format!("editor-invalid-{}", locale.as_str()))?;
+        ctrl.cancel_editor();
+    }
+    ctrl.prefs.set_locale(LocaleCode::En);
+
+    // Unavailable: the red strip, and the panel in place of the editor.
+    ctrl.local = LocalEvents::from_loaded(lightcal::local_events::Loaded::unavailable(
+        lightcal::local_events::Unavailable::Locked,
+    ));
+    ctrl.refresh_local_view();
+    shot(ctrl, "unavailable-light")?;
+    ctrl.open_new_editor();
+    shot(ctrl, "panel-light")?;
+    ctrl.close_editor_panel();
+    ctrl.local = LocalEvents::in_memory(Vec::new());
+    ctrl.refresh_local_view();
+    Ok(())
 }
 
 /// Calendar popup states from the Main, CalendarDetail and CalendarDark boards.
