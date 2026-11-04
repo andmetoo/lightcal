@@ -163,6 +163,36 @@ pub fn numeral_font_source() -> &'static str {
     })
 }
 
+/// Sub-pixel offsets tried for each glyph, nearest first so ties keep the
+/// glyph where layout put it.
+const GRID_NUDGES: [f32; 7] = [0.0, -0.125, 0.125, -0.25, 0.25, -0.375, 0.375];
+
+/// Coverage mask of one glyph with its pen at (`pen_x`, `baseline`).
+fn glyph_mask(glyph: &Glyph, px: f32, pen_x: f32, baseline: f32, size: usize) -> Vec<u8> {
+    let map = |p: Point| Point::new(pen_x + p.x * px, baseline - p.y * px);
+    let path: Vec<Command> = glyph
+        .path
+        .iter()
+        .map(|command| match *command {
+            Command::MoveTo(p) => Command::MoveTo(map(p)),
+            Command::LineTo(p) => Command::LineTo(map(p)),
+            Command::QuadTo(c, p) => Command::QuadTo(map(c), map(p)),
+            Command::CurveTo(c0, c1, p) => Command::CurveTo(map(c0), map(c1), map(p)),
+            Command::Close => Command::Close,
+        })
+        .collect();
+    if path.is_empty() {
+        return vec![0; size * size];
+    }
+    Mask::new(&path).size(size as u32, size as u32).render().0
+}
+
+/// How soft a mask looks: the total distance of every pixel from fully on or
+/// fully off.
+fn greyness(mask: &[u8]) -> u32 {
+    mask.iter().map(|&c| c.min(255 - c) as u32).sum()
+}
+
 /// A source of numeral outlines.
 #[derive(Clone, Copy)]
 enum Face {
@@ -184,8 +214,9 @@ impl Face {
         }
     }
 
-    /// Horizontal ink extent of `text` relative to the pen origin.
-    fn extent(self, text: &str, px: f32) -> (f32, f32) {
+    /// Horizontal ink extent of `text` relative to the pen origin, with
+    /// `tracking` pixels added between glyphs (system face only).
+    fn extent(self, text: &str, px: f32, tracking: f32) -> (f32, f32) {
         let mut left = f32::MAX;
         let mut right = f32::MIN;
         match self {
@@ -196,7 +227,7 @@ impl Face {
                         left = left.min(pen + point.x * px);
                         right = right.max(pen + point.x * px);
                     }
-                    pen += glyph.advance * px;
+                    pen += glyph.advance * px + tracking;
                 }
             }
             Face::Strokes => {
@@ -215,29 +246,36 @@ impl Face {
     }
 
     /// Coverage mask (`size`×`size`) of `text` with its pen origin at
-    /// (`origin_x`, `baseline`).
-    fn draw(self, text: &str, px: f32, origin_x: f32, baseline: f32, size: usize) -> Vec<u8> {
+    /// (`origin_x`, `baseline`) and `tracking` pixels between glyphs.
+    fn draw(
+        self,
+        text: &str,
+        px: f32,
+        tracking: f32,
+        origin_x: f32,
+        baseline: f32,
+        size: usize,
+    ) -> Vec<u8> {
         match self {
             Face::System(glyphs) => {
-                let mut path = Vec::new();
+                // Outlines are unhinted, so each glyph is nudged by up to 3/8 px
+                // to whichever position leaves the fewest half-covered pixels:
+                // stems then land on whole columns instead of blurring across two.
+                let mut mask = vec![0u8; size * size];
                 let mut pen = origin_x;
-                let map = |p: Point, pen: f32| Point::new(pen + p.x * px, baseline - p.y * px);
                 for glyph in text.chars().filter_map(|c| glyphs.glyphs.get(&c)) {
-                    path.extend(glyph.path.iter().map(|command| match *command {
-                        Command::MoveTo(p) => Command::MoveTo(map(p, pen)),
-                        Command::LineTo(p) => Command::LineTo(map(p, pen)),
-                        Command::QuadTo(c, p) => Command::QuadTo(map(c, pen), map(p, pen)),
-                        Command::CurveTo(c0, c1, p) => {
-                            Command::CurveTo(map(c0, pen), map(c1, pen), map(p, pen))
+                    let best = GRID_NUDGES
+                        .iter()
+                        .map(|nudge| glyph_mask(glyph, px, pen + nudge, baseline, size))
+                        .min_by_key(|candidate| greyness(candidate));
+                    if let Some(glyph_mask) = best {
+                        for (total, coverage) in mask.iter_mut().zip(glyph_mask) {
+                            *total = total.saturating_add(coverage);
                         }
-                        Command::Close => Command::Close,
-                    }));
-                    pen += glyph.advance * px;
+                    }
+                    pen += glyph.advance * px + tracking;
                 }
-                if path.is_empty() {
-                    return vec![0; size * size];
-                }
-                Mask::new(&path).size(size as u32, size as u32).render().0
+                mask
             }
             Face::Strokes => {
                 let segments: Vec<[f32; 4]> = stroke_segments(text, px)
@@ -446,20 +484,22 @@ fn over(dst: [f32; 4], rgb: [u8; 3], alpha: f32) -> [f32; 4] {
     ]
 }
 
-/// Pixel geometry of the date tile at one native size. Every value scales
-/// from the 32 px master and is snapped where an edge would otherwise blur.
+/// Pixel geometry of a tile at one native size. Every value scales from the
+/// 32 px master and is snapped where an edge would otherwise blur.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TileGeometry {
     size: usize,
-    /// Corner radius: 6/32 of the raster.
+    /// Corner radius: 6/32 of the raster for banded tiles, 0.16 of it in
+    /// whole pixels for the band-free date tile.
     radius: f32,
-    /// Bottom of the darker band in whole pixels: 6/32 of the raster.
+    /// Bottom of the darker band in whole pixels; 0 for the date tile.
     band_bottom: usize,
     /// Mono outline width in whole pixels: 2/32 of the raster, at least 1.
     stroke: usize,
 }
 
 impl TileGeometry {
+    /// A tile with a darker band holding a label (legacy two-line modes).
     fn new(size: usize, band_ratio: f32) -> Self {
         let side = size as f32;
         Self {
@@ -470,6 +510,26 @@ impl TileGeometry {
         }
     }
 
+    /// The band-free date tile. A tighter radius keeps the plain square
+    /// reading as a page rather than an app badge.
+    fn date(size: usize) -> Self {
+        let side = size as f32;
+        Self {
+            size,
+            radius: (side * 0.16).round(),
+            band_bottom: 0,
+            stroke: ((side / 16.0).round() as usize).max(1),
+        }
+    }
+
+    /// Width of the Mono outline on every side; 0 for Color, which has none.
+    fn inset(&self, style: Style) -> usize {
+        match style {
+            Style::Color => 0,
+            Style::Mono { .. } => self.stroke,
+        }
+    }
+
     /// Clear space between numerals and the tile edge. Color and Mono share
     /// it, so both styles use the same numeral size.
     fn margin(&self) -> usize {
@@ -477,7 +537,6 @@ impl TileGeometry {
     }
 }
 
-const DATE_BAND_RATIO: f32 = 6.0 / 32.0;
 /// Legacy two-line modes put a short label inside a taller band.
 const LABEL_BAND_RATIO: f32 = 11.0 / 32.0;
 
@@ -524,6 +583,8 @@ fn paint_tile(geometry: TileGeometry, style: Style) -> Vec<u8> {
 struct TextFit {
     px: f32,
     height: usize,
+    /// Pixels added between glyphs.
+    tracking: f32,
 }
 
 /// Picks one size for every candidate string: the tallest digit height, up to
@@ -531,6 +592,7 @@ struct TextFit {
 fn fit_text(
     face: Face,
     candidates: &[String],
+    tracking: f32,
     target: usize,
     max_width: f32,
     max_height: usize,
@@ -539,11 +601,15 @@ fn fit_text(
     loop {
         let px = face.px_for_digit_height(height as f32);
         let fits = candidates.iter().all(|text| {
-            let (left, right) = face.extent(text, px);
+            let (left, right) = face.extent(text, px, tracking);
             right - left <= max_width
         });
         if fits || height <= 3 {
-            return TextFit { px, height };
+            return TextFit {
+                px,
+                height,
+                tracking,
+            };
         }
         height -= 1;
     }
@@ -568,20 +634,26 @@ fn draw_text(
     ink: Ink,
 ) {
     let baseline = (top + fit.height) as f32;
-    let (left, right) = face.extent(text, fit.px);
+    let (left, right) = face.extent(text, fit.px, fit.tracking);
     let origin = (size as f32 * 0.5 - (left + right) * 0.5).round();
-    let mask = face.draw(text, fit.px, origin, baseline, size);
-    let mut columns = (size, 0usize);
+    let mask = face.draw(text, fit.px, fit.tracking, origin, baseline, size);
+    // Visible ink edges, with a faint edge column counting only as much as it
+    // covers, so anti-aliasing on one side does not pull the text off-centre.
+    let mut column_coverage = vec![0u8; size];
     for (i, &coverage) in mask.iter().enumerate() {
-        if coverage > 24 {
-            columns.0 = columns.0.min(i % size);
-            columns.1 = columns.1.max(i % size);
-        }
+        let column = &mut column_coverage[i % size];
+        *column = (*column).max(coverage);
     }
-    let shift = if columns.0 <= columns.1 {
-        (size as f32 * 0.5 - (columns.0 + columns.1 + 1) as f32 * 0.5).round() as isize
-    } else {
-        0
+    let first = column_coverage.iter().position(|&c| c > 0);
+    let last = column_coverage.iter().rposition(|&c| c > 0);
+    let shift = match (first, last) {
+        (Some(first), Some(last)) => {
+            let weight = |column: usize| column_coverage[column] as f32 / 255.0;
+            let left = first as f32 + 1.0 - weight(first);
+            let right = last as f32 + weight(last);
+            (size as f32 * 0.5 - (left + right) * 0.5).round() as isize
+        }
+        _ => 0,
     };
     for (i, &coverage) in mask.iter().enumerate() {
         let x = (i % size) as isize + shift;
@@ -599,10 +671,6 @@ fn draw_text(
     }
 }
 
-fn digit_height_target(size: usize) -> usize {
-    (size as f32 * 0.4 + 0.5).round() as usize
-}
-
 /// The date tile: an optional label in a taller band, and a body line
 /// centred below the band. `body_candidates` share one size.
 fn render_tile(
@@ -614,12 +682,7 @@ fn render_tile(
     body_candidates: &[String],
     body_target: usize,
 ) -> Vec<u8> {
-    let ratio = if band_label.is_some() {
-        LABEL_BAND_RATIO
-    } else {
-        DATE_BAND_RATIO
-    };
-    let geometry = TileGeometry::new(size, ratio);
+    let geometry = TileGeometry::new(size, LABEL_BAND_RATIO);
     let mut pixels = paint_tile(geometry, style);
     let margin = geometry.margin();
     let max_width = (size - 2 * margin) as f32;
@@ -632,6 +695,7 @@ fn render_tile(
         let fit = fit_text(
             face,
             candidates,
+            0.0,
             band / 2,
             max_width,
             band.saturating_sub(2),
@@ -645,7 +709,14 @@ fn render_tile(
     }
     let below = size - geometry.band_bottom;
     let max_height = size.saturating_sub(geometry.band_bottom + 1 + margin);
-    let fit = fit_text(face, body_candidates, body_target, max_width, max_height);
+    let fit = fit_text(
+        face,
+        body_candidates,
+        0.0,
+        body_target,
+        max_width,
+        max_height,
+    );
     let top = geometry.band_bottom + (below - fit.height).div_ceil(2);
     draw_text(&mut pixels, size, face, body, &fit, top, Ink::Paint(ink));
     pixels
@@ -655,16 +726,71 @@ fn all_dates() -> Vec<String> {
     (1..=31).map(|day: u8| day.to_string()).collect()
 }
 
+/// Digit height for single-digit dates: 0.58 of the raster in Mono and
+/// 0.62 in Color, which has no outline to clear.
+fn single_digit_height_target(size: usize, style: Style) -> usize {
+    let ratio = match style {
+        Style::Color => 0.62,
+        Style::Mono { .. } => 0.58,
+    };
+    (size as f32 * ratio).round() as usize
+}
+
+/// Digit height two-digit dates aim for before the width limit applies.
+fn double_digit_height_target(size: usize) -> usize {
+    (size as f32 * 0.5).round() as usize
+}
+
+/// Clear space beside two-digit ink: one stroke width inside the Mono
+/// outline, or 1/8 of the raster from the Color tile's edge.
+fn date_clear_space(geometry: &TileGeometry, style: Style) -> usize {
+    match style {
+        Style::Color => ((geometry.size as f32 / 8.0).round() as usize).max(1),
+        Style::Mono { .. } => geometry.stroke,
+    }
+}
+
+/// Tracking between the two digits of a date: -1 px from 20 px up, so a pair
+/// keeps its height without crowding the edge. Pairs with a `1` get no extra
+/// tightening: Segoe's narrow `1` would then run into its neighbour.
+fn date_tracking(size: usize, text: &str) -> f32 {
+    if size >= 20 && text.chars().count() >= 2 {
+        -1.0
+    } else {
+        0.0
+    }
+}
+
+/// The band-free date tile. Dates 1-9 share one tall size and 10-31 another,
+/// each the same for every date of its group, centred by visible ink inside
+/// the Mono outline or on the Color tile.
 fn render_date_tile(size: usize, face: Face, style: Style, day: u8) -> Vec<u8> {
-    render_tile(
-        size,
-        face,
-        style,
-        None,
-        &day.clamp(1, 31).to_string(),
-        &all_dates(),
-        digit_height_target(size),
-    )
+    let day = day.clamp(1, 31);
+    let geometry = TileGeometry::date(size);
+    let mut pixels = paint_tile(geometry, style);
+    let inset = geometry.inset(style);
+    let space = size - 2 * inset;
+    let clear = date_clear_space(&geometry, style);
+    let max_width = size.saturating_sub(2 * (inset + clear)) as f32;
+    // At least one clear row above and below the numeral.
+    let max_height = space.saturating_sub(2);
+    let (days, target) = if day < 10 {
+        (1..=9, single_digit_height_target(size, style))
+    } else {
+        (10..=31, double_digit_height_target(size))
+    };
+    let candidates: Vec<String> = days.map(|d: u8| d.to_string()).collect();
+    // Every date of a group has the same digit count, so one tracking value.
+    let tracking = date_tracking(size, &candidates[0]);
+    let fit = fit_text(face, &candidates, tracking, target, max_width, max_height);
+    let top = inset + (space - fit.height) / 2;
+    let text = day.to_string();
+    let ink = match style {
+        Style::Color => WHITE,
+        Style::Mono { ink } => ink,
+    };
+    draw_text(&mut pixels, size, face, &text, &fit, top, Ink::Paint(ink));
+    pixels
 }
 
 /// The undated application icon: the coral tile with a darker band and a
@@ -1233,56 +1359,77 @@ mod tests {
         [rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]]
     }
 
-    #[test]
-    fn color_tile_fills_the_raster_with_a_band_and_transparent_corners() {
-        for size in TRAY_SIZES {
-            let geometry = TileGeometry::new(size, DATE_BAND_RATIO);
-            let rgba = render_date_tile(size, Face::Strokes, Style::Color, 1);
-            assert_eq!(pixel(&rgba, size, 0, 0)[3], 0, "{size}px corner");
-            assert_eq!(pixel(&rgba, size, size - 1, size - 1)[3], 0);
-            // Edges reach the raster; no unused outer rows or columns.
-            assert_eq!(pixel(&rgba, size, size / 2, 0), [0xA9, 0x2A, 0x31, 255]);
-            assert_eq!(pixel(&rgba, size, 0, size / 2), [0xD7, 0x38, 0x40, 255]);
-            assert_eq!(pixel(&rgba, size, size - 1, size / 2)[3], 255);
-            assert_eq!(
-                pixel(&rgba, size, size / 2, size - 1),
-                [0xD7, 0x38, 0x40, 255]
-            );
-            // The band ends on a whole pixel.
-            let band = geometry.band_bottom;
-            assert_eq!(pixel(&rgba, size, 1, band - 1)[..3], CORAL_BAND);
-            assert_eq!(pixel(&rgba, size, 1, band)[..3], CORAL);
-        }
+    fn styles() -> [Style; 3] {
+        [
+            Style::Color,
+            Style::new(true, false),
+            Style::new(true, true),
+        ]
     }
 
     #[test]
-    fn mono_tile_is_an_outline_in_the_shell_ink() {
-        for (dark, ink) in [(false, INK_ON_LIGHT_SHELL), (true, INK_ON_DARK_SHELL)] {
-            for size in TRAY_SIZES {
-                let geometry = TileGeometry::new(size, DATE_BAND_RATIO);
-                let rgba = paint_tile(geometry, Style::new(true, dark));
-                assert_eq!(pixel(&rgba, size, 0, 0)[3], 0);
-                assert_eq!(pixel(&rgba, size, size / 2, 1)[..3], ink);
-                assert_eq!(
-                    pixel(&rgba, size, 0, size / 2),
-                    [ink[0], ink[1], ink[2], 255]
-                );
-                assert_eq!(pixel(&rgba, size, size / 2, size - 1)[3], 255);
-                assert_eq!(
-                    pixel(&rgba, size, size / 2, size / 2)[3],
-                    0,
-                    "hollow at {size}px"
-                );
-                assert_eq!(pixel(&rgba, size, geometry.stroke, size / 2)[3], 0);
+    fn color_date_tile_fills_the_raster_without_a_band() {
+        for size in TRAY_SIZES {
+            let rgba = paint_tile(TileGeometry::date(size), Style::Color);
+            assert_eq!(pixel(&rgba, size, 0, 0)[3], 0, "{size}px corner");
+            assert_eq!(pixel(&rgba, size, size - 1, size - 1)[3], 0);
+            // Edges reach the raster; no unused outer rows or columns, and no band.
+            for (x, y) in [
+                (size / 2, 0),
+                (0, size / 2),
+                (size - 1, size / 2),
+                (size / 2, size - 1),
+            ] {
+                assert_eq!(pixel(&rgba, size, x, y), [0xD7, 0x38, 0x40, 255]);
             }
         }
     }
 
-    /// Bounds of numeral pixels: white on the coral tile.
-    fn numeral_bounds(rgba: &[u8], size: usize) -> (usize, usize, usize, usize) {
+    #[test]
+    fn mono_date_tile_is_an_even_outline_in_the_shell_ink() {
+        for (dark, ink) in [(false, INK_ON_LIGHT_SHELL), (true, INK_ON_DARK_SHELL)] {
+            for size in TRAY_SIZES {
+                let geometry = TileGeometry::date(size);
+                let rgba = paint_tile(geometry, Style::new(true, dark));
+                let solid = [ink[0], ink[1], ink[2], 255];
+                assert_eq!(pixel(&rgba, size, 0, 0)[3], 0);
+                let s = geometry.stroke;
+                for (x, y) in [
+                    (size / 2, 0),
+                    (size / 2, s - 1),
+                    (0, size / 2),
+                    (size - 1, size / 2),
+                    (size / 2, size - 1),
+                ] {
+                    assert_eq!(pixel(&rgba, size, x, y), solid, "{size}px at {x},{y}");
+                }
+                // The top edge is as thin as the others: no band.
+                assert_eq!(pixel(&rgba, size, size / 2, s)[3], 0, "{size}px band");
+                assert_eq!(pixel(&rgba, size, s, size / 2)[3], 0);
+                assert_eq!(pixel(&rgba, size, size / 2, size / 2)[3], 0);
+            }
+        }
+    }
+
+    /// Bounds of numeral pixels: those that differ from the bare tile.
+    fn numeral_bounds(rgba: &[u8], size: usize, style: Style) -> (usize, usize, usize, usize) {
+        let bare = paint_tile(TileGeometry::date(size), style);
         let mut bounds = (size, size, 0, 0);
-        for (i, p) in rgba.as_chunks::<4>().0.iter().enumerate() {
-            if p[3] == 255 && p[1] > 0x90 {
+        let pairs = rgba.as_chunks::<4>().0.iter().zip(bare.as_chunks::<4>().0);
+        // Straight alpha: weigh colour by coverage so faint edges count as faint.
+        let premultiplied = |p: &[u8; 4], k: usize| {
+            if k == 3 {
+                p[3] as u32
+            } else {
+                p[k] as u32 * p[3] as u32 / 255
+            }
+        };
+        for (i, (p, q)) in pairs.enumerate() {
+            let changed = (0..4)
+                .map(|k| premultiplied(p, k).abs_diff(premultiplied(q, k)))
+                .max()
+                .unwrap_or(0);
+            if changed > 0x60 {
                 let (x, y) = (i % size, i / size);
                 bounds = (
                     bounds.0.min(x),
@@ -1298,31 +1445,67 @@ mod tests {
     #[test]
     fn every_date_fits_and_centres_at_native_shell_sizes() {
         for face in faces() {
-            for size in TRAY_SIZES {
-                let geometry = TileGeometry::new(size, DATE_BAND_RATIO);
-                let margin = geometry.margin();
-                for day in 1..=31 {
-                    let rgba = render_date_tile(size, face, Style::Color, day);
-                    let (left, top, right, bottom) = numeral_bounds(&rgba, size);
-                    assert!(left <= right, "date {day} missing at {size}px");
-                    assert!(
-                        left >= margin && right < size - margin,
-                        "date {day} clips at {size}px: {left}..{right}"
-                    );
-                    assert!(
-                        top > geometry.band_bottom && bottom < size - margin,
-                        "date {day} touches the band or edge at {size}px: {top}..{bottom}"
-                    );
-                    assert!(
+            for style in styles() {
+                for size in TRAY_SIZES {
+                    let inset = TileGeometry::date(size).inset(style);
+                    for day in 1..=31 {
+                        let rgba = render_date_tile(size, face, style, day);
+                        let (left, top, right, bottom) = numeral_bounds(&rgba, size, style);
+                        assert!(left <= right, "date {day} missing at {size}px");
+                        // At least one clear pixel inside the outline or tile edge.
+                        assert!(
+                            left > inset && right + 1 < size - inset,
+                            "date {day} crowds the edge at {size}px: {left}..{right}"
+                        );
+                        assert!(
+                            top > inset && bottom + 1 < size - inset,
+                            "date {day} crowds the edge at {size}px: {top}..{bottom}"
+                        );
                         // Fractional edge coverage can differ by up to two pixels (ADR 0010).
-                        left.abs_diff(size - 1 - right) <= 2,
-                        "date {day} is off-centre at {size}px: {left}..{right}"
-                    );
-                    let above = top - geometry.band_bottom;
-                    let below = size - 1 - bottom;
+                        assert!(
+                            (left - inset).abs_diff(size - inset - 1 - right) <= 2,
+                            "date {day} is off-centre at {size}px: {left}..{right}"
+                        );
+                        assert!(
+                            (top - inset).abs_diff(size - inset - 1 - bottom) <= 2,
+                            "date {day} is vertically off-centre at {size}px: {top}..{bottom}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn one_numeral_size_per_digit_count_and_raster_size() {
+        // Flat-topped, flat-bottomed digits show the shared cap height directly.
+        for face in faces() {
+            for style in styles() {
+                for size in TRAY_SIZES {
+                    let rows_for = |days: &[u8]| -> Vec<(usize, usize)> {
+                        days.iter()
+                            .map(|&day| {
+                                let rgba = render_date_tile(size, face, style, day);
+                                let b = numeral_bounds(&rgba, size, style);
+                                (b.1, b.3)
+                            })
+                            .collect()
+                    };
+                    let single = rows_for(&[1, 4, 7]);
+                    let double = rows_for(&[11, 14, 17]);
+                    for rows in [&single, &double] {
+                        // Baselines are identical; the `1` flag may rise one row above `4`/`7`.
+                        assert!(
+                            rows.windows(2)
+                                .all(|w| w[0].1 == w[1].1 && w[0].0.abs_diff(w[1].0) <= 1),
+                            "numeral rows differ at {size}px: {rows:?}"
+                        );
+                    }
+                    // A lone digit is drawn taller than a two-digit date.
+                    let height = |rows: &[(usize, usize)]| rows[1].1 - rows[1].0;
                     assert!(
-                        above.abs_diff(below) <= 2,
-                        "date {day} is vertically off-centre at {size}px: {above} vs {below}"
+                        height(&single) > height(&double),
+                        "single digits are not taller at {size}px: {single:?} vs {double:?}"
                     );
                 }
             }
@@ -1330,26 +1513,12 @@ mod tests {
     }
 
     #[test]
-    fn one_numeral_size_per_raster_size() {
-        // Flat-topped, flat-bottomed digits show the shared cap height directly.
-        for face in faces() {
-            for size in TRAY_SIZES {
-                let rows: Vec<(usize, usize)> = [1u8, 4, 7, 11, 14, 17]
-                    .iter()
-                    .map(|&day| {
-                        let b =
-                            numeral_bounds(&render_date_tile(size, face, Style::Color, day), size);
-                        (b.1, b.3)
-                    })
-                    .collect();
-                // Baselines are identical; the `1` flag may rise one row above `4`/`7`.
-                assert!(
-                    rows.windows(2)
-                        .all(|w| w[0].1 == w[1].1 && w[0].0.abs_diff(w[1].0) <= 1),
-                    "numeral rows differ at {size}px: {rows:?}"
-                );
-            }
-        }
+    fn two_digit_dates_are_tracked_tighter_from_20_px() {
+        assert_eq!(date_tracking(24, "4"), 0.0);
+        assert_eq!(date_tracking(16, "28"), 0.0);
+        assert_eq!(date_tracking(24, "28"), -1.0);
+        assert_eq!(date_tracking(24, "11"), -1.0);
+        assert_eq!(date_tracking(16, "21"), 0.0);
     }
 
     #[test]
@@ -1398,7 +1567,7 @@ mod tests {
     fn missing_system_font_falls_back_to_strokes() {
         assert!(extract_glyphs(b"not a font", &[], "test").is_none());
         let rgba = render_date_tile(16, Face::Strokes, Style::Color, 28);
-        let (left, _, right, _) = numeral_bounds(&rgba, 16);
+        let (left, _, right, _) = numeral_bounds(&rgba, 16, Style::Color);
         assert!(left < right);
     }
 

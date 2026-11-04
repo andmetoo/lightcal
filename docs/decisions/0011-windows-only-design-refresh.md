@@ -48,20 +48,26 @@ expensive for a one-person project.
   amber with one action, offline as a quiet line.
 - **Icons.** One shape everywhere: a coral `#D73840` rounded tile with a darker
   band (`#A92A31` light, `#B02E35` dark). The app icon puts a 2×2 grid inside,
-  one square solid white for today. The live tray date is the same tile with a
-  bold white numeral. Mono is an outline in the taskbar's ink and follows the
-  Windows shell theme. Vector masters are in
+  one square solid white for today. The live tray date is the same tile
+  without the band (owner decision, November 4, 2026) and with a bold white
+  numeral. Mono is an outline in the taskbar's ink and follows the Windows
+  shell theme. Vector masters are in
   [assets/icons/canvas](../../assets/icons/canvas/).
   *Implementation:* `platform/windows/icon.rs` renders every tray raster
-  (16/20/24/32/40/48/64 px) at its exact size. The tile fills the raster with
-  a 6/32 corner radius and a 6/32 band snapped to whole pixels; Mono uses a
-  2/32 outline (at least 1 px) in `#1A1A1A` on a light shell and white on a
-  dark one. The numeral is Segoe UI Variable Bold (Text optical size) from
-  `%WINDIR%\Fonts`, falling back to Segoe UI Bold and then built-in stroke
-  digits; only the needed outlines stay in memory. Digits are about 0.4 of the
-  raster tall, with one size for all 31 dates at each raster (ADR 0010; the
-  canvas's 19/18 split is not used), sit on a whole-pixel baseline centred
-  below the band, and shrink only if the widest date would cross the margin.
+  (16/20/24/32/40/48/64 px) at its exact size. The date tile fills the raster
+  with a corner radius of 0.16 of the raster in whole pixels and no band;
+  Mono uses a 2/32 outline (at least 1 px) on every side in `#1A1A1A` on a
+  light shell and white on a dark one. The numeral is Segoe UI Variable Bold
+  (Text optical size) from `%WINDIR%\Fonts`, falling back to Segoe UI Bold and
+  then built-in stroke digits; only the needed outlines stay in memory.
+  Dates 1–9 are 0.58 of the raster tall in Mono and 0.62 in Color. Dates
+  10–31 aim for 0.5 and are limited by width: their ink keeps one stroke
+  width clear inside the Mono outline, or 1/8 of the raster from the Color
+  edge, and their two digits sit 1 px closer from 20 px up. Each group shares
+  one size at each raster (ADR 0010; the canvas's 19/18 split is not used).
+  Digits sit on a whole-pixel baseline, centred by their visible ink inside
+  the outline or on the tile. The legacy weekday and time modes keep the
+  banded tile.
   The application icon and `crates/lightcal/assets/lightcal.ico` come from the
   same renderer (`--export-app-icon`); `--export-icon-review <dir>` writes
   review sheets. The window/taskbar icon stays the dated tile (ADR 0010).
