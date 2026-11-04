@@ -18,6 +18,7 @@ canvas runtime to render; they are not application code.
 | Icons | App icon, live tray date in Color and Mono, real-size specimens and two-digit dates |
 | Languages | Russian App, Spanish Calendar and Japanese App settings; the open two-column language menu, German Calendar and Simplified Chinese App ([ADR 0014](../docs/decisions/0014-ten-languages.md)) |
 | Date size | Calendar at Standard, Large and Larger dates (light and dark), Large at 150 %, and the Settings Calendar tab with the Date size control |
+| Local events | [ADR 0017](../docs/decisions/0017-local-events.md) stage 2: the event editor (new, edit with a 24:00 end, validation, the 2,000-event limit), entry points (right-click, **+**, **N**, **Add event**), local event details with Edit and Delete, the in-row delete confirmation, delete-only and unavailable states in the calendar, Settings › Accounts with **On this PC** (with and without an account), every local notice and unavailable state with **Start over** where allowed, the Quit prompt after a failed save, and German and Russian boards |
 
 Every board has a light/dark switch. Calendar boards are interactive: days,
 month arrows, Today and agenda rows work. Settings tabs link to each other.

@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal calendar, local event editor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.lc{--bg:#FFFFFF;--ink:#202020;--ink2:#646464;--ink3:#707070;--line:#F0F0F0;--hover:#F0F0F0;--press:#E8E8E8;--sel:#E8E8E8;--band:#F7F7F7;--accent:#00796B;--nowbg:rgba(0,121,107,.10);--coral:#D73840;--coralband:#A92A31;--chip:#F0F0F0;--ctrl:#FFFFFF;--ctrlline:#E0E0E0;--ctrlbottom:#CECECE;--toggleoff:#838383;--err:#B3261E;--errbg:#FDECEA;--warn:#8A5300;--warnbg:#FFF4E0;--selline:#838383}
+.lc.dark{--bg:#191919;--ink:#EEEEEE;--ink2:#B4B4B4;--ink3:#8A8A8A;--line:#2A2A2A;--hover:#2A2A2A;--press:#313131;--sel:#313131;--band:#1F1F1F;--accent:#53B9AB;--nowbg:rgba(83,185,171,.14);--coralband:#B02E35;--chip:#2A2A2A;--ctrl:#222222;--ctrlline:#333333;--ctrlbottom:#4A4A4A;--toggleoff:#7B7B7B;--err:#FF8A80;--errbg:#3A2220;--warn:#F2B866;--warnbg:#33291A;--selline:#7B7B7B}
+.f{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif}
+.ib{width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ib.sm{width:24px;height:24px}
+.ib:hover,.tb:hover,.row:hover{background:var(--hover)}
+.ib:active,.tb:active{background:var(--press)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tb{height:28px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.g{display:grid;align-items:center;position:relative}
+.g8{grid-template-columns:24px repeat(7,minmax(0,1fr))}
+.band{position:absolute;top:0;bottom:0;border-radius:8px;background:var(--band);left:calc(24px + (100% - 24px) * 5 / 7);width:calc((100% - 24px) * 2 / 7)}
+.wd{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center}
+.wk{font:500 10px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink3);text-align:center;font-variant-numeric:tabular-nums}
+.cell{display:flex;justify-content:center}
+.d{position:relative;width:34px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:500 14px/1 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;padding:3px 0 0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.d:hover{background:var(--hover)}
+.d.out{color:var(--ink3);font-weight:400}
+.d.sel{background:var(--sel);font-weight:600}
+.d.edit{box-shadow:inset 0 0 0 1px var(--selline)}
+.d.today{background:var(--coral);color:#FFFFFF;font-weight:600;overflow:visible;padding-top:6px}
+.d.today::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;border-radius:8px 8px 0 0;background:var(--coralband)}
+.d.today.sel{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--coral)}
+.dots{display:flex;gap:3px;height:4px}
+.dot{width:4px;height:4px;border-radius:2px}
+.d.today .dot{background:rgba(255,255,255,.85) !important}
+.ag{scrollbar-width:none}
+.row{display:flex;align-items:center;gap:10px;width:100%;height:30px;padding:0 4px;border:0;border-radius:6px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit;box-sizing:border-box}
+.row.open{background:var(--chip);border-radius:6px 6px 0 0}
+.row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.det{margin:0 0 6px;padding:2px 8px 6px 21px;border-radius:0 0 8px 8px;background:var(--chip);display:flex;flex-direction:column;gap:4px}
+.det.solo{border-radius:8px;margin:0 4px 6px;padding-top:6px}
+.dl{display:flex;align-items:center;gap:6px;min-height:16px;font:400 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2)}
+.dl.nt{align-items:flex-start;white-space:pre-line;line-height:16px}
+.dl.nt svg{margin-top:2px;flex-shrink:0}
+.acts{display:flex;align-items:center;gap:2px;margin-left:-6px;min-height:24px}
+.gb{height:24px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--accent);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
+.gb:hover{background:var(--press)}
+.gb.del{color:var(--err)}
+.danger{height:24px;padding:0 10px;border:0;border-radius:5px;background:#C42B1C;color:#FFFFFF;font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.danger:hover{background:#B02718}
+.now{height:18px;padding:0 6px;border-radius:4px;display:inline-flex;align-items:center;font:600 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--accent);background:var(--nowbg)}
+.soon{font:500 11px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink2);white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:0;border-radius:6px;background:var(--chip);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--ink);cursor:pointer}
+.chip.open{box-shadow:inset 0 0 0 1px var(--selline)}
+.strip{display:flex;align-items:flex-start;gap:8px;margin:0 4px 6px;padding:6px 8px;border-radius:6px;font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;background:var(--warnbg);color:var(--warn)}
+.strip.err{background:var(--errbg);color:var(--err)}
+.strip svg{flex-shrink:0;margin-top:1px}
+.strip .gb{height:20px;margin:-2px -4px -2px auto;color:inherit;text-decoration:underline;flex-shrink:0}
+.in{display:block;width:100%;height:26px;box-sizing:border-box;margin:0;border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);border-radius:5px;background:var(--ctrl);color:var(--ink);font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;padding:0 8px;outline:none}
+.in::placeholder{color:var(--ink3)}
+.in:focus,.in.fx{border-bottom:2px solid var(--accent)}
+.in.bad{border-color:var(--err)}
+.in.ic{padding-left:26px}
+.ta{resize:none;padding-top:4px;padding-bottom:4px;line-height:16px;overflow-y:auto}
+.ico{position:absolute;left:8px;top:7px;color:var(--ink3);pointer-events:none}
+.tin{width:56px;text-align:center;padding:0 4px;font-variant-numeric:tabular-nums}
+.swb{display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 6px 0 2px;border:0;border-radius:5px;background:transparent;color:var(--ink);font:400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.sw{width:36px;height:18px;border-radius:9px;border:1px solid var(--toggleoff);box-sizing:border-box;position:relative;flex-shrink:0}
+.sw .k{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:5px;background:var(--toggleoff)}
+.sw.on{background:#00796B;border-color:#00796B}
+.sw.on .k{left:21px;background:#FFFFFF}
+.em{display:flex;gap:5px;align-items:flex-start;font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:var(--err);padding:0 2px}
+.em svg{flex-shrink:0;margin-top:2px}
+.pbs{height:26px;padding:0 12px;border:0;border-radius:5px;background:#00796B;color:#FFFFFF;font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.pbs:hover{background:#00695C}
+.bs{height:26px;padding:0 10px;border-radius:5px;background:var(--ctrl);border:1px solid var(--ctrlline);border-bottom-color:var(--ctrlbottom);color:var(--ink);font:500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;cursor:pointer;box-sizing:border-box;white-space:nowrap}
+.bs:hover{background:var(--hover)}
+</style>
+</helmet>
+<div class="{{rootCls}}" lang="{{lang}}" style="width: 352px; height: 432px; box-sizing: border-box; padding: 0 12px {{rootPad}}; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 44px; display: flex; align-items: center; gap: 2px; padding-left: 4px; flex-shrink: 0">
+    <div style="flex-grow: 1; font: 600 17px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; letter-spacing: -0.2px; color: var(--ink)">{{monthName}} <span style="font-weight: 400; color: var(--ink2)">{{year}}</span></div>
+    <button class="ib" aria-label="{{t.prev}}" onClick="{{prev}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button>
+    <sc-if value="{{showToday}}" hint-placeholder-val="{{false}}"><button class="tb" onClick="{{goToday}}">{{t.today}}</button></sc-if>
+    <button class="ib" aria-label="{{t.nextM}}" onClick="{{next}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button>
+    <div style="width: 1px; height: 16px; background: var(--line); margin: 0 4px"></div>
+    <button class="ib" aria-label="{{t.settings}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+    <button class="ib" aria-label="{{t.hide}}" title="{{t.hide}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 12h12"></path></svg></button>
+  </div>
+  <div style="position: relative; flex-shrink: 0">
+    <div class="band"></div>
+    <div class="g g8" style="height: 24px">
+      <div></div>
+      <sc-for list="{{wds}}" as="w" hint-placeholder-count="7"><div class="wd">{{w}}</div></sc-for>
+    </div>
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+      <div class="g g8" style="height: 32px">
+        <div class="wk">{{r.wk}}</div>
+        <sc-for list="{{r.days}}" as="d" hint-placeholder-count="7">
+          <div class="cell"><button class="{{d.cls}}" aria-label="{{d.label}}" onClick="{{d.pick}}" onContextMenu="{{d.ctx}}"><span>{{d.n}}</span><span class="dots"><sc-for list="{{d.dots}}" as="c" hint-placeholder-count="0"><span class="dot" style="background: {{c.color}}"></span></sc-for></span></button></div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+  <div style="height: 1px; background: var(--line); margin: 8px 4px 0; flex-shrink: 0"></div>
+
+  <sc-if value="{{isEditor}}" hint-placeholder-val="{{true}}">
+    <div role="form" aria-label="{{edAria}}" style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column">
+      <div class="ag" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 6px 4px 4px; display: flex; flex-direction: column; gap: 5px">
+        <input class="{{titleCls}}" aria-label="{{t.title}}" placeholder="{{t.title}}" value="{{f.title}}" onChange="{{onTitle}}" onKeyDown="{{lineKey}}" maxlength="256">
+        <sc-if value="{{errTitle}}" hint-placeholder-val="{{false}}"><div class="em" role="alert"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>{{t.errTitle}}</div></sc-if>
+        <div style="display: flex; align-items: center; gap: 6px; min-height: 26px">
+          <button class="swb" role="switch" aria-checked="{{allDayStr}}" onClick="{{toggleAllDay}}"><span class="{{swCls}}"><span class="k"></span></span>{{t.allDay}}</button>
+          <sc-if value="{{timed}}" hint-placeholder-val="{{true}}">
+            <span style="flex-grow: 1"></span>
+            <input class="{{startCls}}" aria-label="{{t.start}}" value="{{f.start}}" placeholder="09:00" inputmode="numeric" maxlength="5" onChange="{{onStart}}" onKeyDown="{{lineKey}}">
+            <span aria-hidden="true" style="color: var(--ink3); font-size: 13px">–</span>
+            <input class="{{endCls}}" aria-label="{{t.end}}" value="{{f.end}}" placeholder="10:00" inputmode="numeric" maxlength="5" onChange="{{onEnd}}" onKeyDown="{{lineKey}}">
+          </sc-if>
+        </div>
+        <sc-if value="{{errTime}}" hint-placeholder-val="{{false}}"><div class="em" role="alert"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>{{errTimeText}}</div></sc-if>
+        <div style="position: relative">
+          <svg class="ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <input class="in ic" aria-label="{{t.location}}" placeholder="{{t.location}}" value="{{f.loc}}" onChange="{{onLoc}}" onKeyDown="{{lineKey}}" maxlength="256">
+        </div>
+        <div style="position: relative">
+          <svg class="ico" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M9 9h6M9 13h6M9 17h3"></path></svg>
+          <textarea class="in ic ta" aria-label="{{t.note}}" placeholder="{{t.note}}" style="height: {{noteH}}" onChange="{{onNote}}" onKeyDown="{{noteKey}}" maxlength="2000" value="{{f.note}}"></textarea>
+        </div>
+      </div>
+      <sc-if value="{{limitErr}}" hint-placeholder-val="{{false}}"><div class="em" role="alert" style="padding: 6px 6px 6px; border-top: 1px solid var(--line)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>{{t.errCount}}</div></sc-if>
+      <div style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 4px; border-top: 1px solid var(--line); flex-shrink: 0">
+        <span title="{{t.dateHint}}" style="flex-grow: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><rect x="3" y="4.5" width="18" height="16" rx="3"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg><span aria-label="{{t.date}}">{{edDate}}</span></span>
+        <button class="pbs" onClick="{{save}}" title="{{t.saveHint}}">{{t.save}}</button>
+        <button class="bs" onClick="{{cancel}}" title="Esc">{{t.cancel}}</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isPanel}}" hint-placeholder-val="{{false}}">
+    <div role="alert" style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 0 20px">
+      <span style="width: 32px; height: 32px; border-radius: 16px; background: {{panelBg}}; color: {{panelInk}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg></span>
+      <div style="font: 600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{panelTitle}}</div>
+      <div style="font: 400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{panelText}}</div>
+      <div style="display: flex; gap: 8px; margin-top: 4px">
+        <sc-if value="{{panelAccounts}}" hint-placeholder-val="{{true}}"><button class="bs">{{t.openAccounts}}</button></sc-if>
+        <button class="bs" onClick="{{cancel}}">{{t.back}}</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isAgenda}}" hint-placeholder-val="{{false}}">
+    <div style="height: 32px; display: flex; align-items: center; gap: 6px; padding: 4px 0 0 4px; box-sizing: border-box; flex-shrink: 0">
+      <div style="flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{agTitle}}</div>
+      <div style="font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); white-space: nowrap">{{agCount}}</div>
+      <button class="ib sm" aria-label="{{t.plus}}" title="{{t.plus}}" onClick="{{plus}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+    </div>
+    <div class="ag" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding-top: 2px">
+      <sc-if value="{{hasStrip}}" hint-placeholder-val="{{false}}">
+        <div class="{{stripCls}}" role="status"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01"></path></svg><span>{{stripText}}</span><sc-if value="{{hasStripAction}}" hint-placeholder-val="{{false}}"><button class="gb">{{stripAction}}</button></sc-if></div>
+      </sc-if>
+      <sc-if value="{{hasAllDay}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 6px">
+          <sc-for list="{{allDay}}" as="a" hint-placeholder-count="1">
+            <button class="{{a.chipCls}}" aria-expanded="{{a.open}}" onClick="{{a.toggle}}"><span style="width: 6px; height: 6px; border-radius: 3px; background: {{a.color}}"></span>{{a.title}}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{hasOpenAllDay}}" hint-placeholder-val="{{false}}">
+        <div class="det solo">
+          <div class="dl">{{t.allDay}}</div>
+          <sc-if value="{{od.hasLoc}}" hint-placeholder-val="{{false}}"><div class="dl"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>{{od.loc}}</div></sc-if>
+          <sc-if value="{{od.hasNote}}" hint-placeholder-val="{{false}}"><div class="dl nt"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M9 9h6M9 13h6M9 17h3"></path></svg><span>{{od.note}}</span></div></sc-if>
+          <div class="dl"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{od.color}}; flex-shrink: 0"></span>{{od.calName}}</div>
+          <div class="acts">
+            <button class="gb" onClick="{{od.copy}}">{{od.copyLabel}}</button>
+            <sc-if value="{{od.canEdit}}" hint-placeholder-val="{{true}}"><button class="gb" onClick="{{od.edit}}">{{t.edit}}</button></sc-if>
+            <sc-if value="{{od.canDelete}}" hint-placeholder-val="{{true}}"><button class="gb del" onClick="{{od.askDelete}}">{{t.del}}</button></sc-if>
+          </div>
+        </div>
+      </sc-if>
+      <sc-for list="{{timedRows}}" as="ev" hint-placeholder-count="1">
+        <button class="{{ev.rowCls}}" style="opacity: {{ev.op}}" aria-expanded="{{ev.open}}" onClick="{{ev.toggle}}">
+          <span style="width: 3px; height: 16px; border-radius: 1.5px; background: {{ev.color}}; flex-shrink: 0"></span>
+          <span style="width: 80px; flex-shrink: 0; font: 500 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2); font-variant-numeric: tabular-nums">{{ev.time}}</span>
+          <span style="flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: {{ev.weight}} 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{ev.title}}</span>
+          <sc-if value="{{ev.hasBadge}}" hint-placeholder-val="{{false}}"><span class="{{ev.badgeCls}}">{{ev.badge}}</span></sc-if>
+        </button>
+        <sc-if value="{{ev.isOpen}}" hint-placeholder-val="{{false}}">
+          <div class="det">
+            <div class="dl"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{{ev.long}}</div>
+            <sc-if value="{{ev.hasLoc}}" hint-placeholder-val="{{false}}"><div class="dl"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>{{ev.loc}}</div></sc-if>
+            <sc-if value="{{ev.hasNote}}" hint-placeholder-val="{{false}}"><div class="dl nt"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z"></path><path d="M9 9h6M9 13h6M9 17h3"></path></svg><span>{{ev.note}}</span></div></sc-if>
+            <sc-if value="{{ev.isLocal}}" hint-placeholder-val="{{false}}">
+              <div class="dl"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{ev.color}}; flex-shrink: 0"></span>{{ev.calName}}</div>
+              <sc-if value="{{ev.confirming}}" hint-placeholder-val="{{false}}">
+                <div class="acts" role="alertdialog" aria-label="{{t.delQ}}" style="margin-left: 0; gap: 6px">
+                  <span style="flex-grow: 1; font: 600 12px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink)">{{t.delQ}}</span>
+                  <button class="danger" onClick="{{ev.doDelete}}">{{t.del}}</button>
+                  <button class="gb" onClick="{{ev.keep}}" style="outline: 2px solid var(--accent); outline-offset: 1px">{{t.cancel}}</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ev.showActs}}" hint-placeholder-val="{{true}}">
+                <div class="acts">
+                  <button class="gb" onClick="{{ev.copy}}">{{ev.copyLabel}}</button>
+                  <sc-if value="{{ev.canEdit}}" hint-placeholder-val="{{true}}"><button class="gb" onClick="{{ev.edit}}">{{t.edit}}</button></sc-if>
+                  <sc-if value="{{ev.canDelete}}" hint-placeholder-val="{{true}}"><button class="gb del" onClick="{{ev.askDelete}}">{{t.del}}</button></sc-if>
+                </div>
+              </sc-if>
+            </sc-if>
+            <sc-if value="{{ev.isProvider}}" hint-placeholder-val="{{true}}">
+              <div class="dl" style="justify-content: space-between">
+                <span style="display: inline-flex; align-items: center; gap: 6px; min-width: 0"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{ev.color}}; flex-shrink: 0"></span>{{ev.calName}}</span>
+                <span style="display: inline-flex; gap: 2px; flex-shrink: 0">
+                  <button class="gb" onClick="{{ev.copy}}">{{ev.copyLabel}}</button>
+                  <button class="gb">{{t.open}}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></button>
+                </span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </sc-for>
+      <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+        <div style="padding: 4px 4px 2px; font: 400 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; color: var(--ink2)">{{t.noEvents}}</div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start">
+          <button class="tb" style="height: 26px; padding: 0 4px; font-size: 12px" onClick="{{plus}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>{{t.addEvent}}</button>
+          <sc-if value="{{hasNext}}" hint-placeholder-val="{{true}}"><button class="tb" style="height: 26px; padding: 0 4px; font-size: 12px; color: var(--ink2)" onClick="{{goNext}}">{{t.next}} {{nextLabel}} →</button></sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"mode":{"editor":"enum","options":["new","edit","invalid","limit","details","confirm","empty","blocked","deleteonly","restored","agenda"],"default":"new"},"lang":{"editor":"enum","options":["en","de","ru"],"default":"en"},"$preview":{"width":352,"height":432}}'>
+var LC_TODAY = "2026-11-04";
+var LC_NOW = 11 * 60 + 20;
+var LC_CAL = { p: "#D9822B", w: "#3B82C4", f: "#2E9D5B", l: "#0F766E" };
+var LC_EV = {
+  "2026-10-27": [["09:30", "09:45", "Standup", "w"]],
+  "2026-10-30": [["16:00", "17:00", "Retro", "w"]],
+  "2026-11-02": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-04": [["09:30", "09:45", "Standup", "w"], ["17:30", "18:00", "Pick up glasses", "l", "Optik Berg"]],
+  "2026-11-06": [[null, null, "Release 1.2", "w"]],
+  "2026-11-09": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-12": [["09:00", "10:00", "Dentist", "l", "Main St 4", "Bring the insurance card"], ["15:00", "16:00", "Design review", "w", "Room 4 and video call"]],
+  "2026-11-14": [[null, null, "Mum’s birthday", "l", null, "Order flowers by Thursday"]],
+  "2026-11-16": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-18": [["19:00", "20:00", "Gym", "p"]],
+  "2026-11-20": [["16:00", "24:00", "Night shift", "l", "Riverside Hospital", "Badge is in the blue bag\nCall Ana before leaving"]],
+  "2026-11-23": [["09:30", "09:45", "Standup", "w"]],
+  "2026-11-26": [["12:30", "13:30", "Team lunch", "w"], ["19:00", "19:30", "Call Mum", "l"]],
+  "2026-11-28": [[null, null, "Hike", "f"]],
+  "2026-12-03": [["18:00", "19:00", "Book club", "p"]]
+};
+var LC_USER = {
+  de: { "Dentist": "Zahnarzt", "Bring the insurance card": "Versichertenkarte mitnehmen", "Night shift": "Nachtschicht", "Pick up glasses": "Brille abholen", "Mum’s birthday": "Mamas Geburtstag", "Call Mum": "Mama anrufen", "Main St 4": "Hauptstraße 4" },
+  ru: { "Dentist": "Стоматолог", "Bring the insurance card": "Взять полис ОМС", "Night shift": "Ночная смена", "Pick up glasses": "Забрать очки", "Mum’s birthday": "День рождения мамы", "Call Mum": "Позвонить маме", "Main St 4": "ул. Ленина, 4" }
+};
+var LC_S = {
+  en: { loc: "en-GB", now: "Now", today: "Today", allDay: "All day", title: "Title", location: "Location", note: "Note", save: "Save", cancel: "Cancel",
+    newAria: "New event", editAria: "Edit event", plus: "New event (N)", start: "Start time", end: "End time", date: "Date", dateHint: "Click a day above to move the event", saveHint: "Save (Enter; Ctrl+Enter in the note)",
+    errTitle: "Add a title.", errTime: "End must be after start.", errFormat: "Use 24-hour time, like 09:30 or 24:00.",
+    errCount: "On this PC holds 2,000 events at most. Delete some to add more.",
+    noEvents: "No events", addEvent: "Add event", next: "Next:", copy: "Copy", copied: "Copied", edit: "Edit", del: "Delete", delQ: "Delete event?", open: "Open",
+    local: "On this PC · Local", work: "Work · Google Calendar", personal: "Personal · Google Calendar", family: "Family · Google Calendar",
+    over: "Over the limit: 2,140 of 2,000 events. Delete some to add or edit again.", restored: "Restored an earlier copy of events on this PC. Recent changes may be missing.", unavail: "Events on this PC are unavailable.", details: "Details", accounts: "Accounts",
+    pTitleU: "Can’t add events right now", pTextU: "Lightcal couldn’t read events on this PC. The file is kept; Settings › Accounts shows where.",
+    pTitleO: "Over the limit", pTextO: "This PC has 2,140 events, 2,000 at most. Delete some to add or edit again.",
+    openAccounts: "Open Accounts", back: "Back", h: "h", min: "min", prev: "Previous month", nextM: "Next month", settings: "Settings", hide: "Hide to tray", ev1: "event", evN: "events" },
+  de: { loc: "de-DE", now: "Jetzt", today: "Heute", allDay: "Ganztägig", title: "Titel", location: "Ort", note: "Notiz", save: "Speichern", cancel: "Abbrechen",
+    newAria: "Neuer Termin", editAria: "Termin bearbeiten", plus: "Neuer Termin (N)", start: "Beginn", end: "Ende", date: "Datum", dateHint: "Klicken Sie oben auf einen Tag, um den Termin zu verschieben", saveHint: "Speichern (Eingabe; Strg+Eingabe in der Notiz)",
+    errTitle: "Geben Sie einen Titel ein.", errTime: "Das Ende muss nach dem Beginn liegen.", errFormat: "24-Stunden-Format, z. B. 09:30 oder 24:00.",
+    errCount: "Auf diesem PC sind höchstens 2.000 Termine möglich. Löschen Sie einige, um neue hinzuzufügen.",
+    noEvents: "Keine Termine", addEvent: "Termin hinzufügen", next: "Danach:", copy: "Kopieren", copied: "Kopiert", edit: "Bearbeiten", del: "Löschen", delQ: "Termin löschen?", open: "Öffnen",
+    local: "Auf diesem PC · Lokal", work: "Arbeit · Google Kalender", personal: "Privat · Google Kalender", family: "Familie · Google Kalender",
+    over: "Über dem Limit: 2.140 von 2.000 Terminen. Löschen Sie einige, um wieder hinzuzufügen oder zu bearbeiten.", restored: "Eine frühere Kopie der Termine auf diesem PC wurde wiederhergestellt. Neueste Änderungen fehlen eventuell.", unavail: "Termine auf diesem PC sind nicht verfügbar.", details: "Details", accounts: "Konten",
+    pTitleU: "Termine können gerade nicht hinzugefügt werden", pTextU: "Lightcal konnte die Termine auf diesem PC nicht lesen. Die Datei bleibt erhalten; Einstellungen › Konten zeigt, wo.",
+    pTitleO: "Über dem Limit", pTextO: "Auf diesem PC sind 2.140 Termine, höchstens 2.000 sind möglich. Löschen Sie einige, um wieder hinzuzufügen oder zu bearbeiten.",
+    openAccounts: "Konten öffnen", back: "Zurück", h: "Std.", min: "Min.", prev: "Vorheriger Monat", nextM: "Nächster Monat", settings: "Einstellungen", hide: "In den Infobereich", ev1: "Termin", evN: "Termine" },
+  ru: { loc: "ru-RU", now: "Сейчас", today: "Сегодня", allDay: "Весь день", title: "Название", location: "Место", note: "Заметка", save: "Сохранить", cancel: "Отмена",
+    newAria: "Новое событие", editAria: "Изменить событие", plus: "Новое событие (N)", start: "Начало", end: "Конец", date: "Дата", dateHint: "Чтобы перенести событие, щёлкните день выше", saveHint: "Сохранить (Enter; Ctrl+Enter в заметке)",
+    errTitle: "Введите название.", errTime: "Конец должен быть позже начала.", errFormat: "Время в 24-часовом формате, например 09:30 или 24:00.",
+    errCount: "На этом ПК можно хранить не больше 2000 событий. Удалите лишние, чтобы добавить новые.",
+    noEvents: "Нет событий", addEvent: "Добавить событие", next: "Далее:", copy: "Копировать", copied: "Скопировано", edit: "Изменить", del: "Удалить", delQ: "Удалить событие?", open: "Открыть",
+    local: "На этом ПК · Локальный", work: "Работа · Google Календарь", personal: "Личное · Google Календарь", family: "Семья · Google Календарь",
+    over: "Превышен лимит: 2140 из 2000 событий. Удалите лишние, чтобы снова добавлять и изменять.", restored: "Восстановлена предыдущая копия событий на этом ПК. Последних изменений может не быть.", unavail: "События на этом ПК недоступны.", details: "Подробнее", accounts: "Аккаунты",
+    pTitleU: "Сейчас нельзя добавить событие", pTextU: "Lightcal не смог прочитать события на этом ПК. Файл сохранён; где он, видно в Настройки › Аккаунты.",
+    pTitleO: "Превышен лимит", pTextO: "На этом ПК 2140 событий, а можно не больше 2000. Удалите лишние, чтобы снова добавлять и изменять.",
+    openAccounts: "Открыть аккаунты", back: "Назад", h: "ч", min: "мин", prev: "Предыдущий месяц", nextM: "Следующий месяц", settings: "Настройки", hide: "Свернуть в трей", ev1: "событие", evN: "событий" }
+};
+function lcIso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function lcParse(k) { var a = k.split("-"); return new Date(+a[0], +a[1] - 1, +a[2]); }
+function lcWeek(d) { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil(((t - y0) / 86400000 + 1) / 7); }
+function lcMins(s) { var m = /^(\d{1,2}):(\d{2})$/.exec((s || "").trim()); if (!m || +m[2] > 59) return -1; return +m[1] * 60 + +m[2]; }
+function lcCap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function lcCount(n, lang, S) {
+  if (lang === "ru") { var a = n % 10, b = n % 100; var w = a === 1 && b !== 11 ? "событие" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "события" : "событий"; return n + " " + w; }
+  return n + " " + (n === 1 ? S.ev1 : S.evN);
+}
+function lcDur(n, S) { var h = Math.floor(n / 60), m = n % 60; return (h ? h + " " + S.h : "") + (h && m ? " " : "") + (m ? m + " " + S.min : ""); }
+function lcU(lang, s) { if (!s) return s; var m = LC_USER[lang]; return m && m[s] ? m[s] : s; }
+function lcBlank() { return { title: "", allDay: false, start: "09:00", end: "10:00", loc: "", note: "" }; }
+function lcInit(mode, lang) {
+  var i = { mode: "agenda", sel: LC_TODAY, open: "", confirm: "", showErr: false, ff: false, limitErr: false, access: "editable", strip: "", f: lcBlank(), editing: "" };
+  if (mode === "new") { i.mode = "new"; i.sel = "2026-11-12"; i.ff = true; }
+  if (mode === "invalid") { i.mode = "new"; i.sel = "2026-11-12"; i.showErr = true; i.f = { title: "", allDay: false, start: "18:00", end: "17:30", loc: "", note: "" }; }
+  if (mode === "limit") { i.mode = "new"; i.sel = "2026-11-26"; i.limitErr = true; i.f = { title: lcU(lang, "Team dinner"), allDay: false, start: "19:00", end: "21:30", loc: "Lumen", note: "" }; }
+  if (mode === "edit") { i.mode = "edit"; i.sel = "2026-11-20"; i.editing = "2026-11-20|Night shift"; i.f = { title: lcU(lang, "Night shift"), allDay: false, start: "16:00", end: "24:00", loc: "Riverside Hospital", note: "Badge is in the blue bag\nCall Ana before leaving" }; }
+  if (mode === "details") { i.sel = "2026-11-12"; i.open = "2026-11-12|Dentist"; }
+  if (mode === "confirm") { i.sel = "2026-11-12"; i.open = "2026-11-12|Dentist"; i.confirm = "2026-11-12|Dentist"; }
+  if (mode === "empty") { i.sel = "2026-11-11"; }
+  if (mode === "blocked") { i.mode = "panel"; i.sel = "2026-11-12"; i.access = "unavailable"; i.strip = "unavail"; }
+  if (mode === "deleteonly") { i.sel = "2026-11-12"; i.open = "2026-11-12|Dentist"; i.access = "deleteonly"; i.strip = "over"; }
+  if (mode === "restored") { i.strip = "restored"; i.open = "2026-11-04|Pick up glasses"; }
+  return i;
+}
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var lang = this.props.lang || "en";
+    var S = LC_S[lang] || LC_S.en;
+    var base = lcInit(this.props.mode || "new", lang);
+    var st = Object.assign({}, base, this.state || {});
+    var data = st.ev || LC_EV;
+    if (st.access === "unavailable") {
+      var filtered = {};
+      Object.keys(data).forEach(function (k) { var l = data[k].filter(function (e) { return e[3] !== "l"; }); if (l.length) filtered[k] = l; });
+      data = filtered;
+    }
+    var sel = st.sel;
+    var sd = lcParse(sel);
+    var y = st.y != null ? st.y : sd.getFullYear();
+    var m = st.m != null ? st.m : sd.getMonth();
+    var dark = (this.props.theme || "light") === "dark";
+    var isEditor = st.mode === "new" || st.mode === "edit";
+    var f = st.f;
+    function setF(key) { return function (e) { var n = Object.assign({}, f); n[key] = e.target.value; self.setState({ f: n, ff: false }); }; }
+    function openNew(k) {
+      var d = lcParse(k);
+      if (st.access !== "editable") { self.setState({ mode: "panel", sel: k, y: d.getFullYear(), m: d.getMonth() }); return; }
+      self.setState({ mode: "new", sel: k, y: d.getFullYear(), m: d.getMonth(), f: lcBlank(), editing: "", showErr: false, ff: true, limitErr: false, confirm: "" });
+    }
+    var first = new Date(y, m, 1);
+    var off = (first.getDay() + 6) % 7;
+    var rows = [];
+    for (var r = 0; r < 6; r++) {
+      var days = [];
+      var wk = 0;
+      for (var c = 0; c < 7; c++) {
+        (function (d, c) {
+          if (c === 0) wk = lcWeek(d);
+          var k = lcIso(d);
+          var out = d.getMonth() !== m;
+          var evs = data[k] || [];
+          var cls = "d" + (out ? " out" : "") + (k === LC_TODAY ? " today" : "") + (k === sel ? " sel" : "") + (k === sel && isEditor && k !== LC_TODAY ? " edit" : "");
+          var n = evs.length;
+          days.push({
+            n: d.getDate(), cls: cls,
+            dots: out ? [] : evs.slice(0, 3).map(function (e) { return { color: LC_CAL[e[3]] }; }),
+            label: d.toLocaleDateString(S.loc, { weekday: "long", day: "numeric", month: "long" }) + (n ? ", " + lcCount(n, lang, S) : ""),
+            pick: function () { self.setState(isEditor ? { sel: k, y: d.getFullYear(), m: d.getMonth() } : { sel: k, y: d.getFullYear(), m: d.getMonth(), open: "", confirm: "", mode: st.mode === "panel" ? "agenda" : st.mode }); },
+            ctx: function (e) { if (e && e.preventDefault) e.preventDefault(); openNew(k); }
+          });
+        })(new Date(y, m, 1 - off + r * 7 + c), c);
+      }
+      rows.push({ wk: wk, days: days });
+    }
+    var wds = [];
+    for (var i = 0; i < 7; i++) { var w = new Date(2026, 10, 2 + i).toLocaleDateString(S.loc, { weekday: "short" }).replace(/\.$/, ""); wds.push(lcCap(w).slice(0, 2)); }
+
+    // Editor validation
+    var sMin = lcMins(f.start), eMin = lcMins(f.end);
+    var badFormat = !f.allDay && (sMin < 0 || sMin > 1439 || eMin < 1 || eMin > 1440);
+    var badOrder = !f.allDay && !badFormat && eMin <= sMin;
+    var errTitle = st.showErr && !f.title.trim();
+    var errTime = st.showErr && (badFormat || badOrder);
+    function save() {
+      var bad = !f.title.trim() || badFormat || badOrder;
+      if (bad) { self.setState({ showErr: true, ff: false }); return; }
+      if (st.limitErr) return;
+      var all = {};
+      Object.keys(st.ev || LC_EV).forEach(function (k) { all[k] = (st.ev || LC_EV)[k].slice(); });
+      if (st.editing) { var p = st.editing.split("|"); if (all[p[0]]) all[p[0]] = all[p[0]].filter(function (e) { return e[2] !== p[1]; }); }
+      var e = [f.allDay ? null : f.start.trim().padStart(5, "0"), f.allDay ? null : f.end.trim().padStart(5, "0"), f.title.trim(), "l", f.loc.trim() || null, f.note.trim() || null];
+      (all[sel] = all[sel] || []).push(e);
+      all[sel].sort(function (a, b) { return (a[0] || "") < (b[0] || "") ? -1 : 1; });
+      self.setState({ ev: all, mode: "agenda", open: sel + "|" + e[2], showErr: false, editing: "", confirm: "" });
+    }
+    function cancel() { self.setState({ mode: "agenda", showErr: false, limitErr: false, editing: "" }); }
+    function lineKey(e) { if (e.key === "Enter") { e.preventDefault(); save(); } else if (e.key === "Escape") { e.preventDefault(); cancel(); } }
+    function noteKey(e) { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); save(); } else if (e.key === "Escape") { e.preventDefault(); cancel(); } }
+    var noteLines = Math.min(4, Math.max(1, (f.note || "").split("\n").length));
+
+    // Agenda
+    var evs = data[sel] || [];
+    var isToday = sel === LC_TODAY;
+    var canEdit = st.access === "editable";
+    var canDelete = st.access !== "unavailable";
+    function calName(c) { return c === "l" ? S.local : c === "w" ? S.work : c === "p" ? S.personal : S.family; }
+    function item(e) {
+      var key = sel + "|" + e[2];
+      var isLocal = e[3] === "l";
+      return {
+        key: key, title: lcU(lang, e[2]), color: LC_CAL[e[3]], loc: lcU(lang, e[4]) || "", hasLoc: !!e[4], note: lcU(lang, e[5]) || "", hasNote: !!e[5],
+        isLocal: isLocal, isProvider: !isLocal, calName: calName(e[3]),
+        canEdit: isLocal && canEdit, canDelete: isLocal && canDelete,
+        confirming: st.confirm === key, showActs: st.confirm !== key,
+        copyLabel: st.copied === key ? S.copied : S.copy,
+        copy: function () { self.setState({ copied: key }); },
+        edit: function () { self.setState({ mode: "edit", editing: key, showErr: false, ff: false, limitErr: false, f: { title: lcU(lang, e[2]), allDay: !e[0], start: e[0] || "09:00", end: e[1] || "10:00", loc: lcU(lang, e[4]) || "", note: lcU(lang, e[5]) || "" } }); },
+        askDelete: function () { self.setState({ confirm: key }); },
+        keep: function () { self.setState({ confirm: "" }); },
+        doDelete: function () {
+          var all = {};
+          Object.keys(st.ev || LC_EV).forEach(function (k) { all[k] = (st.ev || LC_EV)[k].filter(function (x) { return !(k === sel && x[2] === e[2]); }); });
+          self.setState({ ev: all, open: "", confirm: "" });
+        }
+      };
+    }
+    var allDay = evs.filter(function (e) { return !e[0]; }).map(function (e) {
+      var it = item(e); var isOpen = st.open === it.key;
+      it.open = String(isOpen); it.chipCls = "chip" + (isOpen ? " open" : "");
+      it.toggle = function () { self.setState({ open: isOpen ? "" : it.key, copied: "", confirm: "" }); };
+      it.isOpenFlag = isOpen;
+      return it;
+    });
+    var od = allDay.filter(function (a) { return a.isOpenFlag; })[0] || null;
+    var nextDone = false;
+    var timedRows = evs.filter(function (e) { return e[0]; }).map(function (e) {
+      var it = item(e);
+      var s = lcMins(e[0]), en = lcMins(e[1]);
+      var op = "1", badge = "", badgeCls = "", weight = "400";
+      if (isToday) {
+        if (en <= LC_NOW) op = "0.55";
+        else if (s <= LC_NOW) { badge = S.now; badgeCls = "now"; weight = "600"; }
+        else if (!nextDone) { nextDone = true; badge = (lang === "de" ? "in " : lang === "ru" ? "через " : "in ") + lcDur(s - LC_NOW, S); badgeCls = "soon"; }
+      }
+      var isOpen = st.open === it.key;
+      it.time = e[0] + "–" + e[1]; it.op = op; it.badge = badge; it.badgeCls = badgeCls; it.hasBadge = !!badge; it.weight = weight;
+      it.isOpen = isOpen; it.open = String(isOpen); it.rowCls = "row" + (isOpen ? " open" : "");
+      it.long = e[0] + "–" + e[1] + " · " + lcDur(en - s, S);
+      it.toggle = function () { self.setState({ open: isOpen ? "" : it.key, copied: "", confirm: "" }); };
+      return it;
+    });
+    var nextKey = Object.keys(data).sort().filter(function (k) { return k > sel; })[0];
+    var n = evs.length;
+    var onToday = sel === LC_TODAY && y === lcParse(LC_TODAY).getFullYear() && m === lcParse(LC_TODAY).getMonth();
+    var stripText = st.strip === "over" ? S.over : st.strip === "restored" ? S.restored : st.strip === "unavail" ? S.unavail : "";
+    var panelOver = st.access === "deleteonly";
+    return {
+      t: S, lang: lang,
+      rootCls: "lc f" + (dark ? " dark" : ""),
+      rootPad: isEditor ? "4px" : "12px",
+      monthName: lcCap(first.toLocaleDateString(S.loc, { month: "long" })),
+      year: String(y),
+      showToday: !onToday,
+      wds: wds, rows: rows,
+      isEditor: isEditor, isPanel: st.mode === "panel", isAgenda: !isEditor && st.mode !== "panel",
+      edAria: st.mode === "edit" ? S.editAria : S.newAria,
+      f: f,
+      titleCls: "in" + (st.ff ? " fx" : "") + (errTitle ? " bad" : ""),
+      startCls: "in tin" + (errTime && (badFormat ? sMin < 0 || sMin > 1439 : false) ? " bad" : ""),
+      endCls: "in tin" + (errTime ? " bad" : ""),
+      errTitle: errTitle, errTime: errTime, errTimeText: badFormat ? S.errFormat : S.errTime,
+      limitErr: st.limitErr,
+      timed: !f.allDay, allDayStr: String(!!f.allDay), swCls: "sw" + (f.allDay ? " on" : ""),
+      toggleAllDay: function () { var nf = Object.assign({}, f); nf.allDay = !f.allDay; self.setState({ f: nf, ff: false }); },
+      onTitle: setF("title"), onStart: setF("start"), onEnd: setF("end"), onLoc: setF("loc"), onNote: setF("note"),
+      lineKey: lineKey, noteKey: noteKey, noteH: (8 + 16 * noteLines + 2) + "px",
+      edDate: sd.toLocaleDateString(S.loc, { weekday: "short", day: "numeric", month: "short" }),
+      save: save, cancel: cancel,
+      panelTitle: panelOver ? S.pTitleO : S.pTitleU, panelText: panelOver ? S.pTextO : S.pTextU, panelAccounts: !panelOver,
+      panelBg: panelOver ? "var(--warnbg)" : "var(--errbg)", panelInk: panelOver ? "var(--warn)" : "var(--err)",
+      agTitle: (isToday ? S.today + " · " : "") + lcCap(sd.toLocaleDateString(S.loc, { weekday: "long", day: "numeric", month: "long" })),
+      agCount: n ? lcCount(n, lang, S) : "",
+      plus: function () { openNew(sel); },
+      hasStrip: !!stripText, hasStripAction: st.strip !== "over", stripText: stripText, stripCls: "strip" + (st.strip === "unavail" ? " err" : ""), stripAction: st.strip === "over" ? "" : st.strip === "restored" ? S.details : S.accounts,
+      allDay: allDay, hasAllDay: allDay.length > 0, hasOpenAllDay: !!od, od: od || {},
+      timedRows: timedRows,
+      isEmpty: n === 0, hasNext: !!nextKey,
+      nextLabel: nextKey ? data[nextKey][0] && (lcParse(nextKey).toLocaleDateString(S.loc, { weekday: "short", day: "numeric", month: "short" }) + " · " + lcU(lang, data[nextKey][0][2])) : "",
+      goNext: function () { if (!nextKey) return; var d = lcParse(nextKey); self.setState({ sel: nextKey, y: d.getFullYear(), m: d.getMonth() }); },
+      prev: function () { self.setState({ y: m === 0 ? y - 1 : y, m: (m + 11) % 12 }); },
+      next: function () { self.setState({ y: m === 11 ? y + 1 : y, m: (m + 1) % 12 }); },
+      goToday: function () { var d = lcParse(LC_TODAY); self.setState({ sel: LC_TODAY, y: d.getFullYear(), m: d.getMonth(), mode: isEditor ? st.mode : "agenda" }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

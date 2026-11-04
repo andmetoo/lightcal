@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal local event notices</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.cap2{font:600 13px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#202020}
+.cap3{font:400 12px/16px 'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;color:#646464;margin-top:2px}
+.win{border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.10);align-self:flex-start}
+</style>
+</helmet>
+<div style="width: 1504px; height: 940px; box-sizing: border-box; padding: 40px; background: #FAFAFA; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px; row-gap: 36px; align-content: start">
+  <sc-for list="{{cells}}" as="w" hint-placeholder-count="6">
+    <div style="display: flex; flex-direction: column; gap: 12px; height: 412px">
+      <div><div class="cap2">{{w.name}}</div><div class="cap3">{{w.desc}}</div></div>
+      <sc-if value="{{w.settings}}" hint-placeholder-val="{{true}}">
+        <div class="win" style="width: 448px; height: 360px"><dc-import name="LocalSettings" mode="{{w.mode}}" theme="{{w.theme}}" lang="en" hint-size="448px,360px"></dc-import></div>
+      </sc-if>
+      <sc-if value="{{w.quit}}" hint-placeholder-val="{{false}}">
+        <div class="win" style="width: 400px; height: 188px"><dc-import name="LocalQuit" theme="{{w.theme}}" hint-size="400px,188px"></dc-import></div>
+      </sc-if>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1504,"height":940}}'>
+var CELLS = [{"name":"Recovered unfinished save · light","desc":"Quiet line with OK. Nothing was lost, so no colour.","mode":"recovered","theme":"light","quit":false,"settings":true},{"name":"Restored backup · light","desc":"Amber. Names the kept damaged file; Show in folder and OK.","mode":"restored","theme":"light","quit":false,"settings":true},{"name":"Skipped events · dark","desc":"Amber with the count. The file as it was is copied aside before the next save.","mode":"skipped","theme":"dark","quit":false,"settings":true},{"name":"Delete only, over the limits · light","desc":"Amber, no action here: the fix is deleting in the calendar.","mode":"overlimit","theme":"light","quit":false,"settings":true},{"name":"Save failed, retrying · dark","desc":"Amber with Try now. Backoff 5 s doubling to 5 min; the edit stays in memory.","mode":"retrying","theme":"dark","quit":false,"settings":true},{"name":"Quit after a failed save · light","desc":"Shown before anything blocks. Focus starts on Keep Lightcal open; Esc keeps it open.","mode":"","theme":"light","quit":true,"settings":false}];
+class Component extends DCLogic {
+  renderVals() { return { cells: CELLS }; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lightcal settings, Accounts with On this PC and an account</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 448px; height: 360px">
+  <dc-import name="LocalSettings" mode="accounts" theme="{{theme}}" lang="en" hint-size="448px,360px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"dark"},"$preview":{"width":448,"height":360}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.theme || "dark" }; }
+}
+</script>
+</body>
+</html>
