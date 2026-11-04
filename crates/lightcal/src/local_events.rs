@@ -444,6 +444,9 @@ pub enum Unavailable {
     NewerVersion { file: PathBuf },
     /// Neither the file nor any copy could be read as local events.
     Damaged { file: PathBuf },
+    /// The file is fine but nothing can be saved this session (the writer did not
+    /// start); a restart may help. Starting over is never offered for it.
+    CannotSave { error: String },
     /// The file exists but the system refused to read it.
     Unreadable { file: PathBuf, error: String },
 }
@@ -456,7 +459,8 @@ pub enum Notice {
     /// The previous copy was used; recent changes may be missing. `damaged` is where an
     /// unreadable main file was moved.
     RestoredBackup { damaged: Option<PathBuf> },
-    /// Invalid events were skipped; the file as it was is kept on the next save.
+    /// Invalid events were skipped. The file as it was is kept: copied aside at load
+    /// when it was a temporary file or the backup, otherwise on the next save.
     SkippedEvents(usize),
 }
 
@@ -569,14 +573,30 @@ impl Storage {
     /// since copying the main file on save would miss them.
     fn loaded_from_copy(&self, parsed: ParsedFile, notices: Vec<Notice>, source: &Path) -> Loaded {
         let mut loaded = Loaded::from_parsed(parsed, notices);
-        if loaded.copy_before_next_save && self.copy_aside(source).is_ok() {
+        if loaded.copy_before_next_save && self.copy_aside_once(source).is_ok() {
             loaded.copy_before_next_save = false;
         }
         loaded
     }
 
+    /// Copies `source` aside unless a preserved copy with the same contents exists, so
+    /// loading the same file again (a repair save kept failing) adds no duplicates that
+    /// would push other copies out.
+    fn copy_aside_once(&self, source: &Path) -> io::Result<PathBuf> {
+        let contents = fs::read(source)?;
+        let same = self.preserved_files().into_iter().find(|path| {
+            fs::metadata(path).is_ok_and(|m| m.len() == contents.len() as u64)
+                && fs::read(path).is_ok_and(|other| other == contents)
+        });
+        match same {
+            Some(existing) => Ok(existing),
+            None => self.copy_aside(source),
+        }
+    }
+
     /// Loads local events. Reads only, except that an unreadable main file is moved aside
-    /// once a readable copy replaces it.
+    /// once a readable copy replaces it, and a temporary file or backup with skipped
+    /// events is copied aside before the next save removes it.
     pub fn load(&self) -> Loaded {
         let main_path = self.file_path();
         let main = read(&main_path);
@@ -692,19 +712,12 @@ impl Storage {
 
     /// Keeps the newest preserved copies, by the time in their names: a rename or copy
     /// keeps the old file's modified time, so a fresh copy could otherwise go first.
+    /// Names this module did not write (a copy the user renamed) are never pruned.
     fn prune_preserved(&self) {
-        let Ok(entries) = fs::read_dir(&self.dir) else {
-            return;
-        };
-        let mut files: Vec<((u64, u32), PathBuf)> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with(PRESERVED_PREFIX))
-            })
-            .map(|path| (preserved_order(&path), path))
+        let mut files: Vec<((u64, u32), PathBuf)> = self
+            .preserved_files()
+            .into_iter()
+            .filter_map(|path| Some((preserved_order(&path)?, path)))
             .collect();
         files.sort();
         if files.len() > MAX_PRESERVED_FILES {
@@ -712,6 +725,21 @@ impl Storage {
                 let _ = fs::remove_file(stale);
             }
         }
+    }
+
+    fn preserved_files(&self) -> Vec<PathBuf> {
+        let Ok(entries) = fs::read_dir(&self.dir) else {
+            return Vec::new();
+        };
+        entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(PRESERVED_PREFIX))
+            })
+            .collect()
     }
 
     fn move_aside(&self, path: &Path) -> io::Result<PathBuf> {
@@ -789,19 +817,20 @@ impl Storage {
     }
 }
 
-/// When a preserved copy was made: the seconds and attempt in its name. Names that do
-/// not parse sort first.
-fn preserved_order(path: &Path) -> (u64, u32) {
+/// When a preserved copy was made: the seconds and attempt in its name, as
+/// `preserved_path` writes it; `None` for any other name. A clock that was wrong when a
+/// copy was made still misorders it; the name is the only time a rename or copy keeps.
+fn preserved_order(path: &Path) -> Option<(u64, u32)> {
     let stem = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .and_then(|name| name.strip_prefix(PRESERVED_PREFIX))
-        .and_then(|rest| rest.strip_suffix(".json"));
-    let Some(stem) = stem else {
-        return (0, 0);
+        .file_name()?
+        .to_str()?
+        .strip_prefix(PRESERVED_PREFIX)?
+        .strip_suffix(".json")?;
+    let (seconds, attempt) = match stem.split_once('-') {
+        Some((seconds, attempt)) => (seconds, attempt.parse().ok()?),
+        None => (stem, 0),
     };
-    let (seconds, attempt) = stem.split_once('-').unwrap_or((stem, "0"));
-    (seconds.parse().unwrap_or(0), attempt.parse().unwrap_or(0))
+    Some((seconds.parse().ok()?, attempt))
 }
 
 /// Puts `temp` in place of `main`, keeping the previous `main` as `backup`.
@@ -1204,19 +1233,13 @@ impl Writer {
                             report(WriteReport::Saved);
                         }
                         Err(error) => {
-                            // A newer change replaces the failed one and is written at
-                            // once; otherwise the failed one is retried after the backoff.
-                            if let Some(pending) = state.pending.as_mut() {
-                                pending.1 |= copy_first;
-                            } else {
-                                state.failed = true;
-                                state.pending = Some((events, copy_first));
-                            }
+                            let requeued = state.record_failure(events, copy_first);
                             signal.notify_all();
                             drop(state);
                             report(WriteReport::Failed(error));
                             state = lock.lock().unwrap_or_else(|e| e.into_inner());
-                            if !state.shutdown {
+                            // Only a retry of the same change backs off further.
+                            if requeued && !state.shutdown {
                                 let wait = retry;
                                 retry = (retry * 2).min(max_retry);
                                 // Wakes early when a new change arrives.
@@ -1281,6 +1304,20 @@ impl Writer {
 }
 
 impl WriterState {
+    /// Records a failed write. A newer change replaces the failed one and is written at
+    /// once; otherwise the failed one is queued again and marked failed, to be retried
+    /// after the backoff. Returns whether it was queued again.
+    fn record_failure(&mut self, events: Vec<LocalEvent>, copy_first: bool) -> bool {
+        if let Some(pending) = self.pending.as_mut() {
+            pending.1 |= copy_first;
+            false
+        } else {
+            self.failed = true;
+            self.pending = Some((events, copy_first));
+            true
+        }
+    }
+
     /// A change submitted after the last failure, so it should be written at once.
     fn newer_than_failure(&self) -> bool {
         self.pending.is_some() && !self.failed
@@ -1683,8 +1720,15 @@ mod tests {
         ));
         fs::write(&newest, "x").unwrap();
         set_age(&newest, 86_400 * 30);
+        let renamed = dir.join(format!("{PRESERVED_PREFIX}keep.json"));
+        fs::write(&renamed, "x").unwrap();
+        set_age(&renamed, 86_400 * 60);
         storage.prune_preserved();
         assert!(newest.exists());
+        assert!(
+            renamed.exists(),
+            "a name Lightcal did not write is never pruned"
+        );
         assert!(!dir.join(format!("{PRESERVED_PREFIX}1000.json")).exists());
         assert!(!dir.join(format!("{PRESERVED_PREFIX}1001.json")).exists());
         assert!(dir.join(format!("{PRESERVED_PREFIX}1002.json")).exists());
@@ -1798,6 +1842,40 @@ mod tests {
         assert!(writer.wait_saved(Duration::from_secs(5)));
         assert_eq!(Storage::new(&blocked).load().events[0].title, "Later");
         writer.shutdown();
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_change_made_during_a_failed_save_is_not_marked_failed() {
+        let mut state = WriterState {
+            pending: Some((vec![event(2, "Newer")], false)),
+            ..WriterState::default()
+        };
+        assert!(!state.record_failure(vec![event(1, "Older")], true));
+        assert!(!state.failed, "the newer change has not been tried");
+        assert!(state.newer_than_failure(), "it is written at once");
+        let (events, copy) = state.pending.take().unwrap();
+        assert_eq!(events[0].title, "Newer");
+        assert!(copy, "the failed save's copy request carries over");
+
+        assert!(state.record_failure(vec![event(1, "Older")], false));
+        assert!(
+            state.failed && !state.newer_than_failure(),
+            "retried after the backoff"
+        );
+    }
+
+    #[test]
+    fn loading_the_same_file_again_adds_no_duplicate_copy() {
+        let dir = temp_dir("copy-once");
+        let storage = Storage::new(&dir);
+        let original = r#"{"schema_version":1,"events":[
+            {"id":"local:a","title":"Ok","date":"2026-11-12","all_day":true},
+            {"id":"local:b","title":"Bad","date":"2026-13-01","all_day":true}]}"#;
+        fs::write(dir.join(format!("{TEMP_PREFIX}4-0{TEMP_SUFFIX}")), original).unwrap();
+        storage.load();
+        storage.load();
+        assert_eq!(storage.preserved_files().len(), 1);
         fs::remove_dir_all(dir).unwrap();
     }
 

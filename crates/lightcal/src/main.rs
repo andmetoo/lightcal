@@ -116,6 +116,9 @@ pub(crate) struct AppController {
     pub(crate) local: lightcal::local_events::LocalEvents,
     /// Writes local events off the UI thread; `None` in demo mode, snapshots and tests.
     pub(crate) local_writer: Option<lightcal::local_events::Writer>,
+    /// Demo mode selected On this PC that the user had turned off; it is left out of
+    /// saved preferences until the user toggles it.
+    pub(crate) demo_local_unsaved: bool,
     pub(crate) provider_request: u64,
     pub(crate) connection_busy: bool,
     pub(crate) connection_message: String,
@@ -1746,7 +1749,16 @@ impl AppController {
     }
 
     fn persist(&self) {
-        let _ = self.store.save(&self.prefs);
+        if self.demo_local_unsaved {
+            // Demo mode selected On this PC for its samples; the saved choice stays off.
+            let mut prefs = self.prefs.clone();
+            prefs
+                .selected_calendar_ids
+                .remove(lightcal::local_events::SOURCE_ID);
+            let _ = self.store.save(&prefs);
+        } else {
+            let _ = self.store.save(&self.prefs);
+        }
     }
 }
 
@@ -3395,8 +3407,14 @@ fn main() {
     }
     // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
     // The flag is saved with the next preference change; after that the selection is the
-    // user's, in demo mode too, since demo mode saves to the same preferences.
-    if !prefs.local_calendar_offered {
+    // user's. Demo mode always shows its sample local events, but saves the user's own
+    // choice (see `AppController::persist`).
+    let demo_local_unsaved = use_synthetic
+        && prefs.local_calendar_offered
+        && !prefs
+            .selected_calendar_ids
+            .contains(lightcal::local_events::SOURCE_ID);
+    if use_synthetic || !prefs.local_calendar_offered {
         prefs
             .selected_calendar_ids
             .insert(lightcal::local_events::SOURCE_ID.to_string());
@@ -3553,8 +3571,7 @@ fn main() {
             Err(error) => {
                 eprintln!("Lightcal: could not start the local events writer: {error}");
                 (
-                    LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Unreadable {
-                        file: Storage::new(&local_dir).file_path(),
+                    LocalEvents::from_loaded(Loaded::unavailable(Unavailable::CannotSave {
                         error: error.to_string(),
                     })),
                     None,
@@ -3572,6 +3589,7 @@ fn main() {
         remote: provider,
         local,
         local_writer,
+        demo_local_unsaved,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -4124,6 +4142,10 @@ fn main() {
         ui.on_toggle_calendar_source(move |id| {
             let mut c = ctrl.borrow_mut();
             let key = id.to_string();
+            if key == lightcal::local_events::SOURCE_ID {
+                // The user's own choice now, in demo mode too.
+                c.demo_local_unsaved = false;
+            }
             if !c.prefs.selected_calendar_ids.remove(&key) {
                 c.prefs.selected_calendar_ids.insert(key);
             }

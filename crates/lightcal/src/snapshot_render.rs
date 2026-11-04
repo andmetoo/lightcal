@@ -60,6 +60,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         // Snapshots never open the real local events file.
         local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
         local_writer: None,
+        demo_local_unsaved: false,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),

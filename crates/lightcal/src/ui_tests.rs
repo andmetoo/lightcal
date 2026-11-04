@@ -75,6 +75,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         },
         local: lightcal::local_events::LocalEvents::in_memory(Vec::new()),
         local_writer: None,
+        demo_local_unsaved: false,
         provider_request: 0,
         connection_busy: false,
         connection_message: String::new(),
@@ -1893,4 +1894,16 @@ fn the_lock_timeout_marks_unavailable_only_while_the_lock_is_awaited() {
     );
     assert!(!ctrl.local_lock_timeout(false), "only once");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn nothing_shows_the_window_while_quit_waits_for_local_events() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    crate::QUITTING.with(|quitting| quitting.set(true));
+    // The shortcut, a second launch and the tray all show the window through here.
+    crate::show_application_window(&ui);
+    let visible = ui.window().is_visible();
+    crate::QUITTING.with(|quitting| quitting.set(false));
+    assert!(!visible);
 }
