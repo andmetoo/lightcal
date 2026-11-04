@@ -2075,6 +2075,11 @@ fn the_local_event_editor_adds_edits_and_deletes_events() {
         button: PointerEventButton::Right,
     });
     assert!(ui.get_editor_open(), "right-click opens the editor");
+    assert_eq!(
+        ctrl.borrow().cal_state.selected_date,
+        LocalDate::new(2026, 11, 12).unwrap(),
+        "on the day that was clicked"
+    );
     // A second right-click while the editor is open only moves the date: what was
     // typed stays.
     ui.set_editor_title("Half typed".into());
