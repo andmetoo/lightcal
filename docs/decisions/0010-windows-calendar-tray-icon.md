@@ -24,6 +24,11 @@ smaller date. The rest of the owner's completed design must be preserved.
   Render glyphs at native resolution instead of resizing a large icon.
 - Apply this artwork to the live tray and window/taskbar date icon. Preserve
   the static undated application icon and legacy multiline render modes.
+- *Band-free date tile (November 4, 2026):* the owner dropped the header
+  band from the date tile. With the band, its gap and a numeral sized for
+  "28", single-digit dates looked small and pushed down. The tile shape and
+  outline now carry the calendar cue. Dates 1–9 and 10–31 each share one
+  size; see the implementation note in ADR 0011.
 - *Pinned buttons (November 3, 2026):* Alt+Tab and an unpinned taskbar button
   show the dated window icon. Once the owner pins Lightcal, its button draws
   the pinned shortcut's static app icon and ignores the window icon; that is how
@@ -57,7 +62,7 @@ migration is historical and must not be reapplied to the current design.
 ## Validation
 
 Pure renderer tests cover all 31 dates at 16, 18, 20, 24, 32, 36, 40, 48 and 64 px,
-page/header presence in both styles and shell themes, transparent rounded corners,
+band-free tile and outline in both styles and shell themes, transparent rounded corners,
 and date placement within the page. The high-coverage date's center stays within
 one pixel horizontally and vertically of the page center; fractional coverage
 can make its visible opposite margins differ by two pixels.
