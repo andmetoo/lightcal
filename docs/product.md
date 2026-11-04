@@ -14,6 +14,7 @@ Lightcal gives Windows users an immediately available, readable month calendar f
 - All documentation is in English. Changes are reviewed through PRs; protected branches require owner approval.
 - The owner's design canvas is the design tool. Its board sources and review evidence are mirrored in `design/`; see [the design notes](../design/README.md).
 - Slint is accepted. The additional owner-required features and acceptance criteria are tracked in [Required features](features.md), including Windows calendar selection, event dots, startup, shortcut, update checking, and About links.
+- Connected calendars stay read-only. Users can create, edit and delete their own single-day events in the **On this PC** calendar, stored only on this PC; see [ADR 0017](decisions/0017-local-events.md).
 
 ## Proposed first release
 

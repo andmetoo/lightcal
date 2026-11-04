@@ -59,7 +59,7 @@ Copy [.env.example](.env.example) to the ignored `.env` for the public client id
 
 ## Privacy
 
-Lightcal is read-only and has no telemetry. It goes online only when you act: a calendar you connect is read from Google, Microsoft or the ICS host, and an update check reaches GitHub. Sign-in tokens stay in the Windows protected store. See [required features](docs/features.md).
+Lightcal never changes your connected calendars and has no telemetry. It goes online only when you act: a calendar you connect is read from Google, Microsoft or the ICS host, and an update check reaches GitHub. Sign-in tokens stay in the Windows protected store. Events you create in the On this PC calendar are saved only on this PC, as plain unencrypted JSON (`local-events.json` in `%APPDATA%\Lightcal`), so anyone with access to your Windows profile can read them. See [required features](docs/features.md).
 
 ## Documentation
 

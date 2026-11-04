@@ -1,6 +1,7 @@
 # ADR 0017: Local events stored on this PC
 
-Date: 2026-11-04. Status: proposed; awaiting the owner's decision.
+Date: 2026-11-04. Status: accepted by the owner on 2026-11-04 (answers
+under [Owner decisions](#owner-decisions)).
 
 ## Context
 
@@ -319,12 +320,20 @@ What the code already offers:
   planned answer. An edit whose write never succeeded can also be lost (see
   Known limits).
 
-## Questions for the owner
+## Owner decisions
 
-1. Approve local events at all, with the scope above?
-2. Entry points: right-click, **+** in the agenda header and the **N** key.
-   Keep, change or reduce them?
-3. Plain JSON or DPAPI-encrypted storage?
-4. Should `.ics` export ship in the first version? It needs a Windows Save
-   dialog and an iCalendar writer.
-5. Name of the calendar: **On this PC**, **Local** or something else?
+Answered by the owner on 2026-11-04:
+
+1. **Scope:** approved as proposed: one local calendar, single-day all-day
+   or timed events up to `24:00`, a title with an optional location and
+   note, and edit and delete for local events only. Recurrence, multi-day
+   events, reminders, and import and export are deferred.
+2. **Entry points:** keep all of them: right-clicking a day, the **+**
+   button in the agenda header, the **N** key, and **Add event** in the
+   empty-day agenda.
+3. **Storage:** plain JSON. Portability, easy backups and recovery on
+   another PC outweigh DPAPI for local event titles.
+4. **`.ics` export:** not in the first version. Export and import need
+   their own decision, so the first version stays focused on the editor,
+   storage and locking.
+5. **Name:** **On this PC**, with account label **Local** and ID `local`.
