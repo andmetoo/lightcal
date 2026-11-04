@@ -163,6 +163,36 @@ pub fn numeral_font_source() -> &'static str {
     })
 }
 
+/// Sub-pixel offsets tried for each glyph, nearest first so ties keep the
+/// glyph where layout put it.
+const GRID_NUDGES: [f32; 7] = [0.0, -0.125, 0.125, -0.25, 0.25, -0.375, 0.375];
+
+/// Coverage mask of one glyph with its pen at (`pen_x`, `baseline`).
+fn glyph_mask(glyph: &Glyph, px: f32, pen_x: f32, baseline: f32, size: usize) -> Vec<u8> {
+    let map = |p: Point| Point::new(pen_x + p.x * px, baseline - p.y * px);
+    let path: Vec<Command> = glyph
+        .path
+        .iter()
+        .map(|command| match *command {
+            Command::MoveTo(p) => Command::MoveTo(map(p)),
+            Command::LineTo(p) => Command::LineTo(map(p)),
+            Command::QuadTo(c, p) => Command::QuadTo(map(c), map(p)),
+            Command::CurveTo(c0, c1, p) => Command::CurveTo(map(c0), map(c1), map(p)),
+            Command::Close => Command::Close,
+        })
+        .collect();
+    if path.is_empty() {
+        return vec![0; size * size];
+    }
+    Mask::new(&path).size(size as u32, size as u32).render().0
+}
+
+/// How soft a mask looks: the total distance of every pixel from fully on or
+/// fully off.
+fn greyness(mask: &[u8]) -> u32 {
+    mask.iter().map(|&c| c.min(255 - c) as u32).sum()
+}
+
 /// A source of numeral outlines.
 #[derive(Clone, Copy)]
 enum Face {
@@ -228,25 +258,24 @@ impl Face {
     ) -> Vec<u8> {
         match self {
             Face::System(glyphs) => {
-                let mut path = Vec::new();
+                // Outlines are unhinted, so each glyph is nudged by up to 3/8 px
+                // to whichever position leaves the fewest half-covered pixels:
+                // stems then land on whole columns instead of blurring across two.
+                let mut mask = vec![0u8; size * size];
                 let mut pen = origin_x;
-                let map = |p: Point, pen: f32| Point::new(pen + p.x * px, baseline - p.y * px);
                 for glyph in text.chars().filter_map(|c| glyphs.glyphs.get(&c)) {
-                    path.extend(glyph.path.iter().map(|command| match *command {
-                        Command::MoveTo(p) => Command::MoveTo(map(p, pen)),
-                        Command::LineTo(p) => Command::LineTo(map(p, pen)),
-                        Command::QuadTo(c, p) => Command::QuadTo(map(c, pen), map(p, pen)),
-                        Command::CurveTo(c0, c1, p) => {
-                            Command::CurveTo(map(c0, pen), map(c1, pen), map(p, pen))
+                    let best = GRID_NUDGES
+                        .iter()
+                        .map(|nudge| glyph_mask(glyph, px, pen + nudge, baseline, size))
+                        .min_by_key(|candidate| greyness(candidate));
+                    if let Some(glyph_mask) = best {
+                        for (total, coverage) in mask.iter_mut().zip(glyph_mask) {
+                            *total = total.saturating_add(coverage);
                         }
-                        Command::Close => Command::Close,
-                    }));
+                    }
                     pen += glyph.advance * px + tracking;
                 }
-                if path.is_empty() {
-                    return vec![0; size * size];
-                }
-                Mask::new(&path).size(size as u32, size as u32).render().0
+                mask
             }
             Face::Strokes => {
                 let segments: Vec<[f32; 4]> = stroke_segments(text, px)
