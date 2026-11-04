@@ -2809,7 +2809,7 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     }
 }
 
-/// The first step of Quit's wait for `writer`, before the window hides:
+/// The first step of Quit's wait for `writer`, once the window and tray icon are hidden:
 /// - the shortcut or a second launch no longer shows the window while Lightcal exits;
 /// - the single-instance lock is released, so a new launch starts normally. The events
 ///   lock stays held until the process ends, so the new instance waits for it in the
@@ -2835,24 +2835,27 @@ fn begin_quit_wait(
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
 /// on the writer (ADR 0017).
 fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
-    let mut writer = None;
-    with_active_controller(ui_weak, |c, _| writer = c.local_writer.clone());
-    let Some(writer) = writer.filter(|w| w.saving()) else {
+    let ctrl = active_controller();
+    let writer = ctrl.as_ref().and_then(|c| c.borrow().local_writer.clone());
+    let (Some(ctrl), Some(writer)) = (ctrl, writer.filter(|w| w.saving())) else {
         let _ = slint::quit_event_loop();
         return;
     };
-    // `bind` waits for the hotkey thread to unregister the shortcut.
-    with_active_controller(ui_weak, |c, _| {
-        begin_quit_wait(&writer, || c.shortcut_mgr.bind(None).map(|_| ()));
-    });
-    // Window and tray icon go at once.
-    with_active_controller(ui_weak, |_c, ui| {
-        hide_application_window(ui);
-        #[cfg(windows)]
-        if let Some(tray) = &_c.tray_icon {
-            let _ = tray.set_visible(false);
-        }
-    });
+    // The window goes first, before anything that can wait. Hiding it needs no
+    // controller borrow, so Slint callbacks it triggers can still borrow the controller.
+    if let Some(ui) = ui_weak.upgrade() {
+        hide_application_window(&ui);
+    }
+    let mut c = ctrl.borrow_mut();
+    #[cfg(windows)]
+    if let Some(tray) = &c.tray_icon {
+        let _ = tray.set_visible(false);
+    }
+    // Runs whatever the window's state. `bind` waits for the hotkey thread to
+    // unregister the shortcut.
+    let shortcut_mgr = &mut c.shortcut_mgr;
+    begin_quit_wait(&writer, || shortcut_mgr.bind(None).map(|_| ()));
+    drop(c);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let timer = slint::Timer::default();
     timer.start(
