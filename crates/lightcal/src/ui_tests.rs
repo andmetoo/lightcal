@@ -1917,8 +1917,9 @@ fn demo_mode_shows_its_calendars_without_saving_them() {
     ));
     let mut ctrl = controller(&dir);
     ctrl.demo_shown.insert(SOURCE_ID.into());
+    ctrl.prefs.selected_calendar_ids.insert(SOURCE_ID.into());
     ctrl.toggle_calendar("win-work".into());
-    assert!(ctrl.shown_calendar_ids().contains(SOURCE_ID));
+    assert!(ctrl.prefs.selected_calendar_ids.contains(SOURCE_ID));
     let saved = |ctrl: &AppController| ctrl.store.load().preferences.selected_calendar_ids;
     assert!(
         saved(&ctrl).contains("win-work"),
@@ -1931,7 +1932,7 @@ fn demo_mode_shows_its_calendars_without_saving_them() {
 
     // Hiding a calendar only demo mode showed matches the saved selection.
     ctrl.toggle_calendar(SOURCE_ID.into());
-    assert!(!ctrl.shown_calendar_ids().contains(SOURCE_ID));
+    assert!(!ctrl.prefs.selected_calendar_ids.contains(SOURCE_ID));
     assert!(!saved(&ctrl).contains(SOURCE_ID));
     // Showing it again is the user's choice and is saved.
     ctrl.toggle_calendar(SOURCE_ID.into());

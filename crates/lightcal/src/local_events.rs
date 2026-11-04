@@ -1182,6 +1182,8 @@ struct WriterState {
     busy: bool,
     failed: bool,
     shutdown: bool,
+    /// The thread has exited; nothing more is written.
+    stopped: bool,
 }
 
 /// Writes local events off the UI thread, in order. Only the latest pending state is
@@ -1225,6 +1227,7 @@ impl Writer {
                         state = signal.wait(state).unwrap_or_else(|e| e.into_inner());
                     }
                     if state.shutdown && state.pending.is_none() {
+                        state.stopped = true;
                         return;
                     }
                     let (events, copy_first) = state.pending.take().expect("pending write");
@@ -1250,6 +1253,7 @@ impl Writer {
                             // Once shut down, each change is tried once: a failed one stays
                             // unsaved rather than being retried in a loop.
                             if requeued && state.shutdown {
+                                state.stopped = true;
                                 return;
                             }
                             // Only a retry of the same change backs off further.
@@ -1273,14 +1277,29 @@ impl Writer {
         Ok(Self { shared })
     }
 
-    /// Queues a write of `events`, replacing any write not started yet.
-    pub fn submit(&self, events: Vec<LocalEvent>, copy_first: bool) {
+    /// Queues a write of `events`, replacing any write not started yet. False when the
+    /// writer has stopped after `shutdown`: the change stays unsaved and is never
+    /// written.
+    #[must_use = "a stopped writer never writes the change"]
+    pub fn submit(&self, events: Vec<LocalEvent>, copy_first: bool) -> bool {
         let (lock, signal) = &*self.shared;
         let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if state.stopped {
+            state.pending = Some((events, copy_first));
+            return false;
+        }
         let copy_first = copy_first || state.pending.as_ref().is_some_and(|p| p.1);
         state.pending = Some((events, copy_first));
         state.failed_superseded();
         signal.notify_all();
+        true
+    }
+
+    /// True while a change is still to be written by a running writer: what Quit waits
+    /// for. Unlike `has_unsaved`, false once the writer has stopped.
+    pub fn saving(&self) -> bool {
+        let state = self.shared.0.lock().unwrap_or_else(|e| e.into_inner());
+        (state.pending.is_some() || state.busy) && !state.stopped
     }
 
     /// True while a change has not been written yet.
@@ -1830,7 +1849,7 @@ mod tests {
             },
         )
         .unwrap();
-        writer.submit(vec![event(1, "Waiting")], false);
+        assert!(writer.submit(vec![event(1, "Waiting")], false));
         let first = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         assert!(matches!(first, WriteReport::Failed(_)));
         let retried = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -1852,7 +1871,7 @@ mod tests {
         assert!(saved);
         assert!(!writer.has_unsaved());
         assert!(!writer.last_write_failed());
-        writer.submit(vec![event(1, "Later")], false);
+        assert!(writer.submit(vec![event(1, "Later")], false));
         assert!(writer.wait_saved(Duration::from_secs(5)));
         assert_eq!(Storage::new(&blocked).load().events[0].title, "Later");
         writer.shutdown();
@@ -1899,25 +1918,32 @@ mod tests {
         let blocked = dir.join("blocked");
         fs::write(&blocked, "not a directory").unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();
+        // A backoff far longer than the test: no retry starts before `shutdown`, which
+        // ends the wait early.
         let writer = Writer::spawn_with_backoff(
             Storage::new(&blocked),
-            Duration::from_millis(20),
-            Duration::from_millis(20),
+            Duration::from_secs(600),
+            Duration::from_secs(600),
             move |report| {
                 let _ = sender.send(report);
             },
         )
         .unwrap();
-        writer.submit(vec![event(1, "Unsaved")], false);
+        assert!(writer.submit(vec![event(1, "Unsaved")], false));
         writer.shutdown();
         let mut failures = 0;
-        while let Ok(report) = receiver.recv_timeout(Duration::from_millis(300)) {
+        while let Ok(report) = receiver.recv_timeout(Duration::from_millis(500)) {
             assert!(matches!(report, WriteReport::Failed(_)));
             failures += 1;
         }
         // At most one attempt before the shutdown was seen and one after it.
         assert!((1..=2).contains(&failures), "{failures} attempts");
         assert!(writer.has_unsaved() && writer.last_write_failed());
+        // The writer has stopped: Quit does not wait for it, and a later change is
+        // refused rather than lost silently.
+        assert!(!writer.saving());
+        assert!(!writer.submit(vec![event(2, "Late")], false));
+        assert!(writer.has_unsaved());
         fs::remove_dir_all(dir).unwrap();
     }
 
