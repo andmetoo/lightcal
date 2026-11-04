@@ -2809,6 +2809,19 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     }
 }
 
+/// The first step of Quit's wait for `writer`, before the window hides:
+/// - the shortcut or a second launch no longer shows the window while Lightcal exits;
+/// - the single-instance lock is released, so a new launch starts normally. The events
+///   lock stays held until the process ends, so the new instance waits for it in the
+///   background;
+/// - a failed write waiting out its backoff is tried again at once, so the 2 s grace
+///   period is spent on an attempt (after Quit anyway).
+fn begin_quit_wait(writer: &lightcal::local_events::Writer) {
+    QUITTING.with(|quitting| quitting.set(true));
+    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
+    writer.retry_now();
+}
+
 /// Quits once every local event change is written. With a write in progress the window
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
 /// on the writer (ADR 0017).
@@ -2819,12 +2832,8 @@ fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
         let _ = slint::quit_event_loop();
         return;
     };
-    // Window and tray icon go at once, and the shortcut or a second launch no longer
-    // shows the window while Lightcal exits.
-    QUITTING.with(|quitting| quitting.set(true));
-    // A new launch starts normally while this one exits. The events lock stays held
-    // until the process ends, so the new instance waits for it in the background.
-    SINGLE_INSTANCE.with(|slot| drop(slot.borrow_mut().take()));
+    begin_quit_wait(&writer);
+    // Window and tray icon go at once.
     with_active_controller(ui_weak, |_c, ui| {
         hide_application_window(ui);
         #[cfg(windows)]

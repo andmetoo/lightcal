@@ -2507,3 +2507,56 @@ fn session_end_waits_at_most_a_second_for_the_last_write() {
     writer.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
+    use lightcal::local_events::{Storage, Writer};
+    use std::time::Duration;
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-wait-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let app_id = format!(
+        "Lightcal.Test.QuitWait.{}",
+        lightcal::calendars::random_key().unwrap()
+    );
+    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+        panic!("the first instance holds the lock");
+    };
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
+
+    // A failed save waiting out a backoff far longer than the test.
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn_with_backoff(
+        Storage::new(&blocked),
+        Duration::from_secs(600),
+        Duration::from_secs(600),
+        |_| {},
+    )
+    .unwrap();
+    assert!(writer.submit(Vec::new(), false));
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !writer.last_write_failed() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(writer.last_write_failed());
+    std::fs::remove_file(&blocked).unwrap();
+
+    begin_quit_wait(&writer);
+    assert!(QUITTING.with(std::cell::Cell::get));
+    assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_none()));
+    #[cfg(windows)]
+    assert!(
+        matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::FirstInstance(_)
+        ),
+        "a relaunch starts normally"
+    );
+    // The retry runs at once instead of after the 10 min backoff.
+    assert!(writer.wait_saved(Duration::from_secs(5)));
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -752,9 +752,7 @@ impl SingleInstanceGuard {
             // Stop comes first: when both are set, the wait reports the lower index and
             // leaves the activation event set for the new instance. Without a stop event
             // (it could not be created) the listener still hears activations.
-            let raw: Vec<isize> = (!self.stop.is_null())
-                .then(|| duplicate(self.stop))
-                .flatten()
+            let raw: Vec<isize> = duplicate(self.stop)
                 .into_iter()
                 .chain([dup_event])
                 .map(|h| h as isize)
@@ -893,30 +891,36 @@ pub struct SessionEndWatch {
 #[cfg(windows)]
 impl SessionEndWatch {
     pub fn new(on_end: impl Fn() + 'static) -> Option<Self> {
+        use std::sync::atomic::{AtomicBool, Ordering};
         use windows_sys::Win32::Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS};
         use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             CreateWindowExW, RegisterClassW, SetWindowLongPtrW, GWLP_USERDATA, WNDCLASSW,
             WS_EX_TOOLWINDOW, WS_POPUP,
         };
-        static REGISTERED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        // Only success is remembered, so a failed registration is tried again.
+        static REGISTERED: AtomicBool = AtomicBool::new(false);
         let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
         let title = [0u16];
         // SAFETY: the class name and title outlive the calls; the class is registered
         // once per process.
         let hwnd = unsafe {
             let instance = GetModuleHandleW(std::ptr::null());
-            let registered = *REGISTERED.get_or_init(|| {
+            if !REGISTERED.load(Ordering::Acquire) {
                 let wc = WNDCLASSW {
                     lpfnWndProc: Some(session_end_proc),
                     hInstance: instance,
                     lpszClassName: class.as_ptr(),
                     ..std::mem::zeroed()
                 };
-                RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS
-            });
-            if !registered {
-                return None;
+                if RegisterClassW(&wc) == 0 {
+                    let error = GetLastError();
+                    if error != ERROR_CLASS_ALREADY_EXISTS {
+                        eprintln!("Lightcal: sign-out and shutdown are not watched (RegisterClassW error {error})");
+                        return None;
+                    }
+                }
+                REGISTERED.store(true, Ordering::Release);
             }
             CreateWindowExW(
                 WS_EX_TOOLWINDOW,
@@ -934,6 +938,11 @@ impl SessionEndWatch {
             )
         };
         if hwnd.is_null() {
+            // SAFETY: reads this thread's last error, set by CreateWindowExW.
+            let error = unsafe { windows_sys::Win32::Foundation::GetLastError() };
+            eprintln!(
+                "Lightcal: sign-out and shutdown are not watched (CreateWindowExW error {error})"
+            );
             return None;
         }
         let on_end: *mut Box<dyn Fn()> = Box::into_raw(Box::new(Box::new(on_end)));
@@ -1794,6 +1803,39 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(!late.load(std::sync::atomic::Ordering::SeqCst));
         assert!(relaunch.check_activation_requested());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_activation_listener_works_without_a_stop_event() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let app_id = format!("Lightcal_Test_NoStop_{stamp}");
+        let mut guard = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("First instance should have acquired"),
+        };
+        // As if CreateEventW had failed for the stop event.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(guard.stop) };
+        guard.stop = std::ptr::null_mut();
+        let activated = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed = activated.clone();
+        guard.listen_for_activation(move || {
+            observed.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !activated.load(std::sync::atomic::Ordering::SeqCst)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::yield_now();
+        }
+        assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]
