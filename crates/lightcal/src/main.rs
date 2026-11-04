@@ -2762,6 +2762,8 @@ impl AppController {
 }
 
 /// Quit, unless the last local event write failed: then the Quit prompt asks first.
+/// Called from the tray's Quit item, which exists on Windows only.
+#[cfg(windows)]
 fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     let mut failed = false;
     with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
