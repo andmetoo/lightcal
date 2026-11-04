@@ -6,7 +6,8 @@
 import { Theme, Motion } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
-import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption, LocalEditorText } from "types.slint";
+import { Button, Icon } from "controls.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption, LocalEditorText, LocalCardData } from "types.slint";
 
 export { Theme, Motion }
 export { KoiSchool, KoiSwim } from "koi.slint";
@@ -319,6 +320,13 @@ export component AppWindow inherits Window {
     // November 2026 settings refresh (ADR 0011).
     in property <SettingsStrings> settings-strings;
     in property <[AccountCardItem]> account-cards: [];
+    in property <LocalCardData> local-card;
+    callback local-ok();
+    callback local-show-folder();
+    callback local-try-now();
+    callback local-ask-start-over();
+    callback local-start-over();
+    callback local-keep();
     // Shortcut parts for key caps, e.g. ["Ctrl", "Alt", "K"]; empty when unset.
     in property <[string]> shortcut-keys: [];
     in property <bool> install-configured: false;
@@ -643,6 +651,13 @@ export component AppWindow inherits Window {
         current-theme-code: root.current-theme-code;
         copy: root.settings-strings;
         account-cards: root.account-cards;
+        local-card: root.local-card;
+        local-ok() => { root.local-ok(); }
+        local-show-folder() => { root.local-show-folder(); }
+        local-try-now() => { root.local-try-now(); }
+        local-ask-start-over() => { root.local-ask-start-over(); }
+        local-start-over() => { root.local-start-over(); }
+        local-keep() => { root.local-keep(); }
         close-settings() => { root.close-settings(); }
         open-settings(arg0) => { root.open-settings(arg0); }
         dismiss-startup-warning() => { root.dismiss-startup-warning(); }
@@ -683,5 +698,101 @@ export component AppWindow inherits Window {
         choose-outlook-account() => { root.choose-outlook-account(); }
         choose-ics-account() => { root.choose-ics-account(); }
         add-ics-source(arg0, arg1) => { root.add-ics-source(arg0, arg1); }
+    }
+}
+
+// Quit after a failed save (LocalQuit board): shown before anything blocks. Keep Lightcal
+// open is the default; Escape and Enter keep it open.
+export component QuitPrompt inherits Window {
+    in property <string> heading;
+    in property <string> body;
+    in property <string> quit-label;
+    in property <string> keep-label;
+    callback quit-anyway();
+    callback keep-open();
+
+    title: "Lightcal";
+    width: 400px;
+    height: 156px;
+    background: Theme.page;
+    default-font-family: Theme.font-family;
+
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape || event.text == Key.Return) {
+                root.keep-open();
+                return accept;
+            }
+            reject
+        }
+        init => { self.focus(); }
+
+        VerticalLayout {
+            HorizontalLayout {
+                vertical-stretch: 1;
+                padding-left: 20px;
+                padding-right: 20px;
+                padding-top: 16px;
+                spacing: 12px;
+                VerticalLayout {
+                    alignment: start;
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
+                        background: Theme.warn-bg;
+                        Icon {
+                            name: "warning";
+                            size: 16px;
+                            color: Theme.warn;
+                        }
+                    }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 4px;
+                    alignment: start;
+                    Text {
+                        text: root.heading;
+                        font-size: 15px;
+                        font-weight: Theme.weight-semibold;
+                        color: Theme.ink;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.body;
+                        font-size: Theme.type-body;
+                        color: Theme.ink2;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+            Rectangle {
+                height: 56px;
+                background: Theme.card;
+                Rectangle { y: 0px; height: 1px; background: Theme.card-line; }
+                HorizontalLayout {
+                    padding-left: 20px;
+                    padding-right: 20px;
+                    spacing: 8px;
+                    alignment: end;
+                    VerticalLayout {
+                        alignment: center;
+                        Button {
+                            label: root.quit-label;
+                            clicked => { root.quit-anyway(); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Button {
+                            kind: "primary";
+                            label: root.keep-label;
+                            clicked => { root.keep-open(); }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

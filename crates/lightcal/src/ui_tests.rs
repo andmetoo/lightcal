@@ -77,6 +77,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         local_writer: None,
         editor: None,
         editor_panel: None,
+        local_save_error: None,
+        start_over: Default::default(),
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -497,12 +499,20 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("windows-disabled.png"), 448, 360)
         .unwrap();
-    click(&ui, 220.0, 286.0);
+    // The On this PC card sits above the provider list, so the Windows row is found by
+    // its label after scrolling it into view.
+    ui.set_settings_strings(SettingsStrings {
+        windows_title: "Windows calendars".into(),
+        ..ui.get_settings_strings()
+    });
+    scroll(&ui, -400.0);
+    let windows_row = labelled_center(&ui, "Windows calendars");
+    click(&ui, windows_row.x, windows_row.y);
     assert!(
         ui.get_legacy_windows_enabled(),
         "Fresh users can enable Windows calendars"
     );
-    click(&ui, 220.0, 286.0);
+    click(&ui, windows_row.x, windows_row.y);
     assert!(
         !ui.get_legacy_windows_enabled(),
         "The same provider row toggles them again"
@@ -584,7 +594,8 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-retry.png"), 448, 360)
         .unwrap();
-    click(&ui, 372.0, 146.0);
+    // The On this PC card (44 px and an 8 px gap, plus its border) sits above.
+    click(&ui, 372.0, 200.0);
     assert!(
         refreshed.get(),
         "A failed Google query still offers manual refresh"
@@ -602,7 +613,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("google-expired.png"), 448, 360)
         .unwrap();
-    click(&ui, 395.0, 193.0);
+    click(&ui, 395.0, 247.0);
     assert!(
         reconnected.get(),
         "An expired Google account offers Sign in"
@@ -624,7 +635,7 @@ fn settings_recovery_controls_remain_reachable() {
     renderer
         .render_to_png(&dir.join("mixed-permission-denied.png"), 448, 360)
         .unwrap();
-    click(&ui, 220.0, 194.0);
+    click(&ui, 220.0, 248.0);
     assert!(
         selected.get(),
         "Windows permission denial must not remove a readable calendar's checkbox"
@@ -2143,6 +2154,86 @@ fn unavailable_local_events_open_the_panel_instead_of_the_editor() {
 }
 
 #[test]
+fn the_on_this_pc_card_shows_one_notice_at_a_time() {
+    use lightcal::local_events::{Loaded, LocalEvents, Notice, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-local-card-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+
+    // Editable with no notice: name, "Local · No events", the selection.
+    let card = ctrl.local_card();
+    assert_eq!(card.name, "On this PC");
+    assert_eq!(card.sub, "Local · No events");
+    assert_eq!(card.notice, 0);
+    assert!(!card.checked);
+
+    // A failed save: amber with Try now.
+    ctrl.local_save_error = Some("Access is denied. (os error 5)".into());
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 2);
+    assert!(card.retry);
+    assert!(card.text.contains("Access is denied. (os error 5)."));
+    ctrl.local_save_error = None;
+
+    // A damaged file: red, names the kept file, Show in folder and Start over, which asks.
+    let kept = dir.join("local-events.json");
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: kept.clone(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.sub, "Local · Unavailable");
+    assert_eq!(card.head, "Events on this PC couldn\u{2019}t be read");
+    assert!(card.file.ends_with("local-events.json"));
+    assert!(card.folder && card.start_over && !card.confirm);
+    assert_eq!(ctrl.local_card_file(), Some(kept));
+    ctrl.start_over = local_editor::StartOver::Asking;
+    let card = ctrl.local_card();
+    assert!(card.confirm);
+    assert_eq!(card.head, "Start over with no events?");
+    ctrl.start_over = local_editor::StartOver::Idle;
+
+    // The writer did not start: red, read only, never Start over.
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::CannotSave {
+        error: "the disk is full".into(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.sub, "Local · Read only");
+    assert!(!card.start_over && !card.folder);
+    ctrl.start_over = local_editor::StartOver::Asking;
+    assert!(
+        !ctrl.local_card().confirm,
+        "no Start over for a healthy file"
+    );
+    ctrl.start_over = local_editor::StartOver::Idle;
+
+    // Locked: a quiet line with the spinner.
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Locked));
+    let card = ctrl.local_card();
+    assert_eq!((card.notice, card.spinner), (1, true));
+
+    // A restored backup: amber, the damaged file, Show in folder and OK, which dismisses.
+    let mut loaded = Loaded::unavailable(Unavailable::Locked);
+    loaded.access = lightcal::local_events::Access::Editable;
+    loaded.notices = vec![
+        Notice::RecoveredUnfinishedSave,
+        Notice::RestoredBackup {
+            damaged: Some(dir.join("local-events.preserved-1.json")),
+        },
+    ];
+    ctrl.local = LocalEvents::from_loaded(loaded);
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 2);
+    assert!(card.ok && card.folder);
+    assert!(card.file.ends_with("local-events.preserved-1.json"));
+    ctrl.local.dismiss_notices();
+    assert_eq!(ctrl.local_card().notice, 0);
+}
+
+#[test]
 fn saving_an_event_in_demo_mode_keeps_on_this_pc_selected() {
     use lightcal::local_events::SOURCE_ID;
     let dir = std::env::temp_dir().join(format!(
@@ -2165,5 +2256,198 @@ fn saving_an_event_in_demo_mode_keeps_on_this_pc_selected() {
     );
     let saved = ctrl.store.load().preferences.selected_calendar_ids;
     assert!(saved.contains(SOURCE_ID));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn start_over_hides_its_buttons_while_it_runs_and_reports_a_failure() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-start-over-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: dir.join("local-events.json"),
+    }));
+    ctrl.start_over = local_editor::StartOver::Running;
+    let card = ctrl.local_card();
+    assert!(
+        !card.start_over && !card.confirm,
+        "no second Start over while one runs"
+    );
+    ctrl.start_over =
+        local_editor::StartOver::Failed("Failed to keep the events file: in use".into());
+    let card = ctrl.local_card();
+    assert!(card.start_over, "it can be tried again");
+    assert!(card
+        .text
+        .ends_with("Failed to keep the events file: in use"));
+}
+
+#[test]
+fn quit_asks_first_only_after_a_failed_save() {
+    use lightcal::local_events::{Storage, Writer};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-prompt-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    assert!(!ctrl.quit_needs_prompt(), "no writer, nothing to lose");
+    // A file where the data directory should be makes every save fail.
+    std::fs::create_dir_all(&dir).unwrap();
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn_with_backoff(
+        Storage::new(&blocked),
+        std::time::Duration::from_secs(600),
+        std::time::Duration::from_secs(600),
+        |_| {},
+    )
+    .unwrap();
+    ctrl.local_writer = Some(writer.clone());
+    assert!(!ctrl.quit_needs_prompt(), "nothing written yet");
+    assert!(writer.submit(Vec::new(), false));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !writer.last_write_failed() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(
+        ctrl.quit_needs_prompt(),
+        "a failed save asks before quitting"
+    );
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_quit_prompt_keeps_lightcal_open_unless_told_otherwise() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let prompt = QuitPrompt::new().unwrap();
+    prompt.set_quit_label("Quit anyway".into());
+    prompt.set_keep_label("Keep Lightcal open".into());
+    let kept = Rc::new(Cell::new(0));
+    let quit = Rc::new(Cell::new(false));
+    let observed = kept.clone();
+    prompt.on_keep_open(move || observed.set(observed.get() + 1));
+    let observed = quit.clone();
+    prompt.on_quit_anyway(move || observed.set(true));
+    prompt.show().unwrap();
+    for key in [slint::platform::Key::Escape, slint::platform::Key::Return] {
+        let text = SharedString::from(key);
+        prompt
+            .window()
+            .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+        prompt
+            .window()
+            .dispatch_event(WindowEvent::KeyReleased { text });
+    }
+    assert_eq!(kept.get(), 2, "Escape and Enter keep Lightcal open");
+    assert!(!quit.get());
+    let button = ElementHandle::find_by_accessible_label(&prompt, "Quit anyway")
+        .next()
+        .expect("Quit anyway button");
+    let position = element_center(&button);
+    for event in [
+        WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        },
+        WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        },
+    ] {
+        prompt.window().dispatch_event(event);
+    }
+    assert!(quit.get(), "only Quit anyway quits");
+}
+
+#[test]
+fn closing_the_quit_prompt_keeps_lightcal_open() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let prompt = QuitPrompt::new().unwrap();
+    let quit = Rc::new(Cell::new(false));
+    let observed = quit.clone();
+    crate::open_quit_prompt(prompt.clone_strong(), Rc::new(move || observed.set(true)));
+    assert!(prompt.window().is_visible());
+    prompt.window().dispatch_event(WindowEvent::CloseRequested);
+    assert!(!quit.get(), "the close button never quits");
+    assert!(!prompt.window().is_visible());
+    // The prompt is freed after the event, never inside its own callback.
+    assert!(crate::QUIT_ASK.with(|slot| slot.borrow().is_some()));
+    slint::platform::update_timers_and_animations();
+    assert!(crate::QUIT_ASK.with(|slot| slot.borrow().is_none()));
+}
+
+#[test]
+fn a_lock_file_failure_says_events_are_not_shown() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-no-lock-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::NoLock {
+        error: "Access is denied. (os error 5)".into(),
+    }));
+    let card = ctrl.local_card();
+    assert_eq!(card.notice, 3);
+    assert_eq!(card.head, "Events on this PC couldn\u{2019}t be opened");
+    assert!(card.text.contains("Your events are not shown"));
+    assert!(
+        !card.text.contains("read only"),
+        "nothing is shown, so nothing is read only"
+    );
+    assert!(!card.start_over && !card.folder);
+}
+
+#[test]
+fn the_panel_names_a_kept_file_only_when_one_is_at_fault() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-panel-why-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    for (reason, kept) in [
+        (
+            Unavailable::Damaged {
+                file: dir.join("local-events.json"),
+            },
+            true,
+        ),
+        (Unavailable::Locked, false),
+        (
+            Unavailable::NoLock {
+                error: "denied".into(),
+            },
+            false,
+        ),
+        (
+            Unavailable::CannotSave {
+                error: "no thread".into(),
+            },
+            false,
+        ),
+    ] {
+        ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(reason.clone()));
+        ctrl.editor_panel = Some(local_editor::EditorPanel::Unavailable);
+        ctrl.sync_to_ui(&ui);
+        assert_eq!(
+            ui.get_panel_message().contains("The file is kept"),
+            kept,
+            "{reason:?}"
+        );
+    }
+    // Still loading: Accounts has nothing to explain yet, so the panel says so.
+    ctrl.local = LocalEvents::loading();
+    ctrl.sync_to_ui(&ui);
+    assert_eq!(
+        ui.get_panel_message(),
+        "Events on this PC are still loading. Try again in a moment."
+    );
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -121,6 +121,10 @@ pub(crate) struct AppController {
     pub(crate) editor: Option<local_editor::EditorState>,
     /// Shown in place of the editor when local events cannot be added.
     pub(crate) editor_panel: Option<local_editor::EditorPanel>,
+    /// The last local event write failed with this message; cleared by a later save.
+    pub(crate) local_save_error: Option<String>,
+    /// Start over in Settings › Accounts: asking, running or failed.
+    pub(crate) start_over: local_editor::StartOver,
     /// Calendars demo mode selected for its samples. They are in the selection while
     /// Lightcal runs but never saved (`persist`); empty outside demo mode.
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
@@ -856,13 +860,10 @@ impl AppController {
 
     pub(crate) fn sync_to_ui(&self, ui: &AppWindow) {
         let locale = self.prefs.locale();
-        // Provider calendars only; the local calendar joins the Accounts counts with its
-        // own row (ADR 0017, editor stage).
         let active_count = self
             .provider
             .sources
             .iter()
-            .filter(|source| source.id != lightcal::local_events::SOURCE_ID)
             .filter(|source| self.prefs.selected_calendar_ids.contains(&source.id))
             .count();
         let strings = catalog(locale);
@@ -2094,7 +2095,9 @@ impl AppController {
             close_label: st.close.into(),
             connected_accounts: st.connected_accounts.into(),
             add_account: st.add_account.into(),
-            read_only_note: st.read_only_note.into(),
+            read_only_note: lightcal::i18n::local_settings_text(locale)
+                .accounts_read_only
+                .into(),
             connect_heading: st.connect_heading.into(),
             connect_note: st.connect_note.into(),
             google_title: st.google_title.into(),
@@ -2612,8 +2615,8 @@ fn start_local_events_load(
                     LOCAL_EVENTS_LOCK_TAKEN.store(true, std::sync::atomic::Ordering::Release);
                     Storage::new(&dir).load()
                 }
-                Err(error) => Loaded::unavailable(Unavailable::Unreadable {
-                    file: dir.join("local-events.lock"),
+                // Without the lock nothing may be read or written: never Start over.
+                Err(error) => Loaded::unavailable(Unavailable::NoLock {
                     error: error.to_string(),
                 }),
             };
@@ -2634,10 +2637,147 @@ fn start_local_events_load(
     }
 }
 
+/// Shows a writer's outcome on the On this PC card.
+fn apply_local_write_report(report: lightcal::local_events::WriteReport) {
+    let Some(weak) = ACTIVE_UI.with(|u| u.borrow().clone()) else {
+        return;
+    };
+    with_active_controller(&weak, |c, w| {
+        c.local_save_error = match report {
+            lightcal::local_events::WriteReport::Saved => None,
+            lightcal::local_events::WriteReport::Failed(error) => Some(error),
+        };
+        c.sync_to_ui(w);
+    });
+}
+
+/// The open Quit prompt and what Quit anyway goes on to do, kept together so neither can
+/// outlive the other.
+struct QuitAsk {
+    prompt: QuitPrompt,
+    proceed: Rc<dyn Fn()>,
+}
+
+thread_local! {
+    static QUIT_ASK: RefCell<Option<QuitAsk>> = const { RefCell::new(None) };
+}
+
+/// Hides the Quit prompt and frees it, with its next action, once the event that closed
+/// it has finished; it is never dropped inside one of its own callbacks. Returns the
+/// action, for Quit anyway.
+fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
+    let open = QUIT_ASK.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|ask| (ask.prompt.clone_strong(), ask.proceed.clone()))
+    });
+    // Hidden after the borrow ends, for the same reason as `show` above.
+    let proceed = open.map(|(prompt, proceed)| {
+        let _ = prompt.hide();
+        proceed
+    });
+    slint::Timer::single_shot(std::time::Duration::ZERO, || {
+        QUIT_ASK.with(|slot| {
+            let mut slot = slot.borrow_mut();
+            // Shown again meanwhile (a second Quit): keep it.
+            if slot
+                .as_ref()
+                .is_some_and(|ask| !ask.prompt.window().is_visible())
+            {
+                slot.take();
+            }
+        });
+    });
+    proceed
+}
+
+/// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
+/// Lightcal open closes the prompt; Quit anyway runs `proceed`: the usual quit, or the
+/// update install that ends with one.
+fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
+    // A second Quit while the prompt is open brings that prompt back, with this action.
+    let open = QUIT_ASK.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let ask = slot.as_mut()?;
+        ask.proceed = proceed.clone();
+        Some(ask.prompt.clone_strong())
+    });
+    // Shown after the borrow ends: showing can dispatch window events that reach it.
+    if open.is_some_and(|prompt| prompt.show().is_ok()) {
+        return;
+    }
+    let Some(ui) = ui_weak.upgrade() else {
+        let _ = slint::quit_event_loop();
+        return;
+    };
+    let Ok(prompt) = QuitPrompt::new() else {
+        // Without the prompt the choice cannot be offered; quitting stays possible.
+        proceed();
+        return;
+    };
+    let text = {
+        let mut locale = LocaleCode::En;
+        with_active_controller(ui_weak, |c, _| locale = c.prefs.locale());
+        lightcal::i18n::local_settings_text(locale)
+    };
+    let theme = ui.global::<Theme>();
+    prompt.global::<Theme>().set_dark(theme.get_dark());
+    prompt
+        .global::<Theme>()
+        .set_font_family(theme.get_font_family());
+    prompt.set_heading(text.quit_title.into());
+    prompt.set_body(text.quit_text.into());
+    prompt.set_quit_label(text.quit_anyway.into());
+    prompt.set_keep_label(text.keep_open.into());
+    open_quit_prompt(prompt, proceed);
+}
+
+/// Wires the prompt's answers, shows it and keeps it with its next action.
+fn open_quit_prompt(prompt: QuitPrompt, proceed: Rc<dyn Fn()>) {
+    prompt.on_keep_open(|| {
+        close_quit_prompt();
+    });
+    // The close button keeps Lightcal open, like Escape.
+    prompt.window().on_close_requested(|| {
+        close_quit_prompt();
+        slint::CloseRequestResponse::HideWindow
+    });
+    prompt.on_quit_anyway(|| {
+        if let Some(proceed) = close_quit_prompt() {
+            proceed();
+        }
+    });
+    let _ = prompt.show();
+    QUIT_ASK.with(|slot| *slot.borrow_mut() = Some(QuitAsk { prompt, proceed }));
+}
+
+impl AppController {
+    /// Quit asks first when the last local event write failed and is still unsaved.
+    pub(crate) fn quit_needs_prompt(&self) -> bool {
+        self.local_writer
+            .as_ref()
+            .is_some_and(lightcal::local_events::Writer::last_write_failed)
+    }
+}
+
+/// Quit, unless the last local event write failed: then the Quit prompt asks first.
+/// Called from the tray's Quit item, which exists on Windows only.
+#[cfg(windows)]
+fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
+    let mut failed = false;
+    with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
+    if failed {
+        let weak = ui_weak.clone();
+        show_quit_prompt(ui_weak, Rc::new(move || quit_after_writes(&weak)));
+    } else {
+        quit_after_writes(ui_weak);
+    }
+}
+
 /// Quits once every local event change is written. With a write in progress the window
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
 /// on the writer (ADR 0017).
-fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
+fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
     let mut writer = None;
     with_active_controller(ui_weak, |c, _| writer = c.local_writer.clone());
     let Some(writer) = writer.filter(|w| w.saving()) else {
@@ -2774,6 +2914,22 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
     if lightcal::installer::package_managed() {
         return;
     }
+    // Installing ends with Quit: with a failed save, ask first, before the installer
+    // starts and waits on this process.
+    let mut ask = false;
+    with_active_controller(&ui_weak, |c, _| {
+        ask = !c.install_busy && c.quit_needs_prompt()
+    });
+    if ask {
+        let weak = ui_weak.clone();
+        show_quit_prompt(&ui_weak, Rc::new(move || start_install(weak.clone())));
+    } else {
+        start_install(ui_weak);
+    }
+}
+
+/// Stages and launches the verified installer, then quits.
+fn start_install(ui_weak: slint::Weak<AppWindow>) {
     let mut directory = None;
     let mut failure_text = "";
     with_active_controller(&ui_weak, |ctrl, ui| {
@@ -2795,7 +2951,8 @@ fn request_install(ui_weak: slint::Weak<AppWindow>) {
         })
         .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
-            Ok(()) => request_quit(&ui_weak),
+            // The user already chose, before the installer started.
+            Ok(()) => quit_after_writes(&ui_weak),
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
                 ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {
@@ -3593,7 +3750,11 @@ fn main() {
         )
     } else {
         use lightcal::local_events::{LocalEvents, Storage, Writer};
-        match Writer::spawn(Storage::new(&local_dir), |_| {}) {
+        // Each write's outcome reaches the On this PC card (failed, retrying, saved).
+        let report = |report: lightcal::local_events::WriteReport| {
+            let _ = slint::invoke_from_event_loop(move || apply_local_write_report(report));
+        };
+        match Writer::spawn(Storage::new(&local_dir), report) {
             Ok(writer) => (LocalEvents::loading(), Some(writer), None),
             // Nothing could be saved without the writer: the events still load, read-only,
             // rather than accept changes that would be lost.
@@ -3614,6 +3775,8 @@ fn main() {
         local_writer,
         editor: None,
         editor_panel: None,
+        local_save_error: None,
+        start_over: Default::default(),
         demo_shown,
         provider_request: 0,
         connection_busy: false,
@@ -3967,6 +4130,7 @@ fn main() {
             }
         });
     }
+    local_editor::connect_local_card_callbacks(&ui, &ctrl);
     local_editor::connect_local_editor_callbacks(&ui, &ctrl, move |weak| {
         request_visible_calendars(weak, use_synthetic)
     });
@@ -4169,12 +4333,16 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_toggle_calendar_source(move |id| {
             let mut c = ctrl.borrow_mut();
+            let local = id.as_str() == lightcal::local_events::SOURCE_ID;
             c.toggle_calendar(id.to_string());
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
             }
             drop(c);
-            request_visible_calendars(ui_weak.clone(), use_synthetic);
+            // Local events never come from a provider, so only the view changes.
+            if !local {
+                request_visible_calendars(ui_weak.clone(), use_synthetic);
+            }
         });
     }
     {

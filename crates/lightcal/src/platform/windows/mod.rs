@@ -11,6 +11,26 @@ pub fn system_fonts_dir() -> Option<std::path::PathBuf> {
         .map(|windows| std::path::PathBuf::from(windows).join("Fonts"))
 }
 
+/// Opens File Explorer with `file` selected (Show in folder). Only ever called on a
+/// user's click; nothing happens on other platforms.
+pub fn reveal_in_explorer(file: &std::path::Path) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("explorer.exe")
+            .raw_arg(explorer_select_arg(file))
+            .spawn();
+    }
+    #[cfg(not(windows))]
+    let _ = file;
+}
+
+/// Explorer parses `/select,"path"` itself, so the path is passed raw and quoted; Windows
+/// paths cannot contain a quote, so nothing inside needs escaping.
+pub fn explorer_select_arg(file: &std::path::Path) -> String {
+    format!("/select,\"{}\"", file.display())
+}
+
 pub mod icon;
 pub mod provider;
 pub mod shell;
@@ -83,6 +103,16 @@ mod tests {
     use super::*;
     use crate::preferences::TrayIconMode;
     use calendar_core::Weekday;
+
+    #[test]
+    fn show_in_folder_selects_the_quoted_path() {
+        let path =
+            std::path::Path::new(r"C:\Users\Alex Smith\AppData\Roaming\Lightcal\local-events.json");
+        assert_eq!(
+            explorer_select_arg(path),
+            r#"/select,"C:\Users\Alex Smith\AppData\Roaming\Lightcal\local-events.json""#
+        );
+    }
 
     #[test]
     fn reexported_tray_icon_renders_valid_rgba() {

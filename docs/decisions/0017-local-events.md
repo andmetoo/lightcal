@@ -242,7 +242,10 @@ What the code already offers:
   loading meanwhile. So it never reads a file that the exiting process is
   still writing, and two processes never write it at once. After 3 s it
   shows them as unavailable, read only, but keeps trying, and loads them as
-  soon as it holds the lock.
+  soon as it holds the lock. If the lock file cannot be opened at all (for
+  example, the data folder does not allow creating it), local events are
+  neither read nor written for the session: Settings › Accounts says they
+  could not be opened, and Start over is not offered.
 - **Sign-out and shutdown.** On `WM_QUERYENDSESSION` Lightcal does not
   prompt or delay the session. On `WM_ENDSESSION` the UI thread waits at
   most 1 s for the writer's last attempt; if it fails, the edit is lost.

@@ -47,7 +47,7 @@ component SponsorButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
-import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem, LanguageOption } from "types.slint";
+import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem, LanguageOption, LocalCardData } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
 component Glyph inherits Path {
@@ -417,6 +417,271 @@ component MessageBox inherits Rectangle {
         }
         dismiss-touch := TouchArea {
             clicked => { root.dismissed(); }
+        }
+    }
+}
+
+// On this PC (LocalSettings board): a 44 px header with the teal monitor tile, name,
+// "Local · 4 events" and the show checkbox, then at most one notice.
+component SmallButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> danger: false;
+    callback clicked();
+
+    height: 26px;
+    width: text.preferred-width + 20px;
+    border-radius: Theme.radius-control;
+    border-width: root.danger ? 0px : 1px;
+    border-color: Theme.control-line;
+    background: root.danger
+        ? (touch.has-hover ? #B02718 : #C42B1C)
+        : (touch.has-hover ? Theme.hover : Theme.control);
+    accessible-role: button;
+    accessible-label: root.label;
+    text := Text {
+        text: root.label;
+        font-size: Theme.type-caption;
+        font-weight: Theme.weight-medium;
+        color: root.danger ? #FFFFFF : Theme.ink;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component LocalCard inherits Rectangle {
+    in property <LocalCardData> data;
+    callback toggle();
+    callback ok();
+    callback show-folder();
+    callback try-now();
+    callback ask-start-over();
+    callback start-over();
+    callback keep();
+
+    background: Theme.card;
+    border-width: 1px;
+    border-color: Theme.card-line;
+    border-radius: Theme.radius-card;
+    clip: true;
+
+    VerticalLayout {
+        padding: 1px;
+        HorizontalLayout {
+            height: 44px;
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 10px;
+            Centered {
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 8px;
+                    background: #0F766E;
+                    // A monitor: screen and stand.
+                    Path {
+                        width: 16px;
+                        height: 16px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        stroke: #FFFFFF;
+                        stroke-width: 16px * 2 / 24;
+                        stroke-line-cap: round;
+                        fill: transparent;
+                        commands: "M5 4 L19 4 A2 2 0 0 1 21 6 L21 14 A2 2 0 0 1 19 16 L5 16 A2 2 0 0 1 3 14 L3 6 A2 2 0 0 1 5 4 Z M8 20 L16 20 M12 16 L12 20";
+                    }
+                }
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                Text {
+                    text: root.data.name;
+                    font-size: Theme.type-body;
+                    font-weight: Theme.weight-semibold;
+                    color: Theme.ink;
+                    overflow: elide;
+                }
+                Text {
+                    text: root.data.sub;
+                    font-size: Theme.type-caption;
+                    color: Theme.ink2;
+                    overflow: elide;
+                }
+            }
+            Centered {
+                Rectangle {
+                    width: 16px;
+                    height: 16px;
+                    accessible-role: checkbox;
+                    accessible-checked: root.data.checked;
+                    accessible-label: root.data.name;
+                    Checkbox { checked: root.data.checked; }
+                    TouchArea {
+                        x: -8px;
+                        y: -8px;
+                        width: 32px;
+                        height: 32px;
+                        clicked => { root.toggle(); }
+                    }
+                }
+            }
+        }
+
+        // Quiet line: spinner or check, text, OK.
+        if root.data.notice == 1 : Rectangle {
+            VerticalLayout {
+                Rectangle { height: 1px; background: Theme.line; }
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    padding-top: 7px;
+                    padding-bottom: 7px;
+                    spacing: 8px;
+                    if root.data.spinner : Centered { Spinner { } }
+                    if root.data.check : Centered {
+                        Glyph { name: "check"; size: 14px; color: Theme.accent; }
+                    }
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.data.text;
+                        font-size: Theme.type-caption;
+                        color: Theme.ink2;
+                        wrap: word-wrap;
+                        vertical-alignment: center;
+                    }
+                    if root.data.ok : Centered {
+                        SmallButton {
+                            label: root.data.ok-label;
+                            clicked => { root.ok(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Amber: text, the kept file, and its actions.
+        if root.data.notice == 2 : Rectangle {
+            background: Theme.warn-bg;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 8px;
+                VerticalLayout {
+                    padding-top: 1px;
+                    alignment: start;
+                    Glyph { name: "warning"; size: 14px; color: Theme.warn; }
+                }
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 3px;
+                    Text {
+                        text: root.data.text;
+                        font-size: Theme.type-caption;
+                        font-weight: Theme.weight-medium;
+                        color: Theme.warn;
+                        wrap: word-wrap;
+                    }
+                    if root.data.file != "" : Text {
+                        text: root.data.file;
+                        font-family: "Cascadia Mono";
+                        font-size: Theme.type-small;
+                        color: Theme.warn;
+                        wrap: char-wrap;
+                    }
+                    if root.data.ok || root.data.folder || root.data.retry : HorizontalLayout {
+                        padding-top: 3px;
+                        spacing: 6px;
+                        alignment: start;
+                        if root.data.folder : SmallButton {
+                            label: root.data.folder-label;
+                            clicked => { root.show-folder(); }
+                        }
+                        if root.data.retry : SmallButton {
+                            label: root.data.retry-label;
+                            clicked => { root.try-now(); }
+                        }
+                        if root.data.ok : SmallButton {
+                            label: root.data.ok-label;
+                            clicked => { root.ok(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Red box: heading, text, the kept file, Show in folder and Start over, or the
+        // Start over question.
+        if root.data.notice == 3 : HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-bottom: 8px;
+            Rectangle {
+                border-radius: Theme.radius-control;
+                background: Theme.err-bg;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    padding-top: 8px;
+                    padding-bottom: 8px;
+                    spacing: 8px;
+                    VerticalLayout {
+                        padding-top: 1px;
+                        alignment: start;
+                        Glyph { name: "alert"; size: 14px; color: Theme.err; }
+                    }
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 2px;
+                        Text {
+                            text: root.data.head;
+                            font-size: Theme.type-caption;
+                            font-weight: Theme.weight-semibold;
+                            color: Theme.err;
+                            wrap: word-wrap;
+                        }
+                        Text {
+                            text: root.data.text;
+                            font-size: Theme.type-caption;
+                            color: Theme.ink2;
+                            wrap: word-wrap;
+                        }
+                        if root.data.file != "" : Text {
+                            text: root.data.file;
+                            font-family: "Cascadia Mono";
+                            font-size: Theme.type-small;
+                            color: Theme.ink;
+                            wrap: char-wrap;
+                        }
+                        if root.data.confirm || root.data.folder || root.data.start-over : HorizontalLayout {
+                            padding-top: 4px;
+                            spacing: 6px;
+                            alignment: start;
+                            if root.data.confirm : SmallButton {
+                                danger: true;
+                                label: root.data.start-over-label;
+                                clicked => { root.start-over(); }
+                            }
+                            if root.data.confirm : SmallButton {
+                                label: root.data.cancel-label;
+                                clicked => { root.keep(); }
+                            }
+                            if !root.data.confirm && root.data.folder : SmallButton {
+                                label: root.data.folder-label;
+                                clicked => { root.show-folder(); }
+                            }
+                            if !root.data.confirm && root.data.start-over : SmallButton {
+                                label: root.data.start-over-label;
+                                clicked => { root.ask-start-over(); }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -952,6 +1217,13 @@ export component SettingsView inherits Rectangle {
     in property <string> current-theme-code;
     in property <SettingsStrings> copy;
     in property <[AccountCardItem]> account-cards;
+    in property <LocalCardData> local-card;
+    callback local-ok();
+    callback local-show-folder();
+    callback local-try-now();
+    callback local-ask-start-over();
+    callback local-start-over();
+    callback local-keep();
     callback close-settings();
     callback open-settings(int);
     callback dismiss-startup-warning();
@@ -1416,6 +1688,16 @@ export component SettingsView inherits Rectangle {
                     }
                 }
 
+                if root.account-cards.length == 0 && !root.add-account-open : LocalCard {
+                    data: root.local-card;
+                    toggle => { root.toggle-calendar-source("local"); }
+                    ok => { root.local-ok(); }
+                    show-folder => { root.local-show-folder(); }
+                    try-now => { root.local-try-now(); }
+                    ask-start-over => { root.local-ask-start-over(); }
+                    start-over => { root.local-start-over(); }
+                    keep => { root.local-keep(); }
+                }
                 if root.account-cards.length == 0 || root.add-account-open : VerticalLayout {
                     spacing: 10px;
                     HorizontalLayout {
@@ -1516,6 +1798,16 @@ export component SettingsView inherits Rectangle {
                             clicked => { root.add-calendar-account(); }
                         }
                     }
+                    LocalCard {
+                    data: root.local-card;
+                    toggle => { root.toggle-calendar-source("local"); }
+                    ok => { root.local-ok(); }
+                    show-folder => { root.local-show-folder(); }
+                    try-now => { root.local-try-now(); }
+                    ask-start-over => { root.local-ask-start-over(); }
+                    start-over => { root.local-start-over(); }
+                    keep => { root.local-keep(); }
+                }
                     for card in root.account-cards : AccountCard {
                         card: card;
                         refresh-label: root.copy.refresh-label;

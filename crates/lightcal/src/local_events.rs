@@ -447,6 +447,9 @@ pub enum Unavailable {
     /// The file is fine but nothing can be saved this session (the writer did not
     /// start); a restart may help. Starting over is never offered for it.
     CannotSave { error: String },
+    /// The events lock could not be opened, so the file was never read: nothing is shown
+    /// and nothing may be written this session.
+    NoLock { error: String },
     /// The file exists but the system refused to read it.
     Unreadable { file: PathBuf, error: String },
 }
@@ -743,9 +746,16 @@ impl Storage {
     }
 
     fn move_aside(&self, path: &Path) -> io::Result<PathBuf> {
+        let destination = self.move_aside_unpruned(path)?;
+        self.prune_preserved();
+        Ok(destination)
+    }
+
+    /// Moves `path` to a preserved name and deletes nothing, for Start over, which may
+    /// still undo the move.
+    fn move_aside_unpruned(&self, path: &Path) -> io::Result<PathBuf> {
         let destination = self.preserved_path()?;
         fs::rename(path, &destination)?;
-        self.prune_preserved();
         Ok(destination)
     }
 
@@ -800,20 +810,55 @@ impl Storage {
         }
     }
 
-    /// Starts an empty file after local events were unavailable. The unreadable file, if
-    /// any, is moved to a preserved name first; returns where it went.
-    pub fn start_over(&self) -> Result<Option<PathBuf>, String> {
-        let main = self.file_path();
-        let preserved = if main.exists() {
-            Some(
-                self.move_aside(&main)
-                    .map_err(|e| format!("Failed to keep the events file: {e}"))?,
-            )
+    /// Starts an empty file after local events were unavailable. The main file, the
+    /// backup and any unfinished saves are first moved to preserved names, so neither the
+    /// empty save nor a later one can overwrite or delete them (the unreadable or newer
+    /// file may be the backup, and an unfinished save may hold the latest events);
+    /// returns where they went, main first.
+    ///
+    /// All or nothing: when a move or the empty save fails, the moved files are put back
+    /// and the files stay as the card described them. A file that cannot be put back is
+    /// named in the error.
+    pub fn start_over(&self) -> Result<Vec<PathBuf>, String> {
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let mut paths = vec![self.file_path(), self.backup_path()];
+        paths.extend(self.temp_files());
+        for path in paths {
+            if !path.exists() {
+                continue;
+            }
+            match self.move_aside_unpruned(&path) {
+                Ok(preserved) => moved.push((path, preserved)),
+                Err(error) => {
+                    return Err(Self::undo_start_over(
+                        &moved,
+                        format!("Failed to keep the events file: {error}"),
+                    ))
+                }
+            }
+        }
+        if let Err(error) = self.save(&[], false) {
+            return Err(Self::undo_start_over(&moved, error));
+        }
+        // Old copies go only once nothing can be undone any more.
+        self.prune_preserved();
+        Ok(moved.into_iter().map(|(_, preserved)| preserved).collect())
+    }
+
+    /// Puts moved files back after a failed Start over; returns `error`, naming any file
+    /// that stays under its preserved name.
+    fn undo_start_over(moved: &[(PathBuf, PathBuf)], error: String) -> String {
+        let stuck: Vec<String> = moved
+            .iter()
+            .rev()
+            .filter(|(original, preserved)| fs::rename(preserved, original).is_err())
+            .map(|(_, preserved)| preserved.display().to_string())
+            .collect();
+        if stuck.is_empty() {
+            error
         } else {
-            None
-        };
-        self.save(&[], false)?;
-        Ok(preserved)
+            format!("{error}. Kept as {}", stuck.join(", "))
+        }
     }
 }
 
@@ -1308,6 +1353,16 @@ impl Writer {
         state.pending.is_some() || state.busy
     }
 
+    /// Ends the backoff wait so a failed change is tried again at once (Try now).
+    pub fn retry_now(&self) {
+        let (lock, signal) = &*self.shared;
+        let mut state = lock.lock().unwrap_or_else(|e| e.into_inner());
+        if state.pending.is_some() {
+            state.failed_superseded();
+            signal.notify_all();
+        }
+    }
+
     /// True when the last attempt failed and its change is still unsaved.
     pub fn last_write_failed(&self) -> bool {
         let state = self.shared.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -1582,11 +1637,105 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(storage.file_path()).unwrap(), "{ broken");
 
-        let preserved = storage.start_over().unwrap().unwrap();
-        assert_eq!(fs::read_to_string(preserved).unwrap(), "{ broken");
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), "{ broken");
         let fresh = storage.load();
         assert_eq!(fresh.access, Access::Editable);
         assert!(fresh.events.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_start_over_that_cannot_move_the_backup_changes_nothing() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = temp_dir("start-over-locked");
+        let storage = Storage::new(&dir);
+        fs::write(storage.file_path(), "{ broken").unwrap();
+        fs::write(storage.backup_path(), "{ broken too").unwrap();
+        // A full set of older copies: a failed Start over must not prune any of them.
+        for n in 0..MAX_PRESERVED_FILES {
+            fs::write(
+                dir.join(format!("{PRESERVED_PREFIX}{}.json", 1000 + n)),
+                "x",
+            )
+            .unwrap();
+        }
+        // Held open without delete sharing, as a scanner might: it cannot be renamed.
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(storage.backup_path())
+            .unwrap();
+        assert!(storage.start_over().is_err());
+        drop(held);
+        assert_eq!(fs::read_to_string(storage.file_path()).unwrap(), "{ broken");
+        assert_eq!(
+            fs::read_to_string(storage.backup_path()).unwrap(),
+            "{ broken too"
+        );
+        assert_eq!(
+            storage.preserved_files().len(),
+            MAX_PRESERVED_FILES,
+            "the main file was put back and no older copy was pruned"
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn starting_over_keeps_an_unfinished_save() {
+        let dir = temp_dir("start-over-temp");
+        let storage = Storage::new(&dir);
+        fs::write(storage.file_path(), "{ broken").unwrap();
+        let unfinished = serialize(&[event(1, "Latest")]);
+        let temp = dir.join(format!("{TEMP_PREFIX}9-0{TEMP_SUFFIX}"));
+        fs::write(&temp, &unfinished).unwrap();
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(preserved.len(), 2, "the main file and the unfinished save");
+        assert!(preserved
+            .iter()
+            .any(|path| fs::read_to_string(path).unwrap() == unfinished));
+        assert!(storage.load().events.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_start_over_puts_the_files_back_or_names_them() {
+        let dir = temp_dir("start-over-undo");
+        let storage = Storage::new(&dir);
+        let main = storage.file_path();
+        let kept = dir.join(format!("{PRESERVED_PREFIX}1.json"));
+        fs::write(&kept, "{ broken").unwrap();
+        let error = Storage::undo_start_over(&[(main.clone(), kept.clone())], "disk full".into());
+        assert_eq!(error, "disk full");
+        assert_eq!(fs::read_to_string(&main).unwrap(), "{ broken", "put back");
+        // A preserved file that cannot be put back is named.
+        let gone = dir.join(format!("{PRESERVED_PREFIX}2.json"));
+        let error = Storage::undo_start_over(
+            &[(dir.join("elsewhere.json"), gone.clone())],
+            "disk full".into(),
+        );
+        assert!(error.starts_with("disk full. Kept as "));
+        assert!(error.ends_with(&gone.display().to_string()));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn starting_over_keeps_a_newer_backup_from_the_next_save() {
+        let dir = temp_dir("start-over-backup");
+        let storage = Storage::new(&dir);
+        let newer = r#"{"schema_version":2,"events":[]}"#;
+        fs::write(storage.backup_path(), newer).unwrap();
+        assert!(matches!(
+            storage.load().access,
+            Access::Unavailable(Unavailable::NewerVersion { .. })
+        ));
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(preserved.len(), 1);
+        // Two saves: the second would replace last_good with the first.
+        storage.save(&[event(1, "New")], false).unwrap();
+        storage.save(&[event(1, "Newer")], false).unwrap();
+        assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), newer);
         fs::remove_dir_all(dir).unwrap();
     }
 

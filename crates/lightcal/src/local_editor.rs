@@ -169,6 +169,19 @@ pub(crate) struct EditorState {
     pub(crate) errors: EditorErrors,
 }
 
+/// Start over in Settings › Accounts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum StartOver {
+    #[default]
+    Idle,
+    /// The card asks "Start over with no events?".
+    Asking,
+    /// The file work runs; the card shows no actions, so it cannot run twice.
+    Running,
+    /// The last attempt failed; the card shows why and offers Start over again.
+    Failed(String),
+}
+
 /// Shown in place of the editor when events cannot be added.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EditorPanel {
@@ -468,11 +481,31 @@ impl AppController {
                 },
                 true,
             ),
-            _ => (
-                text.panel_unavailable_title,
-                text.panel_unavailable_text.to_string(),
-                false,
-            ),
+            _ => {
+                use lightcal::local_events::Unavailable;
+                // "The file is kept" only where a file is at fault and Accounts names it.
+                let file_at_fault = matches!(
+                    self.local.access(),
+                    Access::Unavailable(
+                        Unavailable::NewerVersion { .. }
+                            | Unavailable::Damaged { .. }
+                            | Unavailable::Unreadable { .. }
+                    )
+                ) && !self.local.is_loading();
+                (
+                    text.panel_unavailable_title,
+                    if self.local.is_loading() {
+                        // Accounts has nothing to explain yet.
+                        text.panel_loading
+                    } else if file_at_fault {
+                        text.panel_unavailable_text
+                    } else {
+                        text.panel_unavailable_why
+                    }
+                    .to_string(),
+                    false,
+                )
+            }
         };
         ui.set_panel_title(title.into());
         ui.set_panel_message(message.into());
@@ -483,6 +516,7 @@ impl AppController {
         ui.set_strip_text(strip.as_ref().map(|s| s.0.as_str()).unwrap_or("").into());
         ui.set_strip_error(strip.as_ref().is_some_and(|s| s.1));
         ui.set_strip_action(strip.as_ref().map(|s| s.2).unwrap_or("").into());
+        ui.set_local_card(self.local_card());
     }
 }
 
@@ -706,5 +740,353 @@ mod tests {
         );
         assert_eq!(fields.note, "Badge\nCall Ana");
         assert_eq!(validate(&fields), Ok(event.timing));
+    }
+}
+
+// ---------- Settings › Accounts: the On this PC card ----------
+
+/// `path` for display, with the user's `%APPDATA%` folder written as such.
+fn display_path(path: &std::path::Path) -> String {
+    let text = path.display().to_string();
+    match std::env::var("APPDATA") {
+        Ok(appdata)
+            if !appdata.is_empty()
+                && text
+                    .get(..appdata.len())
+                    .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&appdata)) =>
+        {
+            format!("%APPDATA%{}", &text[appdata.len()..])
+        }
+        _ => text,
+    }
+}
+
+impl AppController {
+    /// The file the card names, for its text and Show in folder.
+    pub(crate) fn local_card_file(&self) -> Option<std::path::PathBuf> {
+        use lightcal::local_events::Unavailable;
+        match self.local.access() {
+            Access::Unavailable(
+                Unavailable::NewerVersion { file }
+                | Unavailable::Damaged { file }
+                | Unavailable::Unreadable { file, .. },
+            ) => Some(file.clone()),
+            Access::Unavailable(_) => None,
+            _ => self.local.notices().iter().find_map(|notice| match notice {
+                Notice::RestoredBackup { damaged } => damaged.clone(),
+                _ => None,
+            }),
+        }
+    }
+
+    /// The On this PC card: its line under the name, and at most one notice, the most
+    /// pressing first: unavailable, a failed save, over the limits, then load notices.
+    pub(crate) fn local_card(&self) -> crate::LocalCardData {
+        use lightcal::i18n::{format_event_count, local_settings_text};
+        use lightcal::local_events::{account_label, calendar_name, Unavailable};
+        let locale = self.prefs.locale();
+        let text = local_settings_text(locale);
+        let label = account_label(locale);
+        let count = self.local.events().len();
+        let file = self
+            .local_card_file()
+            .map(|path| display_path(&path))
+            .unwrap_or_default();
+        let mut card = crate::LocalCardData {
+            name: calendar_name(locale).into(),
+            sub: format!("{label} · {}", format_event_count(locale, count)).into(),
+            checked: self.prefs.selected_calendar_ids.contains(SOURCE_ID),
+            ok_label: text.ok.into(),
+            folder_label: text.show_in_folder.into(),
+            retry_label: text.try_now.into(),
+            start_over_label: text.start_over.into(),
+            cancel_label: local_event_text(locale).cancel.into(),
+            ..Default::default()
+        };
+        // A red box; `at_fault` states name the kept file and may start over.
+        let red = |card: &mut crate::LocalCardData, head: &str, body: String, at_fault: bool| {
+            card.notice = 3;
+            card.head = head.into();
+            card.text = body.into();
+            if at_fault {
+                card.file = file.as_str().into();
+                card.folder = !file.is_empty();
+            }
+            card.start_over = at_fault;
+        };
+        if self.local.is_loading() {
+            card.sub = label.into();
+            return card;
+        }
+        match self.local.access() {
+            Access::Unavailable(reason) => {
+                card.sub = format!("{label} · {}", text.unavailable_sub).into();
+                match reason {
+                    Unavailable::Locked => {
+                        card.sub = format!("{label} · {}", text.read_only_sub).into();
+                        card.notice = 1;
+                        card.spinner = true;
+                        card.text = text.locked.into();
+                    }
+                    Unavailable::NewerVersion { .. } => {
+                        red(&mut card, text.newer_head, text.newer.to_string(), true);
+                    }
+                    Unavailable::Damaged { .. } => {
+                        red(&mut card, text.damaged_head, text.damaged.to_string(), true);
+                    }
+                    Unavailable::Unreadable { error, .. } => {
+                        let body = text
+                            .unreadable
+                            .replace("{error}", error.trim_end_matches('.'));
+                        red(&mut card, text.unreadable_head, body, true);
+                    }
+                    Unavailable::NoLock { error } => {
+                        let body = text.no_lock.replace("{error}", error.trim_end_matches('.'));
+                        red(&mut card, text.no_lock_head, body, false);
+                    }
+                    Unavailable::CannotSave { error } => {
+                        card.sub = format!("{label} · {}", text.read_only_sub).into();
+                        let body = text
+                            .cannot_save
+                            .replace("{error}", error.trim_end_matches('.'));
+                        red(&mut card, text.cannot_save_head, body, false);
+                    }
+                }
+                match &self.start_over {
+                    StartOver::Asking if card.start_over => {
+                        card.head = text.start_over_head.into();
+                        card.text = text.start_over_text.into();
+                        card.confirm = true;
+                    }
+                    StartOver::Failed(error) => {
+                        card.text = format!("{}\n{error}", card.text).into();
+                    }
+                    // While Start over runs, its buttons are gone, so it cannot run twice.
+                    StartOver::Running => card.start_over = false,
+                    _ => {}
+                }
+                return card;
+            }
+            Access::DeleteOnly => {
+                card.sub = format!(
+                    "{label} · {} · {}",
+                    format_event_count(locale, count),
+                    text.delete_only_sub
+                )
+                .into();
+            }
+            Access::Editable => {}
+        }
+        if let Some(error) = &self.local_save_error {
+            card.notice = 2;
+            card.text = text
+                .retrying
+                .replace("{error}", error.trim_end_matches('.'))
+                .into();
+            card.retry = true;
+            return card;
+        }
+        if *self.local.access() == Access::DeleteOnly {
+            card.notice = 2;
+            card.text = if count > MAX_EVENTS {
+                text.over_count
+                    .replace("{events}", &format_event_count(locale, count))
+                    .replace("{max}", &lightcal::i18n::group_digits(locale, MAX_EVENTS))
+            } else {
+                text.over_size.to_string()
+            }
+            .into();
+            return card;
+        }
+        let notices = self.local.notices();
+        if let Some(Notice::RestoredBackup { damaged }) = notices
+            .iter()
+            .find(|notice| matches!(notice, Notice::RestoredBackup { .. }))
+        {
+            card.notice = 2;
+            card.text = if damaged.is_some() {
+                text.restored_kept
+            } else {
+                text.restored
+            }
+            .into();
+            card.file = file.as_str().into();
+            card.folder = !file.is_empty();
+            card.ok = true;
+        } else if let Some(Notice::SkippedEvents(skipped)) = notices
+            .iter()
+            .find(|notice| matches!(notice, Notice::SkippedEvents(_)))
+        {
+            card.notice = 2;
+            card.text = text
+                .skipped
+                .replace("{events}", &format_event_count(locale, *skipped))
+                .into();
+            card.ok = true;
+        } else if notices
+            .iter()
+            .any(|notice| matches!(notice, Notice::RecoveredUnfinishedSave))
+        {
+            card.notice = 1;
+            card.check = true;
+            card.text = text.recovered.into();
+            card.ok = true;
+        }
+        card
+    }
+}
+
+/// Wires the On this PC card's actions.
+pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    {
+        let ctrl = Rc::clone(ctrl);
+        let weak = ui.as_weak();
+        ui.on_local_ok(move || {
+            let mut c = ctrl.borrow_mut();
+            c.local.dismiss_notices();
+            if let Some(w) = weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(ctrl);
+        ui.on_local_show_folder(move || {
+            // Opens Explorer with the kept file selected, only on this click.
+            if let Some(file) = ctrl.borrow().local_card_file() {
+                lightcal::platform::windows::reveal_in_explorer(&file);
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(ctrl);
+        ui.on_local_try_now(move || {
+            if let Some(writer) = &ctrl.borrow().local_writer {
+                writer.retry_now();
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(ctrl);
+        let weak = ui.as_weak();
+        ui.on_local_ask_start_over(move || {
+            let mut c = ctrl.borrow_mut();
+            if c.start_over != StartOver::Running {
+                c.start_over = StartOver::Asking;
+            }
+            if let Some(w) = weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(ctrl);
+        let weak = ui.as_weak();
+        ui.on_local_keep(move || {
+            let mut c = ctrl.borrow_mut();
+            if c.start_over == StartOver::Asking {
+                c.start_over = StartOver::Idle;
+            }
+            if let Some(w) = weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
+        });
+    }
+    {
+        let ctrl = Rc::clone(ctrl);
+        let weak = ui.as_weak();
+        ui.on_local_start_over(move || {
+            let mut c = ctrl.borrow_mut();
+            if c.start_over == StartOver::Running {
+                return;
+            }
+            // Only an unavailable store that holds the lock can start over; Locked waits.
+            let allowed = matches!(
+                c.local.access(),
+                Access::Unavailable(
+                    lightcal::local_events::Unavailable::NewerVersion { .. }
+                        | lightcal::local_events::Unavailable::Damaged { .. }
+                        | lightcal::local_events::Unavailable::Unreadable { .. }
+                )
+            );
+            if !allowed {
+                c.start_over = StartOver::Idle;
+                if let Some(w) = weak.upgrade() {
+                    c.sync_to_ui(&w);
+                }
+                return;
+            }
+            let dir = c.store.dir().to_path_buf();
+            c.start_over = StartOver::Running;
+            if let Some(w) = weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
+            let thread_weak = weak.clone();
+            // The file work runs off the UI thread; the fresh, empty store, or the error,
+            // comes back here.
+            let spawned = std::thread::Builder::new()
+                .name("lightcal-local-events-start-over".into())
+                .spawn(move || {
+                    let storage = lightcal::local_events::Storage::new(&dir);
+                    let result = storage
+                        .start_over()
+                        .map(|_| lightcal::local_events::LocalEvents::from_loaded(storage.load()));
+                    let _ = slint::invoke_from_event_loop(move || {
+                        crate::with_active_controller(&thread_weak, |c, w| {
+                            match result {
+                                Ok(local) => {
+                                    c.start_over = StartOver::Idle;
+                                    c.apply_local_events(local);
+                                }
+                                Err(error) => c.start_over = StartOver::Failed(error),
+                            }
+                            c.sync_to_ui(w);
+                        });
+                    });
+                });
+            if let Err(error) = spawned {
+                c.start_over = StartOver::Failed(error.to_string());
+                if let Some(w) = weak.upgrade() {
+                    c.sync_to_ui(&w);
+                }
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod card_tests {
+    use super::*;
+
+    #[test]
+    fn appdata_paths_are_written_with_the_variable() {
+        let Ok(appdata) = std::env::var("APPDATA") else {
+            return;
+        };
+        let path = std::path::Path::new(&appdata)
+            .join("Lightcal")
+            .join("local-events.json");
+        assert_eq!(
+            display_path(&path),
+            format!(
+                "%APPDATA%{}Lightcal{}local-events.json",
+                std::path::MAIN_SEPARATOR,
+                std::path::MAIN_SEPARATOR
+            )
+        );
+    }
+}
+
+#[cfg(test)]
+mod path_case_tests {
+    use super::*;
+
+    #[test]
+    fn appdata_is_found_whatever_its_letter_case() {
+        let Ok(appdata) = std::env::var("APPDATA") else {
+            return;
+        };
+        let lower = std::path::Path::new(&appdata.to_ascii_lowercase()).join("Lightcal");
+        assert!(display_path(&lower).starts_with("%APPDATA%"));
     }
 }
