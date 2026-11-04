@@ -2514,6 +2514,9 @@ thread_local! {
 /// The events lock, held until the process exits (ADR 0017).
 static LOCAL_EVENTS_LOCK: std::sync::OnceLock<lightcal::local_events::EventsLock> =
     std::sync::OnceLock::new();
+/// Set once the events lock is held, so a slow file read is not reported as locked.
+static LOCAL_EVENTS_LOCK_TAKEN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 thread_local! {
     /// Polls the local events writer while Quit waits for it.
@@ -2527,7 +2530,9 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
     let timeout_weak = ui_weak.clone();
     slint::Timer::single_shot(std::time::Duration::from_secs(3), move || {
         with_active_controller(&timeout_weak, |c, w| {
-            if c.local.is_loading() {
+            let waiting_for_lock =
+                !LOCAL_EVENTS_LOCK_TAKEN.load(std::sync::atomic::Ordering::Acquire);
+            if c.local.is_loading() && waiting_for_lock {
                 c.local.mark_lock_timeout();
                 c.refresh_local_view();
                 c.sync_to_ui(w);
@@ -2541,6 +2546,7 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
             let loaded = match EventsLock::acquire(&dir) {
                 Ok(lock) => {
                     let _ = LOCAL_EVENTS_LOCK.set(lock);
+                    LOCAL_EVENTS_LOCK_TAKEN.store(true, std::sync::atomic::Ordering::Release);
                     Storage::new(&dir).load()
                 }
                 Err(error) => Loaded::unavailable(Unavailable::Unreadable {
@@ -2551,6 +2557,14 @@ fn start_local_events_load(ui_weak: slint::Weak<AppWindow>, dir: std::path::Path
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_weak, |c, w| {
                     c.local = lightcal::local_events::LocalEvents::from_loaded(loaded);
+                    // A recovered or restored copy is written back at once, so the main
+                    // file is repaired and the notice does not return on the next start.
+                    if c.local.take_repair() {
+                        let (events, copy_first) = c.local.take_save();
+                        if let Some(writer) = &c.local_writer {
+                            writer.submit(events, copy_first);
+                        }
+                    }
                     c.refresh_local_view();
                     c.sync_to_ui(w);
                 });
@@ -2571,9 +2585,14 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
         let _ = slint::quit_event_loop();
         return;
     };
-    if let Some(ui) = ui_weak.upgrade() {
-        hide_application_window(&ui);
-    }
+    // Window and tray icon go at once, so nothing can be reopened while Lightcal exits.
+    with_active_controller(ui_weak, |_c, ui| {
+        hide_application_window(ui);
+        #[cfg(windows)]
+        if let Some(tray) = &_c.tray_icon {
+            let _ = tray.set_visible(false);
+        }
+    });
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let timer = slint::Timer::default();
     timer.start(

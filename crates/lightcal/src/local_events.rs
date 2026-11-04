@@ -473,6 +473,9 @@ pub struct Loaded {
     pub notices: Vec<Notice>,
     /// Keep a copy of the file as it was before the next save (skipped events).
     pub copy_before_next_save: bool,
+    /// The events came from a temporary file or the backup, so they should be saved
+    /// right away to repair the main file.
+    pub repair: bool,
 }
 
 impl Loaded {
@@ -482,10 +485,17 @@ impl Loaded {
             access: Access::Unavailable(reason),
             notices: Vec::new(),
             copy_before_next_save: false,
+            repair: false,
         }
     }
 
     fn from_parsed(parsed: ParsedFile, mut notices: Vec<Notice>) -> Self {
+        let repair = notices.iter().any(|notice| {
+            matches!(
+                notice,
+                Notice::RecoveredUnfinishedSave | Notice::RestoredBackup { .. }
+            )
+        });
         if parsed.skipped > 0 {
             notices.push(Notice::SkippedEvents(parsed.skipped));
         }
@@ -499,6 +509,7 @@ impl Loaded {
             access,
             notices,
             copy_before_next_save: parsed.skipped > 0,
+            repair,
         }
     }
 }
@@ -582,6 +593,10 @@ impl Storage {
         let backup_path = self.backup_path();
         let backup = read(&backup_path);
         let backup_time = modified(&backup_path);
+        // A newer version's copy is never replaced by an older leftover temp file.
+        if matches!(backup, ReadOutcome::Newer) {
+            return Loaded::unavailable(Unavailable::NewerVersion { file: backup_path });
+        }
         let temp_wins = match (&temp, &backup) {
             (Some(_), ReadOutcome::Missing) => true,
             (Some((time, _)), ReadOutcome::Parsed(_)) => backup_time.is_none_or(|b| *time > b),
@@ -699,7 +714,8 @@ impl Storage {
     }
 
     /// Writes `events`. With `copy_first`, the current file is first copied to a preserved
-    /// name. A failed save leaves its temporary file for the next load to recover.
+    /// name. A failed save leaves its temporary file for the next load to recover; at most
+    /// one is kept, since each new one holds everything the older ones held.
     pub fn save(&self, events: &[LocalEvent], copy_first: bool) -> Result<(), String> {
         fs::create_dir_all(&self.dir)
             .map_err(|e| format!("Failed to create the data directory: {e}"))?;
@@ -709,25 +725,35 @@ impl Storage {
             std::process::id(),
             TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
-        {
-            let mut file = fs::File::create(&temp)
-                .map_err(|e| format!("Failed to create a temporary events file: {e}"))?;
-            file.write_all(serialize(events).as_bytes())
-                .and_then(|()| file.sync_all())
-                .map_err(|e| format!("Failed to write the temporary events file: {e}"))?;
+        let written = fs::File::create(&temp).and_then(|mut file| {
+            file.write_all(serialize(events).as_bytes())?;
+            file.sync_all()
+        });
+        if let Err(error) = written {
+            // A partial file holds nothing worth recovering.
+            let _ = fs::remove_file(&temp);
+            return Err(format!(
+                "Failed to write the temporary events file: {error}"
+            ));
         }
+        // Only this process writes (the events lock), so older temporary files are
+        // earlier versions of what was just written.
+        self.remove_temp_files_except(Some(&temp));
         if copy_first && main.exists() {
-            self.copy_aside(&main)
-                .map_err(|e| format!("Failed to keep a copy of the events file: {e}"))?;
+            // A failed copy does not block the save: `replace` still keeps the previous
+            // file as `last_good`.
+            let _ = self.copy_aside(&main);
         }
         replace(&temp, &main, &self.backup_path())?;
-        self.remove_temp_files();
+        self.remove_temp_files_except(None);
         Ok(())
     }
 
-    fn remove_temp_files(&self) {
+    fn remove_temp_files_except(&self, keep: Option<&Path>) {
         for path in self.temp_files() {
-            let _ = fs::remove_file(path);
+            if Some(path.as_path()) != keep {
+                let _ = fs::remove_file(path);
+            }
         }
     }
 
@@ -853,6 +879,20 @@ pub struct LocalEvents {
     loading: bool,
     notices: Vec<Notice>,
     copy_before_next_save: bool,
+    /// Save right away to repair the main file (recovered or restored on load).
+    repair_pending: bool,
+    /// Size of the file these events serialize to, kept up to date on every edit so the
+    /// limit check never serializes everything.
+    bytes: u64,
+}
+
+/// Bytes one event adds to the file, a slight overestimate (separators included).
+fn event_bytes(event: &LocalEvent) -> u64 {
+    (serialize(std::slice::from_ref(event)).len() - serialize(&[]).len()) as u64 + 2
+}
+
+fn file_bytes(events: &[LocalEvent]) -> u64 {
+    serialize(&[]).len() as u64 + events.iter().map(event_bytes).sum::<u64>()
 }
 
 impl LocalEvents {
@@ -864,28 +904,44 @@ impl LocalEvents {
             loading: true,
             notices: Vec::new(),
             copy_before_next_save: false,
+            repair_pending: false,
+            bytes: 0,
         }
     }
 
     /// Editable events that are never written, for demo mode and tests.
     pub fn in_memory(events: Vec<LocalEvent>) -> Self {
+        let bytes = file_bytes(&events);
         Self {
             events,
             access: Access::Editable,
             loading: false,
             notices: Vec::new(),
             copy_before_next_save: false,
+            repair_pending: false,
+            bytes,
         }
     }
 
     pub fn from_loaded(loaded: Loaded) -> Self {
+        let bytes = file_bytes(&loaded.events);
+        let writable = !matches!(loaded.access, Access::Unavailable(_));
         Self {
             events: loaded.events,
             access: loaded.access,
             loading: false,
             notices: loaded.notices,
             copy_before_next_save: loaded.copy_before_next_save,
+            repair_pending: loaded.repair && writable,
+            bytes,
         }
+    }
+
+    /// True once after a load that recovered a temporary file or restored the backup:
+    /// the caller saves at once, so the main file is repaired and the notice is not
+    /// shown again on the next start.
+    pub fn take_repair(&mut self) -> bool {
+        std::mem::take(&mut self.repair_pending)
     }
 
     /// Still waiting after the lock timeout: shown as unavailable, but the wait goes on.
@@ -932,11 +988,11 @@ impl LocalEvents {
         }
     }
 
-    fn fits(events: &[LocalEvent]) -> Result<(), EditError> {
-        if events.len() > MAX_EVENTS {
+    fn fits(count: usize, bytes: u64) -> Result<(), EditError> {
+        if count > MAX_EVENTS {
             return Err(EditError::TooManyEvents);
         }
-        if serialize(events).len() as u64 > MAX_FILE_BYTES {
+        if bytes > MAX_FILE_BYTES {
             return Err(EditError::FileTooLarge);
         }
         Ok(())
@@ -950,10 +1006,10 @@ impl LocalEvents {
         }
         let id = new_event_id().map_err(|_| EditError::Invalid(InvalidEvent::Id))?;
         let event = LocalEvent::from_draft(id.clone(), draft).map_err(EditError::Invalid)?;
-        let mut next = self.events.clone();
-        next.push(event);
-        Self::fits(&next)?;
-        self.events = next;
+        let bytes = self.bytes + event_bytes(&event);
+        Self::fits(self.events.len() + 1, bytes)?;
+        self.events.push(event);
+        self.bytes = bytes;
         Ok(id)
     }
 
@@ -966,10 +1022,10 @@ impl LocalEvents {
             .position(|event| event.id == id)
             .ok_or(EditError::NotFound)?;
         let event = LocalEvent::from_draft(id.to_string(), draft).map_err(EditError::Invalid)?;
-        let mut next = self.events.clone();
-        next[index] = event;
-        Self::fits(&next)?;
-        self.events = next;
+        let bytes = self.bytes - event_bytes(&self.events[index]) + event_bytes(&event);
+        Self::fits(self.events.len(), bytes)?;
+        self.events[index] = event;
+        self.bytes = bytes;
         Ok(())
     }
 
@@ -984,8 +1040,9 @@ impl LocalEvents {
             .iter()
             .position(|event| event.id == id)
             .ok_or(EditError::NotFound)?;
-        self.events.remove(index);
-        if self.access == Access::DeleteOnly && Self::fits(&self.events).is_ok() {
+        let removed = self.events.remove(index);
+        self.bytes = self.bytes.saturating_sub(event_bytes(&removed));
+        if self.access == Access::DeleteOnly && Self::fits(self.events.len(), self.bytes).is_ok() {
             self.access = Access::Editable;
         }
         Ok(())
@@ -1644,6 +1701,71 @@ mod tests {
         assert_eq!(Storage::new(&blocked).load().events[0].title, "Later");
         writer.shutdown();
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failing_saves_keep_at_most_one_temp_file() {
+        let dir = temp_dir("temp-pile");
+        let storage = Storage::new(&dir);
+        // A directory where the main file belongs makes every replace fail.
+        fs::create_dir(storage.file_path()).unwrap();
+        for n in 0..3 {
+            assert!(storage.save(&[event(n, "Retry")], false).is_err());
+        }
+        assert_eq!(storage.temp_files().len(), 1, "older attempts are removed");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_recovered_load_asks_for_a_repair_save_once() {
+        let dir = temp_dir("repair");
+        let storage = Storage::new(&dir);
+        storage.save(&[event(1, "First")], false).unwrap();
+        storage.save(&[event(1, "Second")], false).unwrap();
+        fs::remove_file(storage.file_path()).unwrap();
+        let loaded = storage.load();
+        assert!(loaded.repair);
+        let mut store = LocalEvents::from_loaded(loaded);
+        assert!(store.take_repair());
+        assert!(!store.take_repair());
+        let (events, copy) = store.take_save();
+        storage.save(&events, copy).unwrap();
+        let again = storage.load();
+        assert!(again.notices.is_empty() && !again.repair);
+        assert_eq!(again.events[0].title, "First");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_old_temp_never_beats_a_newer_schema_backup() {
+        let dir = temp_dir("newer-backup");
+        let storage = Storage::new(&dir);
+        fs::write(storage.backup_path(), r#"{"schema_version":2,"events":[]}"#).unwrap();
+        set_age(&storage.backup_path(), 60);
+        let temp = dir.join(format!("{TEMP_PREFIX}1-0{TEMP_SUFFIX}"));
+        fs::write(&temp, serialize(&[event(1, "Stale")])).unwrap();
+        let loaded = storage.load();
+        assert_eq!(
+            loaded.access,
+            Access::Unavailable(Unavailable::NewerVersion {
+                file: storage.backup_path()
+            })
+        );
+        assert!(!loaded.repair);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_cached_size_never_underestimates_the_file() {
+        let mut store = LocalEvents::in_memory(Vec::new());
+        let id = store.add(&draft("Dentist")).unwrap();
+        let mut long = draft("Long");
+        long.note = "n".repeat(MAX_NOTE_CHARS);
+        store.add(&long).unwrap();
+        store.update(&id, &draft("Dentist, moved")).unwrap();
+        assert!(store.bytes >= serialize(store.events()).len() as u64);
+        store.delete(&id).unwrap();
+        assert!(store.bytes >= serialize(store.events()).len() as u64);
     }
 
     #[test]
