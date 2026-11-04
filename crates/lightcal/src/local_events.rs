@@ -800,30 +800,53 @@ impl Storage {
         }
     }
 
-    /// Starts an empty file after local events were unavailable. The main file and the
-    /// backup are first moved to preserved names, so the next save cannot overwrite
-    /// either (the unreadable or newer file may be the backup); returns where they went,
-    /// main first.
+    /// Starts an empty file after local events were unavailable. The main file, the
+    /// backup and any unfinished saves are first moved to preserved names, so neither the
+    /// empty save nor a later one can overwrite or delete them (the unreadable or newer
+    /// file may be the backup, and an unfinished save may hold the latest events);
+    /// returns where they went, main first.
+    ///
+    /// All or nothing: when a move or the empty save fails, the moved files are put back
+    /// and the files stay as the card described them. A file that cannot be put back is
+    /// named in the error.
     pub fn start_over(&self) -> Result<Vec<PathBuf>, String> {
         let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
-        for path in [self.file_path(), self.backup_path()] {
+        let mut paths = vec![self.file_path(), self.backup_path()];
+        paths.extend(self.temp_files());
+        for path in paths {
             if !path.exists() {
                 continue;
             }
             match self.move_aside(&path) {
                 Ok(preserved) => moved.push((path, preserved)),
                 Err(error) => {
-                    // All or nothing: put back what was moved, so the files stay as the
-                    // card described them.
-                    for (original, preserved) in moved.iter().rev() {
-                        let _ = fs::rename(preserved, original);
-                    }
-                    return Err(format!("Failed to keep the events file: {error}"));
+                    return Err(Self::undo_start_over(
+                        &moved,
+                        format!("Failed to keep the events file: {error}"),
+                    ))
                 }
             }
         }
-        self.save(&[], false)?;
+        if let Err(error) = self.save(&[], false) {
+            return Err(Self::undo_start_over(&moved, error));
+        }
         Ok(moved.into_iter().map(|(_, preserved)| preserved).collect())
+    }
+
+    /// Puts moved files back after a failed Start over; returns `error`, naming any file
+    /// that stays under its preserved name.
+    fn undo_start_over(moved: &[(PathBuf, PathBuf)], error: String) -> String {
+        let stuck: Vec<String> = moved
+            .iter()
+            .rev()
+            .filter(|(original, preserved)| fs::rename(preserved, original).is_err())
+            .map(|(_, preserved)| preserved.display().to_string())
+            .collect();
+        if stuck.is_empty() {
+            error
+        } else {
+            format!("{error}. Kept as {}", stuck.join(", "))
+        }
     }
 }
 
@@ -1635,6 +1658,44 @@ mod tests {
             storage.preserved_files().is_empty(),
             "the main file was put back"
         );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn starting_over_keeps_an_unfinished_save() {
+        let dir = temp_dir("start-over-temp");
+        let storage = Storage::new(&dir);
+        fs::write(storage.file_path(), "{ broken").unwrap();
+        let unfinished = serialize(&[event(1, "Latest")]);
+        let temp = dir.join(format!("{TEMP_PREFIX}9-0{TEMP_SUFFIX}"));
+        fs::write(&temp, &unfinished).unwrap();
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(preserved.len(), 2, "the main file and the unfinished save");
+        assert!(preserved
+            .iter()
+            .any(|path| fs::read_to_string(path).unwrap() == unfinished));
+        assert!(storage.load().events.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_start_over_puts_the_files_back_or_names_them() {
+        let dir = temp_dir("start-over-undo");
+        let storage = Storage::new(&dir);
+        let main = storage.file_path();
+        let kept = dir.join(format!("{PRESERVED_PREFIX}1.json"));
+        fs::write(&kept, "{ broken").unwrap();
+        let error = Storage::undo_start_over(&[(main.clone(), kept.clone())], "disk full".into());
+        assert_eq!(error, "disk full");
+        assert_eq!(fs::read_to_string(&main).unwrap(), "{ broken", "put back");
+        // A preserved file that cannot be put back is named.
+        let gone = dir.join(format!("{PRESERVED_PREFIX}2.json"));
+        let error = Storage::undo_start_over(
+            &[(dir.join("elsewhere.json"), gone.clone())],
+            "disk full".into(),
+        );
+        assert!(error.starts_with("disk full. Kept as "));
+        assert!(error.ends_with(&gone.display().to_string()));
         fs::remove_dir_all(dir).unwrap();
     }
 

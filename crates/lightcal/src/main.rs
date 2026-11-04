@@ -2655,44 +2655,54 @@ fn apply_local_write_report(report: lightcal::local_events::WriteReport) {
     });
 }
 
-thread_local! {
-    /// The Quit prompt while it is open.
-    static QUIT_PROMPT: RefCell<Option<QuitPrompt>> = const { RefCell::new(None) };
-    /// What Quit anyway goes on to do.
-    static QUIT_NEXT: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
+/// The open Quit prompt and what Quit anyway goes on to do, kept together so neither can
+/// outlive the other.
+struct QuitAsk {
+    prompt: QuitPrompt,
+    proceed: Rc<dyn Fn()>,
 }
 
-/// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
-/// Lightcal open closes the prompt; Quit anyway goes on as Quit does.
-/// Hides the Quit prompt and frees it once the event that closed it has finished; it is
-/// never dropped inside one of its own callbacks.
-fn close_quit_prompt() {
-    QUIT_PROMPT.with(|slot| {
-        if let Some(prompt) = slot.borrow().as_ref() {
-            let _ = prompt.hide();
-        }
+thread_local! {
+    static QUIT_ASK: RefCell<Option<QuitAsk>> = const { RefCell::new(None) };
+}
+
+/// Hides the Quit prompt and frees it, with its next action, once the event that closed
+/// it has finished; it is never dropped inside one of its own callbacks. Returns the
+/// action, for Quit anyway.
+fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
+    let proceed = QUIT_ASK.with(|slot| {
+        slot.borrow().as_ref().map(|ask| {
+            let _ = ask.prompt.hide();
+            ask.proceed.clone()
+        })
     });
     slint::Timer::single_shot(std::time::Duration::ZERO, || {
-        QUIT_PROMPT.with(|slot| {
+        QUIT_ASK.with(|slot| {
             let mut slot = slot.borrow_mut();
             // Shown again meanwhile (a second Quit): keep it.
             if slot
                 .as_ref()
-                .is_some_and(|prompt| !prompt.window().is_visible())
+                .is_some_and(|ask| !ask.prompt.window().is_visible())
             {
                 slot.take();
             }
         });
     });
+    proceed
 }
 
-/// Asks before quitting with a failed save, then runs `proceed` on Quit anyway: the
-/// usual quit, or the update install that ends with one.
+/// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
+/// Lightcal open closes the prompt; Quit anyway runs `proceed`: the usual quit, or the
+/// update install that ends with one.
 fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
-    QUIT_NEXT.with(|next| *next.borrow_mut() = Some(proceed.clone()));
-    // A second Quit while the prompt is open brings that prompt back.
-    let open = QUIT_PROMPT.with(|slot| slot.borrow().as_ref().map(|prompt| prompt.show().is_ok()));
-    if open == Some(true) {
+    // A second Quit while the prompt is open brings that prompt back, with this action.
+    let reopened = QUIT_ASK.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let ask = slot.as_mut()?;
+        ask.proceed = proceed.clone();
+        Some(ask.prompt.show().is_ok())
+    });
+    if reopened == Some(true) {
         return;
     }
     let Some(ui) = ui_weak.upgrade() else {
@@ -2718,20 +2728,21 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
     prompt.set_body(text.quit_text.into());
     prompt.set_quit_label(text.quit_anyway.into());
     prompt.set_keep_label(text.keep_open.into());
-    prompt.on_keep_open(close_quit_prompt);
+    prompt.on_keep_open(|| {
+        close_quit_prompt();
+    });
     // The close button keeps Lightcal open, like Escape.
     prompt.window().on_close_requested(|| {
         close_quit_prompt();
         slint::CloseRequestResponse::HideWindow
     });
     prompt.on_quit_anyway(|| {
-        close_quit_prompt();
-        if let Some(proceed) = QUIT_NEXT.with(|next| next.borrow_mut().take()) {
+        if let Some(proceed) = close_quit_prompt() {
             proceed();
         }
     });
     let _ = prompt.show();
-    QUIT_PROMPT.with(|slot| *slot.borrow_mut() = Some(prompt));
+    QUIT_ASK.with(|slot| *slot.borrow_mut() = Some(QuitAsk { prompt, proceed }));
 }
 
 impl AppController {

@@ -107,10 +107,10 @@ mod tests {
     #[test]
     fn show_in_folder_selects_the_quoted_path() {
         let path =
-            std::path::Path::new(r"C:UsersAlex SmithAppDataRoamingLightcallocal-events.json");
+            std::path::Path::new(r"C:\Users\Alex Smith\AppData\Roaming\Lightcal\local-events.json");
         assert_eq!(
             explorer_select_arg(path),
-            r#"/select,"C:UsersAlex SmithAppDataRoamingLightcallocal-events.json""#
+            r#"/select,"C:\Users\Alex Smith\AppData\Roaming\Lightcal\local-events.json""#
         );
     }
 
