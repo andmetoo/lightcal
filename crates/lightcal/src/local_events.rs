@@ -800,18 +800,20 @@ impl Storage {
         }
     }
 
-    /// Starts an empty file after local events were unavailable. The unreadable file, if
-    /// any, is moved to a preserved name first; returns where it went.
-    pub fn start_over(&self) -> Result<Option<PathBuf>, String> {
-        let main = self.file_path();
-        let preserved = if main.exists() {
-            Some(
-                self.move_aside(&main)
-                    .map_err(|e| format!("Failed to keep the events file: {e}"))?,
-            )
-        } else {
-            None
-        };
+    /// Starts an empty file after local events were unavailable. The main file and the
+    /// backup are first moved to preserved names, so the next save cannot overwrite
+    /// either (the unreadable or newer file may be the backup); returns where they went,
+    /// main first.
+    pub fn start_over(&self) -> Result<Vec<PathBuf>, String> {
+        let mut preserved = Vec::new();
+        for path in [self.file_path(), self.backup_path()] {
+            if path.exists() {
+                preserved.push(
+                    self.move_aside(&path)
+                        .map_err(|e| format!("Failed to keep the events file: {e}"))?,
+                );
+            }
+        }
         self.save(&[], false)?;
         Ok(preserved)
     }
@@ -1592,11 +1594,30 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(storage.file_path()).unwrap(), "{ broken");
 
-        let preserved = storage.start_over().unwrap().unwrap();
-        assert_eq!(fs::read_to_string(preserved).unwrap(), "{ broken");
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), "{ broken");
         let fresh = storage.load();
         assert_eq!(fresh.access, Access::Editable);
         assert!(fresh.events.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn starting_over_keeps_a_newer_backup_from_the_next_save() {
+        let dir = temp_dir("start-over-backup");
+        let storage = Storage::new(&dir);
+        let newer = r#"{"schema_version":2,"events":[]}"#;
+        fs::write(storage.backup_path(), newer).unwrap();
+        assert!(matches!(
+            storage.load().access,
+            Access::Unavailable(Unavailable::NewerVersion { .. })
+        ));
+        let preserved = storage.start_over().unwrap();
+        assert_eq!(preserved.len(), 1);
+        // Two saves: the second would replace last_good with the first.
+        storage.save(&[event(1, "New")], false).unwrap();
+        storage.save(&[event(1, "Newer")], false).unwrap();
+        assert_eq!(fs::read_to_string(&preserved[0]).unwrap(), newer);
         fs::remove_dir_all(dir).unwrap();
     }
 

@@ -814,6 +814,19 @@ impl AppController {
                     card.text = text.start_over_text.into();
                     card.confirm = true;
                 }
+                if let Some(error) = &self.start_over_error {
+                    card.text = format!(
+                        "{}
+{error}",
+                        card.text
+                    )
+                    .into();
+                }
+                // While Start over runs, its buttons are gone, so it cannot run twice.
+                if self.start_over_busy {
+                    card.confirm = false;
+                    card.start_over = false;
+                }
                 return card;
             }
             Access::DeleteOnly => {
@@ -943,6 +956,9 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
         ui.on_local_start_over(move || {
             let mut c = ctrl.borrow_mut();
             c.start_over_confirm = false;
+            if c.start_over_busy {
+                return;
+            }
             // Only an unavailable store that holds the lock can start over; Locked waits.
             let allowed = matches!(
                 c.local.access(),
@@ -956,22 +972,28 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
                 return;
             }
             let dir = c.store.dir().to_path_buf();
+            c.start_over_busy = true;
+            c.start_over_error = None;
+            if let Some(w) = weak.upgrade() {
+                c.sync_to_ui(&w);
+            }
             let weak = weak.clone();
-            // The file work runs off the UI thread; the fresh, empty store comes back here.
+            // The file work runs off the UI thread; the fresh, empty store, or the error,
+            // comes back here.
             let _ = std::thread::Builder::new()
                 .name("lightcal-local-events-start-over".into())
                 .spawn(move || {
                     let storage = lightcal::local_events::Storage::new(&dir);
-                    let local = match storage.start_over() {
-                        Ok(_) => lightcal::local_events::LocalEvents::from_loaded(storage.load()),
-                        Err(error) => {
-                            eprintln!("Lightcal: could not start over: {error}");
-                            return;
-                        }
-                    };
+                    let result = storage
+                        .start_over()
+                        .map(|_| lightcal::local_events::LocalEvents::from_loaded(storage.load()));
                     let _ = slint::invoke_from_event_loop(move || {
                         crate::with_active_controller(&weak, |c, w| {
-                            c.apply_local_events(local);
+                            c.start_over_busy = false;
+                            match result {
+                                Ok(local) => c.apply_local_events(local),
+                                Err(error) => c.start_over_error = Some(error),
+                            }
                             c.sync_to_ui(w);
                         });
                     });

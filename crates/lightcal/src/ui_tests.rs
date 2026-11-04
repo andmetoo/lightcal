@@ -79,6 +79,8 @@ fn controller(dir: &std::path::Path) -> AppController {
         editor_panel: None,
         local_save_error: None,
         start_over_confirm: false,
+        start_over_busy: false,
+        start_over_error: None,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -2251,5 +2253,66 @@ fn saving_an_event_in_demo_mode_keeps_on_this_pc_selected() {
     );
     let saved = ctrl.store.load().preferences.selected_calendar_ids;
     assert!(saved.contains(SOURCE_ID));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn start_over_hides_its_buttons_while_it_runs_and_reports_a_failure() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-start-over-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
+        file: dir.join("local-events.json"),
+    }));
+    ctrl.start_over_busy = true;
+    let card = ctrl.local_card();
+    assert!(
+        !card.start_over && !card.confirm,
+        "no second Start over while one runs"
+    );
+    ctrl.start_over_busy = false;
+    ctrl.start_over_error = Some("Failed to keep the events file: in use".into());
+    let card = ctrl.local_card();
+    assert!(card.start_over, "it can be tried again");
+    assert!(card
+        .text
+        .ends_with("Failed to keep the events file: in use"));
+}
+
+#[test]
+fn quit_asks_first_only_after_a_failed_save() {
+    use lightcal::local_events::{Storage, Writer};
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-prompt-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    assert!(!ctrl.quit_needs_prompt(), "no writer, nothing to lose");
+    // A file where the data directory should be makes every save fail.
+    std::fs::create_dir_all(&dir).unwrap();
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn_with_backoff(
+        Storage::new(&blocked),
+        std::time::Duration::from_secs(600),
+        std::time::Duration::from_secs(600),
+        |_| {},
+    )
+    .unwrap();
+    ctrl.local_writer = Some(writer.clone());
+    assert!(!ctrl.quit_needs_prompt(), "nothing written yet");
+    assert!(writer.submit(Vec::new(), false));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !writer.last_write_failed() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(
+        ctrl.quit_needs_prompt(),
+        "a failed save asks before quitting"
+    );
+    writer.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

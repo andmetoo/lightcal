@@ -125,6 +125,10 @@ pub(crate) struct AppController {
     pub(crate) local_save_error: Option<String>,
     /// Settings › Accounts asks "Start over with no events?".
     pub(crate) start_over_confirm: bool,
+    /// Start over is running on its thread.
+    pub(crate) start_over_busy: bool,
+    /// Why the last Start over failed, shown on the card.
+    pub(crate) start_over_error: Option<String>,
     /// Calendars demo mode selected for its samples. They are in the selection while
     /// Lightcal runs but never saved (`persist`); empty outside demo mode.
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
@@ -2659,6 +2663,11 @@ thread_local! {
 /// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
 /// Lightcal open closes the prompt; Quit anyway goes on as Quit does.
 fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
+    // A second Quit while the prompt is open brings that prompt back.
+    let open = QUIT_PROMPT.with(|slot| slot.borrow().as_ref().map(|prompt| prompt.show().is_ok()));
+    if open == Some(true) {
+        return;
+    }
     let Some(ui) = ui_weak.upgrade() else {
         let _ = slint::quit_event_loop();
         return;
@@ -2689,6 +2698,11 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
             }
         });
     });
+    // The close button keeps Lightcal open, like Escape.
+    prompt.window().on_close_requested(|| {
+        QUIT_PROMPT.with(|slot| slot.borrow_mut().take());
+        slint::CloseRequestResponse::HideWindow
+    });
     let weak = ui_weak.clone();
     prompt.on_quit_anyway(move || {
         QUIT_PROMPT.with(|slot| {
@@ -2702,15 +2716,19 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>) {
     QUIT_PROMPT.with(|slot| *slot.borrow_mut() = Some(prompt));
 }
 
+impl AppController {
+    /// Quit asks first when the last local event write failed and is still unsaved.
+    pub(crate) fn quit_needs_prompt(&self) -> bool {
+        self.local_writer
+            .as_ref()
+            .is_some_and(lightcal::local_events::Writer::last_write_failed)
+    }
+}
+
 /// Quit, unless the last local event write failed: then the Quit prompt asks first.
 fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     let mut failed = false;
-    with_active_controller(ui_weak, |c, _| {
-        failed = c
-            .local_writer
-            .as_ref()
-            .is_some_and(lightcal::local_events::Writer::last_write_failed);
-    });
+    with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
     if failed {
         show_quit_prompt(ui_weak);
     } else {
@@ -3704,6 +3722,8 @@ fn main() {
         editor_panel: None,
         local_save_error: None,
         start_over_confirm: false,
+        start_over_busy: false,
+        start_over_error: None,
         demo_shown,
         provider_request: 0,
         connection_busy: false,
@@ -4260,12 +4280,16 @@ fn main() {
         let ui_weak = ui.as_weak();
         ui.on_toggle_calendar_source(move |id| {
             let mut c = ctrl.borrow_mut();
+            let local = id.as_str() == lightcal::local_events::SOURCE_ID;
             c.toggle_calendar(id.to_string());
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
             }
             drop(c);
-            request_visible_calendars(ui_weak.clone(), use_synthetic);
+            // Local events never come from a provider, so only the view changes.
+            if !local {
+                request_visible_calendars(ui_weak.clone(), use_synthetic);
+            }
         });
     }
     {

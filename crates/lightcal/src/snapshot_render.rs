@@ -64,6 +64,8 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         editor_panel: None,
         local_save_error: None,
         start_over_confirm: false,
+        start_over_busy: false,
+        start_over_error: None,
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
