@@ -2401,3 +2401,45 @@ fn a_lock_file_failure_says_events_are_not_shown() {
     );
     assert!(!card.start_over && !card.folder);
 }
+
+#[test]
+fn the_panel_names_a_kept_file_only_when_one_is_at_fault() {
+    use lightcal::local_events::{Loaded, LocalEvents, Unavailable};
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-panel-why-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    for (reason, kept) in [
+        (
+            Unavailable::Damaged {
+                file: dir.join("local-events.json"),
+            },
+            true,
+        ),
+        (Unavailable::Locked, false),
+        (
+            Unavailable::NoLock {
+                error: "denied".into(),
+            },
+            false,
+        ),
+        (
+            Unavailable::CannotSave {
+                error: "no thread".into(),
+            },
+            false,
+        ),
+    ] {
+        ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(reason.clone()));
+        ctrl.editor_panel = Some(local_editor::EditorPanel::Unavailable);
+        ctrl.sync_to_ui(&ui);
+        assert_eq!(
+            ui.get_panel_message().contains("The file is kept"),
+            kept,
+            "{reason:?}"
+        );
+    }
+}

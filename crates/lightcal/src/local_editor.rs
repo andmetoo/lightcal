@@ -481,11 +481,28 @@ impl AppController {
                 },
                 true,
             ),
-            _ => (
-                text.panel_unavailable_title,
-                text.panel_unavailable_text.to_string(),
-                false,
-            ),
+            _ => {
+                use lightcal::local_events::Unavailable;
+                // "The file is kept" only where a file is at fault and Accounts names it.
+                let file_at_fault = matches!(
+                    self.local.access(),
+                    Access::Unavailable(
+                        Unavailable::NewerVersion { .. }
+                            | Unavailable::Damaged { .. }
+                            | Unavailable::Unreadable { .. }
+                    )
+                ) && !self.local.is_loading();
+                (
+                    text.panel_unavailable_title,
+                    if file_at_fault {
+                        text.panel_unavailable_text
+                    } else {
+                        text.panel_unavailable_why
+                    }
+                    .to_string(),
+                    false,
+                )
+            }
         };
         ui.set_panel_title(title.into());
         ui.set_panel_message(message.into());
@@ -783,13 +800,16 @@ impl AppController {
             cancel_label: local_event_text(locale).cancel.into(),
             ..Default::default()
         };
-        let red = |card: &mut crate::LocalCardData, head: &str, body: String, start_over: bool| {
+        // A red box; `at_fault` states name the kept file and may start over.
+        let red = |card: &mut crate::LocalCardData, head: &str, body: String, at_fault: bool| {
             card.notice = 3;
             card.head = head.into();
             card.text = body.into();
-            card.file = file.as_str().into();
-            card.folder = !file.is_empty();
-            card.start_over = start_over;
+            if at_fault {
+                card.file = file.as_str().into();
+                card.folder = !file.is_empty();
+            }
+            card.start_over = at_fault;
         };
         if self.local.is_loading() {
             card.sub = label.into();
@@ -820,8 +840,6 @@ impl AppController {
                     Unavailable::NoLock { error } => {
                         let body = text.no_lock.replace("{error}", error.trim_end_matches('.'));
                         red(&mut card, text.no_lock_head, body, false);
-                        card.file = "".into();
-                        card.folder = false;
                     }
                     Unavailable::CannotSave { error } => {
                         card.sub = format!("{label} · {}", text.read_only_sub).into();
@@ -829,8 +847,6 @@ impl AppController {
                             .cannot_save
                             .replace("{error}", error.trim_end_matches('.'));
                         red(&mut card, text.cannot_save_head, body, false);
-                        card.file = "".into();
-                        card.folder = false;
                     }
                 }
                 match &self.start_over {
