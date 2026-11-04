@@ -221,9 +221,15 @@ What the code already offers:
   user cancel; that prompt appears before anything blocks. With a write
   still in progress, Quit hides the window and tray icon at once and
   releases the single-instance lock, so a new launch starts normally; the
-  process exits when the writer finishes, or after 2 s. If that last write
-  fails, nothing is shown and the edit is lost; this is listed with the
-  known limits below.
+  process exits when the writer finishes, or after 2 s. It frees the global
+  shortcut before it releases the lock, so the new launch can register it.
+  A failed write waiting out its backoff is tried again at once, so the
+  grace period is spent on an attempt. If that last write fails, nothing is
+  shown, the process exits at once, and the edit is lost; this is listed
+  with the known limits below. Quitting to install an update waits the
+  same way but keeps the single-instance lock until the process exits: the
+  installer replaces the executable then, so a launch meanwhile activates
+  the exiting process instead of running the old executable again.
 - **One writer at a time.** Each process takes an exclusive lock on
   `local-events.lock` in the data directory at startup, before it loads
   local events, and holds it until it exits. It uses the standard
@@ -247,8 +253,9 @@ What the code already offers:
   neither read nor written for the session: Settings › Accounts says they
   could not be opened, and Start over is not offered.
 - **Sign-out and shutdown.** On `WM_QUERYENDSESSION` Lightcal does not
-  prompt or delay the session. On `WM_ENDSESSION` the UI thread waits at
-  most 1 s for the writer's last attempt; if it fails, the edit is lost.
+  prompt or delay the session. On `WM_ENDSESSION` a failed write waiting
+  out its backoff is tried again at once, and the UI thread waits at most
+  1 s for the writer's last attempt; if it fails, the edit is lost.
   This is the one deliberate exception to the rule that the UI thread never
   waits on disk writes ([architecture](../architecture.md)): the process
   ends right after, so no further UI is lost by waiting.

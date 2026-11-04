@@ -1370,14 +1370,15 @@ impl Writer {
     }
 
     /// Waits up to `timeout` for every change to be written, without retrying a failed
-    /// one; true when nothing is left unsaved. Never call it on the UI thread except at
+    /// one; true when nothing is left unsaved. Returns at once when the writer has
+    /// stopped, as nothing more can be written. Never call it on the UI thread except at
     /// session end.
     pub fn wait_saved(&self, timeout: Duration) -> bool {
         let (lock, signal) = &*self.shared;
         let state = lock.lock().unwrap_or_else(|e| e.into_inner());
         let (state, _) = signal
             .wait_timeout_while(state, timeout, |s| {
-                (s.pending.is_some() || s.busy) && !(s.failed && !s.busy)
+                (s.pending.is_some() || s.busy) && !(s.failed && !s.busy) && !s.stopped
             })
             .unwrap_or_else(|e| e.into_inner());
         state.pending.is_none() && !state.busy
@@ -1968,6 +1969,36 @@ mod tests {
         let again = EventsLock::try_acquire(&dir).unwrap();
         assert!(again.is_some());
         drop(again);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn waiting_on_a_stopped_writer_returns_at_once() {
+        let dir = temp_dir("stopped-writer");
+        let blocked = dir.join("blocked");
+        fs::write(&blocked, "not a directory").unwrap();
+        let writer = Writer::spawn_with_backoff(
+            Storage::new(&blocked),
+            Duration::from_secs(600),
+            Duration::from_secs(600),
+            |_| {},
+        )
+        .unwrap();
+        assert!(writer.submit(vec![event(1, "Lost")], false));
+        writer.shutdown();
+        // Once shut down, the failed change is tried once and the writer stops.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while writer.saving() && std::time::Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        assert!(!writer.saving());
+        assert!(writer.has_unsaved());
+        // Try now clears the failure, but no attempt can follow: the wait must not
+        // sit out its timeout.
+        writer.retry_now();
+        let started = std::time::Instant::now();
+        assert!(!writer.wait_saved(Duration::from_secs(5)));
+        assert!(started.elapsed() < Duration::from_secs(1));
         fs::remove_dir_all(dir).unwrap();
     }
 

@@ -10,7 +10,7 @@ use lightcal::i18n::{
 use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
 use lightcal::platform::windows::{
     bring_to_foreground, primary_tray_area, query_calendar_provider, render_squircle_icon_rgba_64,
-    system_prefers_dark_mode, ShortcutManager, SingleInstance, StartupManager,
+    system_prefers_dark_mode, ShortcutManager, SingleInstance, SingleInstanceGuard, StartupManager,
 };
 #[cfg(windows)]
 use lightcal::platform::windows::{icon::native_small_icon_size, render_squircle_icon_generic};
@@ -2585,6 +2585,41 @@ thread_local! {
     static QUIT_WAIT: RefCell<Option<slint::Timer>> = const { RefCell::new(None) };
     /// Set when Quit starts waiting; the window is not shown again.
     static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The single-instance lock, dropped early when Quit waits for a write (ADR 0017).
+    static SINGLE_INSTANCE: RefCell<Option<SingleInstanceGuard>> = const { RefCell::new(None) };
+    /// The hidden window that hears sign-out and shutdown, alive while the app runs.
+    #[cfg(windows)]
+    static SESSION_END: RefCell<Option<lightcal::platform::windows::SessionEndWatch>> = const { RefCell::new(None) };
+}
+
+/// How long sign-out or shutdown waits for the local events writer's last attempt.
+#[cfg(any(windows, test))]
+const SESSION_END_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// At sign-out or shutdown, waits at most `SESSION_END_WAIT` for the writer's last
+/// attempt; true when nothing is left unsaved. A failed write waiting out its backoff is
+/// tried once more at once. This is the one place the UI thread waits on disk: the
+/// process ends right after (ADR 0017).
+#[cfg(any(windows, test))]
+fn wait_for_writes_at_session_end(writer: Option<&lightcal::local_events::Writer>) -> bool {
+    writer.is_none_or(|w| {
+        w.retry_now();
+        w.wait_saved(SESSION_END_WAIT)
+    })
+}
+
+/// The writer of the running controller, if any. Uses `try_borrow`, as Windows may send
+/// `WM_ENDSESSION` while the controller is borrowed by a nested message loop.
+#[cfg(windows)]
+fn session_end_writer() -> Option<lightcal::local_events::Writer> {
+    let ctrl = active_controller()?;
+    let ctrl = ctrl.try_borrow().ok()?;
+    ctrl.local_writer.clone()
+}
+
+/// The running controller, if any.
+fn active_controller() -> Option<Rc<RefCell<AppController>>> {
+    ACTIVE_CONTROLLER.with(|c| c.borrow().as_ref()?.upgrade())
 }
 
 /// Takes the events lock and loads local events on a background thread. Local events show
@@ -2768,39 +2803,95 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
     with_active_controller(ui_weak, |c, _| failed = c.quit_needs_prompt());
     if failed {
         let weak = ui_weak.clone();
-        show_quit_prompt(ui_weak, Rc::new(move || quit_after_writes(&weak)));
+        show_quit_prompt(
+            ui_weak,
+            Rc::new(move || quit_after_writes(&weak, QuitKind::User)),
+        );
     } else {
-        quit_after_writes(ui_weak);
+        quit_after_writes(ui_weak, QuitKind::User);
     }
+}
+
+/// Why Lightcal quits, which decides whether a new launch may start while it exits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QuitKind {
+    /// The user's Quit: a relaunch starts normally while a write finishes (ADR 0017).
+    /// Only the tray's Quit item, which exists on Windows only, asks for it.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    User,
+    /// After launching the update installer, which waits for this process to exit and
+    /// then replaces its executable. The single-instance lock stays held until then, so
+    /// a launch meanwhile activates this process instead of running the old executable
+    /// again.
+    Update,
+}
+
+/// The first step of Quit's wait for `writer`, once the window and tray icon are hidden:
+/// - the shortcut or a second launch no longer shows the window while Lightcal exits;
+/// - for the user's Quit, the single-instance lock is released, so a new launch starts
+///   normally. The events lock stays held until the process ends, so the new instance
+///   waits for it in the background;
+/// - a failed write waiting out its backoff is tried again at once, so the 2 s grace
+///   period is spent on an attempt (after Quit anyway).
+///
+/// `free_shortcut` unregisters the global shortcut and runs before the lock is
+/// released, so a relaunch can register it.
+fn begin_quit_wait(
+    writer: &lightcal::local_events::Writer,
+    kind: QuitKind,
+    free_shortcut: impl FnOnce() -> Result<(), String>,
+) {
+    QUITTING.with(|quitting| quitting.set(true));
+    if kind == QuitKind::User {
+        if let Err(error) = free_shortcut() {
+            eprintln!("Lightcal: could not free the global shortcut before quitting: {error}");
+        }
+        SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = None);
+    }
+    writer.retry_now();
 }
 
 /// Quits once every local event change is written. With a write in progress the window
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
-/// on the writer (ADR 0017).
-fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>) {
-    let mut writer = None;
-    with_active_controller(ui_weak, |c, _| writer = c.local_writer.clone());
-    let Some(writer) = writer.filter(|w| w.saving()) else {
+/// on the writer (ADR 0017). Once that wait has begun, a further quit leaves it and its
+/// deadline alone.
+fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>, kind: QuitKind) {
+    if QUITTING.with(std::cell::Cell::get) {
+        return;
+    }
+    let ctrl = active_controller();
+    let writer = ctrl.as_ref().and_then(|c| c.borrow().local_writer.clone());
+    let (Some(ctrl), Some(writer)) = (ctrl, writer.filter(|w| w.saving())) else {
         let _ = slint::quit_event_loop();
         return;
     };
-    // Window and tray icon go at once, and the shortcut or a second launch no longer
-    // shows the window while Lightcal exits.
-    QUITTING.with(|quitting| quitting.set(true));
-    with_active_controller(ui_weak, |_c, ui| {
-        hide_application_window(ui);
-        #[cfg(windows)]
-        if let Some(tray) = &_c.tray_icon {
-            let _ = tray.set_visible(false);
-        }
-    });
+    // The window goes first, before anything that can wait. Hiding it needs no
+    // controller borrow, so Slint callbacks it triggers can still borrow the controller.
+    if let Some(ui) = ui_weak.upgrade() {
+        hide_application_window(&ui);
+    }
+    let mut c = ctrl.borrow_mut();
+    #[cfg(windows)]
+    if let Some(tray) = &c.tray_icon {
+        let _ = tray.set_visible(false);
+    }
+    // Runs whatever the window's state. `bind` waits for the hotkey thread to
+    // unregister the shortcut.
+    let shortcut_mgr = &mut c.shortcut_mgr;
+    begin_quit_wait(&writer, kind, || shortcut_mgr.bind(None).map(|_| ()));
+    drop(c);
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let timer = slint::Timer::default();
     timer.start(
         slint::TimerMode::Repeated,
         std::time::Duration::from_millis(50),
         move || {
-            if !writer.saving() || std::time::Instant::now() >= deadline {
+            // A retry that failed again waits out its backoff: nothing more can happen
+            // in the grace period, so Lightcal exits at once.
+            if !writer.saving()
+                || writer.last_write_failed()
+                || std::time::Instant::now() >= deadline
+            {
                 let _ = slint::quit_event_loop();
             }
         },
@@ -2812,15 +2903,9 @@ fn with_active_controller<F>(ui_weak: &slint::Weak<AppWindow>, f: F)
 where
     F: FnOnce(&mut AppController, &AppWindow),
 {
-    ACTIVE_CONTROLLER.with(|c| {
-        if let Some(weak_ctrl) = c.borrow().as_ref() {
-            if let Some(ctrl) = weak_ctrl.upgrade() {
-                if let Some(ui) = ui_weak.upgrade() {
-                    f(&mut ctrl.borrow_mut(), &ui);
-                }
-            }
-        }
-    });
+    if let (Some(ctrl), Some(ui)) = (active_controller(), ui_weak.upgrade()) {
+        f(&mut ctrl.borrow_mut(), &ui);
+    }
 }
 
 fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint::Weak<AppWindow>) {
@@ -2952,7 +3037,7 @@ fn start_install(ui_weak: slint::Weak<AppWindow>) {
         .unwrap_or_else(|_| Err(failure_text.to_string()));
         let _ = slint::invoke_from_event_loop(move || match result {
             // The user already chose, before the installer started.
-            Ok(()) => quit_after_writes(&ui_weak),
+            Ok(()) => quit_after_writes(&ui_weak, QuitKind::Update),
             Err(error) => with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.install_busy = false;
                 ctrl.install_status = if error.contains("LIGHTCAL_UPDATE_CERT_SHA256") {
@@ -3905,7 +3990,7 @@ fn main() {
     {
         // 1. Single-instance activation listener sleeping on Win32 kernel event (0.0% CPU)
         let ui_weak_act = ui.as_weak();
-        _single_instance.listen_for_activation(move || {
+        let _ = _single_instance.listen_for_activation(move || {
             let ui_w = ui_weak_act.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_w, |c, w| {
@@ -3916,6 +4001,13 @@ fn main() {
                 });
             });
         });
+
+        // Sign-out and shutdown: never delay the session, and give the local events
+        // writer at most 1 s for its last attempt (ADR 0017).
+        let session_end = lightcal::platform::windows::SessionEndWatch::new(|| {
+            wait_for_writes_at_session_end(session_end_writer().as_ref());
+        });
+        SESSION_END.with(|slot| *slot.borrow_mut() = session_end);
 
         // 2. Event-driven system tray clicks (dispatches directly on mouse events, no busy polling)
         let ui_weak_tray = ui.as_weak();
@@ -4843,7 +4935,9 @@ fn main() {
         });
     }
 
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(_single_instance));
     slint::run_event_loop_until_quit().expect("Failed to run Slint event loop");
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = None);
 }
 
 #[cfg(test)]

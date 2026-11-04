@@ -2451,3 +2451,226 @@ fn the_panel_names_a_kept_file_only_when_one_is_at_fault() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn session_end_waits_at_most_a_second_for_the_last_write() {
+    use lightcal::local_events::{LocalEvent, Storage, Timing, Writer};
+    use std::time::{Duration, Instant};
+    assert!(
+        wait_for_writes_at_session_end(None),
+        "no writer, nothing to wait for"
+    );
+
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-session-end-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let event = LocalEvent::validated(
+        "local:session-end".into(),
+        "Before sign-out",
+        LocalDate::new(2026, 11, 12).unwrap(),
+        Timing::AllDay,
+        None,
+        None,
+    )
+    .unwrap();
+
+    let storage = Storage::new(dir.join("ok"));
+    let writer = Writer::spawn(storage.clone(), |_| {}).unwrap();
+    assert!(writer.submit(vec![event.clone()], false));
+    assert!(wait_for_writes_at_session_end(Some(&writer)));
+    assert_eq!(storage.load().events.len(), 1);
+    writer.shutdown();
+
+    // A file where the data directory should be makes every save fail. The wait ends
+    // with the failed attempt, and never runs past SESSION_END_WAIT.
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let (sender, reports) = std::sync::mpsc::channel();
+    let writer = Writer::spawn(Storage::new(&blocked), move |report| {
+        let _ = sender.send(report);
+    })
+    .unwrap();
+    assert!(writer.submit(vec![event], false));
+    reports.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(writer.last_write_failed());
+    let started = Instant::now();
+    assert!(!wait_for_writes_at_session_end(Some(&writer)));
+    assert!(started.elapsed() < SESSION_END_WAIT + Duration::from_millis(500));
+
+    // Once the obstacle is gone, session end tries the failed write again at once
+    // instead of leaving it to the 5 s backoff.
+    std::fs::remove_file(&blocked).unwrap();
+    assert!(wait_for_writes_at_session_end(Some(&writer)));
+    assert_eq!(Storage::new(&blocked).load().events.len(), 1);
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
+    use lightcal::local_events::{Storage, Writer};
+    use std::time::Duration;
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-wait-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let app_id = format!(
+        "Lightcal.Test.QuitWait.{}",
+        lightcal::calendars::random_key().unwrap()
+    );
+    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+        panic!("the first instance holds the lock");
+    };
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
+
+    // A failed save waiting out a backoff far longer than the test.
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn_with_backoff(
+        Storage::new(&blocked),
+        Duration::from_secs(600),
+        Duration::from_secs(600),
+        |_| {},
+    )
+    .unwrap();
+    assert!(writer.submit(Vec::new(), false));
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !writer.last_write_failed() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(writer.last_write_failed());
+    std::fs::remove_file(&blocked).unwrap();
+
+    let freed_first = Cell::new(false);
+    begin_quit_wait(&writer, QuitKind::User, || {
+        // Still held: the shortcut goes before the lock. A failure is only logged.
+        freed_first.set(SINGLE_INSTANCE.with(|slot| slot.borrow().is_some()));
+        Err("not registered in tests".into())
+    });
+    assert!(freed_first.get(), "the shortcut is freed before the lock");
+    let quitting = QUITTING.with(std::cell::Cell::get);
+    QUITTING.with(|quitting| quitting.set(false));
+    assert!(quitting);
+    assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_none()));
+    #[cfg(windows)]
+    assert!(
+        matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::FirstInstance(_)
+        ),
+        "a relaunch starts normally"
+    );
+    // The retry runs at once instead of after the 10 min backoff.
+    assert!(writer.wait_saved(Duration::from_secs(5)));
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A writer whose save failed, waiting out a backoff far longer than the test.
+fn failed_writer(dir: &std::path::Path) -> lightcal::local_events::Writer {
+    use lightcal::local_events::{Storage, Writer};
+    use std::time::Duration;
+    std::fs::create_dir_all(dir).unwrap();
+    let blocked = dir.join("blocked");
+    std::fs::write(&blocked, "not a directory").unwrap();
+    let writer = Writer::spawn_with_backoff(
+        Storage::new(&blocked),
+        Duration::from_secs(600),
+        Duration::from_secs(600),
+        |_| {},
+    )
+    .unwrap();
+    assert!(writer.submit(Vec::new(), false));
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !writer.last_write_failed() && std::time::Instant::now() < deadline {
+        std::thread::yield_now();
+    }
+    assert!(writer.last_write_failed());
+    writer
+}
+
+#[test]
+fn quit_hides_the_window_then_frees_the_lock_and_keeps_its_first_deadline() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-order-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let app_id = format!(
+        "Lightcal.Test.QuitOrder.{}",
+        lightcal::calendars::random_key().unwrap()
+    );
+    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+        panic!("the first instance holds the lock");
+    };
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
+    let writer = failed_writer(&dir);
+    let mut ctrl = controller(&dir);
+    ctrl.local_writer = Some(writer.clone());
+    let ctrl = Rc::new(RefCell::new(ctrl));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = Some(Rc::downgrade(&ctrl)));
+    let ui = AppWindow::new().unwrap();
+    ui.show().unwrap();
+    assert!(ui.window().is_visible());
+
+    quit_after_writes(&ui.as_weak(), QuitKind::User);
+    assert!(!ui.window().is_visible(), "the window goes at once");
+    assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_none()));
+    assert!(QUIT_WAIT.with(|slot| slot.borrow().is_some()));
+
+    // A second quit (say, the installer finishing meanwhile) leaves the wait alone.
+    let SingleInstance::FirstInstance(again) = SingleInstance::acquire(&app_id) else {
+        panic!("the lock was released");
+    };
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(again));
+    quit_after_writes(&ui.as_weak(), QuitKind::User);
+    assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_some()));
+
+    QUIT_WAIT.with(|slot| slot.borrow_mut().take());
+    SINGLE_INSTANCE.with(|slot| slot.borrow_mut().take());
+    QUITTING.with(|quitting| quitting.set(false));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_update_quit_keeps_the_single_instance_lock() {
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-quit-update-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let app_id = format!(
+        "Lightcal.Test.QuitUpdate.{}",
+        lightcal::calendars::random_key().unwrap()
+    );
+    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+        panic!("the first instance holds the lock");
+    };
+    SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
+    let writer = failed_writer(&dir);
+    let freed = Cell::new(false);
+    begin_quit_wait(&writer, QuitKind::Update, || {
+        freed.set(true);
+        Ok(())
+    });
+    let quitting = QUITTING.with(std::cell::Cell::get);
+    QUITTING.with(|quitting| quitting.set(false));
+    assert!(quitting);
+    assert!(!freed.get(), "the shortcut stays until the process exits");
+    assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_some()));
+    #[cfg(windows)]
+    assert!(
+        matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ),
+        "a launch during the update activates this process"
+    );
+    SINGLE_INSTANCE.with(|slot| slot.borrow_mut().take());
+    writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}

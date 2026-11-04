@@ -91,6 +91,7 @@ pub use shell::{
     animation_effects_enabled, apply_window_chrome, find_lightcal_hwnd, forget_shell_taskbar,
     hide_native_window, main_window_is_open, main_window_is_seen, position_window_by_tray,
     set_display_on, show_and_restore_window, stop_watching_window_changes, watch_window_changes,
+    SessionEndWatch,
 };
 pub use shell::{
     bring_to_foreground, mica_requested, primary_tray_area, system_prefers_dark_mode,

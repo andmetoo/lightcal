@@ -688,11 +688,26 @@ pub enum SingleInstance {
 }
 
 /// Holds ownership handles of the single-instance synchronization primitives.
+///
+/// Dropping it releases the single-instance lock at once: a new launch then starts
+/// normally, and the activation listener stops, so it no longer takes activations meant
+/// for the new instance. Quit drops it early while it waits for a local events write
+/// (ADR 0017).
 pub struct SingleInstanceGuard {
     #[cfg(windows)]
     _mutex: windows_sys::Win32::Foundation::HANDLE,
     #[cfg(windows)]
     event: windows_sys::Win32::Foundation::HANDLE,
+    /// Manual-reset and unnamed; set on drop to end the activation listener.
+    #[cfg(windows)]
+    stop: windows_sys::Win32::Foundation::HANDLE,
+    /// Set on drop. The stop event is the normal way to end the listener: it wakes the
+    /// listener at once and costs nothing while it sleeps. This flag covers a missing stop
+    /// event (CreateEventW failed): the listener then also wakes every
+    /// `FALLBACK_POLL` to check it, and one that wakes for an activation after the drop
+    /// passes it on to the new instance instead of taking it.
+    #[cfg(windows)]
+    released: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SingleInstanceGuard {
@@ -710,61 +725,105 @@ impl SingleInstanceGuard {
 
     /// Listens for activation events asynchronously on a background thread sleeping
     /// on the Windows kernel event (0.0% CPU usage), dispatching `on_activate` when signaled.
-    pub fn listen_for_activation<F>(&self, on_activate: F)
+    ///
+    /// Returns the listener thread, which ends once the guard is dropped.
+    pub fn listen_for_activation<F>(&self, on_activate: F) -> Option<std::thread::JoinHandle<()>>
     where
         F: Fn() + Send + 'static,
     {
         #[cfg(windows)]
         {
             use windows_sys::Win32::Foundation::{
-                CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, WAIT_OBJECT_0,
+                CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, WAIT_OBJECT_0, WAIT_TIMEOUT,
             };
             use windows_sys::Win32::System::Threading::{
-                GetCurrentProcess, WaitForSingleObject, INFINITE,
+                GetCurrentProcess, WaitForMultipleObjects, INFINITE,
             };
 
-            let mut dup_event = std::ptr::null_mut();
-            let ok = unsafe {
-                DuplicateHandle(
-                    GetCurrentProcess(),
-                    self.event,
-                    GetCurrentProcess(),
-                    &mut dup_event,
-                    0,
-                    0,
-                    DUPLICATE_SAME_ACCESS,
-                )
+            let duplicate = |handle| {
+                let mut dup = std::ptr::null_mut();
+                let ok = unsafe {
+                    DuplicateHandle(
+                        GetCurrentProcess(),
+                        handle,
+                        GetCurrentProcess(),
+                        &mut dup,
+                        0,
+                        0,
+                        DUPLICATE_SAME_ACCESS,
+                    )
+                };
+                (ok != 0 && !dup.is_null()).then_some(dup)
             };
-            if ok != 0 && !dup_event.is_null() {
-                let raw_handle = dup_event as isize;
-                std::thread::spawn(move || {
-                    let event_handle = raw_handle as windows_sys::Win32::Foundation::HANDLE;
-                    loop {
-                        let res = unsafe { WaitForSingleObject(event_handle, INFINITE) };
-                        if res == WAIT_OBJECT_0 {
-                            on_activate();
-                        } else {
-                            break;
-                        }
+            let dup_event = duplicate(self.event)?;
+            // Stop comes first: when both are set, the wait reports the lower index and
+            // leaves the activation event set for the new instance. Without a stop event
+            // (it could not be created) the listener still hears activations, and polls
+            // `released` to end.
+            let raw: Vec<isize> = duplicate(self.stop)
+                .into_iter()
+                .chain([dup_event])
+                .map(|h| h as isize)
+                .collect();
+            let released = self.released.clone();
+            Some(std::thread::spawn(move || {
+                use std::sync::atomic::Ordering;
+                use windows_sys::Win32::System::Threading::SetEvent;
+                let handles: Vec<windows_sys::Win32::Foundation::HANDLE> =
+                    raw.iter().map(|&h| h as _).collect();
+                let count = handles.len() as u32;
+                let timeout = if count == 1 {
+                    FALLBACK_POLL.as_millis() as u32
+                } else {
+                    INFINITE
+                };
+                loop {
+                    let res =
+                        unsafe { WaitForMultipleObjects(count, handles.as_ptr(), 0, timeout) };
+                    if res == WAIT_TIMEOUT && !released.load(Ordering::Acquire) {
+                        continue;
                     }
+                    if res != WAIT_OBJECT_0 + count - 1 {
+                        break;
+                    }
+                    if released.load(Ordering::Acquire) {
+                        // Meant for the instance that now holds the lock.
+                        unsafe { SetEvent(handles[count as usize - 1]) };
+                        break;
+                    }
+                    on_activate();
+                }
+                for handle in handles {
                     unsafe {
-                        CloseHandle(event_handle);
+                        CloseHandle(handle);
                     }
-                });
-            }
+                }
+            }))
         }
         #[cfg(not(windows))]
         {
             let _ = on_activate;
+            None
         }
     }
 }
+
+/// How often a listener without a stop event checks whether its guard was dropped.
+#[cfg(windows)]
+const FALLBACK_POLL: std::time::Duration = std::time::Duration::from_millis(250);
 
 #[cfg(windows)]
 impl Drop for SingleInstanceGuard {
     fn drop(&mut self) {
         use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::SetEvent;
+        self.released
+            .store(true, std::sync::atomic::Ordering::Release);
         unsafe {
+            if !self.stop.is_null() {
+                SetEvent(self.stop);
+                CloseHandle(self.stop);
+            }
             if !self._mutex.is_null() {
                 CloseHandle(self._mutex);
             }
@@ -824,9 +883,19 @@ impl SingleInstance {
                 return SingleInstance::AlreadyRunning;
             }
 
+            let stop = unsafe {
+                CreateEventW(
+                    std::ptr::null(),
+                    1, // Manual reset: stays set once the guard is dropped
+                    0,
+                    std::ptr::null(),
+                )
+            };
             SingleInstance::FirstInstance(SingleInstanceGuard {
                 _mutex: mutex,
                 event,
+                stop,
+                released: Default::default(),
             })
         }
         #[cfg(not(windows))]
@@ -834,6 +903,131 @@ impl SingleInstance {
             let _ = app_id;
             SingleInstance::FirstInstance(SingleInstanceGuard {})
         }
+    }
+}
+
+/// A hidden, untitled top-level window that hears sign-out and shutdown (ADR 0017).
+///
+/// `WM_QUERYENDSESSION` is answered at once, so Lightcal never prompts or delays the
+/// session. `WM_ENDSESSION` for an ending session runs `on_end` on the thread that made
+/// the watch, before the window procedure returns and Windows may end the process.
+/// Created on the UI thread, whose event loop dispatches its messages. A message-only
+/// window would not work: Windows sends these messages only to top-level windows.
+#[cfg(windows)]
+pub struct SessionEndWatch {
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    on_end: *mut Box<dyn Fn()>,
+}
+
+#[cfg(windows)]
+impl SessionEndWatch {
+    pub fn new(on_end: impl Fn() + 'static) -> Option<Self> {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use windows_sys::Win32::Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS};
+        use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, RegisterClassW, SetWindowLongPtrW, GWLP_USERDATA, WNDCLASSW,
+            WS_EX_TOOLWINDOW, WS_POPUP,
+        };
+        // Only success is remembered, so a failed registration is tried again.
+        static REGISTERED: AtomicBool = AtomicBool::new(false);
+        let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
+        let title = [0u16];
+        // SAFETY: the class name and title outlive the calls; the class is registered
+        // once per process.
+        let hwnd = unsafe {
+            let instance = GetModuleHandleW(std::ptr::null());
+            if !REGISTERED.load(Ordering::Acquire) {
+                let wc = WNDCLASSW {
+                    lpfnWndProc: Some(session_end_proc),
+                    hInstance: instance,
+                    lpszClassName: class.as_ptr(),
+                    ..std::mem::zeroed()
+                };
+                if RegisterClassW(&wc) == 0 {
+                    let error = GetLastError();
+                    if error != ERROR_CLASS_ALREADY_EXISTS {
+                        eprintln!("Lightcal: sign-out and shutdown are not watched (RegisterClassW error {error})");
+                        return None;
+                    }
+                }
+                REGISTERED.store(true, Ordering::Release);
+            }
+            CreateWindowExW(
+                WS_EX_TOOLWINDOW,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP,
+                0,
+                0,
+                0,
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                instance,
+                std::ptr::null(),
+            )
+        };
+        if hwnd.is_null() {
+            // SAFETY: reads this thread's last error, set by CreateWindowExW.
+            let error = unsafe { windows_sys::Win32::Foundation::GetLastError() };
+            eprintln!(
+                "Lightcal: sign-out and shutdown are not watched (CreateWindowExW error {error})"
+            );
+            return None;
+        }
+        let on_end: *mut Box<dyn Fn()> = Box::into_raw(Box::new(Box::new(on_end)));
+        // SAFETY: the pointer stays valid until Drop destroys the window first.
+        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, on_end as isize) };
+        Some(Self { hwnd, on_end })
+    }
+
+    /// The watch window, for tests that send it session messages.
+    #[cfg(test)]
+    pub(crate) fn hwnd(&self) -> windows_sys::Win32::Foundation::HWND {
+        self.hwnd
+    }
+}
+
+#[cfg(windows)]
+impl Drop for SessionEndWatch {
+    fn drop(&mut self) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+        // SAFETY: the window is destroyed before the callback it points to is freed.
+        unsafe {
+            DestroyWindow(self.hwnd);
+            drop(Box::from_raw(self.on_end));
+        }
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn session_end_proc(
+    hwnd: windows_sys::Win32::Foundation::HWND,
+    message: u32,
+    wp: windows_sys::Win32::Foundation::WPARAM,
+    lp: windows_sys::Win32::Foundation::LPARAM,
+) -> windows_sys::Win32::Foundation::LRESULT {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DefWindowProcW, GetWindowLongPtrW, GWLP_USERDATA, WM_ENDSESSION, WM_QUERYENDSESSION,
+    };
+    match message {
+        // Never prompt or delay the session.
+        WM_QUERYENDSESSION => 1,
+        WM_ENDSESSION => {
+            if wp != 0 {
+                let on_end = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const Box<dyn Fn()>;
+                if !on_end.is_null() {
+                    // A panic must not unwind into Windows. The panic hook has already
+                    // reported it (the release profile unwinds; it does not abort).
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        (*on_end)();
+                    }));
+                }
+            }
+            0
+        }
+        _ => DefWindowProcW(hwnd, message, wp, lp),
     }
 }
 
@@ -1620,5 +1814,118 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
+
+        // Dropping the guard (Quit while a write is pending) lets a new launch start at
+        // once, and the old listener leaves its activations alone.
+        let late = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let late_clone = late.clone();
+        let listener = guard
+            .listen_for_activation(move || {
+                late_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .unwrap();
+        drop(guard);
+        listener.join().unwrap();
+        let relaunch = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("A relaunch should start normally"),
+        };
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(!late.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(relaunch.check_activation_requested());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_activation_listener_works_without_a_stop_event() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let app_id = format!("Lightcal_Test_NoStop_{stamp}");
+        let mut guard = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("First instance should have acquired"),
+        };
+        // As if CreateEventW had failed for the stop event.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(guard.stop) };
+        guard.stop = std::ptr::null_mut();
+        let activated = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed = activated.clone();
+        let listener = guard
+            .listen_for_activation(move || {
+                observed.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .unwrap();
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !activated.load(std::sync::atomic::Ordering::SeqCst)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::yield_now();
+        }
+        assert!(activated.load(std::sync::atomic::Ordering::SeqCst));
+
+        // Released early (Quit while a write is pending). The activation that follows at
+        // once wakes the old listener, which is blocked on the event well inside its poll
+        // interval: it passes the activation on and ends.
+        activated.store(false, std::sync::atomic::Ordering::SeqCst);
+        drop(guard);
+        let relaunch = match SingleInstance::acquire(&app_id) {
+            SingleInstance::FirstInstance(g) => g,
+            SingleInstance::AlreadyRunning => panic!("A relaunch should start normally"),
+        };
+        assert!(matches!(
+            SingleInstance::acquire(&app_id),
+            SingleInstance::AlreadyRunning
+        ));
+        // The relaunch looks only once the old listener has ended, so the old one alone
+        // could have taken the activation.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !listener.is_finished() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the old listener ends after the release"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!activated.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(
+            relaunch.check_activation_requested(),
+            "the activation went on to the relaunch"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn session_end_watch_never_delays_and_runs_only_when_the_session_ends() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SendMessageW, WM_ENDSESSION, WM_QUERYENDSESSION,
+        };
+        let ended = Rc::new(Cell::new(0));
+        let counter = ended.clone();
+        let watch = SessionEndWatch::new(move || counter.set(counter.get() + 1)).unwrap();
+        let hwnd = watch.hwnd();
+        assert_eq!(unsafe { SendMessageW(hwnd, WM_QUERYENDSESSION, 0, 0) }, 1);
+        assert_eq!(ended.get(), 0);
+        // A cancelled end (wParam FALSE) does nothing.
+        unsafe { SendMessageW(hwnd, WM_ENDSESSION, 0, 0) };
+        assert_eq!(ended.get(), 0);
+        unsafe { SendMessageW(hwnd, WM_ENDSESSION, 1, 0) };
+        assert_eq!(ended.get(), 1);
+        // A second watch registers the same class without trouble.
+        let second = SessionEndWatch::new(|| {}).unwrap();
+        drop(second);
+        drop(watch);
+        assert_eq!(Rc::strong_count(&ended), 1, "the callback is freed");
     }
 }
