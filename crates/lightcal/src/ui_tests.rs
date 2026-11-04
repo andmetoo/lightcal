@@ -78,9 +78,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         editor: None,
         editor_panel: None,
         local_save_error: None,
-        start_over_confirm: false,
-        start_over_busy: false,
-        start_over_error: None,
+        start_over: Default::default(),
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -2191,11 +2189,11 @@ fn the_on_this_pc_card_shows_one_notice_at_a_time() {
     assert!(card.file.ends_with("local-events.json"));
     assert!(card.folder && card.start_over && !card.confirm);
     assert_eq!(ctrl.local_card_file(), Some(kept));
-    ctrl.start_over_confirm = true;
+    ctrl.start_over = local_editor::StartOver::Asking;
     let card = ctrl.local_card();
     assert!(card.confirm);
     assert_eq!(card.head, "Start over with no events?");
-    ctrl.start_over_confirm = false;
+    ctrl.start_over = local_editor::StartOver::Idle;
 
     // The writer did not start: red, read only, never Start over.
     ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::CannotSave {
@@ -2205,12 +2203,12 @@ fn the_on_this_pc_card_shows_one_notice_at_a_time() {
     assert_eq!(card.notice, 3);
     assert_eq!(card.sub, "Local · Read only");
     assert!(!card.start_over && !card.folder);
-    ctrl.start_over_confirm = true;
+    ctrl.start_over = local_editor::StartOver::Asking;
     assert!(
         !ctrl.local_card().confirm,
         "no Start over for a healthy file"
     );
-    ctrl.start_over_confirm = false;
+    ctrl.start_over = local_editor::StartOver::Idle;
 
     // Locked: a quiet line with the spinner.
     ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Locked));
@@ -2272,14 +2270,14 @@ fn start_over_hides_its_buttons_while_it_runs_and_reports_a_failure() {
     ctrl.local = LocalEvents::from_loaded(Loaded::unavailable(Unavailable::Damaged {
         file: dir.join("local-events.json"),
     }));
-    ctrl.start_over_busy = true;
+    ctrl.start_over = local_editor::StartOver::Running;
     let card = ctrl.local_card();
     assert!(
         !card.start_over && !card.confirm,
         "no second Start over while one runs"
     );
-    ctrl.start_over_busy = false;
-    ctrl.start_over_error = Some("Failed to keep the events file: in use".into());
+    ctrl.start_over =
+        local_editor::StartOver::Failed("Failed to keep the events file: in use".into());
     let card = ctrl.local_card();
     assert!(card.start_over, "it can be tried again");
     assert!(card
@@ -2363,4 +2361,21 @@ fn the_quit_prompt_keeps_lightcal_open_unless_told_otherwise() {
         prompt.window().dispatch_event(event);
     }
     assert!(quit.get(), "only Quit anyway quits");
+}
+
+#[test]
+fn closing_the_quit_prompt_keeps_lightcal_open() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let prompt = QuitPrompt::new().unwrap();
+    let quit = Rc::new(Cell::new(false));
+    let observed = quit.clone();
+    crate::open_quit_prompt(prompt.clone_strong(), Rc::new(move || observed.set(true)));
+    assert!(prompt.window().is_visible());
+    prompt.window().dispatch_event(WindowEvent::CloseRequested);
+    assert!(!quit.get(), "the close button never quits");
+    assert!(!prompt.window().is_visible());
+    // The prompt is freed after the event, never inside its own callback.
+    assert!(crate::QUIT_ASK.with(|slot| slot.borrow().is_some()));
+    slint::platform::update_timers_and_animations();
+    assert!(crate::QUIT_ASK.with(|slot| slot.borrow().is_none()));
 }

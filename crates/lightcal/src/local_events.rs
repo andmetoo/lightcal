@@ -743,9 +743,16 @@ impl Storage {
     }
 
     fn move_aside(&self, path: &Path) -> io::Result<PathBuf> {
+        let destination = self.move_aside_unpruned(path)?;
+        self.prune_preserved();
+        Ok(destination)
+    }
+
+    /// Moves `path` to a preserved name and deletes nothing, for Start over, which may
+    /// still undo the move.
+    fn move_aside_unpruned(&self, path: &Path) -> io::Result<PathBuf> {
         let destination = self.preserved_path()?;
         fs::rename(path, &destination)?;
-        self.prune_preserved();
         Ok(destination)
     }
 
@@ -817,7 +824,7 @@ impl Storage {
             if !path.exists() {
                 continue;
             }
-            match self.move_aside(&path) {
+            match self.move_aside_unpruned(&path) {
                 Ok(preserved) => moved.push((path, preserved)),
                 Err(error) => {
                     return Err(Self::undo_start_over(
@@ -830,6 +837,8 @@ impl Storage {
         if let Err(error) = self.save(&[], false) {
             return Err(Self::undo_start_over(&moved, error));
         }
+        // Old copies go only once nothing can be undone any more.
+        self.prune_preserved();
         Ok(moved.into_iter().map(|(_, preserved)| preserved).collect())
     }
 
@@ -1641,6 +1650,14 @@ mod tests {
         let storage = Storage::new(&dir);
         fs::write(storage.file_path(), "{ broken").unwrap();
         fs::write(storage.backup_path(), "{ broken too").unwrap();
+        // A full set of older copies: a failed Start over must not prune any of them.
+        for n in 0..MAX_PRESERVED_FILES {
+            fs::write(
+                dir.join(format!("{PRESERVED_PREFIX}{}.json", 1000 + n)),
+                "x",
+            )
+            .unwrap();
+        }
         // Held open without delete sharing, as a scanner might: it cannot be renamed.
         let held = fs::OpenOptions::new()
             .read(true)
@@ -1654,9 +1671,10 @@ mod tests {
             fs::read_to_string(storage.backup_path()).unwrap(),
             "{ broken too"
         );
-        assert!(
-            storage.preserved_files().is_empty(),
-            "the main file was put back"
+        assert_eq!(
+            storage.preserved_files().len(),
+            MAX_PRESERVED_FILES,
+            "the main file was put back and no older copy was pruned"
         );
         fs::remove_dir_all(dir).unwrap();
     }

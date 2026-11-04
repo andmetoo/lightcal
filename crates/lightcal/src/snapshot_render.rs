@@ -63,9 +63,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         editor: None,
         editor_panel: None,
         local_save_error: None,
-        start_over_confirm: false,
-        start_over_busy: false,
-        start_over_error: None,
+        start_over: Default::default(),
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
@@ -851,9 +849,9 @@ fn render_local_event_boards(
         file: std::path::PathBuf::from(r"C:\Users\alex\AppData\Roaming\Lightcal\local-events.json"),
     }));
     settings_shot(ctrl, "damaged-light")?;
-    ctrl.start_over_confirm = true;
+    ctrl.start_over = crate::local_editor::StartOver::Asking;
     settings_shot(ctrl, "start-over-light")?;
-    ctrl.start_over_confirm = false;
+    ctrl.start_over = crate::local_editor::StartOver::Idle;
     ctrl.prefs.set_locale(LocaleCode::De);
     ctrl.local = LocalEvents::in_memory(samples(today));
     settings_shot(ctrl, "accounts-light-de")?;

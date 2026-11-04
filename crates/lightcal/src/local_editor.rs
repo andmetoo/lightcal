@@ -169,6 +169,19 @@ pub(crate) struct EditorState {
     pub(crate) errors: EditorErrors,
 }
 
+/// Start over in Settings › Accounts.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum StartOver {
+    #[default]
+    Idle,
+    /// The card asks "Start over with no events?".
+    Asking,
+    /// The file work runs; the card shows no actions, so it cannot run twice.
+    Running,
+    /// The last attempt failed; the card shows why and offers Start over again.
+    Failed(String),
+}
+
 /// Shown in place of the editor when events cannot be added.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EditorPanel {
@@ -809,23 +822,18 @@ impl AppController {
                         card.folder = false;
                     }
                 }
-                if self.start_over_confirm && card.start_over {
-                    card.head = text.start_over_head.into();
-                    card.text = text.start_over_text.into();
-                    card.confirm = true;
-                }
-                if let Some(error) = &self.start_over_error {
-                    card.text = format!(
-                        "{}
-{error}",
-                        card.text
-                    )
-                    .into();
-                }
-                // While Start over runs, its buttons are gone, so it cannot run twice.
-                if self.start_over_busy {
-                    card.confirm = false;
-                    card.start_over = false;
+                match &self.start_over {
+                    StartOver::Asking if card.start_over => {
+                        card.head = text.start_over_head.into();
+                        card.text = text.start_over_text.into();
+                        card.confirm = true;
+                    }
+                    StartOver::Failed(error) => {
+                        card.text = format!("{}\n{error}", card.text).into();
+                    }
+                    // While Start over runs, its buttons are gone, so it cannot run twice.
+                    StartOver::Running => card.start_over = false,
+                    _ => {}
                 }
                 return card;
             }
@@ -933,7 +941,9 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
         let weak = ui.as_weak();
         ui.on_local_ask_start_over(move || {
             let mut c = ctrl.borrow_mut();
-            c.start_over_confirm = true;
+            if c.start_over != StartOver::Running {
+                c.start_over = StartOver::Asking;
+            }
             if let Some(w) = weak.upgrade() {
                 c.sync_to_ui(&w);
             }
@@ -944,7 +954,9 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
         let weak = ui.as_weak();
         ui.on_local_keep(move || {
             let mut c = ctrl.borrow_mut();
-            c.start_over_confirm = false;
+            if c.start_over == StartOver::Asking {
+                c.start_over = StartOver::Idle;
+            }
             if let Some(w) = weak.upgrade() {
                 c.sync_to_ui(&w);
             }
@@ -955,8 +967,7 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
         let weak = ui.as_weak();
         ui.on_local_start_over(move || {
             let mut c = ctrl.borrow_mut();
-            c.start_over_confirm = false;
-            if c.start_over_busy {
+            if c.start_over == StartOver::Running {
                 return;
             }
             // Only an unavailable store that holds the lock can start over; Locked waits.
@@ -969,11 +980,11 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
                 )
             );
             if !allowed {
+                c.start_over = StartOver::Idle;
                 return;
             }
             let dir = c.store.dir().to_path_buf();
-            c.start_over_busy = true;
-            c.start_over_error = None;
+            c.start_over = StartOver::Running;
             if let Some(w) = weak.upgrade() {
                 c.sync_to_ui(&w);
             }
@@ -989,10 +1000,12 @@ pub(crate) fn connect_local_card_callbacks(ui: &AppWindow, ctrl: &Rc<RefCell<App
                         .map(|_| lightcal::local_events::LocalEvents::from_loaded(storage.load()));
                     let _ = slint::invoke_from_event_loop(move || {
                         crate::with_active_controller(&weak, |c, w| {
-                            c.start_over_busy = false;
                             match result {
-                                Ok(local) => c.apply_local_events(local),
-                                Err(error) => c.start_over_error = Some(error),
+                                Ok(local) => {
+                                    c.start_over = StartOver::Idle;
+                                    c.apply_local_events(local);
+                                }
+                                Err(error) => c.start_over = StartOver::Failed(error),
                             }
                             c.sync_to_ui(w);
                         });

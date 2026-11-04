@@ -123,12 +123,8 @@ pub(crate) struct AppController {
     pub(crate) editor_panel: Option<local_editor::EditorPanel>,
     /// The last local event write failed with this message; cleared by a later save.
     pub(crate) local_save_error: Option<String>,
-    /// Settings › Accounts asks "Start over with no events?".
-    pub(crate) start_over_confirm: bool,
-    /// Start over is running on its thread.
-    pub(crate) start_over_busy: bool,
-    /// Why the last Start over failed, shown on the card.
-    pub(crate) start_over_error: Option<String>,
+    /// Start over in Settings › Accounts: asking, running or failed.
+    pub(crate) start_over: local_editor::StartOver,
     /// Calendars demo mode selected for its samples. They are in the selection while
     /// Lightcal runs but never saved (`persist`); empty outside demo mode.
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
@@ -2619,8 +2615,9 @@ fn start_local_events_load(
                     LOCAL_EVENTS_LOCK_TAKEN.store(true, std::sync::atomic::Ordering::Release);
                     Storage::new(&dir).load()
                 }
-                Err(error) => Loaded::unavailable(Unavailable::Unreadable {
-                    file: dir.join("local-events.lock"),
+                // Without the lock nothing may be written, so this is "can't save"
+                // (read only, never Start over), not an unreadable events file.
+                Err(error) => Loaded::unavailable(Unavailable::CannotSave {
                     error: error.to_string(),
                 }),
             };
@@ -2670,11 +2667,15 @@ thread_local! {
 /// it has finished; it is never dropped inside one of its own callbacks. Returns the
 /// action, for Quit anyway.
 fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
-    let proceed = QUIT_ASK.with(|slot| {
-        slot.borrow().as_ref().map(|ask| {
-            let _ = ask.prompt.hide();
-            ask.proceed.clone()
-        })
+    let open = QUIT_ASK.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|ask| (ask.prompt.clone_strong(), ask.proceed.clone()))
+    });
+    // Hidden after the borrow ends, for the same reason as `show` above.
+    let proceed = open.map(|(prompt, proceed)| {
+        let _ = prompt.hide();
+        proceed
     });
     slint::Timer::single_shot(std::time::Duration::ZERO, || {
         QUIT_ASK.with(|slot| {
@@ -2696,13 +2697,14 @@ fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
 /// update install that ends with one.
 fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
     // A second Quit while the prompt is open brings that prompt back, with this action.
-    let reopened = QUIT_ASK.with(|slot| {
+    let open = QUIT_ASK.with(|slot| {
         let mut slot = slot.borrow_mut();
         let ask = slot.as_mut()?;
         ask.proceed = proceed.clone();
-        Some(ask.prompt.show().is_ok())
+        Some(ask.prompt.clone_strong())
     });
-    if reopened == Some(true) {
+    // Shown after the borrow ends: showing can dispatch window events that reach it.
+    if open.is_some_and(|prompt| prompt.show().is_ok()) {
         return;
     }
     let Some(ui) = ui_weak.upgrade() else {
@@ -2728,6 +2730,11 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
     prompt.set_body(text.quit_text.into());
     prompt.set_quit_label(text.quit_anyway.into());
     prompt.set_keep_label(text.keep_open.into());
+    open_quit_prompt(prompt, proceed);
+}
+
+/// Wires the prompt's answers, shows it and keeps it with its next action.
+fn open_quit_prompt(prompt: QuitPrompt, proceed: Rc<dyn Fn()>) {
     prompt.on_keep_open(|| {
         close_quit_prompt();
     });
@@ -3768,9 +3775,7 @@ fn main() {
         editor: None,
         editor_panel: None,
         local_save_error: None,
-        start_over_confirm: false,
-        start_over_busy: false,
-        start_over_error: None,
+        start_over: Default::default(),
         demo_shown,
         provider_request: 0,
         connection_busy: false,
