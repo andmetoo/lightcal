@@ -9,51 +9,37 @@
 
 use serde::Deserialize;
 
-/// Uses Windows' TLS stack on a worker thread; no browser or shell process.
+/// Uses the platform TLS stack on a worker thread with a 15 s timeout and a 2 MiB body cap;
+/// no browser or shell process.
 #[cfg(windows)]
 pub fn check_latest_release(installed_version: &str) -> UpdateCheckState {
-    use windows::{core::HSTRING, Foundation::Uri, Web::Http::HttpClient};
-    let request = || -> windows::core::Result<UpdateCheckState> {
-        let client = HttpClient::new()?;
-        let headers = client.DefaultRequestHeaders()?;
-        headers.Append(
-            &HSTRING::from("User-Agent"),
-            &HSTRING::from(concat!("Lightcal/", env!("LIGHTCAL_VERSION"))),
-        )?;
-        headers.Append(
-            &HSTRING::from("Accept"),
-            &HSTRING::from("application/vnd.github+json"),
-        )?;
-        let uri = Uri::CreateUri(&HSTRING::from(
-            "https://api.github.com/repos/andmetoo/lightcal/releases/latest",
-        ))?;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-        let op = client.GetAsync(&uri)?;
-        while op.Status()?.0 == 0 {
-            // WinRT AsyncStatus::Started
-            if std::time::Instant::now() >= deadline {
-                op.Cancel()?;
-                return Ok(UpdateCheckState::Timeout);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        let response = op.get()?;
-        let status = response.StatusCode()?.0 as u16;
-        if status != 200 {
-            return Ok(evaluate_release_response(installed_version, status, ""));
-        }
-        let body_op = response.Content()?.ReadAsStringAsync()?;
-        while body_op.Status()?.0 == 0 {
-            if std::time::Instant::now() >= deadline {
-                body_op.Cancel()?;
-                return Ok(UpdateCheckState::Timeout);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        let body = body_op.get()?.to_string_lossy();
-        Ok(evaluate_release_response(installed_version, status, &body))
+    let client = crate::net::agent(std::time::Duration::from_secs(15));
+    let mut response = match client
+        .get("https://api.github.com/repos/andmetoo/lightcal/releases/latest")
+        .header("User-Agent", concat!("Lightcal/", env!("LIGHTCAL_VERSION")))
+        .header("Accept", "application/vnd.github+json")
+        .call()
+    {
+        Ok(resp) => resp,
+        Err(ureq::Error::Timeout(_)) => return UpdateCheckState::Timeout,
+        Err(_) => return UpdateCheckState::Offline,
     };
-    request().unwrap_or(UpdateCheckState::Offline)
+    let status = response.status().as_u16();
+    if status != 200 {
+        return evaluate_release_response(installed_version, status, "");
+    }
+    match response
+        .body_mut()
+        .with_config()
+        .limit(2 * 1024 * 1024)
+        .read_to_string()
+    {
+        Ok(body) => evaluate_release_response(installed_version, status, &body),
+        Err(ureq::Error::Timeout(_)) => UpdateCheckState::Timeout,
+        Err(_) => UpdateCheckState::InvalidResponse(
+            "Release metadata exceeded the size limit or could not be read".into(),
+        ),
+    }
 }
 
 #[cfg(not(windows))]
@@ -420,6 +406,28 @@ mod tests {
         ));
         assert!(!is_allowed_external_link("https://malicious.site"));
         assert!(!is_allowed_external_link("cmd.exe"));
+    }
+
+    #[test]
+    fn semver_parser_agrees_with_version_policy() {
+        for sample in [
+            "1.2.0",
+            "v1.2.0",
+            "0.0.1",
+            "1.2.0-rc.1",
+            "1.2.0+build",
+            "1.2",
+            "1.2.3.4",
+            "",
+        ] {
+            let parsed =
+                SemVer::parse(sample).map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch));
+            assert_eq!(
+                parsed.as_deref(),
+                crate::version_policy::stable_semver(sample),
+                "{sample}"
+            );
+        }
     }
 
     #[test]

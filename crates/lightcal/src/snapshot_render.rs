@@ -105,7 +105,9 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         google_needs_signin: false,
         google_label: String::new(),
         google_error: String::new(),
+        microsoft_error: String::new(),
         ics_error: String::new(),
+        ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
         // Snapshots are never on screen, so headers render settled.

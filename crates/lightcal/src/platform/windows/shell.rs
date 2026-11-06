@@ -652,7 +652,9 @@ impl ShortcutManager {
                     0,
                 );
             }
-            let res = resp_rx.recv().map_err(|e| e.to_string())??;
+            let res = resp_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .map_err(|e| format!("Shortcut service did not respond: {e}"))??;
             self.active_binding = res.clone();
             return Ok(res);
         }
@@ -931,7 +933,7 @@ impl SessionEndWatch {
         };
         // Only success is remembered, so a failed registration is tried again.
         static REGISTERED: AtomicBool = AtomicBool::new(false);
-        let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
+        let class: Vec<u16> = "LightcalSessionEnd\0".encode_utf16().collect();
         let title = [0u16];
         // SAFETY: the class name and title outlive the calls; the class is registered
         // once per process.

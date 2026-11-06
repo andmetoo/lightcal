@@ -235,8 +235,6 @@ export component AppWindow inherits Window {
     in property <string> live-day-text;
     in property <string> live-weekday-date-text;
     in property <string> live-time-text;
-    in property <image> colored-icon-preview;
-    in property <image> monochrome-icon-preview;
     in property <bool> tray-icon-monochrome: false;
     in property <bool> first-weekday-monday: true;
     in property <[WeekdayChipItem]> gray-weekday-chips: [];
@@ -435,37 +433,43 @@ export component AppWindow inherits Window {
             }
             if (event.text == Key.Escape) {
                 if (root.settings-open) {
-                    root.close-settings();
+                    if (root.language-dropdown-open) {
+                        root.toggle-language-dropdown();
+                    } else if (root.first-day-dropdown-open) {
+                        root.toggle-first-day-dropdown();
+                    } else {
+                        root.close-settings();
+                    }
                 } else {
                     root.dismiss-compact();
                 }
                 return accept;
             }
-            if (event.text == Key.LeftArrow) {
-                root.calendar-keyboard-nav = !root.settings-open;
+            if (!root.settings-open && event.text == Key.LeftArrow) {
+                root.calendar-keyboard-nav = true;
                 root.move-selection-by(-1);
                 return accept;
             }
-            if (event.text == Key.RightArrow) {
-                root.calendar-keyboard-nav = !root.settings-open;
+            if (!root.settings-open && event.text == Key.RightArrow) {
+                root.calendar-keyboard-nav = true;
                 root.move-selection-by(1);
                 return accept;
             }
-            if (event.text == Key.UpArrow) {
-                root.calendar-keyboard-nav = !root.settings-open;
+            if (!root.settings-open && event.text == Key.UpArrow) {
+                root.calendar-keyboard-nav = true;
                 root.move-selection-by(-7);
                 return accept;
             }
-            if (event.text == Key.DownArrow) {
-                root.calendar-keyboard-nav = !root.settings-open;
+            if (!root.settings-open && event.text == Key.DownArrow) {
+                root.calendar-keyboard-nav = true;
                 root.move-selection-by(7);
                 return accept;
             }
-            if (event.text == Key.PageUp) {
+            if (!root.settings-open && event.text == Key.PageUp) {
                 root.prev-month();
                 return accept;
             }
-            if (event.text == Key.PageDown) {
+            if (!root.settings-open && event.text == Key.PageDown) {
                 root.next-month();
                 return accept;
             }

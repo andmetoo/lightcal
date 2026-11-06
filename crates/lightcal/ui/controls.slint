@@ -67,6 +67,11 @@ export component IconButton inherits Rectangle {
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.clicked();
+        }
+    }
 
     if root.icon != "" : Icon {
         x: (parent.width - self.width) / 2;
@@ -109,6 +114,11 @@ export component TextButton inherits Rectangle {
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.clicked();
+        }
+    }
 
     HorizontalLayout {
         padding-left: 8px;
@@ -180,6 +190,11 @@ export component Switch inherits Rectangle {
     accessible-role: checkbox;
     accessible-checked: root.checked;
     accessible-label: root.label;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.toggled();
+        }
+    }
 
     Rectangle {
         width: root.checked ? 14px : 12px;
@@ -262,6 +277,7 @@ export component SegmentedControl inherits Rectangle {
             border-color: Theme.control-line;
             accessible-role: button;
             accessible-label: opt;
+            accessible-action-default => { root.selected(idx); }
 
             Text {
                 width: parent.width;
@@ -293,6 +309,7 @@ export component Select inherits Rectangle {
     height: Theme.control-height;
     accessible-role: combobox;
     accessible-value: root.text;
+    accessible-action-default => { root.clicked(); }
 
     ControlFrame {
         width: 100%;
@@ -344,6 +361,11 @@ export component Button inherits Rectangle {
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.clicked();
+        }
+    }
     background: root.kind == "primary"
         ? (touch.has-hover && root.enabled ? Theme.primary-hover : Theme.primary)
         : (root.kind == "subtle"
@@ -394,6 +416,7 @@ export component LinkButton inherits Rectangle {
     background: touch.has-hover ? Theme.hover : transparent;
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
         padding-left: 4px;
@@ -424,6 +447,7 @@ export component CaptionButton inherits Rectangle {
     background: touch.has-hover ? (root.close ? Theme.close-hover : Theme.hover) : transparent;
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
 
     Icon {
         x: (parent.width - self.width) / 2;
@@ -556,6 +580,8 @@ export component Menu inherits Rectangle {
     drop-shadow-offset-y: 4px;
     drop-shadow-color: Theme.dark ? #00000088 : #2020201A;
 
+    TouchArea { }
+
     content := VerticalLayout {
         padding: 4px;
         spacing: 2px;
@@ -575,6 +601,7 @@ export component MenuOption inherits Rectangle {
     background: root.active ? Theme.selected : (opt-touch.has-hover ? Theme.hover : transparent);
     accessible-role: button;
     accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
         padding-left: 10px;

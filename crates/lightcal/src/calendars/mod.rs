@@ -12,7 +12,10 @@ use crate::{
 use account::MicrosoftAccountState;
 use base64::Engine;
 use calendar_core::LocalDate;
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 pub struct GoogleConfiguration {
     pub client_id: String,
@@ -22,6 +25,7 @@ pub struct GoogleConfiguration {
 pub struct CalendarLoad {
     pub snapshot: ProviderSnapshot,
     pub microsoft: MicrosoftAccountState,
+    pub microsoft_error: String,
     pub google_connected: bool,
     pub google_needs_signin: bool,
     pub google_configuration: Option<GoogleConfiguration>,
@@ -29,6 +33,7 @@ pub struct CalendarLoad {
     pub google_error: String,
     pub google_skipped: usize,
     pub ics_error: String,
+    pub ics_feed_errors: BTreeMap<String, String>,
 }
 
 pub fn random_key() -> Result<String, String> {
@@ -159,6 +164,7 @@ pub fn query(
     };
     let mut errors = Vec::new();
     let mut account = MicrosoftAccountState::Disconnected;
+    let mut microsoft_error = String::new();
     if credentials.microsoft_refresh_token.is_some() {
         account = MicrosoftAccountState::Unavailable {
             saved_credentials: true,
@@ -172,7 +178,12 @@ pub fn query(
             &mut account,
             locale,
         ) {
-            Ok(data) => append_provider(&mut snapshot, data, &mut errors),
+            Ok(data) => {
+                if let ProviderStatus::ProviderUnavailable(ref e) = data.status {
+                    microsoft_error = e.clone();
+                }
+                append_provider(&mut snapshot, data, &mut errors);
+            }
             Err(e) => errors.push(e),
         }
     }
@@ -207,6 +218,9 @@ pub fn query(
                 google_connected = !data.needs_signin;
                 google_label = data.label;
                 google_skipped = data.skipped;
+                if let ProviderStatus::ProviderUnavailable(ref e) = data.snapshot.status {
+                    google_error = e.clone();
+                }
                 append_provider(&mut snapshot, data.snapshot, &mut errors);
             }
             Err(e) => {
@@ -221,6 +235,7 @@ pub fn query(
         }
     }
     let mut ics_errors = Vec::new();
+    let mut ics_feed_errors = BTreeMap::new();
     for feed in &credentials.ics {
         snapshot.sources.push(calendar_core::CalendarSource {
             id: feed.id.clone(),
@@ -232,6 +247,7 @@ pub fn query(
             match ics::fetch(feed, anchor) {
                 Ok(parsed) => {
                     if let Some(note) = parsed.note(locale, &feed.name) {
+                        ics_feed_errors.insert(feed.id.clone(), note.clone());
                         ics_errors.push(note.clone());
                         errors.push(note);
                     }
@@ -239,6 +255,7 @@ pub fn query(
                 }
                 Err(e) => {
                     let message = format!("{}: {e}", feed.name);
+                    ics_feed_errors.insert(feed.id.clone(), message.clone());
                     ics_errors.push(message.clone());
                     errors.push(message);
                 }
@@ -253,6 +270,7 @@ pub fn query(
     CalendarLoad {
         snapshot,
         microsoft: account,
+        microsoft_error,
         google_connected,
         google_needs_signin,
         google_configuration,
@@ -260,6 +278,7 @@ pub fn query(
         google_error,
         google_skipped,
         ics_error: ics_errors.join("\n"),
+        ics_feed_errors,
     }
 }
 
@@ -320,6 +339,7 @@ fn failure(error: String) -> CalendarLoad {
         microsoft: MicrosoftAccountState::Unavailable {
             saved_credentials: false,
         },
+        microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_configuration: None,
@@ -327,6 +347,7 @@ fn failure(error: String) -> CalendarLoad {
         google_error: String::new(),
         google_skipped: 0,
         ics_error: String::new(),
+        ics_feed_errors: BTreeMap::new(),
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),
             sources: Vec::new(),

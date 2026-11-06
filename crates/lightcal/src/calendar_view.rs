@@ -521,6 +521,24 @@ pub(crate) fn shaded_bands(columns: &[bool; 7]) -> Vec<ShadedBand> {
     bands
 }
 
+fn is_wide_glyph(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x1100..=0x115F
+            | 0x2E80..=0x303E
+            | 0x3040..=0x33BF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0xA4CF
+            | 0xAC00..=0xD7A3
+            | 0xF900..=0xFAFF
+            | 0xFE10..=0xFE6B
+            | 0xFF01..=0xFF60
+            | 0xFFE0..=0xFFE6
+            | 0x1F000..=0x1FAFF
+            | 0x20000..=0x3FFFF
+    )
+}
+
 /// Wraps chips into lines by an estimate of their 12 px width (328 px agenda, 8 px padding).
 fn wrap_chips(chips: Vec<AgendaEventItem>) -> Vec<Vec<AgendaEventItem>> {
     const LINE: f32 = 320.0;
@@ -531,7 +549,7 @@ fn wrap_chips(chips: Vec<AgendaEventItem>) -> Vec<Vec<AgendaEventItem>> {
         let width = (chip
             .title
             .chars()
-            .map(|c| if c.is_ascii() { 6.6 } else { 12.0 })
+            .map(|c| if is_wide_glyph(c) { 12.0 } else { 6.6 })
             .sum::<f32>()
             + 28.0)
             .min(LINE);
@@ -697,5 +715,20 @@ mod tests {
             ..local
         };
         assert_eq!(time_range(LocaleCode::En, &provider), "23:00–00:00");
+    }
+
+    #[test]
+    fn cyrillic_and_accented_latin_chips_stay_on_one_row_while_wide_cjk_wraps() {
+        let chip = |title: &str| AgendaEventItem {
+            title: title.into(),
+            ..Default::default()
+        };
+        let cyrillic = wrap_chips(vec![chip("Отпуск и отдых"), chip("День рождения")]);
+        assert_eq!(cyrillic.len(), 1);
+        let cjk = wrap_chips(vec![
+            chip("ゴールデンウィーク特別休暇期間"),
+            chip("年末年始休業のお知らせと予定"),
+        ]);
+        assert_eq!(cjk.len(), 2);
     }
 }

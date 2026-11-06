@@ -31,6 +31,7 @@ component DetailAction inherits Rectangle {
     accessible-role: button;
     accessible-label: root.accessible-name != "" ? root.accessible-name
         : root.show-alt ? root.alt-label : root.label;
+    accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
         padding-left: 6px;
@@ -274,6 +275,7 @@ component AgendaRow inherits Rectangle {
     accessible-label: root.event.time-label + ", " + root.event.title
         + (root.event.badge != "" ? ", " + root.event.badge : "");
     accessible-expanded: root.event.expanded;
+    accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
         padding-left: 4px;
@@ -725,6 +727,7 @@ export component CalendarView inherits Rectangle {
                 height: root.tile-height;
                 accessible-role: button;
                 accessible-label: self.cell.accessible-label;
+                accessible-action-default => { root.select-cell(pill.index); }
 
                 // Keyboard focus: 2 px accent ring with a 2 px gap.
                 if root.keyboard-nav && pill.cell.is-selected : Rectangle {

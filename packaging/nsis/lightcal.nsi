@@ -48,9 +48,15 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_UNPAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
-!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "German"
 !insertmacro MUI_LANGUAGE "Spanish"
+!insertmacro MUI_LANGUAGE "French"
+!insertmacro MUI_LANGUAGE "PortugueseBR"
+!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Ukrainian"
 !insertmacro MUI_LANGUAGE "Japanese"
+!insertmacro MUI_LANGUAGE "Korean"
+!insertmacro MUI_LANGUAGE "SimpChinese"
 
 Function .onInit
   SetShellVarContext current
@@ -60,8 +66,9 @@ Function .onInit
     Abort
   ${EndIf}
 !ifndef TEST_SETUP
-  FindWindow $0 "" "Lightcal"
+  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r0'
   ${If} $0 != 0
+    System::Call 'kernel32::CloseHandle(p r0)'
     MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then run Setup again." /SD IDOK
     SetErrorLevel 1603
     Abort
@@ -117,8 +124,9 @@ SectionEnd
 Function un.onInit
   SetShellVarContext current
 !ifndef TEST_SETUP
-  FindWindow $0 "" "Lightcal"
+  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r0'
   ${If} $0 != 0
+    System::Call 'kernel32::CloseHandle(p r0)'
     MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu before uninstalling." /SD IDOK
     SetErrorLevel 1603
     Abort

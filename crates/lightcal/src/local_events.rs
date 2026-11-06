@@ -388,13 +388,14 @@ fn parse(text: &str) -> ReadOutcome {
         return ReadOutcome::Malformed;
     };
     let mut events: Vec<LocalEvent> = Vec::with_capacity(items.len());
+    let mut seen_ids = std::collections::HashSet::with_capacity(items.len());
     let mut skipped = 0;
     for item in items {
         let event = serde_json::from_value::<RawEvent>(item)
             .ok()
             .and_then(|raw| from_raw(raw).ok());
         match event {
-            Some(event) if !events.iter().any(|known| known.id == event.id) => events.push(event),
+            Some(event) if seen_ids.insert(event.id.clone()) => events.push(event),
             _ => skipped += 1,
         }
     }
