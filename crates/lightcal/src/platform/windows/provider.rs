@@ -272,6 +272,7 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
     }
 }
 
+#[cfg(any(windows, test))]
 fn all_day_span<Tz: chrono::TimeZone>(
     utc_dt: chrono::DateTime<chrono::Utc>,
     local_dt: chrono::DateTime<Tz>,
