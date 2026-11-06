@@ -624,6 +624,25 @@ impl CalendarState {
         }
     }
 
+    /// Returns the first date (`cell_index == 0`) of the 42-cell displayed month grid.
+    pub fn grid_start(&self) -> LocalDate {
+        let first_of_month = LocalDate {
+            year: self.displayed_month.year,
+            month: self.displayed_month.month,
+            day: 1,
+        };
+        let first_wd = first_of_month.weekday().monday_index();
+        let start_wd = self.first_weekday.monday_index();
+        let leading_days = (first_wd + 7 - start_wd) % 7;
+        first_of_month.add_days(-(leading_days as i32))
+    }
+
+    /// Returns the `LocalDate` at `cell_index` (`0..42`) in the displayed month grid in `O(1)`
+    /// without projecting event occurrences.
+    pub fn date_at_cell(&self, cell_index: usize) -> Option<LocalDate> {
+        (cell_index < 42).then(|| self.grid_start().add_days(cell_index as i32))
+    }
+
     /// Builds the 42-cell (6-row × 7-column) month grid with optional event occurrences.
     pub fn build_grid(
         &self,
@@ -633,15 +652,7 @@ impl CalendarState {
         let weekdays = Weekday::ordered_from(self.first_weekday);
         let gray_columns = weekdays.map(|d| self.gray_weekdays.contains(d));
 
-        let first_of_month = LocalDate {
-            year: self.displayed_month.year,
-            month: self.displayed_month.month,
-            day: 1,
-        };
-        let first_wd = first_of_month.weekday().monday_index();
-        let start_wd = self.first_weekday.monday_index();
-        let leading_days = (first_wd + 7 - start_wd) % 7;
-        let grid_start = first_of_month.add_days(-(leading_days as i32));
+        let grid_start = self.grid_start();
         let grid_end = grid_start.add_days(41);
 
         let dots_by_date =
@@ -655,7 +666,9 @@ impl CalendarState {
             let row = idx / 7;
             let col = idx % 7;
             if col == 0 {
-                // Use Thursday of the displayed row (or the row's first date) for the ISO week number.
+                // Use the median day (`col == 3`) of the 7-day row for its ISO week number:
+                // for Monday-start rows this is Thursday, and for any `first_weekday` the
+                // median day belongs to the ISO week covering at least 4 of the row's 7 days.
                 iso_weeks[row] = date.add_days(3).iso_week();
             }
             let (dot_colors, total_event_count) = dots_by_date

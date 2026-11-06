@@ -39,13 +39,11 @@ See [ADR 0005](decisions/0005-taskbar-calendar-presence.md) for the regression a
 
 Windows controls pinning and tray overflow visibility; Lightcal must not promise that it can force either setting. Shortcut identity and reactivation behavior are prototype acceptance criteria.
 
-## Outside the first release
+## Outside the current scope
 
-Direct calendar-account sign-in, event editing, reminders, ICS import/subscriptions, holidays requiring downloads, Lightcal-operated cloud synchronization, telemetry, plugins, system clock replacement, shell injection, and automatic update installation. Read-only Windows calendar access and manual update checking are approved scope. Calendar availability must be established by the API probe before committing to release compatibility.
+Remote calendar event editing, multi-day or recurring local events, reminders, `.ics` file import/export, holidays requiring separate downloads, Lightcal-operated cloud synchronization, telemetry, plugins, system clock replacement, and shell injection. Read-only provider connections (Outlook, Google Calendar, private ICS, and Windows calendars; [ADR 0002](decisions/0002-direct-calendars-and-updates.md), [ADR 0008](decisions/0008-google-calendar-and-platform-design.md)), local single-day events ([ADR 0017](decisions/0017-local-events.md)), and manual/signed automatic updates are approved scope.
 
-## Remaining product decisions
+## Current status
 
-- Implement the [November 1 design refresh](decisions/0011-windows-only-design-refresh.md) in Slint, the tray renderer and the icons.
-- Confirm proposed Windows support and first-release scope before implementation expands beyond the prototype.
-- Decide release format, signing budget, and distribution identity before public binaries.
-- Resolve Windows calendar API/package feasibility and record any release blocker; do not substitute an account provider without owner approval.
+- The [November 1 design refresh](decisions/0011-windows-only-design-refresh.md), [date size options](decisions/0012-date-size.md), [koi pond](decisions/0013-koi-pond.md), [ten languages](decisions/0014-ten-languages.md), [hover follow](decisions/0015-calendar-hover-follow.md), [calendar motion](decisions/0016-calendar-motion.md), and [local events](decisions/0017-local-events.md) are implemented in Slint, the tray renderer, and the icons.
+- Confirm any expansion beyond the approved providers or Windows x64 support with the owner before implementation.

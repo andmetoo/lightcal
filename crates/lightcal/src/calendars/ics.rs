@@ -89,6 +89,7 @@ fn duration(raw: &str) -> Result<Duration, String> {
         .ok_or("Invalid event duration")?;
     let mut seconds = 0i64;
     let mut time = false;
+    let mut any_unit = false;
     while !input.is_empty() {
         if let Some(rest) = input.strip_prefix('T') {
             time = true;
@@ -110,6 +111,7 @@ fn duration(raw: &str) -> Result<Duration, String> {
             (b'S', true) => 1,
             _ => return Err("Unsupported event duration".into()),
         };
+        any_unit = true;
         seconds = seconds
             .checked_add(
                 number
@@ -118,6 +120,9 @@ fn duration(raw: &str) -> Result<Duration, String> {
             )
             .ok_or("Event duration is too large")?;
         input = &input[count + 1..];
+    }
+    if !any_unit {
+        return Err("Invalid event duration".into());
     }
     Duration::try_seconds(seconds)
         .filter(|d| *d <= Duration::days(3660))
@@ -248,6 +253,12 @@ pub fn parse(
                                     to,
                                 )
                                 .is_err();
+                                if output.len() > 20_000 {
+                                    return Err(
+                                        "Calendar expansion exceeds the supported event limit"
+                                            .into(),
+                                    );
+                                }
                             }
                         }
                         skipped += usize::from(failed);
@@ -279,11 +290,11 @@ pub fn parse(
                     to,
                 )
                 .is_err();
+                if output.len() > 20_000 {
+                    return Err("Calendar expansion exceeds the supported event limit".into());
+                }
             }
             skipped += usize::from(failed);
-        }
-        if output.len() > 20_000 {
-            return Err("Calendar expansion exceeds the supported event limit".into());
         }
     }
     Ok(Parsed {
@@ -319,6 +330,14 @@ fn instances(
     };
     if length < Duration::zero() || length > Duration::days(3660) {
         return Err("Invalid or excessively long ICS event".into());
+    }
+    if property(event, "RECURRENCE-ID").is_some()
+        && event
+            .properties
+            .iter()
+            .any(|p| matches!(p.name.as_str(), "RRULE" | "RDATE" | "EXDATE" | "EXRULE"))
+    {
+        return Err("Recurrence override cannot define its own recurrence rule".into());
     }
     let mut set = RRuleSet::new(start).rdate(start);
     for prop in &event.properties {
@@ -599,5 +618,15 @@ mod tests {
     fn unreadable_events_are_counted() {
         let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261030T090000Z\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:d\r\nDTSTART:20261030T090000Z\r\nDURATION:garbage\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
         assert_eq!(parsed.skipped, 2);
+    }
+
+    #[test]
+    fn empty_duration_and_override_recurrence_rules_are_rejected() {
+        for bad in ["P", "PT", "+P", "+PT"] {
+            assert!(duration(bad).is_err(), "{bad}");
+        }
+        let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:ov\r\nRECURRENCE-ID:20261030T090000Z\r\nDTSTART:20261030T100000Z\r\nRRULE:FREQ=DAILY;COUNT=5\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
+        assert!(parsed.occurrences.is_empty());
+        assert_eq!(parsed.skipped, 1);
     }
 }

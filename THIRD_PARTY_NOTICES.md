@@ -12,7 +12,7 @@ This distribution incorporates the following open-source Rust crates:
 | `serde_json` | `1.0.154` | `MIT OR Apache-2.0` | https://github.com/serde-rs/json |
 | `tray-icon` | `0.26.1` | `MIT OR Apache-2.0` | https://github.com/tauri-apps/tray-icon |
 | `muda` | `0.21.2` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/muda |
-| `windows` | `0.61.0` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
+| `windows` | `0.61.3` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `windows-sys` | `0.61.2` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `skrifa` | `0.44.0` | `MIT OR Apache-2.0` | https://github.com/googlefonts/fontations |
 | `zeno` | `0.3.3` | `Apache-2.0 OR MIT` | https://github.com/dfrg/zeno |

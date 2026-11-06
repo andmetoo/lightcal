@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$testRoot = $null
 Push-Location $projectRoot
 try {
     & (Join-Path $PSScriptRoot 'package-nsis.ps1') -SkipBuild -TestSetup
@@ -29,4 +30,7 @@ try {
     if ([IO.File]::ReadAllText($sentinel) -ne 'preserve user-owned files') { throw 'Uninstaller modified an unrelated file' }
     Write-Output 'NSIS isolated installation, payload hash, uninstallation, and user-file preservation passed.'
     Write-Output 'No real registry, shortcuts, startup, credentials, or application profile were touched.'
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    if ($testRoot -and (Test-Path -LiteralPath $testRoot)) { Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue }
+}

@@ -277,9 +277,13 @@ pub fn apply(plan_path: &Path) -> Result<(), String> {
     let backup = parent.join(format!("lightcal-{suffix}.previous.exe"));
     std::fs::copy(&plan.candidate, &replacement)
         .map_err(|_| "Installation directory is not writable; portable update cannot proceed")?;
-    verify_payload(&replacement, &plan.sha256)?;
-    verify_signed_file(&replacement, &plan.expected_version, &pin)?;
-    replace(&plan.target, &replacement, &backup)?;
+    if let Err(error) = verify_payload(&replacement, &plan.sha256)
+        .and_then(|()| verify_signed_file(&replacement, &plan.expected_version, &pin))
+        .and_then(|()| replace(&plan.target, &replacement, &backup))
+    {
+        let _ = std::fs::remove_file(&replacement);
+        return Err(error);
+    }
     match std::process::Command::new(&plan.target)
         .arg("--tray")
         .spawn()

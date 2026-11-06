@@ -146,6 +146,8 @@ pub fn connect(
                     body
                 );
                 let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(std::net::Shutdown::Write);
                 match result {
                     Ok(Some(code)) => break code,
                     Err(error) if error == "Google sign-in was cancelled" => return Err(error),
@@ -440,9 +442,12 @@ fn collect_pages(
 
 fn parse_event(event: &Value, source: &str, color: &str) -> Result<CalendarOccurrence, String> {
     let all_day = event["start"]["date"].is_string();
+    if all_day != event["end"]["date"].is_string() {
+        return Err("Google event start and end have different value types".into());
+    }
     let start = google_bound(&event["start"], true)?;
     let end = google_bound(&event["end"], false)?;
-    if end.0 < start.0 && !all_day {
+    if (all_day && end.0 < start.0) || (!all_day && end.2 < start.2) {
         return Err("Google event ends before its start".into());
     }
     let date = |dt: chrono::NaiveDate| {
@@ -486,21 +491,21 @@ fn parse_event(event: &Value, source: &str, color: &str) -> Result<CalendarOccur
 fn google_bound(
     value: &Value,
     start: bool,
-) -> Result<(chrono::NaiveDate, chrono::NaiveTime), String> {
+) -> Result<(chrono::NaiveDate, chrono::NaiveTime, i64), String> {
     if let Some(day) = value["date"].as_str() {
         let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
             .map_err(|_| "Google event has an invalid date")?;
-        return Ok((date, chrono::NaiveTime::MIN));
+        return Ok((date, chrono::NaiveTime::MIN, 0));
     }
     let raw = value["dateTime"].as_str().ok_or(if start {
         "Google event has no start"
     } else {
         "Google event has no end"
     })?;
-    let instant = chrono::DateTime::parse_from_rfc3339(raw)
-        .map_err(|_| "Google event has an invalid date/time")?
-        .with_timezone(&chrono::Local);
-    Ok((instant.date_naive(), instant.time()))
+    let parsed = chrono::DateTime::parse_from_rfc3339(raw)
+        .map_err(|_| "Google event has an invalid date/time")?;
+    let instant = parsed.with_timezone(&chrono::Local);
+    Ok((instant.date_naive(), instant.time(), parsed.timestamp()))
 }
 
 #[cfg(test)]
@@ -621,6 +626,20 @@ mod tests {
         assert_eq!(event.web_link, None);
         assert_eq!(event.location, None);
         assert_eq!(event.timed_span(), None);
+
+        let inverted_same_day = serde_json::json!({
+            "id": "inv",
+            "start": {"dateTime": "2026-11-01T11:30:00Z"},
+            "end": {"dateTime": "2026-11-01T10:00:00Z"}
+        });
+        assert!(parse_event(&inverted_same_day, "google:primary", "#008573").is_err());
+
+        let mismatched_bounds = serde_json::json!({
+            "id": "mis",
+            "start": {"date": "2026-11-01"},
+            "end": {"dateTime": "2026-11-01T10:00:00Z"}
+        });
+        assert!(parse_event(&mismatched_bounds, "google:primary", "#008573").is_err());
     }
 
     fn empty_snapshot() -> ProviderSnapshot {
