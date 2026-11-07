@@ -331,19 +331,18 @@ fn instances(
     if length < Duration::zero() || length > Duration::days(3660) {
         return Err("Invalid or excessively long ICS event".into());
     }
-    if property(event, "RECURRENCE-ID").is_some()
-        && event
-            .properties
-            .iter()
-            .any(|p| matches!(p.name.as_str(), "RRULE" | "RDATE" | "EXDATE" | "EXRULE"))
-    {
-        return Err("Recurrence override cannot define its own recurrence rule".into());
-    }
+    // An override (RECURRENCE-ID) replaces exactly one instance. Some exporters copy the
+    // master's RRULE, RDATE or EXDATE onto it: ignore them rather than expand them, since
+    // rejecting the override would also hide the occurrence it moves.
+    let is_override = property(event, "RECURRENCE-ID").is_some();
     let mut set = RRuleSet::new(start).rdate(start);
     for prop in &event.properties {
         let Some(raw) = prop.value.as_deref() else {
             continue;
         };
+        if is_override && matches!(prop.name.as_str(), "RRULE" | "RDATE" | "EXDATE" | "EXRULE") {
+            continue;
+        }
         match prop.name.as_str() {
             "RRULE" => {
                 let normalized = raw
@@ -621,12 +620,23 @@ mod tests {
     }
 
     #[test]
-    fn empty_duration_and_override_recurrence_rules_are_rejected() {
+    fn empty_durations_are_rejected() {
         for bad in ["P", "PT", "+P", "+PT"] {
             assert!(duration(bad).is_err(), "{bad}");
         }
-        let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:ov\r\nRECURRENCE-ID:20261030T090000Z\r\nDTSTART:20261030T100000Z\r\nRRULE:FREQ=DAILY;COUNT=5\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
-        assert!(parsed.occurrences.is_empty());
-        assert_eq!(parsed.skipped, 1);
+    }
+
+    #[test]
+    fn override_keeps_one_instance_when_it_carries_copied_recurrence_rules() {
+        // The 30 Oct instance moves to 10:00 in an override that also carries the master's
+        // RRULE and an EXDATE. It stays one instance and still replaces the 09:00 occurrence.
+        let events = parse_events("BEGIN:VEVENT\r\nUID:ov\r\nDTSTART:20261029T090000Z\r\nDURATION:PT1H\r\nRRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Master\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ov\r\nRECURRENCE-ID:20261030T090000Z\r\nDTSTART:20261030T100000Z\r\nDURATION:PT1H\r\nRRULE:FREQ=DAILY;COUNT=5\r\nEXDATE:20261031T090000Z\r\nSUMMARY:Moved\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 3);
+        let moved: Vec<_> = events.iter().filter(|e| e.title == "Moved").collect();
+        assert_eq!(moved.len(), 1);
+        assert_eq!(moved[0].time_label, "10:00");
+        assert!(!events
+            .iter()
+            .any(|e| e.start_date.day == 30 && e.title == "Master"));
     }
 }

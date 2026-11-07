@@ -326,6 +326,19 @@ fn ics_name_from_address(address: &str) -> String {
     }
 }
 
+/// Whether a provider error reads as a network problem, for the account card's offline
+/// glyph. Matches whole words, so "reconnect" or "disconnected" do not count.
+fn looks_offline(error: &str) -> bool {
+    let lower = error.to_lowercase();
+    lower.contains("timed out")
+        || lower.split(|c: char| !c.is_alphanumeric()).any(|word| {
+            matches!(
+                word,
+                "network" | "offline" | "dns" | "connect" | "connection" | "connectivity"
+            )
+        })
+}
+
 fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
     match locale {
         LocaleCode::Ru => format!("Не прочитано событий Google: {count}"),
@@ -1898,11 +1911,8 @@ impl AppController {
             } else {
                 ""
             };
-            let lower = self.microsoft_error.to_lowercase();
-            let offline = matches!(ms, Ms::Unavailable { .. })
-                || ["network", "offline", "connect", "timed out", "dns"]
-                    .iter()
-                    .any(|needle| lower.contains(needle));
+            let offline =
+                matches!(ms, Ms::Unavailable { .. }) || looks_offline(&self.microsoft_error);
             let (notice_kind, notice, action) = match ms {
                 Ms::NeedsSignIn => (2, st.access_expired.to_string(), st.sign_in),
                 Ms::Unavailable { .. } => (1, offline_text.clone(), ""),
@@ -1945,10 +1955,7 @@ impl AppController {
             } else {
                 ""
             };
-            let lower = self.google_error.to_lowercase();
-            let offline = ["network", "offline", "connect", "timed out", "dns"]
-                .iter()
-                .any(|needle| lower.contains(needle));
+            let offline = looks_offline(&self.google_error);
             let (notice_kind, notice, action) = if self.google_needs_signin {
                 (2, st.access_expired.to_string(), st.sign_in)
             } else if !self.google_error.is_empty() {
@@ -4880,6 +4887,20 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offline_glyph_matches_network_words_only() {
+        assert!(looks_offline(
+            "Microsoft Graph request failed: Connection refused"
+        ));
+        assert!(looks_offline("Google Calendar request timed out"));
+        assert!(looks_offline("DNS lookup failed"));
+        assert!(!looks_offline("Sign-in expired; reconnect your account"));
+        assert!(!looks_offline(
+            "Calendar was disconnected by an administrator"
+        ));
+        assert!(!looks_offline(""));
+    }
 
     #[test]
     fn slint_still_needs_the_native_window_icon() {

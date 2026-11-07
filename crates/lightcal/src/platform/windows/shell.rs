@@ -639,22 +639,35 @@ impl ShortcutManager {
 
         #[cfg(all(windows, not(test)))]
         if let Some(tx) = &self.sender {
-            let (resp_tx, resp_rx) = std::sync::mpsc::channel();
-            let _ = tx.send(ShortcutCommand::Bind {
-                binding: normalized.clone(),
-                resp: resp_tx,
-            });
-            unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW(
-                    self.thread_id,
-                    windows_sys::Win32::UI::WindowsAndMessaging::WM_USER,
-                    0,
-                    0,
-                );
-            }
-            let res = resp_rx
-                .recv_timeout(std::time::Duration::from_secs(2))
-                .map_err(|e| format!("Shortcut service did not respond: {e}"))??;
+            let send = |binding: Option<String>| {
+                let (resp_tx, resp_rx) = std::sync::mpsc::channel();
+                let _ = tx.send(ShortcutCommand::Bind {
+                    binding,
+                    resp: resp_tx,
+                });
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW(
+                        self.thread_id,
+                        windows_sys::Win32::UI::WindowsAndMessaging::WM_USER,
+                        0,
+                        0,
+                    );
+                }
+                resp_rx
+            };
+            let res = match send(normalized.clone()).recv_timeout(std::time::Duration::from_secs(2))
+            {
+                Ok(res) => res?,
+                Err(e) => {
+                    // The thread handles commands in order and may still apply the request
+                    // late. Queue the current binding after it, so the registered hotkey
+                    // ends up matching `active_binding` and the error the caller shows.
+                    if matches!(e, std::sync::mpsc::RecvTimeoutError::Timeout) {
+                        drop(send(self.active_binding.clone()));
+                    }
+                    return Err(format!("Shortcut service did not respond: {e}"));
+                }
+            };
             self.active_binding = res.clone();
             return Ok(res);
         }

@@ -528,7 +528,9 @@ mod tests {
         let mut sandbox_blocked = false;
         let result = connect_with_timeout(
             "00000000-0000-0000-0000-000000000000",
-            Duration::from_millis(250),
+            // Short enough that the sandboxed path, which waits for the timeout, stays quick;
+            // long enough that a busy CI runner still delivers the callback first.
+            Duration::from_secs(3),
             |raw| {
                 let auth = url::Url::parse(&raw).unwrap();
                 let params = auth.query_pairs().collect::<BTreeMap<_, _>>();
