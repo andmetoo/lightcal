@@ -1,6 +1,6 @@
 # Documentation
 
-Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.2.1 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
+Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.2.2 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
 
 | Document | Purpose |
 | --- | --- |

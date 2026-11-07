@@ -186,37 +186,24 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                     Some(dt) => dt,
                     None => continue,
                 };
-                let (start_date, local_dt) = if is_all_day {
-                    let mid_local = utc_dt.with_timezone(&chrono::Local);
-                    let d = LocalDate::new(
-                        mid_local.year(),
-                        mid_local.month() as u8,
-                        mid_local.day() as u8,
-                    )
-                    .unwrap_or(anchor);
-                    (d, mid_local)
-                } else {
-                    let local = utc_dt.with_timezone(&chrono::Local);
-                    let d = match LocalDate::new(
-                        local.year(),
-                        local.month() as u8,
-                        local.day() as u8,
-                    ) {
-                        Some(d) => d,
-                        None => continue,
-                    };
-                    (d, local)
-                };
-
                 let duration_secs = appt
                     .Duration()
                     .map(|d| (d.Duration / TICKS_PER_SECOND).max(0))
                     .unwrap_or(0);
 
-                let (end_date_exclusive, time_label) = if is_all_day {
-                    let days = (duration_secs / 86_400).max(1) as i32;
-                    (start_date.add_days(days), String::new())
+                let local_dt = utc_dt.with_timezone(&chrono::Local);
+                let (start_date, end_date_exclusive, time_label) = if is_all_day {
+                    let (start_d, end_excl) = all_day_span(utc_dt, local_dt, duration_secs, anchor);
+                    (start_d, end_excl, String::new())
                 } else {
+                    let start_d = match LocalDate::new(
+                        local_dt.year(),
+                        local_dt.month() as u8,
+                        local_dt.day() as u8,
+                    ) {
+                        Some(d) => d,
+                        None => continue,
+                    };
                     let end_utc = utc_dt + chrono::Duration::seconds(duration_secs);
                     let end_local = end_utc.with_timezone(&chrono::Local);
                     let end_date = LocalDate::new(
@@ -224,8 +211,8 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                         end_local.month() as u8,
                         end_local.day() as u8,
                     )
-                    .unwrap_or_else(|| start_date.add_days(1));
-                    let end_excl = if end_date > start_date {
+                    .unwrap_or_else(|| start_d.add_days(1));
+                    let end_excl = if end_date > start_d {
                         if end_local.hour() == 0
                             && end_local.minute() == 0
                             && end_local.second() == 0
@@ -235,10 +222,10 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
                             end_date.add_days(1)
                         }
                     } else {
-                        start_date.add_days(1)
+                        start_d.add_days(1)
                     };
                     let time = format!("{:02}:{:02}", local_dt.hour(), local_dt.minute());
-                    (end_excl, time)
+                    (start_d, end_excl, time)
                 };
 
                 let start_minutes = (!is_all_day)
@@ -283,6 +270,32 @@ pub fn query_windows_calendar_store(anchor: LocalDate) -> ProviderSnapshot {
         sources,
         occurrences,
     }
+}
+
+#[cfg(any(windows, test))]
+fn all_day_span<Tz: chrono::TimeZone>(
+    utc_dt: chrono::DateTime<chrono::Utc>,
+    local_dt: chrono::DateTime<Tz>,
+    duration_secs: i64,
+    fallback: LocalDate,
+) -> (LocalDate, LocalDate) {
+    use chrono::{Datelike, Timelike};
+    let use_utc = utc_dt.hour() == 0
+        && utc_dt.minute() == 0
+        && utc_dt.second() == 0
+        && (local_dt.hour() != 0 || local_dt.minute() != 0);
+    let start_date = if use_utc {
+        LocalDate::new(utc_dt.year(), utc_dt.month() as u8, utc_dt.day() as u8)
+    } else {
+        LocalDate::new(
+            local_dt.year(),
+            local_dt.month() as u8,
+            local_dt.day() as u8,
+        )
+    }
+    .unwrap_or(fallback);
+    let days = ((duration_secs.max(0) + 43_200) / 86_400).max(1) as i32;
+    (start_date, start_date.add_days(days))
 }
 
 #[cfg(windows)]
@@ -340,6 +353,35 @@ mod tests {
         assert_eq!(snapshot.status, ProviderStatus::Available);
         assert!(!snapshot.sources.is_empty());
         assert!(!snapshot.occurrences.is_empty());
+    }
+
+    #[test]
+    fn all_day_span_preserves_utc_midnight_in_negative_offsets_and_rounds_dst_days() {
+        use chrono::{FixedOffset, TimeZone, Utc};
+        let fallback = LocalDate::new(2026, 11, 1).unwrap();
+        // 00:00:00Z in UTC-5 (19:00 previous evening locally) keeps the UTC calendar date.
+        let utc_mid = Utc.with_ymd_and_hms(2026, 11, 10, 0, 0, 0).unwrap();
+        let minus_five = FixedOffset::west_opt(5 * 3600).unwrap();
+        let local_prev = utc_mid.with_timezone(&minus_five);
+        assert_eq!(
+            all_day_span(utc_mid, local_prev, 86_400, fallback),
+            (
+                LocalDate::new(2026, 11, 10).unwrap(),
+                LocalDate::new(2026, 11, 11).unwrap()
+            )
+        );
+        // Local midnight in UTC-5 (05:00:00Z) keeps the local calendar date and rounds a
+        // 2-day span across a 23-hour spring-forward DST transition (86400 + 82800 = 169200s)
+        // to 2 full days instead of truncating to 1.
+        let utc_five = Utc.with_ymd_and_hms(2026, 3, 8, 5, 0, 0).unwrap();
+        let local_mid = utc_five.with_timezone(&minus_five);
+        assert_eq!(
+            all_day_span(utc_five, local_mid, 169_200, fallback),
+            (
+                LocalDate::new(2026, 3, 8).unwrap(),
+                LocalDate::new(2026, 3, 10).unwrap()
+            )
+        );
     }
 
     #[test]

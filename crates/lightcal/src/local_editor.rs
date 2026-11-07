@@ -129,7 +129,7 @@ impl EditorErrors {
 /// The timing the fields describe, or what is wrong with them.
 pub(crate) fn validate(fields: &EditorFields) -> Result<Timing, EditorErrors> {
     let mut errors = EditorErrors {
-        title: fields.title.trim().is_empty(),
+        title: clipped(&fields.title, MAX_TITLE_CHARS).trim().is_empty(),
         ..EditorErrors::default()
     };
     let timing = if fields.all_day {
@@ -157,9 +157,20 @@ pub(crate) fn validate(fields: &EditorFields) -> Result<Timing, EditorErrors> {
     }
 }
 
-/// Text beyond the stored limits is cut, so a pasted note never blocks Save.
+/// Text beyond the stored limits is cut and stray control characters are stripped,
+/// so a pasted note or location never blocks Save with a misleading file-size error.
 fn clipped(text: &str, max_chars: usize) -> String {
-    text.chars().take(max_chars).collect()
+    text.chars()
+        .map(|c| {
+            if c == '\u{000b}' || c == '\u{000c}' {
+                '\n'
+            } else {
+                c
+            }
+        })
+        .filter(|&c| !c.is_control() || c == '\n' || c == '\t' || c == '\r')
+        .take(max_chars)
+        .collect()
 }
 
 /// The open editor: a new event, or the local event it edits.
@@ -544,11 +555,8 @@ pub(crate) fn connect_local_editor_callbacks(
             let mut c = ctrl.borrow_mut();
             let previous_month = c.cal_state.displayed_month;
             if cell >= 0 {
-                let grid = c
-                    .cal_state
-                    .build_grid(&c.provider.occurrences, &c.prefs.selected_calendar_ids);
-                if let Some(cell) = grid.cells.get(cell as usize) {
-                    c.cal_state.select_date(cell.date);
+                if let Some(date) = c.cal_state.date_at_cell(cell as usize) {
+                    c.cal_state.select_date(date);
                 }
             }
             if let Some(fields) = c.open_new_editor() {
@@ -683,6 +691,21 @@ mod tests {
         for bad in ["24:01", "9", "9:5", "12:60", "ab:cd", "", "-1:00", "123:00"] {
             assert_eq!(parse_time(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn clipped_strips_control_characters_and_normalizes_vertical_whitespace() {
+        assert_eq!(clipped("Dentist\u{007f}\u{001b}", 256), "Dentist");
+        assert_eq!(
+            clipped("Line 1\u{000b}Line 2\u{000c}Line 3\u{007f}", 2000),
+            "Line 1\nLine 2\nLine 3"
+        );
+        // A title consisting only of control characters is rejected by `validate` as empty.
+        assert!(
+            validate(&fields("\u{007f}\u{001b} ", "09:00", "10:00"))
+                .unwrap_err()
+                .title
+        );
     }
 
     #[test]

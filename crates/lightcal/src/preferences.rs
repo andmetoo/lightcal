@@ -683,12 +683,7 @@ impl PreferencesStore {
                     .collect()
             })
             .unwrap_or_default();
-        files.sort_by_key(|path| {
-            fs::metadata(path)
-                .and_then(|meta| meta.modified())
-                .ok()
-                .zip(path.file_name().map(|name| name.to_os_string()))
-        });
+        files.sort_by_key(|path| preserved_sort_key(path));
         files
     }
 
@@ -697,7 +692,15 @@ impl PreferencesStore {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_secs())
             .unwrap_or(0);
-        for attempt in 0..1000u32 {
+        let mut files = self.preserved_files();
+        let next_attempt = files
+            .iter()
+            .filter_map(|p| preserved_order(p))
+            .filter(|(s, _)| *s == seconds)
+            .map(|(_, a)| a + 1)
+            .max()
+            .unwrap_or(0);
+        for attempt in next_attempt..next_attempt + 1000 {
             let name = if attempt == 0 {
                 format!("preferences.preserved-{seconds}.json")
             } else {
@@ -708,11 +711,12 @@ impl PreferencesStore {
                 continue;
             }
             if fs::copy(source, &destination).is_ok() {
+                files.push(destination);
+                files.sort_by_key(|path| preserved_sort_key(path));
                 break;
             }
             return;
         }
-        let files = self.preserved_files();
         if files.len() > MAX_PRESERVED_FILES {
             for stale in &files[..files.len() - MAX_PRESERVED_FILES] {
                 let _ = fs::remove_file(stale);
@@ -730,8 +734,17 @@ impl PreferencesStore {
             return LoadOutcome::new(Preferences::default(), None, false);
         }
 
-        let raw = match fs::read_to_string(&path) {
-            Ok(s) => s,
+        let raw = match read_bounded_preferences(&path) {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                return LoadOutcome::new(
+                    self.load_last_good_or_default(),
+                    Some(WarningKind::Malformed(
+                        "Preferences file exceeds 1 MiB".into(),
+                    )),
+                    true,
+                );
+            }
             Err(err) => {
                 return LoadOutcome::new(
                     Preferences::default(),
@@ -827,23 +840,22 @@ impl PreferencesStore {
         }
 
         // Keep the user's original file when it cannot be read as current preferences, so
-        // recovering with defaults never silently destroys it. Otherwise refresh last_good.
+        // recovering with defaults never silently destroys it.
         if target.exists() {
-            if let Ok(existing_raw) = fs::read_to_string(&target) {
-                let exact = serde_json::from_str::<serde_json::Value>(&existing_raw)
-                    .ok()
-                    .zip(serde_json::from_str::<Preferences>(&existing_raw).ok())
-                    .is_some_and(|(value, existing)| {
-                        existing.schema_version <= CURRENT_SCHEMA_VERSION
-                            && has_schema_version(&value)
-                            && !deviations(&value, &existing).any()
-                    });
-                if exact {
-                    let _ = fs::copy(&target, &last_good);
-                } else {
-                    self.preserve_existing(&target);
-                }
-            } else {
+            let exact = read_bounded_preferences(&target)
+                .ok()
+                .flatten()
+                .is_some_and(|existing_raw| {
+                    serde_json::from_str::<serde_json::Value>(&existing_raw)
+                        .ok()
+                        .zip(serde_json::from_str::<Preferences>(&existing_raw).ok())
+                        .is_some_and(|(value, existing)| {
+                            existing.schema_version <= CURRENT_SCHEMA_VERSION
+                                && has_schema_version(&value)
+                                && !deviations(&value, &existing).any()
+                        })
+                });
+            if !exact {
                 self.preserve_existing(&target);
             }
         }
@@ -852,8 +864,44 @@ impl PreferencesStore {
             let _ = fs::remove_file(&tmp);
             format!("Failed to replace preferences file: {e}")
         })?;
+        // last_good always mirrors the file just written, so recovery restores the latest save.
         let _ = fs::copy(&target, &last_good);
         Ok(())
+    }
+}
+
+const MAX_PREFERENCES_BYTES: u64 = 1024 * 1024;
+
+fn read_bounded_preferences(path: &Path) -> std::io::Result<Option<String>> {
+    use std::io::Read;
+    let file = fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.take(MAX_PREFERENCES_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_PREFERENCES_BYTES {
+        return Ok(None);
+    }
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+/// Oldest first: by the `<seconds>-<attempt>` suffix, then by name.
+fn preserved_sort_key(path: &Path) -> (Option<(u64, u32)>, Option<std::ffi::OsString>) {
+    (
+        preserved_order(path),
+        path.file_name().map(|name| name.to_os_string()),
+    )
+}
+
+fn preserved_order(path: &Path) -> Option<(u64, u32)> {
+    let name = path.file_name()?.to_str()?;
+    let rest = name
+        .strip_prefix("preferences.preserved-")?
+        .strip_suffix(".json")?;
+    match rest.split_once('-') {
+        Some((seconds, attempt)) => Some((seconds.parse().ok()?, attempt.parse().ok()?)),
+        None => Some((rest.parse().ok()?, 0)),
     }
 }
 
@@ -1335,5 +1383,41 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         }
         assert_eq!(store.preserved_files().len(), MAX_PRESERVED_FILES);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn last_good_mirrors_the_latest_save() {
+        let dir = unique_temp_dir("last-good-latest");
+        let store = PreferencesStore::new(&dir);
+        let mut prefs = Preferences::default();
+        store.save(&prefs).unwrap();
+        prefs.theme = ThemePreference::Dark;
+        store.save(&prefs).unwrap();
+        prefs.first_weekday = Weekday::Sunday;
+        store.save(&prefs).unwrap();
+        assert_eq!(
+            fs::read(store.last_good_path()).unwrap(),
+            fs::read(store.file_path()).unwrap()
+        );
+        // A damaged main file recovers the latest save, not an earlier one.
+        fs::write(store.file_path(), "{ not json").unwrap();
+        assert_eq!(store.load().preferences, prefs);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preserved_order_sorts_by_timestamp_and_attempt_not_mtime() {
+        assert_eq!(
+            preserved_order(Path::new("preferences.preserved-100.json")),
+            Some((100, 0))
+        );
+        assert_eq!(
+            preserved_order(Path::new("preferences.preserved-100-2.json")),
+            Some((100, 2))
+        );
+        assert!(
+            preserved_order(Path::new("preferences.preserved-99-9.json"))
+                < preserved_order(Path::new("preferences.preserved-100.json"))
+        );
     }
 }

@@ -75,6 +75,14 @@ pub fn valid_client_id(raw: &str) -> bool {
 }
 
 pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<String, String> {
+    connect_with_timeout(client_id, Duration::from_secs(180), open_browser)
+}
+
+fn connect_with_timeout(
+    client_id: &str,
+    timeout: Duration,
+    open_browser: impl FnOnce(String),
+) -> Result<String, String> {
     if !valid_client_id(client_id) {
         return Err("Configure a Microsoft Entra Desktop app Client ID first (see provider setup documentation)".into());
     }
@@ -105,7 +113,7 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
         ("prompt", "select_account"),
     ]);
     open_browser(auth.into());
-    let deadline = Instant::now() + Duration::from_secs(180);
+    let deadline = Instant::now() + timeout;
     let code = loop {
         if Instant::now() >= deadline {
             return Err("Microsoft sign-in timed out; try connecting again".into());
@@ -123,19 +131,12 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
                 {
                     continue;
                 }
-                let result = callback_code(&line, &state);
-                let success = result.as_ref().is_ok_and(|code| code.is_some());
-                let body = if success {
-                    "Authorization response received. Return to Lightcal to see the connection result."
-                } else {
-                    "Sign-in callback rejected. Return to Lightcal or finish sign-in in the original browser tab."
-                };
-                let response = format!("HTTP/1.1 {}\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'none'\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", if success { "200 OK" } else { "400 Bad Request" }, body.len(), body);
-                let _ = stream.write_all(response.as_bytes());
-                match result {
-                    Ok(Some(code)) => break code,
-                    Err(error) if error == "Microsoft sign-in was cancelled" => return Err(error),
-                    _ => {}
+                let outcome = handle_callback_line(&line, &state, &mut stream);
+                super::close_callback_stream(&mut stream);
+                match outcome {
+                    Some(Ok(code)) => break code,
+                    Some(Err(error)) => return Err(error),
+                    None => {}
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -162,6 +163,27 @@ pub fn connect(client_id: &str, open_browser: impl FnOnce(String)) -> Result<Str
         .ok_or_else(|| {
             "Microsoft did not grant offline calendar access; reconnect and consent".into()
         })
+}
+
+fn handle_callback_line(
+    line: &str,
+    expected_state: &str,
+    mut out: impl Write,
+) -> Option<Result<String, String>> {
+    let result = callback_code(line, expected_state);
+    let success = result.as_ref().is_ok_and(|code| code.is_some());
+    let body = if success {
+        "Authorization response received. Return to Lightcal to see the connection result."
+    } else {
+        "Sign-in callback rejected. Return to Lightcal or finish sign-in in the original browser tab."
+    };
+    let response = format!("HTTP/1.1 {}\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'none'\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", if success { "200 OK" } else { "400 Bad Request" }, body.len(), body);
+    let _ = out.write_all(response.as_bytes());
+    match result {
+        Ok(Some(code)) => Some(Ok(code)),
+        Err(error) if error == "Microsoft sign-in was cancelled" => Some(Err(error)),
+        _ => None,
+    }
 }
 
 fn callback_code(line: &str, expected_state: &str) -> Result<Option<String>, String> {
@@ -502,34 +524,66 @@ mod tests {
     #[test]
     fn desktop_callback_uses_registered_path_and_cancellation_never_reaches_token_exchange() {
         let mut responder = None;
-        let result = connect("00000000-0000-0000-0000-000000000000", |raw| {
-            let auth = url::Url::parse(&raw).unwrap();
-            let params = auth.query_pairs().collect::<BTreeMap<_, _>>();
-            let redirect_raw = params.get("redirect_uri").unwrap().to_string();
-            let redirect = url::Url::parse(&redirect_raw).unwrap();
-            assert_eq!(redirect.scheme(), "http");
-            assert_eq!(redirect.host_str(), Some("localhost"));
-            assert_eq!(redirect.path(), "/lightcalendar/oauth/microsoft");
-            let port = redirect.port().expect("ephemeral redirect port");
+        let mut sandbox_blocked = false;
+        let result = connect_with_timeout(
+            "00000000-0000-0000-0000-000000000000",
+            // Short enough that the sandboxed path, which waits for the timeout, stays quick;
+            // long enough that a busy CI runner still delivers the callback first.
+            Duration::from_secs(3),
+            |raw| {
+                let auth = url::Url::parse(&raw).unwrap();
+                let params = auth.query_pairs().collect::<BTreeMap<_, _>>();
+                let redirect_raw = params.get("redirect_uri").unwrap().to_string();
+                let redirect = url::Url::parse(&redirect_raw).unwrap();
+                assert_eq!(redirect.scheme(), "http");
+                assert_eq!(redirect.host_str(), Some("localhost"));
+                assert_eq!(redirect.path(), "/lightcalendar/oauth/microsoft");
+                let port = redirect.port().expect("ephemeral redirect port");
+                assert_eq!(
+                    redirect_raw,
+                    format!("http://localhost:{port}/lightcalendar/oauth/microsoft")
+                );
+                assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
+                let state = params.get("state").unwrap().to_string();
+                let req_line = format!(
+                    "GET /lightcalendar/oauth/microsoft?error=access_denied&state={state} HTTP/1.1\r\n"
+                );
+                match std::net::TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(mut stream) => {
+                        responder = Some(std::thread::spawn(move || {
+                            stream
+                                .set_read_timeout(Some(Duration::from_secs(5)))
+                                .unwrap();
+                            write!(stream, "{req_line}Host: localhost:{port}\r\n\r\n").unwrap();
+                            let mut response = String::new();
+                            stream.read_to_string(&mut response).unwrap();
+                            assert!(response.starts_with("HTTP/1.1 400"));
+                        }));
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                        sandbox_blocked = true;
+                        let mut out = Vec::new();
+                        let outcome = handle_callback_line(&req_line, &state, &mut out);
+                        assert_eq!(
+                            outcome,
+                            Some(Err("Microsoft sign-in was cancelled".to_string()))
+                        );
+                        let response = String::from_utf8(out).unwrap();
+                        assert!(response.starts_with("HTTP/1.1 400"));
+                    }
+                    Err(e) => panic!("unexpected loopback connect error: {e}"),
+                }
+            },
+        );
+        if sandbox_blocked {
             assert_eq!(
-                redirect_raw,
-                format!("http://localhost:{port}/lightcalendar/oauth/microsoft")
+                result.unwrap_err(),
+                "Microsoft sign-in timed out; try connecting again"
             );
-            assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
-            let state = params.get("state").unwrap().to_string();
-            responder = Some(std::thread::spawn(move || {
-                let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(5)))
-                    .unwrap();
-                write!(stream,"GET /lightcalendar/oauth/microsoft?error=access_denied&state={state} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n").unwrap();
-                let mut response = String::new();
-                stream.read_to_string(&mut response).unwrap();
-                assert!(response.starts_with("HTTP/1.1 400"));
-            }));
-        });
-        assert_eq!(result.unwrap_err(), "Microsoft sign-in was cancelled");
-        responder.unwrap().join().unwrap();
+        } else {
+            assert_eq!(result.unwrap_err(), "Microsoft sign-in was cancelled");
+            responder.unwrap().join().unwrap();
+        }
     }
 
     #[test]

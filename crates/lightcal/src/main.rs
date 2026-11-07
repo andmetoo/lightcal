@@ -9,8 +9,8 @@ use lightcal::i18n::{
 #[cfg(windows)]
 use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
 use lightcal::platform::windows::{
-    bring_to_foreground, primary_tray_area, query_calendar_provider, render_squircle_icon_rgba_64,
-    system_prefers_dark_mode, ShortcutManager, SingleInstance, SingleInstanceGuard, StartupManager,
+    bring_to_foreground, primary_tray_area, query_calendar_provider, system_prefers_dark_mode,
+    ShortcutManager, SingleInstance, SingleInstanceGuard, StartupManager,
 };
 #[cfg(windows)]
 use lightcal::platform::windows::{icon::native_small_icon_size, render_squircle_icon_generic};
@@ -39,10 +39,7 @@ pub(crate) enum ActiveSignIn {
     Microsoft,
     Google,
 }
-use slint::{
-    ComponentHandle, Image, LogicalSize, ModelRc, PhysicalPosition, Rgba8Pixel, SharedPixelBuffer,
-    SharedString, VecModel,
-};
+use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel};
 use std::cell::RefCell;
 use std::env;
 use std::path::Path;
@@ -163,11 +160,13 @@ pub(crate) struct AppController {
     pub(crate) held_google_needs_signin: bool,
     pub(crate) held_google_label: String,
     pub(crate) held_google_error: String,
+    pub(crate) held_microsoft_error: String,
     pub(crate) google_connected: bool,
     pub(crate) google_needs_signin: bool,
     pub(crate) google_label: String,
     pub(crate) google_error: String,
-    pub(crate) ics_error: String,
+    pub(crate) microsoft_error: String,
+    pub(crate) ics_feed_errors: std::collections::BTreeMap<String, String>,
     /// Calendar popup agenda: expanded and copied events.
     pub(crate) agenda: calendar_view::AgendaUiState,
     /// When calendars last loaded successfully; drives "Updated … ago" in Accounts.
@@ -325,6 +324,22 @@ fn ics_name_from_address(address: &str) -> String {
     } else {
         host.chars().take(100).collect()
     }
+}
+
+/// Whether a provider error reads as a network problem, for the account card's offline
+/// glyph. Matches whole words, so "reconnect" or "disconnected" do not count. Network
+/// failures reach the cards as the fixed English messages in `lightcal::net` (provider
+/// errors are not localized; only skipped-event notes are), so matching them works in
+/// every UI language.
+fn looks_offline(error: &str) -> bool {
+    let lower = error.to_lowercase();
+    lower.contains("timed out")
+        || lower.split(|c: char| !c.is_alphanumeric()).any(|word| {
+            matches!(
+                word,
+                "network" | "offline" | "dns" | "connect" | "connection" | "connectivity"
+            )
+        })
 }
 
 fn skipped_google_events(locale: LocaleCode, count: usize) -> String {
@@ -971,24 +986,6 @@ impl AppController {
             .into(),
         );
         ui.set_live_time_text(format!("{:02}:{:02}", now.hour(), now.minute()).into());
-        for monochrome in [false, true] {
-            let rgba = render_squircle_icon_rgba_64(
-                self.prefs.tray_icon_mode,
-                monochrome,
-                self.cal_state.today.day,
-                self.cal_state.today.weekday(),
-                (now.hour() as u8, now.minute() as u8),
-                dark_mode,
-            );
-            let image = Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(
-                &rgba, 64, 64,
-            ));
-            if monochrome {
-                ui.set_monochrome_icon_preview(image);
-            } else {
-                ui.set_colored_icon_preview(image);
-            }
-        }
         #[cfg(windows)]
         self.sync_icons(now);
 
@@ -1459,7 +1456,17 @@ impl AppController {
             }
             .into(),
         );
-        ui.set_ics_status_text(self.ics_error.clone().into());
+        // In the order the feeds are listed, like their cards; the map is keyed by random ids.
+        ui.set_ics_status_text(
+            self.provider
+                .sources
+                .iter()
+                .filter_map(|source| self.ics_feed_errors.get(&source.id))
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .into(),
+        );
         ui.set_google_connected(self.google_connected);
         ui.set_google_needs_signin(self.google_needs_signin);
         ui.set_google_status_text(
@@ -1917,9 +1924,17 @@ impl AppController {
             } else {
                 ""
             };
+            // Unavailable with no error, or with a network error, is the offline state;
+            // any other error is shown as it is, without the offline glyph.
+            let error_offline = looks_offline(&self.microsoft_error);
+            let offline = (matches!(ms, Ms::Unavailable { .. }) && self.microsoft_error.is_empty())
+                || error_offline;
             let (notice_kind, notice, action) = match ms {
                 Ms::NeedsSignIn => (2, st.access_expired.to_string(), st.sign_in),
-                Ms::Unavailable { .. } => (1, offline_text.clone(), ""),
+                Ms::Unavailable { .. } if self.microsoft_error.is_empty() || error_offline => {
+                    (1, offline_text.clone(), "")
+                }
+                _ if !self.microsoft_error.is_empty() => (1, self.microsoft_error.clone(), ""),
                 _ => (0, String::new(), ""),
             };
             cards.push(AccountCardItem {
@@ -1934,7 +1949,7 @@ impl AppController {
                 .into(),
                 notice: notice.into(),
                 notice_kind,
-                notice_offline: notice_kind == 1,
+                notice_offline: offline,
                 action_label: action.into(),
                 can_refresh,
                 can_disconnect: ui.get_can_disconnect_microsoft(),
@@ -1958,10 +1973,7 @@ impl AppController {
             } else {
                 ""
             };
-            let lower = self.google_error.to_lowercase();
-            let offline = ["network", "offline", "connect", "timed out", "dns"]
-                .iter()
-                .any(|needle| lower.contains(needle));
+            let offline = looks_offline(&self.google_error);
             let (notice_kind, notice, action) = if self.google_needs_signin {
                 (2, st.access_expired.to_string(), st.sign_in)
             } else if !self.google_error.is_empty() {
@@ -1990,12 +2002,12 @@ impl AppController {
             });
         }
 
-        for (index, source) in ics.iter().enumerate() {
-            let error = if index == 0 {
-                self.ics_error.as_str()
-            } else {
-                ""
-            };
+        for source in ics.iter() {
+            let error = self
+                .ics_feed_errors
+                .get(source.id.as_str())
+                .map(String::as_str)
+                .unwrap_or("");
             cards.push(AccountCardItem {
                 id: source.id.clone(),
                 title: source.name.clone(),
@@ -2962,6 +2974,7 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
     let snapshot = data.snapshot;
     with_active_controller(&ui_weak, |ctrl, ui| {
         ctrl.microsoft_account = data.microsoft;
+        ctrl.microsoft_error = data.microsoft_error;
         ctrl.account_before_check = None;
         ctrl.google_connected = data.google_connected;
         ctrl.google_needs_signin = data.google_needs_signin;
@@ -2971,10 +2984,15 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
         }
         ctrl.google_label = data.google_label.unwrap_or_default();
         ctrl.google_error = data.google_error;
-        if data.google_skipped > 0 && ctrl.google_error.is_empty() {
-            ctrl.google_error = skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
+        if data.google_skipped > 0 {
+            let skipped = skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
+            if ctrl.google_error.is_empty() {
+                ctrl.google_error = skipped;
+            } else {
+                ctrl.google_error = format!("{}; {skipped}", ctrl.google_error);
+            }
         }
-        ctrl.ics_error = data.ics_error;
+        ctrl.ics_feed_errors = data.ics_feed_errors;
         ctrl.provider_loading = false;
         match &snapshot.status {
             lightcal::platform::ProviderStatus::AccessDenied => {
@@ -3293,7 +3311,8 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                         google_label: None,
                         google_error: String::new(),
                         google_skipped: 0,
-                        ics_error: String::new(),
+                        microsoft_error: String::new(),
+                        ics_feed_errors: Default::default(),
                     }
                 } else {
                     lightcal::calendars::query(
@@ -3413,6 +3432,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             ));
             if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
                 ctrl.held_microsoft = ctrl.microsoft_account.clone();
+                // The previous failure no longer describes the account being connected.
+                ctrl.held_microsoft_error = std::mem::take(&mut ctrl.microsoft_error);
                 ctrl.active_sign_in = ActiveSignIn::Microsoft;
                 ctrl.microsoft_account =
                     lightcal::calendars::account::MicrosoftAccountState::Connecting;
@@ -3567,6 +3588,9 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.connection_busy = false;
                 forget_sign_in_url();
+                // Set only while a Microsoft sign-in runs: a failed one shows the old error
+                // again, a successful one leaves it to the calendar load that follows.
+                let held_microsoft_error = std::mem::take(&mut ctrl.held_microsoft_error);
                 ctrl.connection_message = match result {
                     Ok(removed) => {
                         if let Some(client) = connected_client {
@@ -3587,12 +3611,16 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                         if let Some(prefix) = removed {
                             if prefix == "graph:" {
                                 ctrl.microsoft_account=lightcal::calendars::account::MicrosoftAccountState::Disconnected;
+                                ctrl.microsoft_error.clear();
                             }
                             if prefix == "google:" {
                                 ctrl.google_connected = false;
                                 ctrl.google_needs_signin = false;
                                 ctrl.google_label.clear();
                                 ctrl.google_error.clear();
+                            }
+                            if prefix.starts_with("ics:") {
+                                ctrl.ics_feed_errors.remove(&prefix);
                             }
                             ctrl.prefs
                                 .selected_calendar_ids
@@ -3608,6 +3636,9 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                     }
                     Err(error) => {
                         ctrl.microsoft_account = previous_account;
+                        if !held_microsoft_error.is_empty() {
+                            ctrl.microsoft_error = held_microsoft_error;
+                        }
                         error
                     }
                 };
@@ -3945,11 +3976,13 @@ fn main() {
         held_google_needs_signin: false,
         held_google_label: String::new(),
         held_google_error: String::new(),
+        held_microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_label: String::new(),
         google_error: String::new(),
-        ics_error: String::new(),
+        microsoft_error: String::new(),
+        ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
         on_screen: popup_on_screen,
@@ -4175,7 +4208,11 @@ fn main() {
                 if refresh_tray {
                     if let Some(w) = ui_weak.upgrade() {
                         let c = ctrl.borrow();
-                        c.sync_to_ui(&w);
+                        if date_changed || (c.on_screen)() || w.window().is_visible() {
+                            c.sync_to_ui(&w);
+                        } else {
+                            c.sync_icons(now);
+                        }
                     }
                 }
                 if date_changed {
@@ -4231,11 +4268,8 @@ fn main() {
         ui.on_select_cell(move |idx| {
             let mut c = ctrl.borrow_mut();
             let previous_month = c.cal_state.displayed_month;
-            let grid = c
-                .cal_state
-                .build_grid(&c.provider.occurrences, &c.prefs.selected_calendar_ids);
-            if let Some(cell) = grid.cells.get(idx as usize) {
-                c.cal_state.select_date(cell.date);
+            if let Some(date) = c.cal_state.date_at_cell(idx as usize) {
+                c.cal_state.select_date(date);
             }
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
@@ -4847,6 +4881,7 @@ fn main() {
                 match c.active_sign_in {
                     ActiveSignIn::Microsoft => {
                         c.microsoft_account = c.held_microsoft.clone();
+                        c.microsoft_error = std::mem::take(&mut c.held_microsoft_error);
                     }
                     ActiveSignIn::Google => {
                         c.google_connected = c.held_google_connected;
@@ -4871,6 +4906,26 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offline_glyph_matches_network_words_only() {
+        assert!(looks_offline(
+            "Microsoft Graph request failed: Connection refused"
+        ));
+        assert!(looks_offline("Google Calendar request timed out"));
+        assert!(looks_offline("DNS lookup failed"));
+        // The transport's own messages, which every network failure reaches the cards as.
+        assert!(looks_offline("HTTPS request failed or timed out"));
+        assert!(looks_offline("Authentication request failed or timed out"));
+        assert!(looks_offline(
+            "Response is too large, incomplete, or timed out"
+        ));
+        assert!(!looks_offline("Sign-in expired; reconnect your account"));
+        assert!(!looks_offline(
+            "Calendar was disconnected by an administrator"
+        ));
+        assert!(!looks_offline(""));
+    }
 
     #[test]
     fn slint_still_needs_the_native_window_icon() {
@@ -4969,7 +5024,8 @@ mod tests {
             google_label: None,
             google_error: String::new(),
             google_skipped: 0,
-            ics_error: String::new(),
+            microsoft_error: String::new(),
+            ics_feed_errors: Default::default(),
         });
         assert!(ok.is_ok());
     }

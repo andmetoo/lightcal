@@ -89,6 +89,7 @@ fn duration(raw: &str) -> Result<Duration, String> {
         .ok_or("Invalid event duration")?;
     let mut seconds = 0i64;
     let mut time = false;
+    let mut any_unit = false;
     while !input.is_empty() {
         if let Some(rest) = input.strip_prefix('T') {
             time = true;
@@ -110,6 +111,7 @@ fn duration(raw: &str) -> Result<Duration, String> {
             (b'S', true) => 1,
             _ => return Err("Unsupported event duration".into()),
         };
+        any_unit = true;
         seconds = seconds
             .checked_add(
                 number
@@ -118,6 +120,9 @@ fn duration(raw: &str) -> Result<Duration, String> {
             )
             .ok_or("Event duration is too large")?;
         input = &input[count + 1..];
+    }
+    if !any_unit {
+        return Err("Invalid event duration".into());
     }
     Duration::try_seconds(seconds)
         .filter(|d| *d <= Duration::days(3660))
@@ -248,6 +253,12 @@ pub fn parse(
                                     to,
                                 )
                                 .is_err();
+                                if output.len() > 20_000 {
+                                    return Err(
+                                        "Calendar expansion exceeds the supported event limit"
+                                            .into(),
+                                    );
+                                }
                             }
                         }
                         skipped += usize::from(failed);
@@ -279,11 +290,11 @@ pub fn parse(
                     to,
                 )
                 .is_err();
+                if output.len() > 20_000 {
+                    return Err("Calendar expansion exceeds the supported event limit".into());
+                }
             }
             skipped += usize::from(failed);
-        }
-        if output.len() > 20_000 {
-            return Err("Calendar expansion exceeds the supported event limit".into());
         }
     }
     Ok(Parsed {
@@ -320,11 +331,18 @@ fn instances(
     if length < Duration::zero() || length > Duration::days(3660) {
         return Err("Invalid or excessively long ICS event".into());
     }
+    // An override (RECURRENCE-ID) replaces exactly one instance. Some exporters copy the
+    // master's RRULE, RDATE or EXDATE onto it: ignore them rather than expand them, since
+    // rejecting the override would also hide the occurrence it moves.
+    let is_override = property(event, "RECURRENCE-ID").is_some();
     let mut set = RRuleSet::new(start).rdate(start);
     for prop in &event.properties {
         let Some(raw) = prop.value.as_deref() else {
             continue;
         };
+        if is_override && matches!(prop.name.as_str(), "RRULE" | "RDATE" | "EXDATE" | "EXRULE") {
+            continue;
+        }
         match prop.name.as_str() {
             "RRULE" => {
                 let normalized = raw
@@ -599,5 +617,26 @@ mod tests {
     fn unreadable_events_are_counted() {
         let parsed = parse_raw("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20261030T090000Z\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:d\r\nDTSTART:20261030T090000Z\r\nDURATION:garbage\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
         assert_eq!(parsed.skipped, 2);
+    }
+
+    #[test]
+    fn empty_durations_are_rejected() {
+        for bad in ["P", "PT", "+P", "+PT"] {
+            assert!(duration(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn override_keeps_one_instance_when_it_carries_copied_recurrence_rules() {
+        // The 30 Oct instance moves to 10:00 in an override that also carries the master's
+        // RRULE and an EXDATE. It stays one instance and still replaces the 09:00 occurrence.
+        let events = parse_events("BEGIN:VEVENT\r\nUID:ov\r\nDTSTART:20261029T090000Z\r\nDURATION:PT1H\r\nRRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Master\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:ov\r\nRECURRENCE-ID:20261030T090000Z\r\nDTSTART:20261030T100000Z\r\nDURATION:PT1H\r\nRRULE:FREQ=DAILY;COUNT=5\r\nEXDATE:20261031T090000Z\r\nSUMMARY:Moved\r\nEND:VEVENT\r\n");
+        assert_eq!(events.len(), 3);
+        let moved: Vec<_> = events.iter().filter(|e| e.title == "Moved").collect();
+        assert_eq!(moved.len(), 1);
+        assert_eq!(moved[0].time_label, "10:00");
+        assert!(!events
+            .iter()
+            .any(|e| e.start_date.day == 30 && e.title == "Master"));
     }
 }

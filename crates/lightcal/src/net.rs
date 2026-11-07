@@ -2,10 +2,25 @@
 use std::time::Duration;
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
+/// For requests that carry tokens: no redirect is followed, so a token never reaches
+/// another host.
 pub fn agent(timeout: Duration) -> ureq::Agent {
+    agent_with(timeout, 0)
+}
+
+/// For unauthenticated GitHub API reads. Unlike [`agent`], this follows a few HTTPS-only
+/// redirects, which GitHub sends for a renamed or transferred repository.
+pub fn public_api_agent(timeout: Duration) -> ureq::Agent {
+    agent_with(timeout, 3)
+}
+
+/// The shared TLS setup (native TLS, platform roots). Statuses come back as responses, and
+/// a redirect, when any is allowed, must stay on HTTPS.
+fn agent_with(timeout: Duration, max_redirects: u32) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
-        .max_redirects(0)
+        .max_redirects(max_redirects)
+        .https_only(max_redirects > 0)
         .http_status_as_error(false)
         .tls_config(
             TlsConfig::builder()
@@ -27,18 +42,8 @@ pub fn download_release_asset(raw: &str) -> Result<Vec<u8>, String> {
     {
         return Err("Rejected an update asset outside the official repository".into());
     }
-    let client: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(120)))
-        .max_redirects(5)
-        .https_only(true)
-        .tls_config(
-            TlsConfig::builder()
-                .provider(TlsProvider::NativeTls)
-                .root_certs(RootCerts::PlatformVerifier)
-                .build(),
-        )
-        .build()
-        .into();
+    // GitHub redirects release downloads to its asset CDN.
+    let client = agent_with(Duration::from_secs(120), 5);
     let mut response = client
         .get(uri.as_str())
         .header("User-Agent", "Lightcal updater")

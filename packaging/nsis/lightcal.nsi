@@ -37,6 +37,9 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${STAGE}\LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
+!ifndef TEST_SETUP
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryLeave
+!endif
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !ifndef TEST_SETUP
@@ -48,9 +51,91 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_UNPAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
-!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "German"
 !insertmacro MUI_LANGUAGE "Spanish"
+!insertmacro MUI_LANGUAGE "French"
+!insertmacro MUI_LANGUAGE "PortugueseBR"
+!insertmacro MUI_LANGUAGE "Russian"
+!insertmacro MUI_LANGUAGE "Ukrainian"
 !insertmacro MUI_LANGUAGE "Japanese"
+!insertmacro MUI_LANGUAGE "Korean"
+!insertmacro MUI_LANGUAGE "SimpChinese"
+
+; Sets $0 to 0 when $INSTDIR\lightcal.exe can be replaced, 1 while Lightcal
+; holds its single-instance mutex, 2 while the exe stays in use, and 3 when
+; this account cannot write it. Quit releases the mutex before the process has
+; exited (ADR 0017), so the exe is also opened for writing, which Windows
+; refuses while a process runs it: usually with a sharing violation, but a
+; running or delete-pending image can also give access denied. Both are retried
+; for 5 s, so a closing Lightcal or a short antivirus or indexer lock passes;
+; access denied that lasts means this account cannot write the file. The probe
+; changes nothing: a read-only exe counts as replaceable, since the install and
+; uninstall sections clear the attribute themselves.
+!macro LightcalRunning
+  StrCpy $0 0
+  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r1'
+  ${If} $1 != 0
+    System::Call 'kernel32::CloseHandle(p r1)'
+    StrCpy $0 1
+  ${ElseIf} ${FileExists} "$INSTDIR\lightcal.exe"
+    StrCpy $2 0
+    ${Do}
+      ; GENERIC_WRITE, share read/write/delete, OPEN_EXISTING.
+      System::Call 'kernel32::CreateFileW(w "$INSTDIR\lightcal.exe", i 0x40000000, i 7, p 0, i 3, i 0, p 0) p .r1 ?e'
+      Pop $3
+      ${If} $1 <> -1
+        System::Call 'kernel32::CloseHandle(p r1)'
+        StrCpy $0 0
+        ${Break}
+      ${EndIf}
+      ${If} $3 == 5
+        ; ERROR_ACCESS_DENIED: a read-only attribute passes at once; otherwise the
+        ; image may still be closing, or this account cannot write the file.
+        System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\lightcal.exe") i .r4'
+        IntOp $4 $4 & 1
+        ${If} $4 == 1
+          StrCpy $0 0
+          ${Break}
+        ${EndIf}
+        StrCpy $0 3
+      ${ElseIf} $3 == 32
+        ; ERROR_SHARING_VIOLATION: a process still has the file open.
+        StrCpy $0 2
+      ${Else}
+        ; Anything else will not clear by waiting.
+        StrCpy $0 3
+        ${Break}
+      ${EndIf}
+      IntOp $2 $2 + 1
+      ${If} $2 >= 10
+        ${Break}
+      ${EndIf}
+      Sleep 500
+    ${Loop}
+  ${EndIf}
+!macroend
+
+; Shows why Setup cannot continue when $0 is not 0.
+!macro LightcalRunningMessage ACTION
+  ${If} $0 == 1
+    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then ${ACTION}." /SD IDOK
+  ${ElseIf} $0 == 2
+    MessageBox MB_OK|MB_ICONINFORMATION "$INSTDIR\lightcal.exe is still in use. If Lightcal is closing, wait a moment, then ${ACTION}." /SD IDOK
+  ${ElseIf} $0 == 3
+    MessageBox MB_OK|MB_ICONSTOP "This account cannot change $INSTDIR\lightcal.exe. If Lightcal was just closing, try again; otherwise choose another folder, or remove that installation with the account that installed it." /SD IDOK
+  ${EndIf}
+!macroend
+
+!ifndef TEST_SETUP
+; The Directory page can point Setup at another installation, so check again there.
+Function DirectoryLeave
+  !insertmacro LightcalRunning
+  ${If} $0 != 0
+    !insertmacro LightcalRunningMessage "continue"
+    Abort
+  ${EndIf}
+FunctionEnd
+!endif
 
 Function .onInit
   SetShellVarContext current
@@ -60,9 +145,9 @@ Function .onInit
     Abort
   ${EndIf}
 !ifndef TEST_SETUP
-  FindWindow $0 "" "Lightcal"
+  !insertmacro LightcalRunning
   ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then run Setup again." /SD IDOK
+    !insertmacro LightcalRunningMessage "run Setup again"
     SetErrorLevel 1603
     Abort
   ${EndIf}
@@ -72,6 +157,10 @@ FunctionEnd
 Section "Lightcal (required)" AppFiles
   SectionIn RO
   SetOutPath "$INSTDIR"
+  ; A read-only exe from an earlier copy would block the overwrite.
+  ${If} ${FileExists} "$INSTDIR\lightcal.exe"
+    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
+  ${EndIf}
   File "${STAGE}\lightcal.exe"
   File "${STAGE}\LICENSE"
   File "${STAGE}\THIRD_PARTY_NOTICES.md"
@@ -117,9 +206,9 @@ SectionEnd
 Function un.onInit
   SetShellVarContext current
 !ifndef TEST_SETUP
-  FindWindow $0 "" "Lightcal"
+  !insertmacro LightcalRunning
   ${If} $0 != 0
-    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu before uninstalling." /SD IDOK
+    !insertmacro LightcalRunningMessage "uninstall again"
     SetErrorLevel 1603
     Abort
   ${EndIf}
@@ -128,6 +217,9 @@ FunctionEnd
 
 Section "Uninstall"
   ; Delete only installer-owned files; never recurse over a user-selected directory.
+  ${If} ${FileExists} "$INSTDIR\lightcal.exe"
+    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
+  ${EndIf}
   Delete "$INSTDIR\lightcal.exe"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\THIRD_PARTY_NOTICES.md"

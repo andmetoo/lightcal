@@ -112,11 +112,13 @@ fn controller(dir: &std::path::Path) -> AppController {
         held_google_needs_signin: false,
         held_google_label: String::new(),
         held_google_error: String::new(),
+        held_microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_label: String::new(),
         google_error: String::new(),
-        ics_error: String::new(),
+        microsoft_error: String::new(),
+        ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
         // Off screen unless a test says otherwise; never the process-wide native window.
@@ -384,7 +386,8 @@ fn expired_google_account_restores_saved_reconnect_configuration() {
             google_label: None,
             google_error: String::new(),
             google_skipped: 0,
-            ics_error: String::new(),
+            microsoft_error: String::new(),
+            ics_feed_errors: Default::default(),
         },
         ui.as_weak(),
     );
@@ -2944,5 +2947,189 @@ fn the_update_quit_keeps_the_single_instance_lock() {
     );
     SINGLE_INSTANCE.with(|slot| slot.borrow_mut().take());
     writer.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn settings_ignores_calendar_navigation_keys_and_closes_on_escape() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-settings-keys-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = true;
+    ctrl.settings_tab = 0;
+    let ctrl = Rc::new(RefCell::new(ctrl));
+
+    let moved = Rc::new(Cell::new(false));
+    let moved_obs = moved.clone();
+    ui.on_move_selection_by(move |_| moved_obs.set(true));
+    let paged = Rc::new(Cell::new(false));
+    let paged_prev = paged.clone();
+    ui.on_prev_month(move || paged_prev.set(true));
+    let paged_next = paged.clone();
+    ui.on_next_month(move || paged_next.set(true));
+
+    let weak = ui.as_weak();
+    let ctrl_close = ctrl.clone();
+    ui.on_close_settings(move || {
+        let mut c = ctrl_close.borrow_mut();
+        c.settings_open = false;
+        c.sync_to_ui(&weak.upgrade().unwrap());
+    });
+
+    ctrl.borrow().sync_to_ui(&ui);
+    ui.show().unwrap();
+    ui.invoke_focus_calendar_keys();
+
+    for key in [
+        slint::platform::Key::LeftArrow,
+        slint::platform::Key::RightArrow,
+        slint::platform::Key::UpArrow,
+        slint::platform::Key::DownArrow,
+        slint::platform::Key::PageUp,
+        slint::platform::Key::PageDown,
+    ] {
+        let text = SharedString::from(key);
+        ui.window()
+            .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+        ui.window()
+            .dispatch_event(WindowEvent::KeyReleased { text });
+    }
+    assert!(
+        !moved.get() && !paged.get(),
+        "Arrow and page keys do not navigate the hidden calendar while Settings is open"
+    );
+
+    let esc = SharedString::from(slint::platform::Key::Escape);
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: esc.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: esc.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text: esc });
+    assert!(!ui.get_settings_open(), "Escape closes Settings");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_cards() {
+    slint::platform::set_platform(Box::new(HeadlessPlatform::new())).unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-card-errors-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let ctrl = Rc::new(RefCell::new(controller(&dir)));
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = Some(Rc::downgrade(&ctrl)));
+
+    let mut ics_feed_errors = std::collections::BTreeMap::new();
+    ics_feed_errors.insert(
+        "ics:second".to_string(),
+        "Second feed failed: HTTP 502".to_string(),
+    );
+    apply_loaded_provider(
+        lightcal::calendars::CalendarLoad {
+            snapshot: ProviderSnapshot {
+                status: lightcal::platform::ProviderStatus::Available,
+                sources: vec![
+                    calendar_core::CalendarSource {
+                        id: "graph:work".into(),
+                        name: "Work".into(),
+                        account_label: "alex@contoso.com".into(),
+                        color_hex: "#0078D4".into(),
+                    },
+                    calendar_core::CalendarSource {
+                        id: "google:primary".into(),
+                        name: "Personal".into(),
+                        account_label: "alex@example.com".into(),
+                        color_hex: "#008573".into(),
+                    },
+                    calendar_core::CalendarSource {
+                        id: "ics:first".into(),
+                        name: "First ICS".into(),
+                        account_label: "Private ICS".into(),
+                        color_hex: "#6E56CF".into(),
+                    },
+                    calendar_core::CalendarSource {
+                        id: "ics:second".into(),
+                        name: "Second ICS".into(),
+                        account_label: "Private ICS".into(),
+                        color_hex: "#E5484D".into(),
+                    },
+                ],
+                occurrences: Vec::new(),
+            },
+            microsoft: lightcal::calendars::account::MicrosoftAccountState::Connected {
+                label: Some("alex@contoso.com".into()),
+            },
+            google_connected: true,
+            google_needs_signin: false,
+            google_configuration: None,
+            google_label: Some("alex@example.com".into()),
+            google_error: "Google calendar events failed: HTTP 503".into(),
+            google_skipped: 2,
+            microsoft_error: "Microsoft Graph events failed: HTTP 504".into(),
+            ics_feed_errors,
+        },
+        ui.as_weak(),
+    );
+
+    let cards = ui.get_account_cards();
+    let find_card = |id: &str| {
+        (0..cards.row_count())
+            .filter_map(|i| cards.row_data(i))
+            .find(|c| c.id == id)
+            .unwrap_or_else(|| panic!("missing account card {id}"))
+    };
+    let outlook = find_card("outlook");
+    assert_eq!(outlook.notice_kind, 1);
+    assert_eq!(outlook.notice, "Microsoft Graph events failed: HTTP 504");
+
+    let google = find_card("google");
+    assert_eq!(google.notice_kind, 1);
+    assert!(google
+        .notice
+        .contains("Google calendar events failed: HTTP 503"));
+    assert!(google.notice.contains("Google events not read: 2"));
+
+    let first_ics = find_card("ics:first");
+    assert_eq!(first_ics.notice_kind, 0);
+    assert_eq!(first_ics.notice, "");
+
+    let second_ics = find_card("ics:second");
+    assert_eq!(second_ics.notice_kind, 1);
+    assert_eq!(second_ics.notice, "Second feed failed: HTTP 502");
+
+    // A hard Microsoft failure leaves the account Unavailable: its error shows as it is,
+    // and only a network failure gets the offline text and glyph.
+    let outlook_after = |error: &str| {
+        let mut c = ctrl.borrow_mut();
+        c.microsoft_account = lightcal::calendars::account::MicrosoftAccountState::Unavailable {
+            saved_credentials: true,
+        };
+        c.microsoft_error = error.into();
+        c.sync_to_ui(&ui);
+        let cards = ui.get_account_cards();
+        (0..cards.row_count())
+            .filter_map(|i| cards.row_data(i))
+            .find(|card| card.id == "outlook")
+            .expect("outlook card")
+    };
+    let rejected = outlook_after("Authentication request failed (HTTP 400): invalid_client");
+    assert_eq!(rejected.notice_kind, 1);
+    assert_eq!(
+        rejected.notice,
+        "Authentication request failed (HTTP 400): invalid_client"
+    );
+    assert!(!rejected.notice_offline);
+    let unreachable = outlook_after("HTTPS request failed or timed out");
+    assert_eq!(unreachable.notice_kind, 1);
+    assert_ne!(unreachable.notice, "HTTPS request failed or timed out");
+    assert!(unreachable.notice_offline);
+
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
     let _ = std::fs::remove_dir_all(dir);
 }

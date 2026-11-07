@@ -12,7 +12,10 @@ use crate::{
 use account::MicrosoftAccountState;
 use base64::Engine;
 use calendar_core::LocalDate;
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 pub struct GoogleConfiguration {
     pub client_id: String,
@@ -22,13 +25,16 @@ pub struct GoogleConfiguration {
 pub struct CalendarLoad {
     pub snapshot: ProviderSnapshot,
     pub microsoft: MicrosoftAccountState,
+    pub microsoft_error: String,
     pub google_connected: bool,
     pub google_needs_signin: bool,
     pub google_configuration: Option<GoogleConfiguration>,
     pub google_label: Option<String>,
     pub google_error: String,
     pub google_skipped: usize,
-    pub ics_error: String,
+    /// Each ICS feed's error or note by feed id; the cards and the ICS status line both
+    /// read it.
+    pub ics_feed_errors: BTreeMap<String, String>,
 }
 
 pub fn random_key() -> Result<String, String> {
@@ -36,6 +42,32 @@ pub fn random_key() -> Result<String, String> {
     getrandom::fill(&mut bytes)
         .map_err(|_| "Secure random generator is unavailable".to_string())?;
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+/// Ends a sign-in callback connection after its response is written. The callback reads
+/// only the request line, so the browser's headers can still be unread; closing a socket
+/// with unread input makes Windows reset the connection, which can discard the response
+/// before the browser reads it. So: flush, send FIN, then read and drop what is left until
+/// the browser closes its side, for at most a second in all and 64 KiB, so a client that
+/// trickles bytes cannot hold up the sign-in loop.
+pub(crate) fn close_callback_stream(stream: &mut std::net::TcpStream) {
+    use std::io::{Read, Write};
+    use std::time::{Duration, Instant};
+    let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let mut sink = [0u8; 4096];
+    let mut drained = 0usize;
+    while drained < 64 * 1024 {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
+            break;
+        }
+        match stream.read(&mut sink) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => drained += n,
+        }
+    }
 }
 
 pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
@@ -159,6 +191,7 @@ pub fn query(
     };
     let mut errors = Vec::new();
     let mut account = MicrosoftAccountState::Disconnected;
+    let mut microsoft_error = String::new();
     if credentials.microsoft_refresh_token.is_some() {
         account = MicrosoftAccountState::Unavailable {
             saved_credentials: true,
@@ -172,8 +205,18 @@ pub fn query(
             &mut account,
             locale,
         ) {
-            Ok(data) => append_provider(&mut snapshot, data, &mut errors),
-            Err(e) => errors.push(e),
+            Ok(data) => {
+                if let ProviderStatus::ProviderUnavailable(ref e) = data.status {
+                    microsoft_error = e.clone();
+                }
+                append_provider(&mut snapshot, data, &mut errors);
+            }
+            Err(e) => {
+                // A hard failure (token refresh, Graph rejecting the request) also belongs
+                // on the Outlook card; the card decides whether it reads as offline.
+                microsoft_error = e.clone();
+                errors.push(e);
+            }
         }
     }
     // A transport/configuration failure does not disconnect saved credentials.
@@ -207,6 +250,9 @@ pub fn query(
                 google_connected = !data.needs_signin;
                 google_label = data.label;
                 google_skipped = data.skipped;
+                if let ProviderStatus::ProviderUnavailable(ref e) = data.snapshot.status {
+                    google_error = e.clone();
+                }
                 append_provider(&mut snapshot, data.snapshot, &mut errors);
             }
             Err(e) => {
@@ -220,7 +266,7 @@ pub fn query(
             }
         }
     }
-    let mut ics_errors = Vec::new();
+    let mut ics_feed_errors = BTreeMap::new();
     for feed in &credentials.ics {
         snapshot.sources.push(calendar_core::CalendarSource {
             id: feed.id.clone(),
@@ -232,14 +278,14 @@ pub fn query(
             match ics::fetch(feed, anchor) {
                 Ok(parsed) => {
                     if let Some(note) = parsed.note(locale, &feed.name) {
-                        ics_errors.push(note.clone());
+                        ics_feed_errors.insert(feed.id.clone(), note.clone());
                         errors.push(note);
                     }
                     snapshot.occurrences.extend(parsed.occurrences);
                 }
                 Err(e) => {
                     let message = format!("{}: {e}", feed.name);
-                    ics_errors.push(message.clone());
+                    ics_feed_errors.insert(feed.id.clone(), message.clone());
                     errors.push(message);
                 }
             }
@@ -253,13 +299,14 @@ pub fn query(
     CalendarLoad {
         snapshot,
         microsoft: account,
+        microsoft_error,
         google_connected,
         google_needs_signin,
         google_configuration,
         google_label,
         google_error,
         google_skipped,
-        ics_error: ics_errors.join("\n"),
+        ics_feed_errors,
     }
 }
 
@@ -320,13 +367,14 @@ fn failure(error: String) -> CalendarLoad {
         microsoft: MicrosoftAccountState::Unavailable {
             saved_credentials: false,
         },
+        microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_configuration: None,
         google_label: None,
         google_error: String::new(),
         google_skipped: 0,
-        ics_error: String::new(),
+        ics_feed_errors: BTreeMap::new(),
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),
             sources: Vec::new(),
@@ -356,6 +404,75 @@ pub fn add_feed(credentials: &mut Credentials, name: &str, raw: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::time::{Duration, Instant};
+
+    /// A loopback listener, or `None` where the sandbox forbids local sockets.
+    fn loopback() -> Option<(TcpListener, u16)> {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).ok()?;
+        let port = listener.local_addr().ok()?.port();
+        Some((listener, port))
+    }
+
+    #[test]
+    fn callback_response_survives_unread_request_headers() {
+        let Some((listener, port)) = loopback() else {
+            return;
+        };
+        for _ in 0..20 {
+            let client = std::thread::spawn(move || {
+                let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                write!(
+                    stream,
+                    "GET /callback?code=x HTTP/1.1\r\nHost: localhost\r\nUser-Agent: test\r\nAccept: */*\r\n\r\n"
+                )
+                .unwrap();
+                let mut response = String::new();
+                stream.read_to_string(&mut response).unwrap();
+                response
+            });
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new((&mut stream).take(64))
+                .read_line(&mut line)
+                .unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .unwrap();
+            close_callback_stream(&mut stream);
+            drop(stream);
+            assert!(client.join().unwrap().ends_with("\r\n\r\nok"));
+        }
+    }
+
+    #[test]
+    fn callback_drain_stops_at_its_deadline_for_a_trickling_client() {
+        let Some((listener, port)) = loopback() else {
+            return;
+        };
+        let client = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            // One byte every 300 ms for 6 s: never idle long enough for a per-read timeout.
+            for _ in 0..20 {
+                if stream.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        let started = Instant::now();
+        close_callback_stream(&mut stream);
+        let took = started.elapsed();
+        drop(stream);
+        assert!(took < Duration::from_secs(3), "drain took {took:?}");
+        client.join().unwrap();
+    }
+
     fn empty(status: ProviderStatus) -> ProviderSnapshot {
         ProviderSnapshot {
             status,
