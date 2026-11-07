@@ -7,7 +7,7 @@
 
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { BrandMark, CaptionButton, ControlFrame, Icon, Keycap, LinkButton, Menu, MenuOption, Select, Switch, TextField } from "controls.slint";
+import { BrandMark, CaptionButton, ControlFrame, Icon, Keycap, LinkButton, Menu, MenuOption, GridSelect, Switch, TextField } from "controls.slint";
 
 // Heart + label that opens GitHub Sponsors (footer, always visible).
 component SponsorButton inherits Rectangle {
@@ -47,7 +47,7 @@ component SponsorButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 }
-import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem, LanguageOption, LocalCardData } from "types.slint";
+import { AccountCardItem, CalendarDateSize, CalendarSourceItem, SettingsStrings, WeekdayChipItem, MenuEntry, LocalCardData } from "types.slint";
 
 // 24-unit stroke icons used by settings (Lucide-style geometry from the boards).
 component Glyph inherits Path {
@@ -1155,8 +1155,6 @@ export component SettingsView inherits Rectangle {
     in property <string> theme-light-label;
     in property <string> theme-dark-label;
     in property <string> label-first-weekday-text;
-    in property <string> current-first-weekday-display;
-    in property <bool> first-day-dropdown-open;
     in property <string> label-gray-weekdays-text;
     in property <[WeekdayChipItem]> gray-weekday-chips;
     in property <string> label-show-week-numbers-text;
@@ -1170,17 +1168,15 @@ export component SettingsView inherits Rectangle {
     in property <string> date-size-large-label;
     in property <string> date-size-larger-label;
     in property <CalendarDateSize> date-size;
-    in property <string> weekday-monday-label;
-    in property <bool> first-weekday-monday;
-    in property <string> weekday-sunday-label;
+    // Full day names, Monday first; `first-weekday` is a Monday-based index into them.
+    in property <[MenuEntry]> first-weekday-entries;
+    in property <int> first-weekday;
     in property <bool> add-account-enabled;
     in property <bool> connection-busy;
     in property <bool> sign-in-cancelled;
     in property <string> connection-message;
     in property <bool> provider-loading;
     in property <string> label-language-text;
-    in property <string> current-language-display;
-    in property <bool> language-dropdown-open;
     in property <string> startup-status-text;
     in property <string> label-startup-text;
     in property <bool> start-with-windows;
@@ -1195,8 +1191,11 @@ export component SettingsView inherits Rectangle {
     in property <string> palette-monochrome-text;
     in property <string> live-day-text;
     in property <string> updates-heading-text;
-    in property <[LanguageOption]> language-options;
-    in property <string> current-language-code;
+    in property <[MenuEntry]> language-options;
+    // Position of the current language in `language-options`.
+    in property <int> current-language-index;
+    // Headless snapshots only: 1 opens the week menu, 2 the language menu.
+    in property <int> snapshot-open-menu;
     in property <string> about-version-text;
     in property <bool> update-is-available;
     in property <bool> update-is-checking;
@@ -1228,13 +1227,12 @@ export component SettingsView inherits Rectangle {
     callback open-settings(int);
     callback dismiss-startup-warning();
     callback select-theme(string);
-    callback toggle-first-day-dropdown();
     callback toggle-gray-weekday(int);
     callback toggle-show-week-numbers();
     callback toggle-show-event-dots();
     callback toggle-show-koi();
     callback select-date-size(CalendarDateSize);
-    callback select-first-weekday-option(bool);
+    callback select-first-weekday-option(int);
     callback add-calendar-account();
     callback cancel-account-sign-in();
     callback reopen-sign-in-browser();
@@ -1248,7 +1246,6 @@ export component SettingsView inherits Rectangle {
     callback disconnect-google();
     callback open-privacy-settings();
     callback toggle-legacy-windows();
-    callback toggle-language-dropdown();
     callback toggle-start-with-windows();
     callback record-shortcut(string, bool, bool, bool, bool);
     callback clear-shortcut();
@@ -1360,13 +1357,6 @@ export component SettingsView inherits Rectangle {
             height: parent.height;
             content-width: self.visible-width;
             content-height: cal-col.preferred-height;
-            // The week menu is placed outside the scroll view; close it rather than leave it
-            // behind when the cards move.
-            scrolled => {
-                if (root.first-day-dropdown-open) {
-                    root.toggle-first-day-dropdown();
-                }
-            }
 
             cal-col := VerticalLayout {
                 width: parent.width;
@@ -1418,11 +1408,18 @@ export component SettingsView inherits Rectangle {
                     Row {
                         title: root.label-first-weekday-text;
                         Centered {
-                            week-select := Select {
-                                text: root.current-first-weekday-display;
-                                is-open: root.first-day-dropdown-open;
+                            // Three columns, top to bottom: Monday-Wednesday,
+                            // Thursday-Saturday, Sunday.
+                            GridSelect {
+                                accessible-label: root.label-first-weekday-text;
+                                entries: root.first-weekday-entries;
+                                current-index: root.first-weekday;
+                                columns: 3;
                                 select-width: 136px;
-                                clicked => { root.toggle-first-day-dropdown(); }
+                                menu-width: 400px;
+                                bounds-width: root.width;
+                                show-menu: root.snapshot-open-menu == 1;
+                                selected(index) => { root.select-first-weekday-option(index); }
                             }
                         }
                     }
@@ -1471,22 +1468,6 @@ export component SettingsView inherits Rectangle {
                         }
                     }
                 }
-            }
-        }
-
-        if root.first-day-dropdown-open : Menu {
-            x: week-select.absolute-position.x - cal-tab.absolute-position.x;
-            y: week-select.absolute-position.y - cal-tab.absolute-position.y + 32px;
-            width: 136px;
-            MenuOption {
-                label: root.weekday-monday-label;
-                active: root.first-weekday-monday;
-                clicked => { root.select-first-weekday-option(true); }
-            }
-            MenuOption {
-                label: root.weekday-sunday-label;
-                active: !root.first-weekday-monday;
-                clicked => { root.select-first-weekday-option(false); }
             }
         }
     }
@@ -1905,12 +1886,19 @@ export component SettingsView inherits Rectangle {
                     Row {
                         title: root.label-language-text;
                         Centered {
-                            lang-select := Select {
-                                text: root.current-language-display;
-                                is-open: root.language-dropdown-open;
+                            // Two columns, top to bottom: Latin-script languages on the
+                            // left, Cyrillic and CJK on the right.
+                            GridSelect {
+                                accessible-label: root.label-language-text;
+                                entries: root.language-options;
+                                current-index: root.current-language-index;
+                                columns: 2;
                                 // Fits the longest name, Português (Brasil).
                                 select-width: 168px;
-                                clicked => { root.toggle-language-dropdown(); }
+                                menu-width: 328px;
+                                bounds-width: root.width;
+                                show-menu: root.snapshot-open-menu == 2;
+                                selected(index) => { root.select-language(root.language-options[index].code); }
                             }
                         }
                     }
@@ -2025,6 +2013,13 @@ export component SettingsView inherits Rectangle {
                                     width: 0px;
                                     height: 0px;
                                     enabled: root.recording;
+                                    // Focus moved elsewhere (a menu opened, another field was
+                                    // clicked): stop listening, as a native shortcut field does.
+                                    focus-changed-event => {
+                                        if (!self.has-focus) {
+                                            root.recording = false;
+                                        }
+                                    }
                                     key-pressed(event) => {
                                         if (!root.recording) {
                                             return reject;
@@ -2140,27 +2135,6 @@ export component SettingsView inherits Rectangle {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        // Two columns, filled top to bottom: Latin-script languages on the left,
-        // Cyrillic and CJK on the right. Right-aligned under the select.
-        if root.language-dropdown-open : Menu {
-            x: lang-select.absolute-position.x + lang-select.width - self.width - app-tab.absolute-position.x;
-            y: lang-select.absolute-position.y - app-tab.absolute-position.y + 32px;
-            width: 328px;
-            language-grid := Rectangle {
-                property <int> rows: Math.ceil(root.language-options.length / 2);
-                height: self.rows * (Theme.control-height + 2px) - 2px;
-                for option[i] in root.language-options : MenuOption {
-                    x: i < language-grid.rows ? 0 : (parent.width + 4px) / 2;
-                    y: Math.mod(i, language-grid.rows) * (Theme.control-height + 2px);
-                    width: (parent.width - 4px) / 2;
-                    label: option.label;
-                    font-family: option.font != "" ? option.font : Theme.font-family;
-                    active: root.current-language-code == option.code;
-                    clicked => { root.select-language(option.code); }
                 }
             }
         }
