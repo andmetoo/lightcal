@@ -3102,6 +3102,33 @@ fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_car
     assert_eq!(second_ics.notice_kind, 1);
     assert_eq!(second_ics.notice, "Second feed failed: HTTP 502");
 
+    // A hard Microsoft failure leaves the account Unavailable: its error shows as it is,
+    // and only a network failure gets the offline text and glyph.
+    let outlook_after = |error: &str| {
+        let mut c = ctrl.borrow_mut();
+        c.microsoft_account = lightcal::calendars::account::MicrosoftAccountState::Unavailable {
+            saved_credentials: true,
+        };
+        c.microsoft_error = error.into();
+        c.sync_to_ui(&ui);
+        let cards = ui.get_account_cards();
+        (0..cards.row_count())
+            .filter_map(|i| cards.row_data(i))
+            .find(|card| card.id == "outlook")
+            .expect("outlook card")
+    };
+    let rejected = outlook_after("Authentication request failed (HTTP 400): invalid_client");
+    assert_eq!(rejected.notice_kind, 1);
+    assert_eq!(
+        rejected.notice,
+        "Authentication request failed (HTTP 400): invalid_client"
+    );
+    assert!(!rejected.notice_offline);
+    let unreachable = outlook_after("HTTPS request failed or timed out");
+    assert_eq!(unreachable.notice_kind, 1);
+    assert_ne!(unreachable.notice, "HTTPS request failed or timed out");
+    assert!(unreachable.notice_offline);
+
     ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
     let _ = std::fs::remove_dir_all(dir);
 }

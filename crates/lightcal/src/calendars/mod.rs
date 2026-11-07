@@ -211,7 +211,12 @@ pub fn query(
                 }
                 append_provider(&mut snapshot, data, &mut errors);
             }
-            Err(e) => errors.push(e),
+            Err(e) => {
+                // A hard failure (token refresh, Graph rejecting the request) also belongs
+                // on the Outlook card; the card decides whether it reads as offline.
+                microsoft_error = e.clone();
+                errors.push(e);
+            }
         }
     }
     // A transport/configuration failure does not disconnect saved credentials.
@@ -399,6 +404,75 @@ pub fn add_feed(credentials: &mut Credentials, name: &str, raw: &str) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::time::{Duration, Instant};
+
+    /// A loopback listener, or `None` where the sandbox forbids local sockets.
+    fn loopback() -> Option<(TcpListener, u16)> {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).ok()?;
+        let port = listener.local_addr().ok()?.port();
+        Some((listener, port))
+    }
+
+    #[test]
+    fn callback_response_survives_unread_request_headers() {
+        let Some((listener, port)) = loopback() else {
+            return;
+        };
+        for _ in 0..20 {
+            let client = std::thread::spawn(move || {
+                let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                write!(
+                    stream,
+                    "GET /callback?code=x HTTP/1.1\r\nHost: localhost\r\nUser-Agent: test\r\nAccept: */*\r\n\r\n"
+                )
+                .unwrap();
+                let mut response = String::new();
+                stream.read_to_string(&mut response).unwrap();
+                response
+            });
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new((&mut stream).take(64))
+                .read_line(&mut line)
+                .unwrap();
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .unwrap();
+            close_callback_stream(&mut stream);
+            drop(stream);
+            assert!(client.join().unwrap().ends_with("\r\n\r\nok"));
+        }
+    }
+
+    #[test]
+    fn callback_drain_stops_at_its_deadline_for_a_trickling_client() {
+        let Some((listener, port)) = loopback() else {
+            return;
+        };
+        let client = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            // One byte every 300 ms for 6 s: never idle long enough for a per-read timeout.
+            for _ in 0..20 {
+                if stream.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        let started = Instant::now();
+        close_callback_stream(&mut stream);
+        let took = started.elapsed();
+        drop(stream);
+        assert!(took < Duration::from_secs(3), "drain took {took:?}");
+        client.join().unwrap();
+    }
+
     fn empty(status: ProviderStatus) -> ProviderSnapshot {
         ProviderSnapshot {
             status,

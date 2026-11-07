@@ -1923,11 +1923,16 @@ impl AppController {
             } else {
                 ""
             };
-            let offline =
-                matches!(ms, Ms::Unavailable { .. }) || looks_offline(&self.microsoft_error);
+            // Unavailable with no error, or with a network error, is the offline state;
+            // any other error is shown as it is, without the offline glyph.
+            let error_offline = looks_offline(&self.microsoft_error);
+            let offline = (matches!(ms, Ms::Unavailable { .. }) && self.microsoft_error.is_empty())
+                || error_offline;
             let (notice_kind, notice, action) = match ms {
                 Ms::NeedsSignIn => (2, st.access_expired.to_string(), st.sign_in),
-                Ms::Unavailable { .. } => (1, offline_text.clone(), ""),
+                Ms::Unavailable { .. } if self.microsoft_error.is_empty() || error_offline => {
+                    (1, offline_text.clone(), "")
+                }
                 _ if !self.microsoft_error.is_empty() => (1, self.microsoft_error.clone(), ""),
                 _ => (0, String::new(), ""),
             };
