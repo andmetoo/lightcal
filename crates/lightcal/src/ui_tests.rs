@@ -112,6 +112,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         held_google_needs_signin: false,
         held_google_label: String::new(),
         held_google_error: String::new(),
+        held_microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_label: String::new(),

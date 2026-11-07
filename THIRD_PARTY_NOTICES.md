@@ -14,7 +14,7 @@ This distribution incorporates the following open-source Rust crates:
 | `muda` | `0.21.2` | `Apache-2.0 OR MIT` | https://github.com/tauri-apps/muda |
 | `windows` | `0.61.3` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
 | `windows-sys` | `0.61.2` | `MIT OR Apache-2.0` | https://github.com/microsoft/windows-rs |
-| `skrifa` | `0.44.0` | `MIT OR Apache-2.0` | https://github.com/googlefonts/fontations |
+| `skrifa` | `0.49.0`; `0.44.0` (through Slint) | `MIT OR Apache-2.0` | https://github.com/googlefonts/fontations |
 | `zeno` | `0.3.3` | `Apache-2.0 OR MIT` | https://github.com/dfrg/zeno |
 | `winres` | `0.1.12` | `MIT` | https://github.com/mxre/winres |
 | `ical` | `0.11.0` | `Apache-2.0` (upstream LICENSE file) | https://github.com/Peltoche/ical-rs |

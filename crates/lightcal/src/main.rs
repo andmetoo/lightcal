@@ -160,6 +160,7 @@ pub(crate) struct AppController {
     pub(crate) held_google_needs_signin: bool,
     pub(crate) held_google_label: String,
     pub(crate) held_google_error: String,
+    pub(crate) held_microsoft_error: String,
     pub(crate) google_connected: bool,
     pub(crate) google_needs_signin: bool,
     pub(crate) google_label: String,
@@ -3431,6 +3432,8 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             ));
             if matches!(action, CalendarAction::ConnectMicrosoft(_)) {
                 ctrl.held_microsoft = ctrl.microsoft_account.clone();
+                // The previous failure no longer describes the account being connected.
+                ctrl.held_microsoft_error = std::mem::take(&mut ctrl.microsoft_error);
                 ctrl.active_sign_in = ActiveSignIn::Microsoft;
                 ctrl.microsoft_account =
                     lightcal::calendars::account::MicrosoftAccountState::Connecting;
@@ -3585,6 +3588,9 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
             with_active_controller(&ui_weak, |ctrl, ui| {
                 ctrl.connection_busy = false;
                 forget_sign_in_url();
+                // Set only while a Microsoft sign-in runs: a failed one shows the old error
+                // again, a successful one leaves it to the calendar load that follows.
+                let held_microsoft_error = std::mem::take(&mut ctrl.held_microsoft_error);
                 ctrl.connection_message = match result {
                     Ok(removed) => {
                         if let Some(client) = connected_client {
@@ -3630,6 +3636,9 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                     }
                     Err(error) => {
                         ctrl.microsoft_account = previous_account;
+                        if !held_microsoft_error.is_empty() {
+                            ctrl.microsoft_error = held_microsoft_error;
+                        }
                         error
                     }
                 };
@@ -3967,6 +3976,7 @@ fn main() {
         held_google_needs_signin: false,
         held_google_label: String::new(),
         held_google_error: String::new(),
+        held_microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_label: String::new(),
@@ -4871,6 +4881,7 @@ fn main() {
                 match c.active_sign_in {
                     ActiveSignIn::Microsoft => {
                         c.microsoft_account = c.held_microsoft.clone();
+                        c.microsoft_error = std::mem::take(&mut c.held_microsoft_error);
                     }
                     ActiveSignIn::Google => {
                         c.google_connected = c.held_google_connected;
