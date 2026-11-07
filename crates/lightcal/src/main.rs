@@ -152,10 +152,6 @@ pub(crate) struct AppController {
     /// Tray menu items, relabeled when the language changes.
     #[cfg(windows)]
     pub(crate) tray_menu: TrayMenuItems,
-    pub(crate) language_dropdown_open: bool,
-    pub(crate) theme_dropdown_open: bool,
-    pub(crate) first_day_dropdown_open: bool,
-    pub(crate) update_channel_dropdown_open: bool,
     pub(crate) calendars_access_denied: bool,
     pub(crate) calendars_is_empty: bool,
     pub(crate) add_account_open: bool,
@@ -607,20 +603,98 @@ fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
     });
 }
 
-/// The language select and its two-column menu.
-fn wire_language(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
-    let toggle_ctrl = Rc::clone(ctrl);
+impl AppController {
+    /// Shows Settings on `tab`.
+    pub(crate) fn open_settings_tab(&mut self, tab: i32) {
+        self.settings_open = true;
+        self.settings_tab = tab;
+    }
+
+    /// Leaves Settings for the calendar.
+    pub(crate) fn close_settings(&mut self) {
+        self.settings_open = false;
+    }
+}
+
+/// Fills the week-start menu with the seven day names, Monday first. The list is
+/// updated in place, so a sync while the menu is open keeps its entries (and the
+/// hovered one); only a language change rewrites the labels.
+fn sync_first_weekday_entries(ui: &AppWindow, locale: LocaleCode) {
+    use slint::Model;
+    let entry = |day: Weekday| MenuEntry {
+        code: SharedString::new(),
+        label: lightcal::i18n::weekday_full(locale, day).into(),
+        font: SharedString::new(),
+    };
+    let entries = ui.get_first_weekday_entries();
+    if entries.row_count() != Weekday::ALL.len() {
+        let fresh: Vec<MenuEntry> = Weekday::ALL.iter().map(|&day| entry(day)).collect();
+        ui.set_first_weekday_entries(ModelRc::new(VecModel::from(fresh)));
+        return;
+    }
+    for (row, &day) in Weekday::ALL.iter().enumerate() {
+        let wanted = entry(day);
+        if entries.row_data(row).as_ref() != Some(&wanted) {
+            entries.set_row_data(row, wanted);
+        }
+    }
+}
+
+/// The Settings tab buttons, the gear and Close. `resize` fits the native window to the
+/// view (true for Settings); tests pass a no-op so they never touch a real window.
+fn wire_settings_navigation(
+    ui: &AppWindow,
+    ctrl: &Rc<RefCell<AppController>>,
+    resize: fn(&AppWindow, bool),
+) {
+    let open_ctrl = Rc::clone(ctrl);
     let ui_weak = ui.as_weak();
-    ui.on_toggle_language_dropdown(move || {
-        let mut c = toggle_ctrl.borrow_mut();
-        c.language_dropdown_open = !c.language_dropdown_open;
-        c.theme_dropdown_open = false;
-        c.first_day_dropdown_open = false;
-        c.update_channel_dropdown_open = false;
+    ui.on_open_settings(move |tab| {
+        let mut c = open_ctrl.borrow_mut();
+        c.open_settings_tab(tab);
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+            resize(&w, true);
+        }
+    });
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_close_settings(move || {
+        let mut c = ctrl.borrow_mut();
+        c.close_settings();
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+            resize(&w, false);
+            w.invoke_focus_calendar_keys();
+        }
+    });
+}
+
+/// The "Week starts on" select: its menu offers all seven days.
+fn wire_first_weekday(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_select_first_weekday_option(move |idx| {
+        // A Monday-based index into the seven day names. Anything else is a UI bug: keep the
+        // current day rather than save a different one. Release builds have no console, so
+        // the message shows only when running a debug build from a terminal.
+        let Some(index) = u8::try_from(idx).ok().filter(|&i| i < 7) else {
+            eprintln!("Lightcal: ignored week start index {idx}; expected 0 to 6");
+            return;
+        };
+        let mut c = ctrl.borrow_mut();
+        let day = Weekday::from_monday_index(index);
+        c.prefs.first_weekday = day;
+        c.cal_state.first_weekday = day;
+        c.persist();
         if let Some(w) = ui_weak.upgrade() {
             c.sync_to_ui(&w);
         }
     });
+}
+
+/// The language select: its two-column menu lists every language.
+fn wire_language(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
     let ctrl = Rc::clone(ctrl);
     let ui_weak = ui.as_weak();
     ui.on_select_language(move |code| {
@@ -629,7 +703,6 @@ fn wire_language(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
         c.prefs.set_locale(loc);
         // The local calendar's name is translated.
         c.refresh_local_view();
-        c.language_dropdown_open = false;
         c.persist();
         if let Some(w) = ui_weak.upgrade() {
             c.sync_to_ui(&w);
@@ -1019,11 +1092,9 @@ impl AppController {
         ui.set_general_subtitle_text(strings.general_subtitle.into());
         ui.set_appearance_subtitle_text(strings.appearance_subtitle.into());
         ui.set_calendars_subtitle_text(strings.calendars_subtitle.into());
-        ui.set_about_subtitle_text(strings.about_subtitle.into());
         ui.set_label_language_text(strings.label_language.into());
         ui.set_desc_language_text(strings.desc_language.into());
         ui.set_label_first_weekday_text(strings.label_first_weekday.into());
-        ui.set_desc_first_weekday_text(strings.desc_first_weekday.into());
         ui.set_label_show_week_numbers_text(strings.label_show_week_numbers.into());
         ui.set_desc_show_week_numbers_text(strings.desc_show_week_numbers.into());
         let startup = lightcal::i18n::startup_copy(locale);
@@ -1447,11 +1518,15 @@ impl AppController {
         ui.set_about_link_text(strings.tray_about.into());
         ui.set_updates_check_button_text(strings.updates_check_button.into());
         ui.set_updates_open_release_button_text(strings.updates_open_release_button.into());
-        ui.set_current_language_code(locale.as_str().into());
+        ui.set_current_language_index(
+            LocaleCode::ALL
+                .iter()
+                .position(|&l| l == locale)
+                .unwrap_or(0) as i32,
+        );
         ui.set_current_theme_code(self.prefs.theme.as_str().into());
         ui.set_current_tray_icon_mode(self.prefs.tray_icon_mode.as_str().into());
         ui.set_tray_icon_monochrome(self.prefs.tray_icon_monochrome);
-        ui.set_first_weekday_monday(self.prefs.first_weekday == Weekday::Monday);
         ui.set_highlight_current_month(self.prefs.highlight_current_month);
         ui.set_show_event_dots(self.prefs.show_event_dots);
         ui.set_show_koi(self.prefs.show_koi);
@@ -1499,8 +1574,6 @@ impl AppController {
         };
         ui.set_label_auto_updates_text(check_title.into());
         ui.set_desc_auto_updates_text(check_description.into());
-        ui.set_label_update_channel_text(strings.label_update_channel.into());
-        ui.set_desc_update_channel_text(strings.desc_update_channel.into());
         ui.set_label_license_source_text(strings.label_license_source.into());
         ui.set_desc_license_source_text(strings.desc_license_source.into());
         ui.set_app_version_line_text(lightcal::version::VERSION.into());
@@ -1560,8 +1633,6 @@ impl AppController {
         }
         ui.set_release_notes_button_text(strings.release_notes_button.into());
 
-        ui.set_current_language_display(locale.display_name().into());
-
         let theme_disp = match self.prefs.theme {
             ThemePreference::Light => strings.theme_light_obsidian,
             ThemePreference::Dark => strings.theme_dark_obsidian,
@@ -1569,28 +1640,12 @@ impl AppController {
         };
         ui.set_current_theme_display(theme_disp.into());
 
-        let fday_disp = if self.prefs.first_weekday == Weekday::Monday {
-            strings.start_of_week_monday
-        } else {
-            strings.start_of_week_sunday
-        };
-        ui.set_current_first_weekday_display(fday_disp.into());
-
-        let chan_disp = if self.prefs.update_channel == "preview" {
-            strings.channel_preview
-        } else {
-            strings.channel_stable
-        };
-        ui.set_current_update_channel_display(chan_disp.into());
+        ui.set_first_weekday(self.prefs.first_weekday.monday_index() as i32);
+        sync_first_weekday_entries(ui, locale);
 
         ui.set_active_calendars_count_label(
             format_active_calendars_heading(locale, active_count).into(),
         );
-
-        ui.set_language_dropdown_open(self.language_dropdown_open);
-        ui.set_theme_dropdown_open(self.theme_dropdown_open);
-        ui.set_first_day_dropdown_open(self.first_day_dropdown_open);
-        ui.set_update_channel_dropdown_open(self.update_channel_dropdown_open);
 
         let has_conflict = !self.shortcut_error.is_empty();
         ui.set_shortcut_has_conflict(has_conflict);
@@ -1613,9 +1668,9 @@ impl AppController {
         // The menu lists every language by its own name in any UI language, so it is
         // built once; replacing it would recreate the open menu's entries.
         if slint::Model::row_count(&ui.get_language_options()) == 0 {
-            let languages: Vec<LanguageOption> = LocaleCode::ALL
+            let languages: Vec<MenuEntry> = LocaleCode::ALL
                 .iter()
-                .map(|option| LanguageOption {
+                .map(|option| MenuEntry {
                     code: option.as_str().into(),
                     label: option.display_name().into(),
                     font: language_font(*option).unwrap_or_default().into(),
@@ -1623,14 +1678,9 @@ impl AppController {
                 .collect();
             ui.set_language_options(ModelRc::new(VecModel::from(languages)));
         }
-        ui.set_weekday_monday_label(strings.start_of_week_monday.into());
-        ui.set_weekday_sunday_label(strings.start_of_week_sunday.into());
         ui.set_theme_light_label(strings.theme_light_obsidian.into());
         ui.set_theme_dark_label(strings.theme_dark_obsidian.into());
         ui.set_theme_system_label(strings.theme_system_obsidian.into());
-        ui.set_channel_stable_label(strings.channel_stable.into());
-        ui.set_channel_preview_label(strings.channel_preview.into());
-        ui.set_update_channel_is_preview(self.prefs.update_channel == "preview");
         ui.set_github_button_text(strings.github_repo_button.into());
         ui.set_koona_button_text(strings.koona_app_button.into());
 
@@ -3735,7 +3785,7 @@ fn main() {
                 if !c.settings_open && application_window_is_open(w) {
                     hide_application_window(w);
                 } else {
-                    c.settings_open = false;
+                    c.close_settings();
                     c.sync_to_ui(w);
                     show_application_window(w);
                     bring_to_foreground();
@@ -3884,10 +3934,6 @@ fn main() {
         tray_icon,
         #[cfg(windows)]
         tray_menu,
-        language_dropdown_open: false,
-        theme_dropdown_open: false,
-        first_day_dropdown_open: false,
-        update_channel_dropdown_open: false,
         calendars_access_denied: false,
         calendars_is_empty: false,
         add_account_open: false,
@@ -3994,7 +4040,7 @@ fn main() {
             let ui_w = ui_weak_act.clone();
             let _ = slint::invoke_from_event_loop(move || {
                 with_active_controller(&ui_w, |c, w| {
-                    c.settings_open = false;
+                    c.close_settings();
                     c.sync_to_ui(w);
                     show_application_window(w);
                     bring_to_foreground();
@@ -4024,7 +4070,7 @@ fn main() {
                         if !c.settings_open && application_window_is_open(w) {
                             hide_application_window(w);
                         } else {
-                            c.settings_open = false;
+                            c.close_settings();
                             c.sync_to_ui(w);
                             show_application_window(w);
                             bring_to_foreground();
@@ -4062,7 +4108,7 @@ fn main() {
                     with_active_controller(&ui_w, |c, w| {
                         c.cal_state.update_today(current_local_date());
                         c.cal_state.return_to_today();
-                        c.settings_open = false;
+                        c.close_settings();
                         c.sync_to_ui(w);
                         show_application_window(w);
                         bring_to_foreground();
@@ -4070,8 +4116,7 @@ fn main() {
                     request_visible_calendars(ui_w.clone(), use_synthetic);
                 } else if id == settings_id {
                     with_active_controller(&ui_w, |c, w| {
-                        c.settings_open = true;
-                        c.settings_tab = 2; // App tab (language, startup, shortcut)
+                        c.open_settings_tab(2); // App tab (language, startup, shortcut)
                         c.sync_to_ui(w);
                         show_application_window(w);
                         bring_to_foreground();
@@ -4230,32 +4275,7 @@ fn main() {
         request_visible_calendars(weak, use_synthetic)
     });
 
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_open_settings(move |tab| {
-            let mut c = ctrl.borrow_mut();
-            c.settings_open = true;
-            c.settings_tab = tab;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-                sync_window_geometry(&w, true);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_close_settings(move || {
-            let mut c = ctrl.borrow_mut();
-            c.settings_open = false;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-                sync_window_geometry(&w, false);
-                w.invoke_focus_calendar_keys();
-            }
-        });
-    }
+    wire_settings_navigation(&ui, &ctrl, sync_window_geometry);
     wire_language(&ui, &ctrl);
     {
         let ctrl = Rc::clone(&ctrl);
@@ -4263,7 +4283,6 @@ fn main() {
         ui.on_select_theme(move |mode| {
             let mut c = ctrl.borrow_mut();
             c.prefs.theme = ThemePreference::from_str_lossy(mode.as_str());
-            c.theme_dropdown_open = false;
             c.persist();
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
@@ -4288,24 +4307,6 @@ fn main() {
         ui.on_toggle_tray_icon_monochrome(move || {
             let mut c = ctrl.borrow_mut();
             c.prefs.tray_icon_monochrome = !c.prefs.tray_icon_monochrome;
-            c.persist();
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_toggle_first_weekday(move || {
-            let mut c = ctrl.borrow_mut();
-            let next = if c.prefs.first_weekday == Weekday::Monday {
-                Weekday::Sunday
-            } else {
-                Weekday::Monday
-            };
-            c.prefs.first_weekday = next;
-            c.cal_state.first_weekday = next;
             c.persist();
             if let Some(w) = ui_weak.upgrade() {
                 c.sync_to_ui(&w);
@@ -4607,82 +4608,9 @@ fn main() {
             slint::CloseRequestResponse::KeepWindowShown
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_toggle_theme_dropdown(move || {
-            let mut c = ctrl.borrow_mut();
-            c.theme_dropdown_open = !c.theme_dropdown_open;
-            c.language_dropdown_open = false;
-            c.first_day_dropdown_open = false;
-            c.update_channel_dropdown_open = false;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
 
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_toggle_first_day_dropdown(move || {
-            let mut c = ctrl.borrow_mut();
-            c.first_day_dropdown_open = !c.first_day_dropdown_open;
-            c.language_dropdown_open = false;
-            c.theme_dropdown_open = false;
-            c.update_channel_dropdown_open = false;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_toggle_update_channel_dropdown(move || {
-            let mut c = ctrl.borrow_mut();
-            c.update_channel_dropdown_open = !c.update_channel_dropdown_open;
-            c.language_dropdown_open = false;
-            c.theme_dropdown_open = false;
-            c.first_day_dropdown_open = false;
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
+    wire_first_weekday(&ui, &ctrl);
 
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_select_first_weekday_option(move |monday| {
-            let mut c = ctrl.borrow_mut();
-            let day = if monday {
-                Weekday::Monday
-            } else {
-                Weekday::Sunday
-            };
-            c.prefs.first_weekday = day;
-            c.cal_state.first_weekday = day;
-            c.first_day_dropdown_open = false;
-            c.persist();
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_select_update_channel(move |ch| {
-            let mut c = ctrl.borrow_mut();
-            c.prefs.update_channel = ch.to_ascii_lowercase().to_string();
-            c.update_channel_dropdown_open = false;
-            c.persist();
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();

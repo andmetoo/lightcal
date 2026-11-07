@@ -101,10 +101,6 @@ fn controller(dir: &std::path::Path) -> AppController {
         tray_icon: None,
         #[cfg(windows)]
         tray_menu: crate::TrayMenuItems::new(LocaleCode::En),
-        language_dropdown_open: false,
-        theme_dropdown_open: false,
-        first_day_dropdown_open: false,
-        update_channel_dropdown_open: false,
         calendars_access_denied: false,
         calendars_is_empty: true,
         add_account_open: false,
@@ -1313,17 +1309,61 @@ fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Opens the language menu by clicking the select that shows `current`.
-fn open_language_menu(ui: &AppWindow, current: &str) {
-    let select = ElementHandle::find_by_element_type_name(ui, "Select")
-        .find(|element| element.accessible_value().as_deref() == Some(current))
-        .unwrap_or_else(|| panic!("no select showing {current:?}"));
-    let center = element_center(&select);
+/// The select whose row is titled `label` ("Week starts on", "Language").
+fn select_handle(ui: &AppWindow, label: &str) -> ElementHandle {
+    ElementHandle::find_by_accessible_label(ui, label)
+        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Combobox))
+        .unwrap_or_else(|| panic!("no select labelled {label:?}"))
+}
+
+/// Opens a select's menu with a click, as a user would.
+fn open_select(ui: &AppWindow, label: &str) {
+    let center = element_center(&select_handle(ui, label));
     click(ui, center.x, center.y);
 }
 
-#[test]
-fn language_menu_columns_select_and_save_each_language() {
+/// Where the popup of the select labelled `label` sits in the 448 px window, with the menu
+/// `menu_width` wide: GridSelect's own placement (4 px under the select, right-aligned with
+/// it, 16 px from either window edge). Options report positions inside the popup, so a click
+/// on one adds this origin; if the placement changed, those clicks would miss and fail.
+fn popup_origin(ui: &AppWindow, label: &str, menu_width: f32) -> slint::LogicalPosition {
+    let select = select_handle(ui, label);
+    let (at, size) = (select.absolute_position(), select.size());
+    let (window, margin) = (448.0_f32, 16.0_f32);
+    let width = menu_width.min(window - 2.0 * margin);
+    let right = (at.x + size.width).min(window - margin);
+    slint::LogicalPosition::new((right - width).max(margin), at.y + size.height + 4.0)
+}
+
+/// Whether the select's menu is open: its popup holds the key focus.
+fn menu_open(ui: &AppWindow, label: &str) -> bool {
+    select_handle(ui, label).accessible_expanded() == Some(true)
+}
+
+/// A menu option; `None` when no open menu shows it.
+fn menu_option(ui: &AppWindow, label: &str) -> Option<ElementHandle> {
+    ElementHandle::find_by_accessible_label(ui, label)
+        .find(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Button))
+}
+
+/// Clicks the menu option `label` in the popup placed at `origin`.
+fn click_option(ui: &AppWindow, origin: slint::LogicalPosition, label: &str) {
+    let option = menu_option(ui, label).unwrap_or_else(|| panic!("no menu option {label:?}"));
+    let center = element_center(&option);
+    click(ui, origin.x + center.x, origin.y + center.y);
+}
+
+/// A headless window showing Settings on `tab`, wired like the app but with no native
+/// window to resize. Key focus starts on the window, as when the app shows it.
+fn settings_window(
+    tab: i32,
+    name: &str,
+) -> (
+    AppWindow,
+    Rc<slint::platform::software_renderer::MinimalSoftwareWindow>,
+    Rc<RefCell<AppController>>,
+    std::path::PathBuf,
+) {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
     slint::platform::set_platform(Box::new(HeadlessPlatform {
@@ -1332,25 +1372,225 @@ fn language_menu_columns_select_and_save_each_language() {
     .unwrap();
     let ui = AppWindow::new().unwrap();
     let dir = std::env::temp_dir().join(format!(
-        "lightcal-language-menu-{}",
+        "lightcal-{name}-{}",
         lightcal::calendars::random_key().unwrap()
     ));
     std::fs::create_dir_all(&dir).unwrap();
     let mut ctrl = controller(&dir);
-    ctrl.settings_open = true;
-    ctrl.settings_tab = 2;
+    ctrl.open_settings_tab(tab);
     let ctrl = Rc::new(RefCell::new(ctrl));
     wire_language(&ui, &ctrl);
+    wire_first_weekday(&ui, &ctrl);
+    wire_settings_navigation(&ui, &ctrl, |_, _| {});
     ui.show().unwrap();
     ctrl.borrow().sync_to_ui(&ui);
     window.set_size(slint::PhysicalSize::new(448, 360));
     window.draw_if_needed(|_| {});
+    ui.invoke_focus_calendar_keys();
+    (ui, window, ctrl, dir)
+}
+
+const WEEK: &str = "Week starts on";
+
+#[test]
+fn settings_menus_close_like_native_drop_downs() {
+    let (ui, window, ctrl, dir) = settings_window(0, "settings-menus");
+
+    // Escape closes the menu and leaves Settings open.
+    open_select(&ui, WEEK);
+    assert!(menu_open(&ui, WEEK));
+    assert!(menu_option(&ui, "Tuesday").is_some());
+    press_key(&ui, SharedString::from(slint::platform::Key::Escape));
+    assert!(!menu_open(&ui, WEEK));
+    assert!(menu_option(&ui, "Tuesday").is_none(), "the popup is gone");
+    assert!(ctrl.borrow().settings_open, "Escape closed only the menu");
+
+    // A click outside the menu closes it and reaches nothing else: the Event dots switch
+    // under the click is not toggled. With the menu closed, the same click toggles it.
+    let dot_toggles = Rc::new(Cell::new(0));
+    let counter = Rc::clone(&dot_toggles);
+    ui.on_toggle_show_event_dots(move || counter.set(counter.get() + 1));
+    window.draw_if_needed(|_| {});
+    let away = switch_center(&ui, "Event dots");
+    open_select(&ui, WEEK);
+    click(&ui, away.x, away.y);
+    assert!(
+        menu_option(&ui, "Tuesday").is_none(),
+        "a click away closes the menu"
+    );
+    assert_eq!(dot_toggles.get(), 0, "the click away reached only the menu");
+    window.draw_if_needed(|_| {});
+    click(&ui, away.x, away.y);
+    assert_eq!(
+        dot_toggles.get(),
+        1,
+        "with the menu closed the switch works"
+    );
+
+    // While the menu is open the window is modal to it: a wheel turn outside reaches
+    // nothing under it, so the tab cannot scroll away from the menu, and the menu stays.
+    open_select(&ui, WEEK);
+    ui.window().dispatch_event(WindowEvent::PointerScrolled {
+        position: slint::LogicalPosition::new(away.x, away.y),
+        delta_x: 0.0,
+        delta_y: -40.0,
+    });
+    assert!(menu_open(&ui, WEEK));
+    press_key(&ui, SharedString::from(slint::platform::Key::Escape));
+
+    // A tab switch or closing Settings leaves no menu behind.
+    open_select(&ui, WEEK);
+    ui.invoke_open_settings(2);
+    assert!(menu_option(&ui, "Tuesday").is_none());
+    ui.invoke_open_settings(0);
+    open_select(&ui, WEEK);
+    ui.invoke_close_settings();
+    window.draw_if_needed(|_| {});
+    assert!(
+        menu_option(&ui, "Tuesday").is_none(),
+        "no menu over the calendar"
+    );
+    ui.invoke_open_settings(0);
+    window.draw_if_needed(|_| {});
+    assert!(menu_option(&ui, "Tuesday").is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn week_start_menu_works_from_the_keyboard() {
+    let (ui, window, ctrl, dir) = settings_window(0, "week-start-keys");
+    let key = |k: slint::platform::Key| press_key(&ui, SharedString::from(k));
+    use slint::platform::Key;
+
+    // Click the select, then close the menu: the select keeps the focus.
+    open_select(&ui, WEEK);
+    key(Key::Escape);
+    assert!(!menu_open(&ui, WEEK));
+
+    // Enter opens the menu with the cursor on the current day (Monday). Down moves to
+    // Tuesday, Right jumps a column to Friday, End goes to Sunday, Left back to Thursday.
+    key(Key::Return);
+    assert!(menu_open(&ui, WEEK), "Enter opens the menu");
+    key(Key::DownArrow);
+    key(Key::RightArrow);
+    key(Key::End);
+    key(Key::LeftArrow);
+    // Enter chooses the day under the cursor and closes the menu.
+    key(Key::Return);
+    assert!(!menu_open(&ui, WEEK));
+    assert_eq!(ctrl.borrow().prefs.first_weekday, Weekday::Thursday);
+
+    // Down opens it too; Home and Space choose Monday.
+    key(Key::DownArrow);
+    assert!(menu_open(&ui, WEEK), "Down opens the menu");
+    key(Key::Home);
+    press_key(&ui, " ".into());
+    assert_eq!(ctrl.borrow().prefs.first_weekday, Weekday::Monday);
+
+    // Tab leaves an open menu without choosing anything.
+    key(Key::Return);
+    key(Key::DownArrow);
+    key(Key::Tab);
+    assert!(!menu_open(&ui, WEEK));
+    assert_eq!(ctrl.borrow().prefs.first_weekday, Weekday::Monday);
+    window.draw_if_needed(|_| {});
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn week_start_menu_offers_every_day_and_saves_the_choice() {
+    let (ui, window, ctrl, dir) = settings_window(0, "week-start-menu");
+    assert_eq!(
+        select_handle(&ui, WEEK).accessible_value().as_deref(),
+        Some("Monday")
+    );
+
+    // Three columns, top to bottom: Monday-Wednesday, Thursday-Saturday, Sunday. Option
+    // positions are measured inside the popup; the popup's origin places them in the window.
+    open_select(&ui, WEEK);
+    let origin = popup_origin(&ui, WEEK, 400.0);
+    let footer_top = ElementHandle::find_by_accessible_label(&ui, "About Lightcal")
+        .next()
+        .unwrap()
+        .absolute_position()
+        .y;
+    window.draw_if_needed(|_| {});
+    let at = |label: &str| menu_option(&ui, label).unwrap().absolute_position();
+    let (monday, tuesday, thursday, sunday) =
+        (at("Monday"), at("Tuesday"), at("Thursday"), at("Sunday"));
+    assert!(thursday.x > monday.x && sunday.x > thursday.x);
+    assert!((thursday.y - monday.y).abs() < 1.0 && (sunday.y - monday.y).abs() < 1.0);
+    assert!(tuesday.y > monday.y && (tuesday.x - monday.x).abs() < 1.0);
+    // Every option lies within the window's 16 px margins and above the footer.
+    for day in Weekday::ALL {
+        let option = menu_option(&ui, lightcal::i18n::weekday_full(LocaleCode::En, day)).unwrap();
+        let (at, size) = (option.absolute_position(), option.size());
+        let (left, right) = (origin.x + at.x, origin.x + at.x + size.width);
+        assert!(
+            left >= 16.0 && right <= 432.0,
+            "{day:?} from {left} to {right}"
+        );
+        assert!(origin.y + at.y + size.height <= footer_top, "{day:?}");
+    }
+
+    // A sync while the menu is open keeps the same entries instead of rebuilding them.
+    let entries = ui.get_first_weekday_entries();
+    ctrl.borrow().sync_to_ui(&ui);
+    assert!(entries == ui.get_first_weekday_entries());
+    assert!(menu_open(&ui, WEEK), "a sync leaves the menu open");
+
+    click_option(&ui, origin, "Saturday");
+    {
+        let c = ctrl.borrow();
+        assert_eq!(c.prefs.first_weekday, Weekday::Saturday);
+        assert_eq!(c.cal_state.first_weekday, Weekday::Saturday);
+    }
+    assert!(!menu_open(&ui, WEEK));
+    assert_eq!(
+        select_handle(&ui, WEEK).accessible_value().as_deref(),
+        Some("Saturday")
+    );
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert_eq!(saved.preferences.first_weekday, Weekday::Saturday);
+    // The shaded-day chips start with Saturday too.
+    let chips = ui.get_gray_weekday_chips();
+    assert_eq!(
+        chips.row_data(0).unwrap().index,
+        Weekday::Saturday.monday_index() as i32
+    );
+
+    // An index outside Monday..Sunday is ignored and nothing is saved.
+    for bad in [-1, 7, i32::MAX] {
+        ui.invoke_select_first_weekday_option(bad);
+        assert_eq!(ctrl.borrow().prefs.first_weekday, Weekday::Saturday);
+    }
+    let saved = PreferencesStore::new(dir.clone()).load();
+    assert_eq!(saved.preferences.first_weekday, Weekday::Saturday);
+
+    // A language change rewrites the labels in place; the select shows the new name.
+    ctrl.borrow_mut().prefs.set_locale(LocaleCode::Ru);
+    ctrl.borrow().sync_to_ui(&ui);
+    assert!(entries == ui.get_first_weekday_entries());
+    assert_eq!(
+        entries.row_data(5).map(|e| e.label).as_deref(),
+        Some("Суббота")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn language_menu_columns_select_and_save_each_language() {
+    let (ui, window, ctrl, dir) = settings_window(2, "language-menu");
 
     // Latin scripts fill the left column, Cyrillic and CJK the right, top to bottom.
-    open_language_menu(&ui, "English");
-    assert!(ui.get_language_dropdown_open());
-    let left = labelled_center(&ui, LocaleCode::PtBr.display_name());
-    let right = labelled_center(&ui, LocaleCode::ZhHans.display_name());
+    open_select(&ui, "Language");
+    window.draw_if_needed(|_| {});
+    let at = |locale: LocaleCode| {
+        menu_option(&ui, locale.display_name())
+            .unwrap()
+            .absolute_position()
+    };
+    let (left, right) = (at(LocaleCode::PtBr), at(LocaleCode::ZhHans));
     assert!(
         right.x > left.x,
         "Simplified Chinese is in the right column"
@@ -1359,22 +1599,54 @@ fn language_menu_columns_select_and_save_each_language() {
         (right.y - left.y).abs() < 1.0,
         "both columns have five rows"
     );
-    assert!(labelled_center(&ui, LocaleCode::En.display_name()).y < left.y);
-    assert!(labelled_center(&ui, LocaleCode::Ru.display_name()).y < right.y);
+    assert!(at(LocaleCode::En).y < left.y);
+    assert!(at(LocaleCode::Ru).y < right.y);
+    press_key(&ui, SharedString::from(slint::platform::Key::Escape));
 
-    // Every language can be picked from the menu and is saved under its code.
-    let mut current = LocaleCode::En;
+    // Every language can be picked from the menu and is saved under its code. The row's
+    // title is translated, so find the select by the current language's own label.
     for locale in LocaleCode::ALL.into_iter().rev() {
-        if !ui.get_language_dropdown_open() {
-            open_language_menu(&ui, current.display_name());
-        }
-        click_label(&ui, locale.display_name());
+        let title = lightcal::i18n::catalog(ctrl.borrow().prefs.locale()).label_language;
+        open_select(&ui, title);
+        let origin = popup_origin(&ui, title, 328.0);
+        click_option(&ui, origin, locale.display_name());
         assert_eq!(ctrl.borrow().prefs.locale(), locale);
-        assert!(!ui.get_language_dropdown_open());
+        let title = lightcal::i18n::catalog(locale).label_language;
+        assert!(!menu_open(&ui, title));
+        assert_eq!(
+            select_handle(&ui, title).accessible_value().as_deref(),
+            Some(locale.display_name())
+        );
         let saved = PreferencesStore::new(dir.clone()).load();
         assert_eq!(saved.preferences.language, locale.as_str());
-        current = locale;
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn opening_a_menu_stops_shortcut_recording() {
+    let (ui, window, _ctrl, dir) = settings_window(2, "menu-while-recording");
+    let recording = || {
+        ElementHandle::find_by_accessible_label(&ui, "Press a key combination…")
+            .next()
+            .is_some()
+    };
+    let field = menu_option(&ui, "Open shortcut").expect("the shortcut field");
+    let center = element_center(&field);
+    click(&ui, center.x, center.y);
+    window.draw_if_needed(|_| {});
+    assert!(recording());
+
+    // The menu takes the key focus, so recording stops instead of catching keys meant
+    // for the menu; Escape then closes the menu and leaves Settings open.
+    open_select(&ui, "Language");
+    window.draw_if_needed(|_| {});
+    assert!(menu_open(&ui, "Language"));
+    assert!(!recording(), "recording stopped when the field lost focus");
+    press_key(&ui, SharedString::from(slint::platform::Key::Escape));
+    assert!(!menu_open(&ui, "Language"));
+    assert!(!recording());
+    assert!(ui.get_settings_open());
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -655,7 +655,8 @@ impl CalendarState {
             let row = idx / 7;
             let col = idx % 7;
             if col == 0 {
-                // Use Thursday of the displayed row (or the row's first date) for the ISO week number.
+                // The row's fourth day is in the ISO week that holds at least four of the row's
+                // seven days, whichever weekday starts the row. With a Monday start it is Thursday.
                 iso_weeks[row] = date.add_days(3).iso_week();
             }
             let (dot_colors, total_event_count) = dots_by_date
@@ -774,6 +775,39 @@ mod tests {
             grid.gray_columns,
             [false, false, false, true, false, true, false]
         );
+    }
+
+    #[test]
+    fn any_weekday_can_start_the_grid() {
+        let today = LocalDate::new(2026, 11, 1).unwrap();
+        for first in Weekday::ALL {
+            let state = CalendarState::new(today, first, WeekdaySet::default_weekends());
+            let grid = state.build_grid(&[], &BTreeSet::new());
+
+            assert_eq!(grid.weekdays, Weekday::ordered_from(first));
+            assert_eq!(grid.cells[0].date.weekday(), first);
+            // The 1st sits in the first row, so no row is wasted on the previous month.
+            let first_of_month = grid.cells.iter().position(|c| c.date == today).unwrap();
+            assert!(
+                first_of_month < 7,
+                "{first:?}: 1 November at cell {first_of_month}"
+            );
+            // Shaded columns follow the days, not the column positions.
+            for (col, day) in grid.weekdays.iter().enumerate() {
+                let weekend = matches!(day, Weekday::Saturday | Weekday::Sunday);
+                assert_eq!(grid.gray_columns[col], weekend, "{first:?} column {col}");
+            }
+            // Each row is numbered with the ISO week holding most of its days.
+            for (row, &week) in grid.iso_weeks.iter().enumerate() {
+                let days = &grid.cells[row * 7..row * 7 + 7];
+                let majority = days
+                    .iter()
+                    .map(|c| c.date.iso_week())
+                    .find(|w| days.iter().filter(|c| c.date.iso_week() == *w).count() >= 4)
+                    .unwrap();
+                assert_eq!(week, majority, "{first:?} row {row}");
+            }
+        }
     }
 
     #[test]
