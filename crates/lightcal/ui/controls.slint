@@ -3,6 +3,7 @@
 // .kbd, .r, .card, .cap, .lnk). Colors and metrics come from `Theme`.
 
 import { Theme, Motion } from "theme.slint";
+import { MenuEntry } from "types.slint";
 
 // 24-unit stroke icons from the canvas boards (Lucide-style geometry).
 // Names: chevron-left, chevron-right, chevron-down, gear, close, check,
@@ -286,6 +287,8 @@ export component SegmentedControl inherits Rectangle {
 export component Select inherits Rectangle {
     in property <string> text;
     in property <bool> is-open: false;
+    // Keyboard focus is on the select: draw the focus edge.
+    in property <bool> has-focus: false;
     in property <length> select-width: 136px;
     callback clicked();
 
@@ -298,7 +301,7 @@ export component Select inherits Rectangle {
         width: 100%;
         height: 100%;
         hovered: touch.has-hover;
-        focused: root.is-open;
+        focused: root.is-open || root.has-focus;
 
         HorizontalLayout {
             padding-left: 10px;
@@ -568,11 +571,14 @@ export component MenuOption inherits Rectangle {
     in property <string> label;
     in property <string> font-family: Theme.font-family;
     in property <bool> active: false;
+    // The keyboard cursor is on this option.
+    in property <bool> highlighted: false;
     callback clicked();
 
     height: Theme.control-height;
     border-radius: Theme.radius-control;
-    background: root.active ? Theme.selected : (opt-touch.has-hover ? Theme.hover : transparent);
+    background: root.active ? Theme.selected
+        : ((opt-touch.has-hover || root.highlighted) ? Theme.hover : transparent);
     accessible-role: button;
     accessible-label: root.label;
 
@@ -603,6 +609,178 @@ export component MenuOption inherits Rectangle {
 
     opt-touch := TouchArea {
         clicked => { root.clicked(); }
+    }
+}
+
+// Lays out `count` menu options in `columns` equal columns, filled top to bottom. Place each
+// option with `cell-x(i)`, `cell-y(i)` and `column-width`.
+export component MenuGrid inherits Rectangle {
+    in property <int> count;
+    in property <int> columns: 2;
+    out property <int> rows: Math.ceil(root.count / root.columns);
+    out property <length> column-width: (root.width - (root.columns - 1) * root.column-gap) / root.columns;
+    property <length> column-gap: 4px;
+    property <length> row-gap: 2px;
+    height: Math.max(0px, root.rows * (Theme.control-height + root.row-gap) - root.row-gap);
+
+    public pure function cell-x(i: int) -> length {
+        root.rows == 0 ? 0px : Math.floor(i / root.rows) * (root.column-width + root.column-gap)
+    }
+    public pure function cell-y(i: int) -> length {
+        root.rows == 0 ? 0px : Math.mod(i, root.rows) * (Theme.control-height + root.row-gap)
+    }
+
+    @children
+}
+
+// A select whose menu is a grid of options in a popup, like a native drop-down: it opens on a
+// click, Enter, Space or the arrow keys; closes on a click outside, Escape, Tab or a choice; and
+// is never clipped by the view it sits in. In the menu the arrow keys move a cursor (Left and
+// Right jump a column), Home and End go to the ends, and Enter or Space chooses. The menu sits
+// 4 px under the select, right-aligned with it, inside `bounds-width` less `margin` each side.
+export component GridSelect {
+    in property <[MenuEntry]> entries;
+    in property <int> current-index: -1;
+    in property <int> columns: 1;
+    in property <length> select-width: 136px;
+    in property <length> menu-width: 168px;
+    // The width of the window the menu must fit in; the select's absolute x is measured in it.
+    in property <length> bounds-width;
+    in property <length> margin: 16px;
+    // Opens the menu without user input; headless snapshots use it to draw the open menu.
+    in property <bool> show-menu: false;
+    callback selected(int);
+
+    property <bool> menu-has-focus: false;
+    property <int> cursor: 0;
+    property <int> rows: Math.ceil(root.entries.length / root.columns);
+    property <length> popup-width: Math.min(root.menu-width, root.bounds-width - 2 * root.margin);
+
+    width: root.select-width;
+    height: Theme.control-height;
+    forward-focus: keys;
+    accessible-role: combobox;
+    accessible-value: root.current-index >= 0 && root.current-index < root.entries.length
+        ? root.entries[root.current-index].label : "";
+    accessible-expandable: true;
+    accessible-expanded: root.menu-has-focus;
+    accessible-action-expand => { root.open-menu(); }
+
+    function open-menu() {
+        if (root.entries.length == 0) {
+            return;
+        }
+        root.cursor = Math.max(0, root.current-index);
+        popup.show();
+    }
+
+    function choose(index: int) {
+        popup.close();
+        root.selected(index);
+    }
+
+    function move-cursor(delta: int) {
+        root.cursor = Math.max(0, Math.min(root.entries.length - 1, root.cursor + delta));
+    }
+
+    init => {
+        if (root.show-menu) {
+            root.open-menu();
+        }
+    }
+    changed show-menu => {
+        if (root.show-menu) {
+            root.open-menu();
+        } else {
+            popup.close();
+        }
+    }
+
+    keys := FocusScope {
+        // The popup gives focus back here when it closes.
+        changed has-focus => {
+            if (self.has-focus) {
+                root.menu-has-focus = false;
+            }
+        }
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " "
+                || event.text == Key.DownArrow || event.text == Key.UpArrow) {
+                root.open-menu();
+                return accept;
+            }
+            reject
+        }
+
+        Select {
+            accessible-role: none;
+            text: root.accessible-value;
+            is-open: root.menu-has-focus;
+            has-focus: keys.has-focus;
+            select-width: root.select-width;
+            clicked => {
+                keys.focus();
+                root.open-menu();
+            }
+        }
+    }
+
+    popup := PopupWindow {
+        x: Math.max(
+            root.margin - root.absolute-position.x,
+            Math.min(root.width, root.bounds-width - root.margin - root.absolute-position.x) - root.popup-width);
+        y: root.height + 4px;
+        width: root.popup-width;
+        height: grid.height + 8px;
+        close-policy: close-on-click-outside;
+        forward-focus: menu-keys;
+
+        menu-keys := FocusScope {
+            focus-changed-event => {
+                root.menu-has-focus = self.has-focus;
+            }
+            key-pressed(event) => {
+                if (event.text == Key.UpArrow) {
+                    root.move-cursor(-1);
+                } else if (event.text == Key.DownArrow) {
+                    root.move-cursor(1);
+                } else if (event.text == Key.LeftArrow) {
+                    root.move-cursor(-root.rows);
+                } else if (event.text == Key.RightArrow) {
+                    root.move-cursor(root.rows);
+                } else if (event.text == Key.Home) {
+                    root.cursor = 0;
+                } else if (event.text == Key.End) {
+                    root.cursor = root.entries.length - 1;
+                } else if (event.text == Key.Return || event.text == " ") {
+                    root.choose(root.cursor);
+                } else if (event.text == Key.Escape || event.text == Key.Tab) {
+                    popup.close();
+                } else {
+                    return reject;
+                }
+                accept
+            }
+
+            Menu {
+                width: 100%;
+                height: 100%;
+                grid := MenuGrid {
+                    count: root.entries.length;
+                    columns: root.columns;
+                    for entry[i] in root.entries : MenuOption {
+                        x: grid.cell-x(i);
+                        y: grid.cell-y(i);
+                        width: grid.column-width;
+                        label: entry.label;
+                        font-family: entry.font != "" ? entry.font : Theme.font-family;
+                        active: i == root.current-index;
+                        highlighted: i == root.cursor && root.menu-has-focus;
+                        clicked => { root.choose(i); }
+                    }
+                }
+            }
+        }
     }
 }
 

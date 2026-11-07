@@ -7,7 +7,7 @@ import { Theme, Motion } from "theme.slint";
 import { CalendarView } from "calendar.slint";
 import { SettingsView } from "settings.slint";
 import { Button, Icon } from "controls.slint";
-import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, LanguageOption, LocalEditorText, LocalCardData } from "types.slint";
+import { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings, MenuEntry, LocalEditorText, LocalCardData } from "types.slint";
 
 export { Theme, Motion }
 export { KoiSchool, KoiSwim } from "koi.slint";
@@ -130,11 +130,9 @@ export component AppWindow inherits Window {
     in property <string> general-subtitle-text: "Regional conventions, startup behavior, and global keyboard shortcuts.";
     in property <string> appearance-subtitle-text: "Theme, gray weekdays, event dots, and the tray icon.";
     in property <string> calendars-subtitle-text: "Read-only Outlook and private ICS links. Checked calendars show event dots.";
-    in property <string> about-subtitle-text: "Version status, release channel, and automatic update preferences.";
     in property <string> label-language-text: "Language";
     in property <string> desc-language-text: "Interface language for month names, weekdays, and controls";
     in property <string> label-first-weekday-text: "Start of week";
-    in property <string> desc-first-weekday-text: "First column shown in the calendar grid";
     in property <string> label-show-week-numbers-text: "Show week numbers";
     in property <string> desc-show-week-numbers-text: "Display ISO week numbers (W01–W52) along the left margin";
     in property <string> label-startup-text: "Launch at login";
@@ -225,12 +223,9 @@ export component AppWindow inherits Window {
     in property <string> license-short-text: "GPL-3.0-only";
     in property <string> updates-check-button-text: "Check for updates";
     in property <string> updates-open-release-button-text: "Open release page ↗";
-    in property <string> current-language-code: "en";
-    in property <string> current-language-display: "English (US)";
+    in property <int> current-language-index: 0;
     in property <string> current-theme-code: "system";
     in property <string> current-theme-display: "Dark (Obsidian)";
-    in property <string> current-first-weekday-display: "Monday";
-    in property <string> current-update-channel-display: "Stable";
     in property <string> current-tray-icon-mode: "date";
     in property <string> live-day-text;
     in property <string> live-weekday-date-text;
@@ -238,7 +233,8 @@ export component AppWindow inherits Window {
     in property <image> colored-icon-preview;
     in property <image> monochrome-icon-preview;
     in property <bool> tray-icon-monochrome: false;
-    in property <bool> first-weekday-monday: true;
+    in property <[MenuEntry]> first-weekday-entries: [];
+    in property <int> first-weekday: 0;
     in property <[WeekdayChipItem]> gray-weekday-chips: [];
     in property <bool> start-with-windows: false;
     in property <string> global-shortcut-display: "Alt + C";
@@ -259,10 +255,8 @@ export component AppWindow inherits Window {
     in property <string> date-size-standard-label: "Standard";
     in property <string> date-size-large-label: "Large";
     in property <string> date-size-larger-label: "Larger";
-    in property <bool> language-dropdown-open: false;
-    in property <bool> theme-dropdown-open: false;
-    in property <bool> first-day-dropdown-open: false;
-    in property <bool> update-channel-dropdown-open: false;
+    // Headless snapshots only: 1 opens the week menu, 2 the language menu.
+    in property <int> snapshot-open-menu: 0;
     in property <bool> shortcut-has-conflict: false;
     in property <string> shortcut-conflict-title: "Shortcut unavailable: Alt + Space is already registered by Raycast.";
     in property <string> shortcut-conflict-hint: "Press a new key combination (for example Alt + C) or click Reset.";
@@ -275,15 +269,10 @@ export component AppWindow inherits Window {
     in property <string> section-region-text: "Region";
     in property <string> section-startup-text: "Startup";
     in property <string> desc-auto-install-text: "Install the signed release and restart after a successful check.";
-    in property <[LanguageOption]> language-options;
-    in property <string> weekday-monday-label: "Monday";
-    in property <string> weekday-sunday-label: "Sunday";
+    in property <[MenuEntry]> language-options;
     in property <string> theme-light-label: "Light (Alabaster)";
     in property <string> theme-dark-label: "Dark (Obsidian)";
     in property <string> theme-system-label: "System default";
-    in property <string> channel-stable-label: "Stable";
-    in property <string> channel-preview-label: "Preview";
-    in property <bool> update-channel-is-preview: false;
     in property <string> github-button-text: "GitHub ↗";
     in property <string> koona-button-text: "koona.app ↗";
     in property <string> startup-status-text: "";
@@ -311,8 +300,6 @@ export component AppWindow inherits Window {
     in property <bool> auto-check-updates: false;
     in property <string> label-auto-updates-text: "Automatic updates";
     in property <string> desc-auto-updates-text: "Download and verify signed releases in the background";
-    in property <string> label-update-channel-text: "Update channel";
-    in property <string> desc-update-channel-text: "Receive verified stable releases or preview builds";
     in property <string> label-license-source-text: "License & source";
     in property <string> desc-license-source-text: "GPL-3.0-only · Built with Rust, Slint, and zero webview bloat";
     in property <string> app-version-line-text: "Lightcal · Rust + Slint";
@@ -346,7 +333,6 @@ export component AppWindow inherits Window {
     callback select-theme(string);
     callback select-tray-icon-mode(string);
     callback toggle-tray-icon-monochrome();
-    callback toggle-first-weekday();
     callback toggle-gray-weekday(int);
     callback toggle-show-weekday();
     callback toggle-show-week-numbers();
@@ -365,12 +351,7 @@ export component AppWindow inherits Window {
     callback open-external-url(string);
     callback open-sponsor(bool);
     callback dismiss-compact();
-    callback toggle-language-dropdown();
-    callback toggle-theme-dropdown();
-    callback toggle-first-day-dropdown();
-    callback toggle-update-channel-dropdown();
-    callback select-first-weekday-option(bool);
-    callback select-update-channel(string);
+    callback select-first-weekday-option(int);
     callback toggle-highlight-current-month();
     callback toggle-show-event-dots();
     callback toggle-show-koi();
@@ -589,8 +570,6 @@ export component AppWindow inherits Window {
         theme-light-label: root.theme-light-label;
         theme-dark-label: root.theme-dark-label;
         label-first-weekday-text: root.label-first-weekday-text;
-        current-first-weekday-display: root.current-first-weekday-display;
-        first-day-dropdown-open: root.first-day-dropdown-open;
         label-gray-weekdays-text: root.label-gray-weekdays-text;
         gray-weekday-chips: root.gray-weekday-chips;
         label-show-week-numbers-text: root.label-show-week-numbers-text;
@@ -604,17 +583,14 @@ export component AppWindow inherits Window {
         date-size-large-label: root.date-size-large-label;
         date-size-larger-label: root.date-size-larger-label;
         date-size: root.date-size;
-        weekday-monday-label: root.weekday-monday-label;
-        first-weekday-monday: root.first-weekday-monday;
-        weekday-sunday-label: root.weekday-sunday-label;
+        first-weekday-entries: root.first-weekday-entries;
+        first-weekday: root.first-weekday;
         add-account-enabled: root.add-account-enabled;
         connection-busy: root.connection-busy;
         sign-in-cancelled: root.sign-in-cancelled;
         connection-message: root.connection-message;
         provider-loading: root.provider-loading;
         label-language-text: root.label-language-text;
-        current-language-display: root.current-language-display;
-        language-dropdown-open: root.language-dropdown-open;
         startup-status-text: root.startup-status-text;
         label-startup-text: root.label-startup-text;
         start-with-windows: root.start-with-windows;
@@ -630,7 +606,8 @@ export component AppWindow inherits Window {
         live-day-text: root.live-day-text;
         updates-heading-text: root.updates-heading-text;
         language-options: root.language-options;
-        current-language-code: root.current-language-code;
+        current-language-index: root.current-language-index;
+        snapshot-open-menu: root.snapshot-open-menu;
         about-version-text: root.about-version-text;
         update-is-available: root.update-is-available;
         update-is-checking: root.update-is-checking;
@@ -662,7 +639,6 @@ export component AppWindow inherits Window {
         open-settings(arg0) => { root.open-settings(arg0); }
         dismiss-startup-warning() => { root.dismiss-startup-warning(); }
         select-theme(arg0) => { root.select-theme(arg0); }
-        toggle-first-day-dropdown() => { root.toggle-first-day-dropdown(); }
         toggle-gray-weekday(arg0) => { root.toggle-gray-weekday(arg0); }
         toggle-show-week-numbers() => { root.toggle-show-week-numbers(); }
         toggle-show-event-dots() => { root.toggle-show-event-dots(); }
@@ -682,7 +658,6 @@ export component AppWindow inherits Window {
         disconnect-google() => { root.disconnect-google(); }
         open-privacy-settings() => { root.open-privacy-settings(); }
         toggle-legacy-windows() => { root.toggle-legacy-windows(); }
-        toggle-language-dropdown() => { root.toggle-language-dropdown(); }
         toggle-start-with-windows() => { root.toggle-start-with-windows(); }
         record-shortcut(text, ctrl, alt, shift, meta) => { root.record-shortcut(text, ctrl, alt, shift, meta); }
         clear-shortcut() => { root.clear-shortcut(); }
