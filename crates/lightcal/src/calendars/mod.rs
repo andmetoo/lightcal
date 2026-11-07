@@ -32,7 +32,8 @@ pub struct CalendarLoad {
     pub google_label: Option<String>,
     pub google_error: String,
     pub google_skipped: usize,
-    pub ics_error: String,
+    /// Each ICS feed's error or note by feed id; the cards and the ICS status line both
+    /// read it.
     pub ics_feed_errors: BTreeMap<String, String>,
 }
 
@@ -234,7 +235,6 @@ pub fn query(
             }
         }
     }
-    let mut ics_errors = Vec::new();
     let mut ics_feed_errors = BTreeMap::new();
     for feed in &credentials.ics {
         snapshot.sources.push(calendar_core::CalendarSource {
@@ -248,7 +248,6 @@ pub fn query(
                 Ok(parsed) => {
                     if let Some(note) = parsed.note(locale, &feed.name) {
                         ics_feed_errors.insert(feed.id.clone(), note.clone());
-                        ics_errors.push(note.clone());
                         errors.push(note);
                     }
                     snapshot.occurrences.extend(parsed.occurrences);
@@ -256,7 +255,6 @@ pub fn query(
                 Err(e) => {
                     let message = format!("{}: {e}", feed.name);
                     ics_feed_errors.insert(feed.id.clone(), message.clone());
-                    ics_errors.push(message.clone());
                     errors.push(message);
                 }
             }
@@ -277,7 +275,6 @@ pub fn query(
         google_label,
         google_error,
         google_skipped,
-        ics_error: ics_errors.join("\n"),
         ics_feed_errors,
     }
 }
@@ -346,7 +343,6 @@ fn failure(error: String) -> CalendarLoad {
         google_label: None,
         google_error: String::new(),
         google_skipped: 0,
-        ics_error: String::new(),
         ics_feed_errors: BTreeMap::new(),
         snapshot: ProviderSnapshot {
             status: ProviderStatus::ProviderUnavailable(error),

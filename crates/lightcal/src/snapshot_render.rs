@@ -102,7 +102,6 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         google_label: String::new(),
         google_error: String::new(),
         microsoft_error: String::new(),
-        ics_error: String::new(),
         ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
@@ -1066,7 +1065,7 @@ fn render_settings_snapshots(
         ctrl.google_needs_signin = false;
         ctrl.google_label.clear();
         ctrl.google_error.clear();
-        ctrl.ics_error.clear();
+        ctrl.ics_feed_errors.clear();
         ctrl.connection_busy = false;
         ctrl.connection_message.clear();
         ctrl.provider_loading = false;

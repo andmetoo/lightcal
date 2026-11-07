@@ -165,7 +165,6 @@ pub(crate) struct AppController {
     pub(crate) google_label: String,
     pub(crate) google_error: String,
     pub(crate) microsoft_error: String,
-    pub(crate) ics_error: String,
     pub(crate) ics_feed_errors: std::collections::BTreeMap<String, String>,
     /// Calendar popup agenda: expanded and copied events.
     pub(crate) agenda: calendar_view::AgendaUiState,
@@ -327,7 +326,10 @@ fn ics_name_from_address(address: &str) -> String {
 }
 
 /// Whether a provider error reads as a network problem, for the account card's offline
-/// glyph. Matches whole words, so "reconnect" or "disconnected" do not count.
+/// glyph. Matches whole words, so "reconnect" or "disconnected" do not count. Network
+/// failures reach the cards as the fixed English messages in `lightcal::net` (provider
+/// errors are not localized; only skipped-event notes are), so matching them works in
+/// every UI language.
 fn looks_offline(error: &str) -> bool {
     let lower = error.to_lowercase();
     lower.contains("timed out")
@@ -1453,7 +1455,14 @@ impl AppController {
             }
             .into(),
         );
-        ui.set_ics_status_text(self.ics_error.clone().into());
+        ui.set_ics_status_text(
+            self.ics_feed_errors
+                .values()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join("\n")
+                .into(),
+        );
         ui.set_google_connected(self.google_connected);
         ui.set_google_needs_signin(self.google_needs_signin);
         ui.set_google_status_text(
@@ -2974,7 +2983,6 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
                 ctrl.google_error = format!("{}; {skipped}", ctrl.google_error);
             }
         }
-        ctrl.ics_error = data.ics_error;
         ctrl.ics_feed_errors = data.ics_feed_errors;
         ctrl.provider_loading = false;
         match &snapshot.status {
@@ -3295,7 +3303,6 @@ fn request_visible_calendars(ui_weak: slint::Weak<AppWindow>, use_synthetic: boo
                         google_error: String::new(),
                         google_skipped: 0,
                         microsoft_error: String::new(),
-                        ics_error: String::new(),
                         ics_feed_errors: Default::default(),
                     }
                 } else {
@@ -3599,17 +3606,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                                 ctrl.google_error.clear();
                             }
                             if prefix.starts_with("ics:") {
-                                // The status line joins every feed's message; drop the
-                                // removed feed's lines so its error does not linger.
-                                if let Some(message) = ctrl.ics_feed_errors.remove(&prefix) {
-                                    let gone: Vec<&str> = message.lines().collect();
-                                    ctrl.ics_error = ctrl
-                                        .ics_error
-                                        .lines()
-                                        .filter(|line| !gone.contains(line))
-                                        .collect::<Vec<_>>()
-                                        .join("\n");
-                                }
+                                ctrl.ics_feed_errors.remove(&prefix);
                             }
                             ctrl.prefs
                                 .selected_calendar_ids
@@ -3967,7 +3964,6 @@ fn main() {
         google_label: String::new(),
         google_error: String::new(),
         microsoft_error: String::new(),
-        ics_error: String::new(),
         ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
@@ -4899,6 +4895,12 @@ mod tests {
         ));
         assert!(looks_offline("Google Calendar request timed out"));
         assert!(looks_offline("DNS lookup failed"));
+        // The transport's own messages, which every network failure reaches the cards as.
+        assert!(looks_offline("HTTPS request failed or timed out"));
+        assert!(looks_offline("Authentication request failed or timed out"));
+        assert!(looks_offline(
+            "Response is too large, incomplete, or timed out"
+        ));
         assert!(!looks_offline("Sign-in expired; reconnect your account"));
         assert!(!looks_offline(
             "Calendar was disconnected by an administrator"
@@ -5004,7 +5006,6 @@ mod tests {
             google_error: String::new(),
             google_skipped: 0,
             microsoft_error: String::new(),
-            ics_error: String::new(),
             ics_feed_errors: Default::default(),
         });
         assert!(ok.is_ok());

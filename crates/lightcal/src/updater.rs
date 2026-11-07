@@ -21,8 +21,7 @@ pub fn check_latest_release(installed_version: &str) -> UpdateCheckState {
         .call()
     {
         Ok(resp) => resp,
-        Err(ureq::Error::Timeout(_)) => return UpdateCheckState::Timeout,
-        Err(_) => return UpdateCheckState::Offline,
+        Err(error) => return request_failure(&error),
     };
     let status = response.status().as_u16();
     if status != 200 {
@@ -39,6 +38,22 @@ pub fn check_latest_release(installed_version: &str) -> UpdateCheckState {
         Err(_) => UpdateCheckState::InvalidResponse(
             "Release metadata exceeded the size limit or could not be read".into(),
         ),
+    }
+}
+
+/// What a failed release request means for the user. Only transport failures read as
+/// offline; a redirect GitHub should never send (a loop, too many, or to plain HTTP) is a
+/// bad response, not a network problem.
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+fn request_failure(error: &ureq::Error) -> UpdateCheckState {
+    match error {
+        ureq::Error::Timeout(_) => UpdateCheckState::Timeout,
+        ureq::Error::TooManyRedirects
+        | ureq::Error::RedirectFailed
+        | ureq::Error::RequireHttpsOnly(_) => {
+            UpdateCheckState::InvalidResponse("GitHub sent an unexpected redirect".into())
+        }
+        _ => UpdateCheckState::Offline,
     }
 }
 
@@ -406,6 +421,31 @@ mod tests {
         ));
         assert!(!is_allowed_external_link("https://malicious.site"));
         assert!(!is_allowed_external_link("cmd.exe"));
+    }
+
+    #[test]
+    fn redirect_failures_are_bad_responses_not_offline() {
+        for error in [
+            ureq::Error::TooManyRedirects,
+            ureq::Error::RedirectFailed,
+            ureq::Error::RequireHttpsOnly("http://example.com".into()),
+        ] {
+            assert!(
+                matches!(
+                    request_failure(&error),
+                    UpdateCheckState::InvalidResponse(_)
+                ),
+                "{error}"
+            );
+        }
+        assert_eq!(
+            request_failure(&ureq::Error::HostNotFound),
+            UpdateCheckState::Offline
+        );
+        assert_eq!(
+            request_failure(&ureq::Error::ConnectionFailed),
+            UpdateCheckState::Offline
+        );
     }
 
     #[test]

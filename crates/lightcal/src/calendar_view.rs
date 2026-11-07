@@ -525,16 +525,32 @@ const NARROW_GLYPH: f32 = 6.6;
 const WIDE_GLYPH: f32 = 12.0;
 
 /// Estimated advance of `c` in a 12 px chip title.
-fn glyph_width(c: char) -> f32 {
-    match c {
-        // Zero-width joiner and the text-style selector add no width.
-        '\u{200D}' | '\u{FE0E}' => 0.0,
-        // The emoji-style selector turns the narrow symbol before it (✈ in "✈️") into a
-        // color emoji: add the difference.
-        '\u{FE0F}' => WIDE_GLYPH - NARROW_GLYPH,
-        c if is_wide_glyph(c) => WIDE_GLYPH,
-        _ => NARROW_GLYPH,
+/// Estimated width of a 12 px chip title. Emoji sequences count as one glyph: the
+/// emoji-style selector U+FE0F widens only a narrow symbol before it (✈ in "✈️"), skin-tone
+/// modifiers and the text-style selector add nothing, and a character joined by U+200D
+/// (a family or profession emoji) adds nothing either.
+fn text_width(text: &str) -> f32 {
+    let mut total = 0.0;
+    let mut previous = 0.0;
+    let mut joined = false;
+    for c in text.chars() {
+        let width = match c {
+            '\u{200D}' => {
+                joined = true;
+                continue;
+            }
+            '\u{FE0E}' | '\u{1F3FB}'..='\u{1F3FF}' => 0.0,
+            '\u{FE0F}' if previous == NARROW_GLYPH => WIDE_GLYPH - NARROW_GLYPH,
+            '\u{FE0F}' => 0.0,
+            _ if joined => 0.0,
+            c if is_wide_glyph(c) => WIDE_GLYPH,
+            _ => NARROW_GLYPH,
+        };
+        joined = false;
+        total += width;
+        previous = if c == '\u{FE0F}' { WIDE_GLYPH } else { width };
     }
+    total
 }
 
 fn is_wide_glyph(c: char) -> bool {
@@ -597,7 +613,7 @@ fn wrap_chips(chips: Vec<AgendaEventItem>) -> Vec<Vec<AgendaEventItem>> {
     let mut rows: Vec<Vec<AgendaEventItem>> = Vec::new();
     let mut used = 0.0f32;
     for chip in chips {
-        let width = (chip.title.chars().map(glyph_width).sum::<f32>() + 28.0).min(LINE);
+        let width = (text_width(&chip.title) + 28.0).min(LINE);
         match rows.last_mut() {
             Some(row) if used + GAP + width <= LINE => {
                 used += GAP + width;
@@ -779,8 +795,13 @@ mod tests {
         assert!(!is_wide_glyph('Ж') && !is_wide_glyph('é'));
         // Text-style symbols stay narrow; the emoji selector widens them.
         assert!(!is_wide_glyph('✓') && !is_wide_glyph('★') && !is_wide_glyph('✈'));
-        let width = |s: &str| s.chars().map(glyph_width).sum::<f32>();
-        assert_eq!(width("✈"), NARROW_GLYPH);
-        assert_eq!(width("✈\u{FE0F}"), WIDE_GLYPH);
+        assert_eq!(text_width("✈"), NARROW_GLYPH);
+        assert_eq!(text_width("✈\u{FE0F}"), WIDE_GLYPH);
+        // A selector after an emoji that is already wide, a skin tone, and a joined
+        // sequence each still count as one wide glyph.
+        assert_eq!(text_width("⭐\u{FE0F}"), WIDE_GLYPH);
+        assert_eq!(text_width("👍\u{1F3FD}"), WIDE_GLYPH);
+        assert_eq!(text_width("👨\u{200D}👩\u{200D}👧"), WIDE_GLYPH);
+        assert_eq!(text_width("a\u{FE0F}b"), WIDE_GLYPH + NARROW_GLYPH);
     }
 }

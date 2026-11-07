@@ -62,12 +62,13 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 ; Sets $0 to 0 when $INSTDIR\lightcal.exe can be replaced, 1 while Lightcal
-; holds its single-instance mutex, and 2 while the exe stays in use. Quit
-; releases the mutex before the process has exited (ADR 0017), so the exe is
-; also opened for writing, which Windows refuses while a process runs it. That
-; open is retried for 5 s, so a closing Lightcal or a short antivirus or
-; indexer lock passes, and a read-only attribute is cleared first (Setup
-; overwrites the file and the uninstaller deletes it anyway).
+; holds its single-instance mutex, 2 while the exe stays in use, and 3 when
+; this account cannot write it. Quit releases the mutex before the process has
+; exited (ADR 0017), so the exe is also opened for writing, which Windows
+; refuses with a sharing violation while a process runs it. Only that error is
+; retried, for 5 s, so a closing Lightcal or a short antivirus or indexer lock
+; passes. The probe changes nothing: a read-only exe counts as replaceable,
+; since the install and uninstall sections clear the attribute themselves.
 !macro LightcalRunning
   StrCpy $0 0
   System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r1'
@@ -75,14 +76,29 @@ UninstallIcon "${STAGE}\lightcal.ico"
     System::Call 'kernel32::CloseHandle(p r1)'
     StrCpy $0 1
   ${ElseIf} ${FileExists} "$INSTDIR\lightcal.exe"
-    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
     StrCpy $2 0
     ${Do}
-      ClearErrors
-      FileOpen $1 "$INSTDIR\lightcal.exe" a
-      ${IfNot} ${Errors}
-        FileClose $1
+      ; GENERIC_WRITE, share read/write/delete, OPEN_EXISTING.
+      System::Call 'kernel32::CreateFileW(w "$INSTDIR\lightcal.exe", i 0x40000000, i 7, p 0, i 3, i 0, p 0) p .r1 ?e'
+      Pop $3
+      ${If} $1 <> -1
+        System::Call 'kernel32::CloseHandle(p r1)'
         StrCpy $0 0
+        ${Break}
+      ${EndIf}
+      ${If} $3 == 5
+        ; ERROR_ACCESS_DENIED: a read-only attribute, or a folder this account cannot write.
+        System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\lightcal.exe") i .r3'
+        IntOp $3 $3 & 1
+        ${If} $3 == 1
+          StrCpy $0 0
+        ${Else}
+          StrCpy $0 3
+        ${EndIf}
+        ${Break}
+      ${ElseIf} $3 != 32
+        ; Anything but ERROR_SHARING_VIOLATION will not clear by waiting.
+        StrCpy $0 3
         ${Break}
       ${EndIf}
       StrCpy $0 2
@@ -101,6 +117,8 @@ UninstallIcon "${STAGE}\lightcal.ico"
     MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then ${ACTION}." /SD IDOK
   ${ElseIf} $0 == 2
     MessageBox MB_OK|MB_ICONINFORMATION "$INSTDIR\lightcal.exe is still in use. If Lightcal is closing, wait a moment, then ${ACTION}." /SD IDOK
+  ${ElseIf} $0 == 3
+    MessageBox MB_OK|MB_ICONSTOP "This account cannot change $INSTDIR\lightcal.exe. Choose another folder, or remove that installation with the account that installed it." /SD IDOK
   ${EndIf}
 !macroend
 
@@ -135,6 +153,10 @@ FunctionEnd
 Section "Lightcal (required)" AppFiles
   SectionIn RO
   SetOutPath "$INSTDIR"
+  ; A read-only exe from an earlier copy would block the overwrite.
+  ${If} ${FileExists} "$INSTDIR\lightcal.exe"
+    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
+  ${EndIf}
   File "${STAGE}\lightcal.exe"
   File "${STAGE}\LICENSE"
   File "${STAGE}\THIRD_PARTY_NOTICES.md"
@@ -191,6 +213,9 @@ FunctionEnd
 
 Section "Uninstall"
   ; Delete only installer-owned files; never recurse over a user-selected directory.
+  ${If} ${FileExists} "$INSTDIR\lightcal.exe"
+    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
+  ${EndIf}
   Delete "$INSTDIR\lightcal.exe"
   Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\THIRD_PARTY_NOTICES.md"
