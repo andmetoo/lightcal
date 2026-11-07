@@ -514,7 +514,23 @@ impl ShortcutManager {
                     }
 
                     if msg.message == WM_USER {
-                        while let Ok(cmd) = cmd_rx.try_recv() {
+                        // Only the newest queued Bind is applied: requests that timed out
+                        // while this thread was busy, and the restore queued after each,
+                        // are answered as superseded instead of re-registering in turn.
+                        let pending: Vec<ShortcutCommand> =
+                            std::iter::from_fn(|| cmd_rx.try_recv().ok()).collect();
+                        let last_bind = pending
+                            .iter()
+                            .rposition(|cmd| matches!(cmd, ShortcutCommand::Bind { .. }));
+                        for (index, cmd) in pending.into_iter().enumerate() {
+                            if let ShortcutCommand::Bind { resp, .. } = &cmd {
+                                if Some(index) != last_bind {
+                                    let _ = resp.send(Err(
+                                        "Superseded by a newer shortcut change".to_string()
+                                    ));
+                                    continue;
+                                }
+                            }
                             match cmd {
                                 ShortcutCommand::Bind { binding, resp } => {
                                     if current_binding.is_some() {
@@ -639,20 +655,35 @@ impl ShortcutManager {
 
         #[cfg(all(windows, not(test)))]
         if let Some(tx) = &self.sender {
-            let (resp_tx, resp_rx) = std::sync::mpsc::channel();
-            let _ = tx.send(ShortcutCommand::Bind {
-                binding: normalized.clone(),
-                resp: resp_tx,
-            });
-            unsafe {
-                windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW(
-                    self.thread_id,
-                    windows_sys::Win32::UI::WindowsAndMessaging::WM_USER,
-                    0,
-                    0,
-                );
-            }
-            let res = resp_rx.recv().map_err(|e| e.to_string())??;
+            let send = |binding: Option<String>| {
+                let (resp_tx, resp_rx) = std::sync::mpsc::channel();
+                let _ = tx.send(ShortcutCommand::Bind {
+                    binding,
+                    resp: resp_tx,
+                });
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::PostThreadMessageW(
+                        self.thread_id,
+                        windows_sys::Win32::UI::WindowsAndMessaging::WM_USER,
+                        0,
+                        0,
+                    );
+                }
+                resp_rx
+            };
+            let res = match send(normalized.clone()).recv_timeout(std::time::Duration::from_secs(2))
+            {
+                Ok(res) => res?,
+                Err(e) => {
+                    // The thread handles commands in order and may still apply the request
+                    // late. Queue the current binding after it, so the registered hotkey
+                    // ends up matching `active_binding` and the error the caller shows.
+                    if matches!(e, std::sync::mpsc::RecvTimeoutError::Timeout) {
+                        drop(send(self.active_binding.clone()));
+                    }
+                    return Err(format!("Shortcut service did not respond: {e}"));
+                }
+            };
             self.active_binding = res.clone();
             return Ok(res);
         }
@@ -931,7 +962,7 @@ impl SessionEndWatch {
         };
         // Only success is remembered, so a failed registration is tried again.
         static REGISTERED: AtomicBool = AtomicBool::new(false);
-        let class: Vec<u16> = "LightcalSessionEnd ".encode_utf16().collect();
+        let class: Vec<u16> = "LightcalSessionEnd\0".encode_utf16().collect();
         let title = [0u16];
         // SAFETY: the class name and title outlive the calls; the class is registered
         // once per process.

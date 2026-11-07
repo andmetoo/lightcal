@@ -277,9 +277,13 @@ pub fn apply(plan_path: &Path) -> Result<(), String> {
     let backup = parent.join(format!("lightcal-{suffix}.previous.exe"));
     std::fs::copy(&plan.candidate, &replacement)
         .map_err(|_| "Installation directory is not writable; portable update cannot proceed")?;
-    verify_payload(&replacement, &plan.sha256)?;
-    verify_signed_file(&replacement, &plan.expected_version, &pin)?;
-    replace(&plan.target, &replacement, &backup)?;
+    if let Err(error) = verify_payload(&replacement, &plan.sha256)
+        .and_then(|()| verify_signed_file(&replacement, &plan.expected_version, &pin))
+        .and_then(|()| replace(&plan.target, &replacement, &backup))
+    {
+        let _ = std::fs::remove_file(&replacement);
+        return Err(error);
+    }
     match std::process::Command::new(&plan.target)
         .arg("--tray")
         .spawn()
@@ -418,18 +422,32 @@ fn replace(target: &Path, new: &Path, backup: &Path) -> Result<(), String> {
             .chain(Some(0))
             .collect::<Vec<_>>()
     };
-    let (target, new, backup) = (wide(target), wide(new), wide(backup));
     let ok = unsafe {
         windows_sys::Win32::Storage::FileSystem::ReplaceFileW(
-            target.as_ptr(),
-            new.as_ptr(),
-            backup.as_ptr(),
+            wide(target).as_ptr(),
+            wide(new).as_ptr(),
+            wide(backup).as_ptr(),
             0,
             std::ptr::null(),
             std::ptr::null(),
         )
     };
     if ok == 0 {
+        // ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 has already moved the target to the backup name
+        // but left `new` where it was. Finish the swap the caller asked for (the new build on
+        // an update, the previous one on a rollback); if that fails too, put the old target
+        // back, so the installation is never left without its executable.
+        if !target.exists() && backup.exists() {
+            if std::fs::rename(new, target).is_ok() {
+                return Ok(());
+            }
+            if std::fs::rename(backup, target).is_err() {
+                return Err(format!(
+                    "Executable replacement failed and the previous executable is at {}",
+                    backup.display()
+                ));
+            }
+        }
         return Err(
             "Atomic executable replacement failed; previous installation was retained".into(),
         );

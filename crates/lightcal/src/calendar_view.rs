@@ -521,6 +521,98 @@ pub(crate) fn shaded_bands(columns: &[bool; 7]) -> Vec<ShadedBand> {
     bands
 }
 
+const NARROW_GLYPH: f32 = 6.6;
+const WIDE_GLYPH: f32 = 12.0;
+
+/// Estimated advance of `c` in a 12 px chip title.
+/// Estimated width of a 12 px chip title. Emoji sequences count as one glyph: the
+/// emoji-style selector U+FE0F widens only a narrow symbol before it (✈ in "✈️"), skin-tone
+/// modifiers and the text-style selector add nothing, and a character joined by U+200D
+/// (a family or profession emoji) adds nothing either.
+fn text_width(text: &str) -> f32 {
+    let mut total = 0.0;
+    let mut previous = 0.0;
+    let mut joined = false;
+    for c in text.chars() {
+        let width = match c {
+            '\u{200D}' => {
+                joined = true;
+                continue;
+            }
+            // Combining marks draw on the character before them: a decomposed "é" (e +
+            // U+0301) or the keycap in "1️⃣". They change nothing, not even `previous`.
+            '\u{0300}'..='\u{036F}'
+            | '\u{1AB0}'..='\u{1AFF}'
+            | '\u{1DC0}'..='\u{1DFF}'
+            | '\u{20D0}'..='\u{20FF}'
+            | '\u{FE20}'..='\u{FE2F}' => continue,
+            '\u{FE0E}' | '\u{1F3FB}'..='\u{1F3FF}' => 0.0,
+            '\u{FE0F}' if previous == NARROW_GLYPH => WIDE_GLYPH - NARROW_GLYPH,
+            '\u{FE0F}' => 0.0,
+            _ if joined => 0.0,
+            c if is_wide_glyph(c) => WIDE_GLYPH,
+            _ => NARROW_GLYPH,
+        };
+        joined = false;
+        total += width;
+        previous = if c == '\u{FE0F}' { WIDE_GLYPH } else { width };
+    }
+    total
+}
+
+fn is_wide_glyph(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x1100..=0x115F
+            // Symbols drawn as color emoji without a selector (Emoji_Presentation). Other
+            // symbols in these blocks, such as ✓ ★ ✈, stay narrow unless U+FE0F follows.
+            | 0x231A..=0x231B
+            | 0x23E9..=0x23EC
+            | 0x23F0
+            | 0x23F3
+            | 0x25FD..=0x25FE
+            | 0x2614..=0x2615
+            | 0x2648..=0x2653
+            | 0x267F
+            | 0x2693
+            | 0x26A1
+            | 0x26AA..=0x26AB
+            | 0x26BD..=0x26BE
+            | 0x26C4..=0x26C5
+            | 0x26CE
+            | 0x26D4
+            | 0x26EA
+            | 0x26F2..=0x26F3
+            | 0x26F5
+            | 0x26FA
+            | 0x26FD
+            | 0x2705
+            | 0x270A..=0x270B
+            | 0x2728
+            | 0x274C
+            | 0x274E
+            | 0x2753..=0x2755
+            | 0x2757
+            | 0x2795..=0x2797
+            | 0x27B0
+            | 0x27BF
+            | 0x2B1B..=0x2B1C
+            | 0x2B50
+            | 0x2B55
+            | 0x2E80..=0x303E
+            | 0x3040..=0x33BF
+            | 0x3400..=0x4DBF
+            | 0x4E00..=0xA4CF
+            | 0xAC00..=0xD7A3
+            | 0xF900..=0xFAFF
+            | 0xFE10..=0xFE6B
+            | 0xFF01..=0xFF60
+            | 0xFFE0..=0xFFE6
+            | 0x1F000..=0x1FAFF
+            | 0x20000..=0x3FFFF
+    )
+}
+
 /// Wraps chips into lines by an estimate of their 12 px width (328 px agenda, 8 px padding).
 fn wrap_chips(chips: Vec<AgendaEventItem>) -> Vec<Vec<AgendaEventItem>> {
     const LINE: f32 = 320.0;
@@ -528,13 +620,7 @@ fn wrap_chips(chips: Vec<AgendaEventItem>) -> Vec<Vec<AgendaEventItem>> {
     let mut rows: Vec<Vec<AgendaEventItem>> = Vec::new();
     let mut used = 0.0f32;
     for chip in chips {
-        let width = (chip
-            .title
-            .chars()
-            .map(|c| if c.is_ascii() { 6.6 } else { 12.0 })
-            .sum::<f32>()
-            + 28.0)
-            .min(LINE);
+        let width = (text_width(&chip.title) + 28.0).min(LINE);
         match rows.last_mut() {
             Some(row) if used + GAP + width <= LINE => {
                 used += GAP + width;
@@ -697,5 +783,35 @@ mod tests {
             ..local
         };
         assert_eq!(time_range(LocaleCode::En, &provider), "23:00–00:00");
+    }
+
+    #[test]
+    fn cyrillic_and_accented_latin_chips_stay_on_one_row_while_wide_cjk_wraps() {
+        let chip = |title: &str| AgendaEventItem {
+            title: title.into(),
+            ..Default::default()
+        };
+        let cyrillic = wrap_chips(vec![chip("Отпуск и отдых"), chip("День рождения")]);
+        assert_eq!(cyrillic.len(), 1);
+        let cjk = wrap_chips(vec![
+            chip("ゴールデンウィーク特別休暇期間"),
+            chip("年末年始休業のお知らせと予定"),
+        ]);
+        assert_eq!(cjk.len(), 2);
+        assert!(is_wide_glyph('☕') && is_wide_glyph('⭐') && is_wide_glyph('✅'));
+        assert!(!is_wide_glyph('Ж') && !is_wide_glyph('é'));
+        // Text-style symbols stay narrow; the emoji selector widens them.
+        assert!(!is_wide_glyph('✓') && !is_wide_glyph('★') && !is_wide_glyph('✈'));
+        assert_eq!(text_width("✈"), NARROW_GLYPH);
+        assert_eq!(text_width("✈\u{FE0F}"), WIDE_GLYPH);
+        // A selector after an emoji that is already wide, a skin tone, and a joined
+        // sequence each still count as one wide glyph.
+        assert_eq!(text_width("⭐\u{FE0F}"), WIDE_GLYPH);
+        assert_eq!(text_width("👍\u{1F3FD}"), WIDE_GLYPH);
+        assert_eq!(text_width("👨\u{200D}👩\u{200D}👧"), WIDE_GLYPH);
+        assert_eq!(text_width("a\u{FE0F}b"), WIDE_GLYPH + NARROW_GLYPH);
+        // Combining marks add nothing: decomposed "é" is one letter, "1️⃣" one emoji.
+        assert_eq!(text_width("e\u{0301}"), text_width("é"));
+        assert_eq!(text_width("1\u{FE0F}\u{20E3}"), WIDE_GLYPH);
     }
 }

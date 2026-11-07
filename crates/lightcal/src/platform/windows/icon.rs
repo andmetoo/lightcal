@@ -751,8 +751,7 @@ fn date_clear_space(geometry: &TileGeometry, style: Style) -> usize {
 }
 
 /// Tracking between the two digits of a date: -1 px from 20 px up, so a pair
-/// keeps its height without crowding the edge. Pairs with a `1` get no extra
-/// tightening: Segoe's narrow `1` would then run into its neighbour.
+/// keeps its height without crowding the edge.
 fn date_tracking(size: usize, text: &str) -> f32 {
     if size >= 20 && text.chars().count() >= 2 {
         -1.0

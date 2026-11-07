@@ -97,11 +97,13 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         held_google_needs_signin: false,
         held_google_label: String::new(),
         held_google_error: String::new(),
+        held_microsoft_error: String::new(),
         google_connected: false,
         google_needs_signin: false,
         google_label: String::new(),
         google_error: String::new(),
-        ics_error: String::new(),
+        microsoft_error: String::new(),
+        ics_feed_errors: Default::default(),
         agenda: Default::default(),
         last_refreshed: None,
         // Snapshots are never on screen, so headers render settled.
@@ -1064,7 +1066,7 @@ fn render_settings_snapshots(
         ctrl.google_needs_signin = false;
         ctrl.google_label.clear();
         ctrl.google_error.clear();
-        ctrl.ics_error.clear();
+        ctrl.ics_feed_errors.clear();
         ctrl.connection_busy = false;
         ctrl.connection_message.clear();
         ctrl.provider_loading = false;

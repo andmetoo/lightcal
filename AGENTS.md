@@ -7,7 +7,7 @@
 - Keep calendar logic independent of toolkit and platform APIs. Lightcal targets Windows only; do not add macOS work (see [ADR 0011](docs/decisions/0011-windows-only-design-refresh.md)).
 - Measure resource claims in release builds and label unmeasured targets honestly.
 - Use temporary application data for tests. Never alter real autostart/registry/profile state during automated tests without an isolated, explicit test setup.
-- Follow `docs/features.md`: read-only Windows calendar access, manual GitHub update checking, optional startup/shortcut, and About links are approved scope. Direct account sign-in, other event providers, telemetry, and automatic update installation still require an owner decision.
+- Follow `docs/features.md`: read-only calendar connections (Outlook, Google Calendar, private ICS, and Windows calendars), local single-day events (`On this PC`), manual and signed automatic GitHub updates, optional startup/shortcut, and About links are approved scope (see ADRs [0002](docs/decisions/0002-direct-calendars-and-updates.md), [0008](docs/decisions/0008-google-calendar-and-platform-design.md), and [0017](docs/decisions/0017-local-events.md)). Additional event providers, remote event editing, and telemetry still require an owner decision.
 - Preserve GPL-3.0-only licensing and third-party attribution. Never commit credentials or signing material.
 - Check documentation with `bun scripts/check-docs.ts`. Write new scripts for Bun (TypeScript); use Python only when Bun cannot do the job, and PowerShell only for Windows-only tooling.
 
