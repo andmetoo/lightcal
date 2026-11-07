@@ -844,24 +844,22 @@ impl PreferencesStore {
         }
 
         // Keep the user's original file when it cannot be read as current preferences, so
-        // recovering with defaults never silently destroys it. Otherwise refresh last_good.
-        let mut updated_last_good = false;
+        // recovering with defaults never silently destroys it.
         if target.exists() {
-            if let Ok(Some(existing_raw)) = read_bounded_preferences(&target) {
-                let exact = serde_json::from_str::<serde_json::Value>(&existing_raw)
-                    .ok()
-                    .zip(serde_json::from_str::<Preferences>(&existing_raw).ok())
-                    .is_some_and(|(value, existing)| {
-                        existing.schema_version <= CURRENT_SCHEMA_VERSION
-                            && has_schema_version(&value)
-                            && !deviations(&value, &existing).any()
-                    });
-                if exact {
-                    updated_last_good = fs::copy(&target, &last_good).is_ok();
-                } else {
-                    self.preserve_existing(&target);
-                }
-            } else {
+            let exact = read_bounded_preferences(&target)
+                .ok()
+                .flatten()
+                .is_some_and(|existing_raw| {
+                    serde_json::from_str::<serde_json::Value>(&existing_raw)
+                        .ok()
+                        .zip(serde_json::from_str::<Preferences>(&existing_raw).ok())
+                        .is_some_and(|(value, existing)| {
+                            existing.schema_version <= CURRENT_SCHEMA_VERSION
+                                && has_schema_version(&value)
+                                && !deviations(&value, &existing).any()
+                        })
+                });
+            if !exact {
                 self.preserve_existing(&target);
             }
         }
@@ -870,9 +868,8 @@ impl PreferencesStore {
             let _ = fs::remove_file(&tmp);
             format!("Failed to replace preferences file: {e}")
         })?;
-        if !updated_last_good && !last_good.exists() {
-            let _ = fs::copy(&target, &last_good);
-        }
+        // last_good always mirrors the file just written, so recovery restores the latest save.
+        let _ = fs::copy(&target, &last_good);
         Ok(())
     }
 }
@@ -1381,6 +1378,26 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             store.save(&Preferences::default()).unwrap();
         }
         assert_eq!(store.preserved_files().len(), MAX_PRESERVED_FILES);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn last_good_mirrors_the_latest_save() {
+        let dir = unique_temp_dir("last-good-latest");
+        let store = PreferencesStore::new(&dir);
+        let mut prefs = Preferences::default();
+        store.save(&prefs).unwrap();
+        prefs.theme = ThemePreference::Dark;
+        store.save(&prefs).unwrap();
+        prefs.first_weekday = Weekday::Sunday;
+        store.save(&prefs).unwrap();
+        assert_eq!(
+            fs::read(store.last_good_path()).unwrap(),
+            fs::read(store.file_path()).unwrap()
+        );
+        // A damaged main file recovers the latest save, not an earlier one.
+        fs::write(store.file_path(), "{ not json").unwrap();
+        assert_eq!(store.load().preferences, prefs);
         let _ = fs::remove_dir_all(&dir);
     }
 
