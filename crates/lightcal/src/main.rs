@@ -3599,7 +3599,17 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                                 ctrl.google_error.clear();
                             }
                             if prefix.starts_with("ics:") {
-                                ctrl.ics_feed_errors.remove(&prefix);
+                                // The status line joins every feed's message; drop the
+                                // removed feed's lines so its error does not linger.
+                                if let Some(message) = ctrl.ics_feed_errors.remove(&prefix) {
+                                    let gone: Vec<&str> = message.lines().collect();
+                                    ctrl.ics_error = ctrl
+                                        .ics_error
+                                        .lines()
+                                        .filter(|line| !gone.contains(line))
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
+                                }
                             }
                             ctrl.prefs
                                 .selected_calendar_ids

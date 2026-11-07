@@ -433,13 +433,20 @@ fn replace(target: &Path, new: &Path, backup: &Path) -> Result<(), String> {
         )
     };
     if ok == 0 {
-        // ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 leaves the target under the backup name. Put it
-        // back, so a failed replace never leaves the installation without its executable.
-        if !target.exists() && backup.exists() && std::fs::rename(backup, target).is_err() {
-            return Err(format!(
-                "Executable replacement failed and the previous executable is at {}",
-                backup.display()
-            ));
+        // ERROR_UNABLE_TO_MOVE_REPLACEMENT_2 has already moved the target to the backup name
+        // but left `new` where it was. Finish the swap the caller asked for (the new build on
+        // an update, the previous one on a rollback); if that fails too, put the old target
+        // back, so the installation is never left without its executable.
+        if !target.exists() && backup.exists() {
+            if std::fs::rename(new, target).is_ok() {
+                return Ok(());
+            }
+            if std::fs::rename(backup, target).is_err() {
+                return Err(format!(
+                    "Executable replacement failed and the previous executable is at {}",
+                    backup.display()
+                ));
+            }
         }
         return Err(
             "Atomic executable replacement failed; previous installation was retained".into(),

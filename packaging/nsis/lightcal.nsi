@@ -37,6 +37,9 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${STAGE}\LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
+!ifndef TEST_SETUP
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryLeave
+!endif
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !ifndef TEST_SETUP
@@ -58,9 +61,13 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_LANGUAGE "Korean"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
-; Sets $0 to 1 while Lightcal runs. Quit releases the single-instance mutex
-; before the process has exited (ADR 0017), so also try to open the installed
-; exe for writing: Windows refuses that while any process still runs it.
+; Sets $0 to 0 when $INSTDIR\lightcal.exe can be replaced, 1 while Lightcal
+; holds its single-instance mutex, and 2 while the exe stays in use. Quit
+; releases the mutex before the process has exited (ADR 0017), so the exe is
+; also opened for writing, which Windows refuses while a process runs it. That
+; open is retried for 5 s, so a closing Lightcal or a short antivirus or
+; indexer lock passes, and a read-only attribute is cleared first (Setup
+; overwrites the file and the uninstaller deletes it anyway).
 !macro LightcalRunning
   StrCpy $0 0
   System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r1'
@@ -68,15 +75,45 @@ UninstallIcon "${STAGE}\lightcal.ico"
     System::Call 'kernel32::CloseHandle(p r1)'
     StrCpy $0 1
   ${ElseIf} ${FileExists} "$INSTDIR\lightcal.exe"
-    ClearErrors
-    FileOpen $1 "$INSTDIR\lightcal.exe" a
-    ${If} ${Errors}
-      StrCpy $0 1
-    ${Else}
-      FileClose $1
-    ${EndIf}
+    SetFileAttributes "$INSTDIR\lightcal.exe" NORMAL
+    StrCpy $2 0
+    ${Do}
+      ClearErrors
+      FileOpen $1 "$INSTDIR\lightcal.exe" a
+      ${IfNot} ${Errors}
+        FileClose $1
+        StrCpy $0 0
+        ${Break}
+      ${EndIf}
+      StrCpy $0 2
+      IntOp $2 $2 + 1
+      ${If} $2 >= 10
+        ${Break}
+      ${EndIf}
+      Sleep 500
+    ${Loop}
   ${EndIf}
 !macroend
+
+; Shows why Setup cannot continue when $0 is not 0.
+!macro LightcalRunningMessage ACTION
+  ${If} $0 == 1
+    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then ${ACTION}." /SD IDOK
+  ${ElseIf} $0 == 2
+    MessageBox MB_OK|MB_ICONINFORMATION "$INSTDIR\lightcal.exe is still in use. If Lightcal is closing, wait a moment, then ${ACTION}." /SD IDOK
+  ${EndIf}
+!macroend
+
+!ifndef TEST_SETUP
+; The Directory page can point Setup at another installation, so check again there.
+Function DirectoryLeave
+  !insertmacro LightcalRunning
+  ${If} $0 != 0
+    !insertmacro LightcalRunningMessage "continue"
+    Abort
+  ${EndIf}
+FunctionEnd
+!endif
 
 Function .onInit
   SetShellVarContext current
@@ -87,8 +124,8 @@ Function .onInit
   ${EndIf}
 !ifndef TEST_SETUP
   !insertmacro LightcalRunning
-  ${If} $0 == 1
-    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then run Setup again." /SD IDOK
+  ${If} $0 != 0
+    !insertmacro LightcalRunningMessage "run Setup again"
     SetErrorLevel 1603
     Abort
   ${EndIf}
@@ -144,8 +181,8 @@ Function un.onInit
   SetShellVarContext current
 !ifndef TEST_SETUP
   !insertmacro LightcalRunning
-  ${If} $0 == 1
-    MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu before uninstalling." /SD IDOK
+  ${If} $0 != 0
+    !insertmacro LightcalRunningMessage "uninstall again"
     SetErrorLevel 1603
     Abort
   ${EndIf}
