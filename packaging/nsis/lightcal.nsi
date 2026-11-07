@@ -65,10 +65,12 @@ UninstallIcon "${STAGE}\lightcal.ico"
 ; holds its single-instance mutex, 2 while the exe stays in use, and 3 when
 ; this account cannot write it. Quit releases the mutex before the process has
 ; exited (ADR 0017), so the exe is also opened for writing, which Windows
-; refuses with a sharing violation while a process runs it. Only that error is
-; retried, for 5 s, so a closing Lightcal or a short antivirus or indexer lock
-; passes. The probe changes nothing: a read-only exe counts as replaceable,
-; since the install and uninstall sections clear the attribute themselves.
+; refuses while a process runs it: usually with a sharing violation, but a
+; running or delete-pending image can also give access denied. Both are retried
+; for 5 s, so a closing Lightcal or a short antivirus or indexer lock passes;
+; access denied that lasts means this account cannot write the file. The probe
+; changes nothing: a read-only exe counts as replaceable, since the install and
+; uninstall sections clear the attribute themselves.
 !macro LightcalRunning
   StrCpy $0 0
   System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r1'
@@ -87,21 +89,23 @@ UninstallIcon "${STAGE}\lightcal.ico"
         ${Break}
       ${EndIf}
       ${If} $3 == 5
-        ; ERROR_ACCESS_DENIED: a read-only attribute, or a folder this account cannot write.
-        System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\lightcal.exe") i .r3'
-        IntOp $3 $3 & 1
-        ${If} $3 == 1
+        ; ERROR_ACCESS_DENIED: a read-only attribute passes at once; otherwise the
+        ; image may still be closing, or this account cannot write the file.
+        System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\lightcal.exe") i .r4'
+        IntOp $4 $4 & 1
+        ${If} $4 == 1
           StrCpy $0 0
-        ${Else}
-          StrCpy $0 3
+          ${Break}
         ${EndIf}
-        ${Break}
-      ${ElseIf} $3 != 32
-        ; Anything but ERROR_SHARING_VIOLATION will not clear by waiting.
+        StrCpy $0 3
+      ${ElseIf} $3 == 32
+        ; ERROR_SHARING_VIOLATION: a process still has the file open.
+        StrCpy $0 2
+      ${Else}
+        ; Anything else will not clear by waiting.
         StrCpy $0 3
         ${Break}
       ${EndIf}
-      StrCpy $0 2
       IntOp $2 $2 + 1
       ${If} $2 >= 10
         ${Break}
@@ -118,7 +122,7 @@ UninstallIcon "${STAGE}\lightcal.ico"
   ${ElseIf} $0 == 2
     MessageBox MB_OK|MB_ICONINFORMATION "$INSTDIR\lightcal.exe is still in use. If Lightcal is closing, wait a moment, then ${ACTION}." /SD IDOK
   ${ElseIf} $0 == 3
-    MessageBox MB_OK|MB_ICONSTOP "This account cannot change $INSTDIR\lightcal.exe. Choose another folder, or remove that installation with the account that installed it." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "This account cannot change $INSTDIR\lightcal.exe. If Lightcal was just closing, try again; otherwise choose another folder, or remove that installation with the account that installed it." /SD IDOK
   ${EndIf}
 !macroend
 

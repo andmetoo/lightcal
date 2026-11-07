@@ -1455,9 +1455,12 @@ impl AppController {
             }
             .into(),
         );
+        // In the order the feeds are listed, like their cards; the map is keyed by random ids.
         ui.set_ics_status_text(
-            self.ics_feed_errors
-                .values()
+            self.provider
+                .sources
+                .iter()
+                .filter_map(|source| self.ics_feed_errors.get(&source.id))
                 .map(String::as_str)
                 .collect::<Vec<_>>()
                 .join("\n")

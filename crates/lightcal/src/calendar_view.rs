@@ -539,6 +539,13 @@ fn text_width(text: &str) -> f32 {
                 joined = true;
                 continue;
             }
+            // Combining marks draw on the character before them: a decomposed "é" (e +
+            // U+0301) or the keycap in "1️⃣". They change nothing, not even `previous`.
+            '\u{0300}'..='\u{036F}'
+            | '\u{1AB0}'..='\u{1AFF}'
+            | '\u{1DC0}'..='\u{1DFF}'
+            | '\u{20D0}'..='\u{20FF}'
+            | '\u{FE20}'..='\u{FE2F}' => continue,
             '\u{FE0E}' | '\u{1F3FB}'..='\u{1F3FF}' => 0.0,
             '\u{FE0F}' if previous == NARROW_GLYPH => WIDE_GLYPH - NARROW_GLYPH,
             '\u{FE0F}' => 0.0,
@@ -803,5 +810,8 @@ mod tests {
         assert_eq!(text_width("👍\u{1F3FD}"), WIDE_GLYPH);
         assert_eq!(text_width("👨\u{200D}👩\u{200D}👧"), WIDE_GLYPH);
         assert_eq!(text_width("a\u{FE0F}b"), WIDE_GLYPH + NARROW_GLYPH);
+        // Combining marks add nothing: decomposed "é" is one letter, "1️⃣" one emoji.
+        assert_eq!(text_width("e\u{0301}"), text_width("é"));
+        assert_eq!(text_width("1\u{FE0F}\u{20E3}"), WIDE_GLYPH);
     }
 }

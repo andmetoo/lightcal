@@ -48,15 +48,21 @@ pub fn random_key() -> Result<String, String> {
 /// only the request line, so the browser's headers can still be unread; closing a socket
 /// with unread input makes Windows reset the connection, which can discard the response
 /// before the browser reads it. So: flush, send FIN, then read and drop what is left until
-/// the browser closes its side, for at most a second and 64 KiB.
+/// the browser closes its side, for at most a second in all and 64 KiB, so a client that
+/// trickles bytes cannot hold up the sign-in loop.
 pub(crate) fn close_callback_stream(stream: &mut std::net::TcpStream) {
     use std::io::{Read, Write};
+    use std::time::{Duration, Instant};
     let _ = stream.flush();
     let _ = stream.shutdown(std::net::Shutdown::Write);
-    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(1)));
+    let deadline = Instant::now() + Duration::from_secs(1);
     let mut sink = [0u8; 4096];
     let mut drained = 0usize;
     while drained < 64 * 1024 {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
+            break;
+        }
         match stream.read(&mut sink) {
             Ok(0) | Err(_) => break,
             Ok(n) => drained += n,
