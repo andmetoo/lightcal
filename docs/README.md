@@ -1,9 +1,10 @@
 # Documentation
 
-Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.2.0 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
+Documentation baseline: October 29, 2026; updated for the public repository on November 1, 2026. The application is implemented; the current version is 1.2.1 (1.0.4 was skipped, so 1.0.3 is followed directly by 1.0.5).
 
 | Document | Purpose |
 | --- | --- |
+| [Several accounts per provider](decisions/0018-multiple-accounts.md) | Up to five Google and five Microsoft accounts, account-scoped calendar IDs and credential migration |
 | [Local events](decisions/0017-local-events.md) | Events created in Lightcal and stored only on this PC as plain JSON; the "On this PC" calendar |
 | [Calendar motion](decisions/0016-calendar-motion.md) | Copy, agenda and month-change transitions; Today underline; Settings unchanged |
 | [Calendar hover follow](decisions/0015-calendar-hover-follow.md) | One highlight springs after the pointer across the day grid; stronger selected fill |

@@ -249,10 +249,6 @@ const fn default_true() -> bool {
     true
 }
 
-fn default_update_channel() -> String {
-    "stable".to_string()
-}
-
 fn default_microsoft_client_id() -> String {
     option_env!("LIGHTCAL_MICROSOFT_CLIENT_ID")
         .unwrap_or("")
@@ -353,8 +349,6 @@ pub struct Preferences {
     pub date_size: DateSize,
     #[serde(default)]
     pub auto_check_updates: bool,
-    #[serde(default = "default_update_channel")]
-    pub update_channel: String,
     #[serde(skip, default = "default_microsoft_client_id")]
     pub microsoft_client_id: String,
     #[serde(skip, default = "default_google_client_id")]
@@ -395,7 +389,6 @@ impl Default for Preferences {
             show_koi: false,
             date_size: DateSize::Standard,
             auto_check_updates: false,
-            update_channel: "stable".to_string(),
             microsoft_client_id: default_microsoft_client_id(),
             google_client_id: default_google_client_id(),
             google_client_secret: default_google_client_secret(),
@@ -1050,6 +1043,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
             "start_with_windows": false,
             "global_shortcut": null,
             "default_view_mode": "expanded",
+            "update_channel": "preview",
             "microsoft_client_id": "obsolete-user-editable-value",
             "selected_calendar_ids": []
         }"#;
@@ -1065,7 +1059,6 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         assert!(!loaded.preferences.show_koi);
         assert_eq!(loaded.preferences.date_size, DateSize::Standard);
         assert!(!loaded.preferences.auto_check_updates);
-        assert_eq!(loaded.preferences.update_channel, "stable");
 
         // Now modify and roundtrip
         let mut modified = loaded.preferences;
@@ -1074,7 +1067,6 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         modified.show_koi = true;
         modified.date_size = DateSize::Larger;
         modified.auto_check_updates = true;
-        modified.update_channel = "preview".to_string();
 
         store.save(&modified).unwrap();
         let reloaded = store.load();
@@ -1082,6 +1074,10 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         assert!(!fs::read_to_string(store.file_path())
             .unwrap()
             .contains("default_view_mode"));
+        // The update channel was never offered in Settings and is no longer kept.
+        assert!(!fs::read_to_string(store.file_path())
+            .unwrap()
+            .contains("update_channel"));
         assert!(!fs::read_to_string(store.file_path())
             .unwrap()
             .contains("microsoft_client_id"));

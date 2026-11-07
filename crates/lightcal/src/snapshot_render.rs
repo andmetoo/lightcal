@@ -86,10 +86,6 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         tray_icon: None,
         #[cfg(windows)]
         tray_menu: crate::TrayMenuItems::new(LocaleCode::En),
-        language_dropdown_open: false,
-        theme_dropdown_open: false,
-        first_day_dropdown_open: false,
-        update_channel_dropdown_open: false,
         calendars_access_denied: false,
         calendars_is_empty: false,
         add_account_open: false,
@@ -903,6 +899,14 @@ fn render_calendar_boards(
     shot(ctrl, "today-no-weeks-light")?;
     ctrl.prefs.show_week_numbers = true;
 
+    // Any day can start the week: a Saturday-first grid.
+    let first_weekday = ctrl.prefs.first_weekday;
+    ctrl.prefs.first_weekday = Weekday::Saturday;
+    ctrl.cal_state.first_weekday = Weekday::Saturday;
+    shot(ctrl, "today-saturday-start-light")?;
+    ctrl.prefs.first_weekday = first_weekday;
+    ctrl.cal_state.first_weekday = first_weekday;
+
     // Koi pond behind the grid, at a fixed pond time so the boards are reproducible. At 260 s
     // the three koi are spread over the grid, which the README screenshot uses.
     ctrl.prefs.show_koi = true;
@@ -1081,8 +1085,7 @@ fn render_settings_snapshots(
         ctrl.install_busy = false;
         ctrl.startup_warning.clear();
         ctrl.startup_error.clear();
-        ctrl.language_dropdown_open = false;
-        ctrl.first_day_dropdown_open = false;
+        ui.set_snapshot_open_menu(0);
         ctrl.last_refreshed = Some(chrono::Local::now() - chrono::Duration::minutes(2));
     };
     // Connected Google (three calendars, two checked) and Outlook accounts.
@@ -1121,9 +1124,16 @@ fn render_settings_snapshots(
     connect(ctrl);
     ctrl.settings_tab = 0;
     shot(ctrl, "calendar")?;
-    ctrl.first_day_dropdown_open = true;
+    ui.set_snapshot_open_menu(1);
     shot(ctrl, "calendar-week-menu")?;
-    ctrl.first_day_dropdown_open = false;
+    // Saturday chosen, with the longest day names (Brazilian Portuguese).
+    let first_weekday = ctrl.prefs.first_weekday;
+    ctrl.prefs.first_weekday = Weekday::Saturday;
+    ctrl.prefs.set_locale(LocaleCode::PtBr);
+    shot(ctrl, "calendar-week-menu-saturday-pt-br")?;
+    ctrl.prefs.set_locale(LocaleCode::En);
+    ctrl.prefs.first_weekday = first_weekday;
+    ui.set_snapshot_open_menu(0);
     ctrl.settings_tab = 1;
     shot(ctrl, "accounts-connected")?;
     ctrl.settings_tab = 2;
@@ -1131,9 +1141,9 @@ fn render_settings_snapshots(
     ctrl.prefs.tray_icon_monochrome = true;
     shot(ctrl, "app-mono")?;
     ctrl.prefs.tray_icon_monochrome = false;
-    ctrl.language_dropdown_open = true;
+    ui.set_snapshot_open_menu(2);
     shot(ctrl, "app-language-menu")?;
-    ctrl.language_dropdown_open = false;
+    ui.set_snapshot_open_menu(0);
 
     // Shortcut conflict: the previous shortcut stays.
     ctrl.shortcut_error =
@@ -1350,14 +1360,14 @@ fn render_settings_snapshots(
     ctrl.settings_tab = 2;
     ctrl.prefs.set_locale(LocaleCode::ZhHans);
     ctrl.prefs.theme = ThemePreference::Light;
-    ctrl.language_dropdown_open = true;
+    ui.set_snapshot_open_menu(2);
     ctrl.sync_to_ui(ui);
     helper.render_to_png(
         &out_dir.join("settings-app-language-menu-light-zh-Hans.png"),
         448,
         360,
     )?;
-    ctrl.language_dropdown_open = false;
+    ui.set_snapshot_open_menu(0);
 
     reset(ctrl);
     ctrl.provider = base_provider;
