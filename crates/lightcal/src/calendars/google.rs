@@ -146,8 +146,7 @@ pub fn connect(
                     body
                 );
                 let _ = stream.write_all(response.as_bytes());
-                let _ = stream.flush();
-                let _ = stream.shutdown(std::net::Shutdown::Write);
+                super::close_callback_stream(&mut stream);
                 match result {
                     Ok(Some(code)) => break code,
                     Err(error) if error == "Google sign-in was cancelled" => return Err(error),

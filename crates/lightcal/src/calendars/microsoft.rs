@@ -132,8 +132,7 @@ fn connect_with_timeout(
                     continue;
                 }
                 let outcome = handle_callback_line(&line, &state, &mut stream);
-                let _ = stream.flush();
-                let _ = stream.shutdown(std::net::Shutdown::Write);
+                super::close_callback_stream(&mut stream);
                 match outcome {
                     Some(Ok(code)) => break code,
                     Some(Err(error)) => return Err(error),

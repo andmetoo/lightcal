@@ -44,6 +44,26 @@ pub fn random_key() -> Result<String, String> {
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
 }
 
+/// Ends a sign-in callback connection after its response is written. The callback reads
+/// only the request line, so the browser's headers can still be unread; closing a socket
+/// with unread input makes Windows reset the connection, which can discard the response
+/// before the browser reads it. So: flush, send FIN, then read and drop what is left until
+/// the browser closes its side, for at most a second and 64 KiB.
+pub(crate) fn close_callback_stream(stream: &mut std::net::TcpStream) {
+    use std::io::{Read, Write};
+    let _ = stream.flush();
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(1)));
+    let mut sink = [0u8; 4096];
+    let mut drained = 0usize;
+    while drained < 64 * 1024 {
+        match stream.read(&mut sink) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => drained += n,
+        }
+    }
+}
+
 pub fn range(anchor: LocalDate) -> (LocalDate, LocalDate) {
     let month = anchor.year_month();
     (
