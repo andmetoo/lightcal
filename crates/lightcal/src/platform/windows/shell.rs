@@ -514,7 +514,23 @@ impl ShortcutManager {
                     }
 
                     if msg.message == WM_USER {
-                        while let Ok(cmd) = cmd_rx.try_recv() {
+                        // Only the newest queued Bind is applied: requests that timed out
+                        // while this thread was busy, and the restore queued after each,
+                        // are answered as superseded instead of re-registering in turn.
+                        let pending: Vec<ShortcutCommand> =
+                            std::iter::from_fn(|| cmd_rx.try_recv().ok()).collect();
+                        let last_bind = pending
+                            .iter()
+                            .rposition(|cmd| matches!(cmd, ShortcutCommand::Bind { .. }));
+                        for (index, cmd) in pending.into_iter().enumerate() {
+                            if let ShortcutCommand::Bind { resp, .. } = &cmd {
+                                if Some(index) != last_bind {
+                                    let _ = resp.send(Err(
+                                        "Superseded by a newer shortcut change".to_string()
+                                    ));
+                                    continue;
+                                }
+                            }
                             match cmd {
                                 ShortcutCommand::Bind { binding, resp } => {
                                     if current_binding.is_some() {

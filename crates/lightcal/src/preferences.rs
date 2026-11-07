@@ -683,12 +683,7 @@ impl PreferencesStore {
                     .collect()
             })
             .unwrap_or_default();
-        files.sort_by_key(|path| {
-            (
-                preserved_order(path),
-                path.file_name().map(|name| name.to_os_string()),
-            )
-        });
+        files.sort_by_key(|path| preserved_sort_key(path));
         files
     }
 
@@ -697,8 +692,8 @@ impl PreferencesStore {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_secs())
             .unwrap_or(0);
-        let next_attempt = self
-            .preserved_files()
+        let mut files = self.preserved_files();
+        let next_attempt = files
             .iter()
             .filter_map(|p| preserved_order(p))
             .filter(|(s, _)| *s == seconds)
@@ -716,11 +711,12 @@ impl PreferencesStore {
                 continue;
             }
             if fs::copy(source, &destination).is_ok() {
+                files.push(destination);
+                files.sort_by_key(|path| preserved_sort_key(path));
                 break;
             }
             return;
         }
-        let files = self.preserved_files();
         if files.len() > MAX_PRESERVED_FILES {
             for stale in &files[..files.len() - MAX_PRESERVED_FILES] {
                 let _ = fs::remove_file(stale);
@@ -888,6 +884,14 @@ fn read_bounded_preferences(path: &Path) -> std::io::Result<Option<String>> {
     String::from_utf8(bytes)
         .map(Some)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+/// Oldest first: by the `<seconds>-<attempt>` suffix, then by name.
+fn preserved_sort_key(path: &Path) -> (Option<(u64, u32)>, Option<std::ffi::OsString>) {
+    (
+        preserved_order(path),
+        path.file_name().map(|name| name.to_os_string()),
+    )
 }
 
 fn preserved_order(path: &Path) -> Option<(u64, u32)> {

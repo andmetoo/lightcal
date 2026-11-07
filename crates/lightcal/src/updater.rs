@@ -13,7 +13,7 @@ use serde::Deserialize;
 /// no browser or shell process.
 #[cfg(windows)]
 pub fn check_latest_release(installed_version: &str) -> UpdateCheckState {
-    let client = crate::net::agent(std::time::Duration::from_secs(15));
+    let client = crate::net::public_api_agent(std::time::Duration::from_secs(15));
     let mut response = match client
         .get("https://api.github.com/repos/andmetoo/lightcal/releases/latest")
         .header("User-Agent", concat!("Lightcal/", env!("LIGHTCAL_VERSION")))

@@ -1984,18 +1984,12 @@ impl AppController {
             });
         }
 
-        for (index, source) in ics.iter().enumerate() {
+        for source in ics.iter() {
             let error = self
                 .ics_feed_errors
                 .get(source.id.as_str())
                 .map(String::as_str)
-                .unwrap_or_else(|| {
-                    if index == 0 && self.ics_feed_errors.is_empty() {
-                        self.ics_error.as_str()
-                    } else {
-                        ""
-                    }
-                });
+                .unwrap_or("");
             cards.push(AccountCardItem {
                 id: source.id.clone(),
                 title: source.name.clone(),

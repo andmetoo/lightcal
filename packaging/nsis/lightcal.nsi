@@ -58,6 +58,26 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !insertmacro MUI_LANGUAGE "Korean"
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
+; Sets $0 to 1 while Lightcal runs. Quit releases the single-instance mutex
+; before the process has exited (ADR 0017), so also try to open the installed
+; exe for writing: Windows refuses that while any process still runs it.
+!macro LightcalRunning
+  StrCpy $0 0
+  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r1'
+  ${If} $1 != 0
+    System::Call 'kernel32::CloseHandle(p r1)'
+    StrCpy $0 1
+  ${ElseIf} ${FileExists} "$INSTDIR\lightcal.exe"
+    ClearErrors
+    FileOpen $1 "$INSTDIR\lightcal.exe" a
+    ${If} ${Errors}
+      StrCpy $0 1
+    ${Else}
+      FileClose $1
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 Function .onInit
   SetShellVarContext current
   ${IfNot} ${RunningX64}
@@ -66,9 +86,8 @@ Function .onInit
     Abort
   ${EndIf}
 !ifndef TEST_SETUP
-  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r0'
-  ${If} $0 != 0
-    System::Call 'kernel32::CloseHandle(p r0)'
+  !insertmacro LightcalRunning
+  ${If} $0 == 1
     MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu, then run Setup again." /SD IDOK
     SetErrorLevel 1603
     Abort
@@ -124,9 +143,8 @@ SectionEnd
 Function un.onInit
   SetShellVarContext current
 !ifndef TEST_SETUP
-  System::Call 'kernel32::OpenMutexW(i 0x00100000, i 0, w "Local\Lightcal_SingleInstance_Mutex") p .r0'
-  ${If} $0 != 0
-    System::Call 'kernel32::CloseHandle(p r0)'
+  !insertmacro LightcalRunning
+  ${If} $0 == 1
     MessageBox MB_OK|MB_ICONINFORMATION "Please exit Lightcal using the tray menu before uninstalling." /SD IDOK
     SetErrorLevel 1603
     Abort

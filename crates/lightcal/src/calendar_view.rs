@@ -525,6 +525,9 @@ fn is_wide_glyph(c: char) -> bool {
     matches!(
         c as u32,
         0x1100..=0x115F
+            // Miscellaneous Symbols and Dingbats, usually drawn as color emoji.
+            | 0x2600..=0x27BF
+            | 0x2B50..=0x2B55
             | 0x2E80..=0x303E
             | 0x3040..=0x33BF
             | 0x3400..=0x4DBF
@@ -730,5 +733,7 @@ mod tests {
             chip("年末年始休業のお知らせと予定"),
         ]);
         assert_eq!(cjk.len(), 2);
+        assert!(is_wide_glyph('✈') && is_wide_glyph('☕') && is_wide_glyph('⭐'));
+        assert!(!is_wide_glyph('Ж') && !is_wide_glyph('é'));
     }
 }

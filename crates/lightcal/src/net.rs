@@ -17,6 +17,25 @@ pub fn agent(timeout: Duration) -> ureq::Agent {
         .into()
 }
 
+/// For unauthenticated GitHub API reads. Unlike [`agent`], which carries tokens and so
+/// never follows a redirect, this follows a few HTTPS-only redirects, which GitHub sends
+/// for a renamed or transferred repository.
+pub fn public_api_agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .max_redirects(3)
+        .https_only(true)
+        .http_status_as_error(false)
+        .tls_config(
+            TlsConfig::builder()
+                .provider(TlsProvider::NativeTls)
+                .root_certs(RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .build()
+        .into()
+}
+
 pub fn download_release_asset(raw: &str) -> Result<Vec<u8>, String> {
     let uri = https_url(raw)?;
     if uri.host_str() != Some("github.com")
