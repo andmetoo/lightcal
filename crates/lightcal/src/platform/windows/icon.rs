@@ -839,6 +839,45 @@ pub fn render_app_icon(size: usize) -> Vec<u8> {
     })
 }
 
+/// The undated macOS bundle icon following Apple's icon grid (~824/1024 tile with
+/// ~9.8% transparent margin and 22.37% continuous-feel corner radius) so Lightcal
+/// matches native macOS apps in Finder and the Dock.
+pub fn render_macos_app_icon(size: usize) -> Vec<u8> {
+    let side = size as f32;
+    let inset = (side * (100.0 / 1024.0)).round().max(1.0);
+    let tile = [inset, inset, side - inset, side - inset];
+    let tile_size = tile[2] - tile[0];
+    let radius = tile_size * 0.2237;
+    let band_height = (tile_size * 0.245).round();
+    let band_bottom = inset + band_height;
+    let cell = ((tile_size * (12.0 / 56.0)).round()).max(2.0);
+    let gap = ((tile_size * (4.0 / 56.0)).round()).max(1.0);
+    let grid = 2.0 * cell + gap;
+    let left = ((side - grid) * 0.5).round();
+    let top = (band_bottom + (tile[3] - band_bottom - grid) * 0.5).round();
+    let cell_radius = cell * 0.25;
+    let squares: Vec<([f32; 4], f32)> = (0..4)
+        .map(|i| {
+            let x = left + (i % 2) as f32 * (cell + gap);
+            let y = top + (i / 2) as f32 * (cell + gap);
+            let alpha = if i == 3 { 1.0 } else { APP_GRID_DIM_ALPHA };
+            ([x, y, x + cell, y + cell], alpha)
+        })
+        .collect();
+    paint(size, 4, |x, y| {
+        if rounded_rect_distance(x, y, tile, radius) > 0.0 {
+            return [0.0; 4];
+        }
+        let mut color = opaque(if y < band_bottom { CORAL_BAND } else { CORAL });
+        for (rect, alpha) in &squares {
+            if rounded_rect_distance(x, y, *rect, cell_radius) <= 0.0 {
+                color = over(color, WHITE, *alpha);
+            }
+        }
+        color
+    })
+}
+
 /// Renders a 32×32 RGBA tray icon for `DateOnly`.
 pub fn render_tray_icon_rgba(day_of_month: u8, dark_taskbar: bool) -> Vec<u8> {
     render_tray_icon_variant_rgba(

@@ -4,11 +4,14 @@ Documentation baseline: October 29, 2026; updated for the public repository on N
 
 | Document | Purpose |
 | --- | --- |
+| [macOS support](decisions/0019-macos-support.md) | Owner-approved macOS port, EventKit and direct Outlook/Google calendars, menu bar text, and integration gate |
+| [macOS builds and releases](macos.md) | Universal bundle, tag workflow, signing, notarization, and remaining acceptance checks |
 | [Several accounts per provider](decisions/0018-multiple-accounts.md) | Up to five Google and five Microsoft accounts, account-scoped calendar IDs and credential migration |
 | [Local events](decisions/0017-local-events.md) | Events created in Lightcal and stored only on this PC as plain JSON; the "On this PC" calendar |
 | [Calendar motion](decisions/0016-calendar-motion.md) | Copy, agenda and month-change transitions; Today underline; Settings unchanged |
 | [Calendar hover follow](decisions/0015-calendar-hover-follow.md) | One highlight springs after the pointer across the day grid; stronger selected fill |
 | [Ten languages](decisions/0014-ten-languages.md) | German, French, Brazilian Portuguese, Ukrainian, Simplified Chinese and Korean; two-column language menu |
+| [Translation review](translation-review.md) | Editorial pass on all interface copy: human wording and Apple writing guidelines, with recommended replacements |
 | [Koi pond](decisions/0013-koi-pond.md) | Optional koi swimming behind the calendar grid, off by default |
 | [Date size setting](decisions/0012-date-size.md) | Standard, Large and Larger day numbers; the 352 × 444 popup for Larger |
 | [Windows-only design refresh](decisions/0011-windows-only-design-refresh.md) | November 1 redesign, new icons, event details, design canvas, macOS dropped |

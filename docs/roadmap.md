@@ -1,5 +1,7 @@
 # Implementation roadmap
 
+Platform update (2026-11-09): [ADR 0019](decisions/0019-macos-support.md) adds macOS 14+ support with EventKit and direct Outlook/Google calendars, Dock and menu bar entry points, and signed automatic updates. Windows-specific requirements below remain Windows-specific. See [macOS validation and release status](macos.md).
+
 > **Status.** Milestone 0 and the application baseline are done (release 1.2.2). The text below is the original plan, kept for traceability; measured resource gates remain open and are tracked in [validation](validation.md).
 
 Each milestone ends with a reviewable PR and owner acceptance. Estimates are planning time boxes, not delivery promises. Do not start application implementation in the planning PR.

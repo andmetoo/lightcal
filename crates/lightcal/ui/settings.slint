@@ -839,13 +839,16 @@ component ProviderRow inherits Rectangle {
 
 // One connected account: header, optional notice, calendar rows (.cr).
 component AccountCard inherits Rectangle {
+    in property <bool> macos: false;
     in property <AccountCardItem> card;
     in property <string> refresh-label;
     in property <string> more-label;
+    in property <string> open-calendar-label;
     in property <bool> enabled: true;
     callback action(string);
     callback refresh(string);
     callback disconnect(string);
+    callback open-calendar();
     callback toggle-source(string);
 
     background: Theme.card;
@@ -868,7 +871,14 @@ component AccountCard inherits Rectangle {
                     height: 28px;
                     border-radius: 14px;
                     background: Theme.avatar;
-                    Text {
+                    if root.macos && root.card.id == "windows" : Glyph {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        name: "calendar";
+                        size: 16px;
+                        color: Theme.accent;
+                    }
+                    if !root.macos || root.card.id != "windows" : Text {
                         width: parent.width;
                         height: parent.height;
                         text: root.card.initial;
@@ -1049,6 +1059,10 @@ component AccountCard inherits Rectangle {
         y: 42px;
         width: 168px;
         Menu {
+            if root.macos && root.card.id == "windows" : MenuOption {
+                label: root.open-calendar-label;
+                clicked => { root.open-calendar(); }
+            }
             MenuOption {
                 label: root.card.disconnect-label;
                 clicked => { root.disconnect(root.card.id); }
@@ -1159,7 +1173,81 @@ component SelectorTab inherits Rectangle {
     }
 }
 
+// Updates summary row shared by Windows (inside the Tray card) and macOS (its own card).
+component UpdatesRow inherits Row {
+    in property <string> heading;
+    in property <int> update-kind;
+    in property <string> update-short;
+    in property <string> button-label;
+    in property <bool> package-managed;
+    callback open-about();
+    callback check-updates();
+
+    title: root.heading;
+    divider: false;
+
+    HorizontalLayout {
+        spacing: 5px;
+        if root.update-kind == 1 : Centered {
+            Glyph {
+                name: "check";
+                size: 12px;
+                weight: 2.5;
+                color: Theme.accent;
+            }
+        }
+        if root.update-kind == 2 : Centered {
+            Spinner {
+                size: 12px;
+            }
+        }
+        if root.update-kind == 3 : Centered {
+            Rectangle {
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: Theme.accent;
+            }
+        }
+        Text {
+            text: root.update-short;
+            font-size: Theme.type-caption;
+            color: root.update-kind == 3 ? Theme.accent : Theme.ink2;
+            vertical-alignment: center;
+        }
+    }
+    Rectangle { width: 5px; }
+    Centered {
+        ActButton {
+            label: root.button-label;
+            enabled: root.update-kind != 2 && !root.package-managed;
+            clicked => {
+                if (root.update-kind == 3) {
+                    root.open-about();
+                } else {
+                    root.check-updates();
+                }
+            }
+        }
+    }
+}
+
 export component SettingsView inherits Rectangle {
+    in property <bool> macos: false;
+    in property <string> mac-weekday-label: "Weekday";
+    in property <string> mac-weekday-off-label: "Off";
+    in property <string> mac-weekday-short-label: "Short";
+    in property <string> mac-weekday-full-label: "Full";
+    in property <string> mac-month-label: "Month";
+    in property <string> mac-open-calendar-label: "Open Calendar";
+    in property <string> mac-calendars-desc: "iCloud and accounts in Apple Calendar";
+    in property <int> mac-weekday: 1;
+    in property <bool> mac-month: true;
+    callback select-mac-weekday(int);
+    callback toggle-mac-month();
+    callback connect-mac-calendars();
+    callback open-mac-calendar-app();
+    callback start-window-drag();
     in property <string> app-name-text;
     in property <int> settings-tab;
     in property <string> nav-about-text;
@@ -1191,6 +1279,7 @@ export component SettingsView inherits Rectangle {
     in property <[MenuEntry]> first-weekday-entries;
     in property <int> first-weekday;
     in property <bool> add-account-enabled;
+    in property <bool> legacy-windows-enabled: false;
     in property <bool> connection-busy;
     in property <bool> sign-in-cancelled;
     in property <string> connection-message;
@@ -1300,6 +1389,17 @@ export component SettingsView inherits Rectangle {
     clip: true;
 
     // ===== Caption (32 px): mark, title, Close only =====
+    if root.macos : TouchArea {
+        x: 0px;
+        y: 0px;
+        width: parent.width - 42px;
+        height: Theme.caption-height;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.start-window-drag();
+            }
+        }
+    }
     BrandMark {
         x: 12px;
         y: 8px;
@@ -1316,9 +1416,16 @@ export component SettingsView inherits Rectangle {
         vertical-alignment: center;
         overflow: elide;
     }
-    CaptionButton {
+    if !root.macos : CaptionButton {
         x: parent.width - 46px;
         y: 0px;
+        label: root.copy.close-label;
+        clicked => { root.close-settings(); }
+    }
+    if root.macos : GhostButton {
+        x: parent.width - 34px;
+        y: 2px;
+        icon: "close";
         label: root.copy.close-label;
         clicked => { root.close-settings(); }
     }
@@ -1688,7 +1795,8 @@ export component SettingsView inherits Rectangle {
                     }
                 }
 
-                if root.account-cards.length == 0 && !root.add-account-open : LocalCard {
+                if !root.macos && root.account-cards.length == 0 && !root.add-account-open : LocalCard {
+                    visible: !root.macos;
                     data: root.local-card;
                     toggle => { root.toggle-calendar-source("local"); }
                     ok => { root.local-ok(); }
@@ -1755,7 +1863,7 @@ export component SettingsView inherits Rectangle {
                                 enabled: root.add-account-enabled;
                                 clicked => { root.choose-outlook-account(); }
                             }
-                            ProviderRow {
+                            if !root.macos : ProviderRow {
                                 title: root.copy.ics-title;
                                 desc: root.copy.ics-desc;
                                 glyph: "link";
@@ -1764,7 +1872,7 @@ export component SettingsView inherits Rectangle {
                                 enabled: root.add-account-enabled;
                                 clicked => { root.choose-ics-account(); }
                             }
-                            ProviderRow {
+                            if !root.macos : ProviderRow {
                                 title: root.copy.windows-title;
                                 desc: root.copy.windows-desc;
                                 glyph: "calendar";
@@ -1772,6 +1880,15 @@ export component SettingsView inherits Rectangle {
                                 divider: true;
                                 enabled: root.add-account-enabled;
                                 clicked => { root.toggle-legacy-windows(); }
+                            }
+                            if root.macos && !root.legacy-windows-enabled : ProviderRow {
+                                title: root.copy.windows-title;
+                                desc: root.mac-calendars-desc;
+                                glyph: "calendar";
+                                tile: #D73840;
+                                divider: true;
+                                enabled: root.add-account-enabled;
+                                clicked => { root.connect-mac-calendars(); }
                             }
                         }
                     }
@@ -1798,7 +1915,7 @@ export component SettingsView inherits Rectangle {
                             clicked => { root.add-calendar-account(); }
                         }
                     }
-                    LocalCard {
+                    if !root.macos : LocalCard {
                     data: root.local-card;
                     toggle => { root.toggle-calendar-source("local"); }
                     ok => { root.local-ok(); }
@@ -1809,10 +1926,13 @@ export component SettingsView inherits Rectangle {
                     keep => { root.local-keep(); }
                 }
                     for card in root.account-cards : AccountCard {
+                        macos: root.macos;
                         card: card;
                         refresh-label: root.copy.refresh-label;
                         more-label: root.copy.more-label;
+                        open-calendar-label: root.mac-open-calendar-label;
                         enabled: !root.provider-loading && !root.connection-busy;
+                        open-calendar => { root.open-mac-calendar-app(); }
                         action(id) => {
                             if (id == "outlook") { root.connect-microsoft(); }
                             if (id == "google") { root.choose-google-account(); }
@@ -2106,53 +2226,48 @@ export component SettingsView inherits Rectangle {
                             }
                         }
                     }
-                    Row {
-                        title: root.updates-heading-text;
-                        divider: false;
-                        HorizontalLayout {
-                            spacing: 5px;
-                            if root.copy.update-kind == 1 : Centered {
-                                Glyph {
-                                    name: "check";
-                                    size: 12px;
-                                    weight: 2.5;
-                                    color: Theme.accent;
-                                }
-                            }
-                            if root.copy.update-kind == 2 : Centered {
-                                Spinner {
-                                    size: 12px;
-                                }
-                            }
-                            if root.copy.update-kind == 3 : Centered {
-                                Rectangle {
-                                    width: 8px;
-                                    height: 8px;
-                                    border-radius: 4px;
-                                    background: Theme.accent;
-                                }
-                            }
-                            Text {
-                                text: root.copy.update-short;
-                                font-size: Theme.type-caption;
-                                color: root.copy.update-kind == 3 ? Theme.accent : Theme.ink2;
-                                vertical-alignment: center;
-                            }
-                        }
-                        Rectangle { width: 5px; }
+                    if root.macos : Row {
+                        title: root.mac-weekday-label;
                         Centered {
-                            ActButton {
-                                label: root.copy.app-update-button;
-                                enabled: root.copy.update-kind != 2 && !root.package-managed-updates;
-                                clicked => {
-                                    if (root.copy.update-kind == 3) {
-                                        root.open-settings(3);
-                                    } else {
-                                        root.check-updates();
-                                    }
+                            Track {
+                                for opt[idx] in [root.mac-weekday-off-label, root.mac-weekday-short-label, root.mac-weekday-full-label] : Segment {
+                                    label: opt;
+                                    on: root.mac-weekday == idx;
+                                    clicked => { root.select-mac-weekday(idx); }
                                 }
                             }
                         }
+                    }
+                    if root.macos : Row {
+                        title: root.mac-month-label;
+                        divider: false;
+                        Centered {
+                            Switch {
+                                label: root.mac-month-label;
+                                checked: root.mac-month;
+                                toggled => { root.toggle-mac-month(); }
+                            }
+                        }
+                    }
+                    if !root.macos : UpdatesRow {
+                        heading: root.updates-heading-text;
+                        update-kind: root.copy.update-kind;
+                        update-short: root.copy.update-short;
+                        button-label: root.copy.app-update-button;
+                        package-managed: root.package-managed-updates;
+                        open-about => { root.open-settings(3); }
+                        check-updates => { root.check-updates(); }
+                    }
+                }
+                if root.macos : SettingsCard {
+                    UpdatesRow {
+                        heading: root.updates-heading-text;
+                        update-kind: root.copy.update-kind;
+                        update-short: root.copy.update-short;
+                        button-label: root.copy.app-update-button;
+                        package-managed: root.package-managed-updates;
+                        open-about => { root.open-settings(3); }
+                        check-updates => { root.check-updates(); }
                     }
                 }
             }
