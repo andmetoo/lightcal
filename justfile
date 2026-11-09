@@ -48,12 +48,12 @@ sign-draft version: (release "sign-draft" version)
 # Verify signatures, then publish or promote vX.Y.Z
 publish-release version: (release "publish-release" version)
 
-# NSIS setup; -SkipBuild packages the existing release EXE
+# Native installer: macOS universal DMG or Windows NSIS setup
 [positional-arguments]
 [script("bun")]
 [extension(".ts")]
 installer *args:
-    const { exitCode } = Bun.spawnSync(["pwsh", "-NoLogo", "-NoProfile", "-File", "scripts/package-nsis.ps1", ...process.argv.slice(2)], { stdio: ["inherit", "inherit", "inherit"] });
+    const { exitCode } = Bun.spawnSync(["bun", "scripts/installer.ts", ...process.argv.slice(2)], { env: process.env, stdio: ["inherit", "inherit", "inherit"] });
     process.exit(exitCode ?? 1);
 
 # Fetch the pinned portable NSIS compiler into target/tools

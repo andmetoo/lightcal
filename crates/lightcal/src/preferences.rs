@@ -13,6 +13,15 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Maximum number of preserved copies of unreadable or newer-schema files.
 const MAX_PRESERVED_FILES: usize = 5;
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MenuWeekday {
+    Off,
+    #[default]
+    Short,
+    Full,
+}
+
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -322,6 +331,9 @@ pub fn local_env_value(key: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub mac_weekday: MenuWeekday,
+    #[serde(alias = "mac_show_year")]
+    pub mac_show_month: bool,
     pub schema_version: u32,
     pub language: String,
     #[serde(deserialize_with = "lenient_theme")]
@@ -368,6 +380,8 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            mac_weekday: MenuWeekday::Short,
+            mac_show_month: true,
             schema_version: CURRENT_SCHEMA_VERSION,
             // Required by docs/features.md: default to English ("en") on a fresh installation,
             // even on a non-English OS.
@@ -638,6 +652,10 @@ pub fn resolve_data_dir() -> PathBuf {
             return PathBuf::from(appdata).join("Lightcal");
         }
     }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = env::var_os("HOME") {
+        return PathBuf::from(home).join("Library/Application Support/Lightcal");
+    }
     env::temp_dir().join("lightcal-data")
 }
 
@@ -907,6 +925,15 @@ fn preserved_order(path: &Path) -> Option<(u64, u32)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn old_menu_year_preference_migrates_to_month() {
+        let prefs: super::Preferences = serde_json::from_str(r#"{"mac_show_year":true}"#).unwrap();
+        assert!(prefs.mac_show_month);
+        let saved = serde_json::to_value(prefs).unwrap();
+        assert_eq!(saved["mac_show_month"], true);
+        assert!(saved.get("mac_show_year").is_none());
+    }
+
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 

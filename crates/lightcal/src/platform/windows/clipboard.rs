@@ -48,7 +48,12 @@ pub fn copy_text(text: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn copy_text(_text: &str) -> Result<(), String> {
     Err("Clipboard access is only implemented on Windows".into())
+}
+
+#[cfg(target_os = "macos")]
+pub fn copy_text(text: &str) -> Result<(), String> {
+    crate::platform::macos::copy_text(text)
 }

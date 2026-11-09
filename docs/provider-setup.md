@@ -84,3 +84,35 @@ Installation requires a valid Authenticode chain, exact pinned certificate SHA-2
 Live delegated sign-in, populated Outlook events, private ICS compatibility, and actual signed upgrade/restart require separately configured and verified credentials/certificates. A syntactically valid Client ID or certificate fingerprint alone does not establish successful authentication or signing trust. No credentials were invented or committed, and no release was pushed/published during implementation.
 
 Local verification on 2026-10-30 used Rust 1.99.1: workspace tests, Clippy with warnings denied, formatting, Markdown checks, headless light/dark settings rendering, and optimized portable EXE/ZIP builds. Tests include recurrence exceptions/DST, callback state validation and loopback cancellation, unsigned-payload rejection, changed-download rejection, and isolated Windows atomic file replacement/rollback. ProductVersion/FileVersion are `0.1.0`; the unsigned optimized payload is approximately 13.46 MiB. That is executable file size, not process memory or idle CPU evidence. No live account, signing identity, or installed executable was modified by those tests.
+
+## macOS direct accounts
+
+The macOS build uses the same public desktop OAuth registrations and read-only
+scopes as Windows. Google must use the **Desktop app** client type, which supports
+a loopback redirect on macOS; do not substitute an iOS/macOS mobile client.
+Microsoft uses the registered localhost callback path documented above.
+
+Configure these values in the ignored root `.env` or build environment, then
+rebuild the app:
+
+- `LIGHTCAL_MICROSOFT_CLIENT_ID`
+- `LIGHTCAL_GOOGLE_CLIENT_ID`
+- `LIGHTCAL_GOOGLE_CLIENT_SECRET`
+
+The Mac tag workflow reads the client IDs from GitHub environment variables and
+the Google desktop secret from a protected GitHub secret. Release packaging fails
+if this configuration is absent. Keep values out of commits and chat messages.
+The development checkout is configured through its ignored local file. Live
+account consent and calendar access still require the owner to sign in explicitly.
+
+Launch `target/macos/Lightcal.app` normally, without synthetic calendars or
+`LIGHTCAL_DATA_DIR`, then choose Google or Outlook in Settings → Accounts.
+The app stores refresh tokens in its own generic-password Keychain item, reads
+selected calendars off the UI thread and removes local credentials on disconnect.
+EventKit permission is separate and is not required for either direct provider.
+Local Lightcal events and private ICS subscriptions remain unavailable on Mac.
+Automated tests mock all Keychain operations and use temporary data.
+
+References: [Google desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app),
+[Microsoft desktop redirects](https://learn.microsoft.com/entra/identity-platform/reply-url),
+and [Apple generic-password items](https://developer.apple.com/documentation/security/ksecclassgenericpassword).

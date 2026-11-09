@@ -6,6 +6,166 @@ use slint::platform::{PointerEventButton, WindowEvent};
 use slint::Model;
 use std::cell::Cell;
 
+fn test_instance(app_id: &str, directory: &std::path::Path) -> SingleInstance {
+    #[cfg(target_os = "macos")]
+    {
+        SingleInstance::acquire_isolated(app_id, directory)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = directory;
+        SingleInstance::acquire(app_id)
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn isolated_instance_locks_use_the_explicit_binary_test_directory() {
+    let directory = std::env::temp_dir().join(format!(
+        "lightcal-instance-isolation-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    let first_dir = directory.join("first");
+    let second_dir = directory.join("second");
+    let app_id = "Lightcal.Test.Isolated";
+    let SingleInstance::FirstInstance(first) = test_instance(app_id, &first_dir) else {
+        panic!("first lock");
+    };
+    assert!(matches!(
+        test_instance(app_id, &first_dir),
+        SingleInstance::AlreadyRunning
+    ));
+    let SingleInstance::FirstInstance(second) = test_instance(app_id, &second_dir) else {
+        panic!("isolated directory has its own lock");
+    };
+    for dir in [&first_dir, &second_dir] {
+        let paths: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].to_string_lossy().starts_with("instance-"));
+    }
+    drop(first);
+    assert!(matches!(
+        test_instance(app_id, &first_dir),
+        SingleInstance::FirstInstance(_)
+    ));
+    drop(second);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn clock_tick_updates_agenda_without_querying_providers_or_opening_hidden_windows() {
+    let (ui, _, ctrl, dir) = settings_window(0, "minute-agenda");
+    let mut c = ctrl.borrow_mut();
+    c.settings_open = false;
+    let today = c.cal_state.today;
+    c.provider.sources = vec![calendar_core::CalendarSource {
+        id: "google:work".into(),
+        name: "Work".into(),
+        account_label: "Google".into(),
+        color_hex: "#008573".into(),
+    }];
+    c.prefs.selected_calendar_ids.insert("google:work".into());
+    c.provider.occurrences = vec![calendar_core::CalendarOccurrence {
+        source_id: "google:work".into(),
+        event_id: "clock".into(),
+        title: "Meeting".into(),
+        start_date: today,
+        end_date_exclusive: today.add_days(1),
+        time_label: "15:00".into(),
+        start_minutes: Some(calendar_core::local_minutes(today, 15 * 60)),
+        end_minutes: Some(calendar_core::local_minutes(today, 16 * 60)),
+        ..Default::default()
+    }];
+    let request = c.provider_request;
+    for (minute, is_now, dimmed) in [
+        (15 * 60 - 1, false, false),
+        (15 * 60, true, false),
+        (16 * 60, false, true),
+    ] {
+        c.agenda.now_override = Some(calendar_core::local_minutes(today, minute));
+        refresh_clock_ui(&mut c, &ui, today);
+        let event = ui.get_agenda_events().row_data(0).unwrap();
+        assert_eq!(event.is_now, is_now);
+        assert_eq!(event.dimmed, dimmed);
+        if minute == 15 * 60 - 1 {
+            assert_eq!(event.badge, "in 1 min");
+        }
+        assert_eq!(c.provider_request, request);
+    }
+    ui.hide().unwrap();
+    refresh_clock_ui(&mut c, &ui, today.add_days(1));
+    assert!(!ui.window().is_visible());
+    assert_eq!(c.cal_state.today, today.add_days(1));
+    assert_eq!(c.provider_request, request);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn minute_tick_aligns_to_the_next_wall_clock_boundary() {
+    use chrono::TimeZone;
+    let minute = chrono::Utc
+        .with_ymd_and_hms(2026, 11, 9, 12, 30, 0)
+        .unwrap();
+    assert_eq!(
+        next_minute_delay(&minute),
+        std::time::Duration::from_secs(60)
+    );
+    assert_eq!(
+        next_minute_delay(&(minute + chrono::Duration::milliseconds(59_250))),
+        std::time::Duration::from_millis(750)
+    );
+    assert_eq!(
+        next_minute_delay(&(minute + chrono::Duration::nanoseconds(59_999_500_000))),
+        std::time::Duration::from_millis(1)
+    );
+}
+
+#[test]
+fn automatic_update_entry_points_never_request_interactive_checks_on_macos() {
+    let calls = Cell::new(0);
+    // The shared dispatcher is used at startup, by the daily timer and by the
+    // automatic-check/download toggles. Manual Check for Updates bypasses it.
+    for _ in 0..4 {
+        dispatch_automatic_update_check(true, false, || calls.set(calls.get() + 1));
+    }
+    assert_eq!(calls.get(), if cfg!(target_os = "macos") { 0 } else { 4 });
+    dispatch_automatic_update_check(false, false, || panic!("automatic checks disabled"));
+    dispatch_automatic_update_check(true, true, || {
+        panic!("synthetic app must not check updates")
+    });
+}
+
+#[test]
+fn removing_native_sources_disables_and_persists_only_the_native_connection() {
+    let directory = std::env::temp_dir().join(format!(
+        "lightcal-native-remove-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let mut ctrl = controller(&directory);
+    ctrl.prefs
+        .selected_calendar_ids
+        .insert("google:work".into());
+    ctrl.google_connected = true;
+    for id in ["mac:fixture", "win:fixture"] {
+        ctrl.prefs.windows_calendars_enabled = true;
+        assert!(ctrl.disconnect_native_source(id));
+        assert!(!ctrl.prefs.windows_calendars_enabled);
+        assert!(!ctrl.store.load().preferences.windows_calendars_enabled);
+        assert!(ctrl.google_connected);
+        assert!(ctrl.prefs.selected_calendar_ids.contains("google:work"));
+    }
+    ctrl.prefs.windows_calendars_enabled = true;
+    for id in ["google:work", "graph:work", "ics:feed", "macaroni"] {
+        assert!(!ctrl.disconnect_native_source(id));
+        assert!(ctrl.prefs.windows_calendars_enabled);
+    }
+    let _ = std::fs::remove_dir_all(directory);
+}
+
 fn click(ui: &AppWindow, x: f32, y: f32) {
     let position = slint::LogicalPosition::new(x, y);
     ui.window().dispatch_event(WindowEvent::PointerPressed {
@@ -82,7 +242,7 @@ fn controller(dir: &std::path::Path) -> AppController {
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
-        connection_message: String::new(),
+        connection_message: Default::default(),
         startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
         provider_loading: false,
@@ -90,7 +250,16 @@ fn controller(dir: &std::path::Path) -> AppController {
         install_busy: false,
         install_status: String::new(),
         startup_mgr: StartupManager::from_env(dir),
-        shortcut_mgr: ShortcutManager::new(),
+        shortcut_mgr: {
+            #[cfg(target_os = "macos")]
+            {
+                ShortcutManager::isolated()
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                ShortcutManager::new()
+            }
+        },
         shortcut_error: String::new(),
         startup_error: String::new(),
         conflicting_shortcut: None,
@@ -999,12 +1168,182 @@ fn recorded_keys_become_registrable_shortcuts() {
         shortcut_from_key(f5.as_str(), false, true, false, false).as_deref(),
         Some("Alt + F5")
     );
+    #[cfg(target_os = "macos")]
+    {
+        let recorded = shortcut_from_key(f5.as_str(), true, false, false, false).unwrap();
+        assert_eq!(
+            ShortcutManager::isolated()
+                .bind(Some(&recorded))
+                .unwrap()
+                .as_deref(),
+            Some("Ctrl + F5")
+        );
+    }
     assert_eq!(shortcut_from_key("k", false, false, true, false), None);
     assert_eq!(shortcut_from_key("-", true, false, false, false), None);
     assert_eq!(
         ics_name_from_address("https://user@calendar.example.com:443/private/basic.ics"),
         "calendar.example.com"
     );
+}
+
+#[test]
+fn failed_startup_and_unconfigured_connections_use_the_selected_language() {
+    use lightcal::i18n::{calendar_failure_text, startup_failure_text, CalendarFailure};
+    let (ui, _, ctrl, dir) = settings_window(1, "translated-connection-failures");
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = Some(Rc::downgrade(&ctrl)));
+    wire_startup_setting(&ui, &ctrl, |_, _, _| {
+        Err("Check Lightcal in System Settings → General → Login Items".into())
+    });
+    wire_outlook_sign_in(&ui, &ctrl, true);
+    wire_google_sign_in(&ui, &ctrl, true);
+    ctrl.borrow_mut().prefs.microsoft_client_id.clear();
+    ctrl.borrow_mut().prefs.google_client_id.clear();
+    for locale in LocaleCode::ALL {
+        ctrl.borrow_mut().prefs.set_locale(locale);
+        ui.invoke_toggle_start_with_windows();
+        assert!(!ctrl.borrow().prefs.start_with_windows);
+        assert_eq!(
+            ui.get_startup_status_text(),
+            startup_failure_text(locale, cfg!(target_os = "macos"))
+        );
+        if locale != LocaleCode::En {
+            assert!(!ui.get_startup_status_text().contains("Check Lightcal"));
+        }
+        ui.invoke_connect_microsoft();
+        assert_eq!(
+            ui.get_connection_message(),
+            calendar_failure_text(locale, CalendarFailure::OutlookNotConfigured)
+        );
+        ui.invoke_choose_google_account();
+        assert_eq!(
+            ui.get_connection_message(),
+            calendar_failure_text(locale, CalendarFailure::GoogleNotConfigured)
+        );
+    }
+    // Translate an already visible failure without another sign-in or startup action.
+    ctrl.borrow_mut().prefs.set_locale(LocaleCode::Fr);
+    ctrl.borrow().sync_to_ui(&ui);
+    assert_eq!(
+        ui.get_connection_message(),
+        "La connexion à Google n’est pas disponible dans cette version de Lightcal."
+    );
+    ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn rejected_ics_inputs_and_provider_card_failures_are_translated_at_presentation() {
+    use lightcal::i18n::{calendar_failure_text, CalendarFailure};
+    let (ui, _, ctrl, dir) = settings_window(1, "translated-calendar-failures");
+    let mut credentials = lightcal::secure_store::Credentials::default();
+    let name_error =
+        lightcal::calendars::add_feed(&mut credentials, "", "https://example.test/basic.ics")
+            .unwrap_err();
+    lightcal::calendars::add_feed(&mut credentials, "Work", "https://example.test/basic.ics")
+        .unwrap();
+    let duplicate =
+        lightcal::calendars::add_feed(&mut credentials, "Work", "https://example.test/basic.ics")
+            .unwrap_err();
+    let invalid_link =
+        lightcal::calendars::add_feed(&mut credentials, "Work", "http://example.test/basic.ics")
+            .unwrap_err();
+    let oversized = "x".repeat(8 * 1024 * 1024 + 1);
+    let size_error = lightcal::calendars::ics::parse(
+        &oversized,
+        &credentials.ics[0],
+        ctrl.borrow().cal_state.today,
+        rrule::Tz::UTC,
+    )
+    .unwrap_err();
+    {
+        let mut c = ctrl.borrow_mut();
+        c.google_connected = true;
+        c.google_error = "Google sign-in timed out; try connecting again".into();
+        c.microsoft_account =
+            lightcal::calendars::account::MicrosoftAccountState::Connected { label: None };
+        c.microsoft_error = "Invalid Microsoft calendar response".into();
+        c.provider.sources.push(calendar_core::CalendarSource {
+            id: "ics:fixture".into(),
+            name: "Holidays".into(),
+            account_label: "ICS".into(),
+            color_hex: "#008573".into(),
+        });
+        c.ics_feed_errors
+            .insert("ics:fixture".into(), size_error.clone());
+    }
+    for locale in LocaleCode::ALL {
+        ctrl.borrow_mut().prefs.set_locale(locale);
+        for (raw, kind) in [
+            (&name_error, CalendarFailure::CalendarName),
+            (&duplicate, CalendarFailure::Duplicate),
+            (&invalid_link, CalendarFailure::Https),
+            (&size_error, CalendarFailure::CalendarTooLarge),
+        ] {
+            ctrl.borrow_mut().connection_message = raw.clone().into();
+            ctrl.borrow().sync_to_ui(&ui);
+            assert_eq!(
+                ui.get_connection_message(),
+                calendar_failure_text(locale, kind)
+            );
+        }
+        let cards: Vec<_> = ui.get_account_cards().iter().collect();
+        for (id, kind) in [
+            ("google", CalendarFailure::SignInTimeout),
+            ("outlook", CalendarFailure::InvalidResponse),
+            ("ics:fixture", CalendarFailure::CalendarTooLarge),
+        ] {
+            let card = cards.iter().find(|c| c.id == id).unwrap();
+            assert_eq!(card.notice, calendar_failure_text(locale, kind));
+        }
+        ctrl.borrow_mut().provider.status = lightcal::platform::ProviderStatus::ProviderUnavailable(
+            "HTTPS request failed or timed out".into(),
+        );
+        ctrl.borrow().sync_to_ui(&ui);
+        assert_eq!(
+            ui.get_provider_error_text(),
+            calendar_failure_text(locale, CalendarFailure::Network)
+        );
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn mac_settings_close_is_a_compact_neutral_control_with_the_same_action() {
+    let (ui, window, ctrl, dir) = settings_window(2, "mac-close-control");
+    ui.set_macos(true);
+    window.request_redraw();
+    window.draw_if_needed(|_| {});
+    let label = lightcal::i18n::settings_text(LocaleCode::En).close;
+    let close = ElementHandle::find_by_accessible_label(&ui, label)
+        .find(|element| {
+            element.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Button)
+        })
+        .unwrap();
+    assert_eq!(close.size().width, 28.0);
+    assert_eq!(close.size().height, 28.0);
+    let center = element_center(&close);
+    click(&ui, center.x, center.y);
+    assert!(!ctrl.borrow().settings_open);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn korean_available_update_title_has_no_particle_hedge() {
+    let (ui, _, ctrl, dir) = settings_window(3, "korean-update-title");
+    let mut c = ctrl.borrow_mut();
+    c.prefs.set_locale(LocaleCode::Ko);
+    c.update_state = UpdateCheckState::UpdateAvailable {
+        latest_version: "1.2.3".into(),
+        release_url: "https://github.com/andmetoo/lightcal/releases/tag/v1.2.3".into(),
+        current_version: "1.2.2".into(),
+    };
+    c.sync_to_ui(&ui);
+    assert_eq!(
+        ui.get_update_ready_title_text(),
+        "새 버전이 있습니다: 1.2.3"
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
@@ -2796,7 +3135,7 @@ fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
         "Lightcal.Test.QuitWait.{}",
         lightcal::calendars::random_key().unwrap()
     );
-    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+    let SingleInstance::FirstInstance(guard) = test_instance(&app_id, &dir) else {
         panic!("the first instance holds the lock");
     };
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
@@ -2833,7 +3172,7 @@ fn the_quit_wait_frees_the_single_instance_lock_and_retries_at_once() {
     #[cfg(windows)]
     assert!(
         matches!(
-            SingleInstance::acquire(&app_id),
+            test_instance(&app_id, &dir),
             SingleInstance::FirstInstance(_)
         ),
         "a relaunch starts normally"
@@ -2878,7 +3217,7 @@ fn quit_hides_the_window_then_frees_the_lock_and_keeps_its_first_deadline() {
         "Lightcal.Test.QuitOrder.{}",
         lightcal::calendars::random_key().unwrap()
     );
-    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+    let SingleInstance::FirstInstance(guard) = test_instance(&app_id, &dir) else {
         panic!("the first instance holds the lock");
     };
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
@@ -2897,7 +3236,7 @@ fn quit_hides_the_window_then_frees_the_lock_and_keeps_its_first_deadline() {
     assert!(QUIT_WAIT.with(|slot| slot.borrow().is_some()));
 
     // A second quit (say, the installer finishing meanwhile) leaves the wait alone.
-    let SingleInstance::FirstInstance(again) = SingleInstance::acquire(&app_id) else {
+    let SingleInstance::FirstInstance(again) = test_instance(&app_id, &dir) else {
         panic!("the lock was released");
     };
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(again));
@@ -2922,7 +3261,7 @@ fn the_update_quit_keeps_the_single_instance_lock() {
         "Lightcal.Test.QuitUpdate.{}",
         lightcal::calendars::random_key().unwrap()
     );
-    let SingleInstance::FirstInstance(guard) = SingleInstance::acquire(&app_id) else {
+    let SingleInstance::FirstInstance(guard) = test_instance(&app_id, &dir) else {
         panic!("the first instance holds the lock");
     };
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(guard));
@@ -2939,10 +3278,7 @@ fn the_update_quit_keeps_the_single_instance_lock() {
     assert!(SINGLE_INSTANCE.with(|slot| slot.borrow().is_some()));
     #[cfg(windows)]
     assert!(
-        matches!(
-            SingleInstance::acquire(&app_id),
-            SingleInstance::AlreadyRunning
-        ),
+        matches!(test_instance(&app_id, &dir), SingleInstance::AlreadyRunning),
         "a launch during the update activates this process"
     );
     SINGLE_INSTANCE.with(|slot| slot.borrow_mut().take());
@@ -2972,13 +3308,7 @@ fn settings_ignores_calendar_navigation_keys_and_closes_on_escape() {
     let paged_next = paged.clone();
     ui.on_next_month(move || paged_next.set(true));
 
-    let weak = ui.as_weak();
-    let ctrl_close = ctrl.clone();
-    ui.on_close_settings(move || {
-        let mut c = ctrl_close.borrow_mut();
-        c.settings_open = false;
-        c.sync_to_ui(&weak.upgrade().unwrap());
-    });
+    wire_settings_navigation(&ui, &ctrl, |_, _| {});
 
     ctrl.borrow().sync_to_ui(&ui);
     ui.show().unwrap();
@@ -3086,14 +3416,12 @@ fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_car
     };
     let outlook = find_card("outlook");
     assert_eq!(outlook.notice_kind, 1);
-    assert_eq!(outlook.notice, "Microsoft Graph events failed: HTTP 504");
+    assert!(outlook.notice.contains("HTTP 504"));
 
     let google = find_card("google");
     assert_eq!(google.notice_kind, 1);
-    assert!(google
-        .notice
-        .contains("Google calendar events failed: HTTP 503"));
-    assert!(google.notice.contains("Google events not read: 2"));
+    assert!(google.notice.contains("HTTP 503"));
+    assert!(google.notice.contains("Google: 2 events could not be read"));
 
     let first_ics = find_card("ics:first");
     assert_eq!(first_ics.notice_kind, 0);
@@ -3101,9 +3429,9 @@ fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_car
 
     let second_ics = find_card("ics:second");
     assert_eq!(second_ics.notice_kind, 1);
-    assert_eq!(second_ics.notice, "Second feed failed: HTTP 502");
+    assert!(second_ics.notice.contains("HTTP 502"));
 
-    // A hard Microsoft failure leaves the account Unavailable: its error shows as it is,
+    // A hard Microsoft failure leaves the account Unavailable: its error is localized,
     // and only a network failure gets the offline text and glyph.
     let outlook_after = |error: &str| {
         let mut c = ctrl.borrow_mut();
@@ -3120,10 +3448,8 @@ fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_car
     };
     let rejected = outlook_after("Authentication request failed (HTTP 400): invalid_client");
     assert_eq!(rejected.notice_kind, 1);
-    assert_eq!(
-        rejected.notice,
-        "Authentication request failed (HTTP 400): invalid_client"
-    );
+    assert!(rejected.notice.contains("HTTP 400"));
+    assert!(!rejected.notice.contains("invalid_client"));
     assert!(!rejected.notice_offline);
     let unreachable = outlook_after("HTTPS request failed or timed out");
     assert_eq!(unreachable.notice_kind, 1);
@@ -3131,5 +3457,135 @@ fn account_cards_route_microsoft_google_and_per_feed_ics_errors_to_their_own_car
     assert!(unreachable.notice_offline);
 
     ACTIVE_CONTROLLER.with(|active| *active.borrow_mut() = None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn macos_software_surface_has_opaque_corner_pixels_in_both_views_and_themes() {
+    use slint::platform::software_renderer::PremultipliedRgbaColor;
+    let platform = HeadlessPlatform::new();
+    let window = platform.window.clone();
+    slint::platform::set_platform(Box::new(platform)).unwrap();
+    let ui = AppWindow::new().unwrap();
+    ui.set_macos(true);
+    let (width, height) = (448u32, 432u32);
+    window.set_size(slint::PhysicalSize::new(width, height));
+    ui.show().unwrap();
+    for dark in [false, true] {
+        for settings in [false, true] {
+            ui.set_dark_mode(dark);
+            ui.set_settings_open(settings);
+            window.request_redraw();
+            let mut pixels = vec![PremultipliedRgbaColor::default(); (width * height) as usize];
+            window.draw_if_needed(|renderer| {
+                renderer.render(&mut pixels, width as usize);
+            });
+            for index in [0, width - 1, width * (height - 1), width * height - 1] {
+                let pixel = pixels[index as usize];
+                assert_eq!(
+                    pixel.alpha, 255,
+                    "AppKit must clip an opaque software surface"
+                );
+                assert!(
+                    pixel.red > 0 || pixel.green > 0 || pixel.blue > 0,
+                    "Corner backing must match the theme instead of black"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn mac_accounts_offer_google_and_outlook_without_local_or_ics_creation() {
+    let (ui, window, _, dir) = settings_window(1, "mac-direct-providers");
+    ui.set_macos(true);
+    window.request_redraw();
+    window.draw_if_needed(|_| {});
+    let strings = lightcal::i18n::settings_text(LocaleCode::En);
+    let button = |label: &str| {
+        ElementHandle::find_by_accessible_label(&ui, label).any(|element| {
+            element.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Button)
+        })
+    };
+    assert!(button(strings.google_title));
+    assert!(button(strings.outlook_title));
+    assert!(!button(strings.ics_title));
+    assert!(ElementHandle::find_by_accessible_label(&ui, "On this PC")
+        .next()
+        .is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn native_calendar_permission_copy_and_read_only_footer_follow_the_platform_and_language() {
+    let (ui, window, ctrl, dir) = settings_window(1, "native-calendar-copy");
+    let locales = [
+        LocaleCode::En,
+        LocaleCode::Ru,
+        LocaleCode::Es,
+        LocaleCode::Ja,
+        LocaleCode::De,
+        LocaleCode::Fr,
+        LocaleCode::PtBr,
+        LocaleCode::Uk,
+        LocaleCode::ZhHans,
+        LocaleCode::Ko,
+    ];
+    let mut controller = ctrl.borrow_mut();
+    controller.calendars_access_denied = true;
+    controller.prefs.windows_calendars_enabled = true;
+    controller.google_connected = true;
+    controller
+        .provider
+        .sources
+        .push(calendar_core::CalendarSource {
+            id: "google:fixture".into(),
+            name: "Work".into(),
+            account_label: "Google".into(),
+            color_hex: "#008573".into(),
+        });
+    for macos in [true, false] {
+        ui.set_macos(macos);
+        for locale in locales {
+            controller.prefs.set_locale(locale);
+            controller.sync_settings_view(&ui);
+            window.request_redraw();
+            window.draw_if_needed(|_| {});
+            let strings = lightcal::i18n::settings_text(locale);
+            let cards: Vec<_> = ui.get_account_cards().iter().collect();
+            let native = cards.iter().find(|card| card.id == "windows").unwrap();
+            assert_eq!(native.notice_kind, 2);
+            assert_eq!(native.action_label, strings.open_privacy);
+            assert!(
+                cards.iter().any(|card| card.id == "google"
+                    && card.notice_kind == 0
+                    && card.sources.row_count() == 1),
+                "System calendar permission must not block direct Google calendars"
+            );
+            if macos {
+                assert_eq!(native.title, lightcal::i18n::mac_calendars_title(locale));
+                assert_eq!(ui.get_settings_strings().windows_title, native.title);
+                assert_eq!(native.initial, "M");
+                assert_eq!(native.detail, lightcal::i18n::mac_labels(locale)[5]);
+                assert_eq!(
+                    native.notice,
+                    lightcal::i18n::mac_calendar_access_denied(locale)
+                );
+                assert!(!native.notice.contains("Windows"));
+                assert_eq!(
+                    ui.get_settings_strings().read_only_note,
+                    strings.read_only_note
+                );
+            } else {
+                assert_eq!(native.initial, "W");
+                assert_eq!(native.title, strings.windows_title);
+                assert_eq!(native.notice, strings.access_denied);
+                assert_eq!(
+                    ui.get_settings_strings().read_only_note,
+                    lightcal::i18n::local_settings_text(locale).accounts_read_only
+                );
+            }
+        }
+    }
     let _ = std::fs::remove_dir_all(dir);
 }

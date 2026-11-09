@@ -285,7 +285,7 @@ pub fn query(
     credentials: &mut Credentials,
     store: &SecureStore,
     account: &mut MicrosoftAccountState,
-    locale: crate::preferences::LocaleCode,
+    _locale: crate::preferences::LocaleCode,
 ) -> Result<ProviderSnapshot, String> {
     let configured_client = credentials.microsoft_client_id.clone();
     let client_id = configured_client.as_deref().unwrap_or(client_id);
@@ -391,7 +391,12 @@ pub fn query(
         let name = calendar["name"].as_str().unwrap_or("Outlook");
         let skipped = merge_calendar(&mut result, &mut errors, outcome, name, &id, color, hard)?;
         if skipped > 0 {
-            errors.push(super::skipped_events_note(locale, name, skipped));
+            // The UI translates this cached diagnostic at presentation time.
+            errors.push(super::skipped_events_note(
+                crate::preferences::LocaleCode::En,
+                name,
+                skipped,
+            ));
         }
     }
     if !errors.is_empty() {

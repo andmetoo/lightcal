@@ -1,4 +1,4 @@
-//! Account tokens and private feed addresses: DPAPI current-user encryption on Windows.
+//! Protected account credentials: Windows DPAPI or macOS Keychain.
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 static CREDENTIAL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -84,10 +84,26 @@ pub struct SecureStore {
 impl SecureStore {
     pub fn new(dir: &Path) -> Self {
         Self {
-            path: dir.join("credentials.dpapi"),
+            path: dir.join(if cfg!(target_os = "macos") {
+                "credentials.keychain"
+            } else {
+                "credentials.dpapi"
+            }),
         }
     }
     pub fn load(&self) -> Result<Credentials, String> {
+        #[cfg(target_os = "macos")]
+        {
+            if self.check_write_allowed().is_err() {
+                return Ok(Credentials::default());
+            }
+            crate::platform::macos::load_credentials()
+        }
+        #[cfg(not(target_os = "macos"))]
+        self.load_file()
+    }
+    #[cfg(not(target_os = "macos"))]
+    fn load_file(&self) -> Result<Credentials, String> {
         match std::fs::read(&self.path) {
             Ok(bytes) => serde_json::from_slice(&unprotect(&bytes)?)
                 .map_err(|_| "Stored credentials are invalid; reconnect the account".into()),
@@ -95,7 +111,27 @@ impl SecureStore {
             Err(_) => Err("Could not read protected credentials".into()),
         }
     }
+    pub fn check_write_allowed(&self) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        if cfg!(test)
+            || std::env::var_os("LIGHTCAL_DATA_DIR").is_some()
+            || self.path.parent() != Some(crate::preferences::resolve_data_dir().as_path())
+        {
+            return Err("Direct account sign-in is disabled with isolated application data. Open the installed Lightcal app normally to connect an account.".into());
+        }
+        Ok(())
+    }
     pub fn save(&self, credentials: &Credentials) -> Result<(), String> {
+        self.check_write_allowed()?;
+        #[cfg(target_os = "macos")]
+        {
+            crate::platform::macos::save_credentials(credentials)
+        }
+        #[cfg(not(target_os = "macos"))]
+        self.save_file(credentials)
+    }
+    #[cfg(not(target_os = "macos"))]
+    fn save_file(&self, credentials: &Credentials) -> Result<(), String> {
         let bytes = serde_json::to_vec(credentials)
             .map_err(|_| "Could not encode credentials".to_string())?;
         let protected = protect(&bytes)?;
@@ -181,11 +217,11 @@ fn protect(bytes: &[u8]) -> Result<Vec<u8>, String> {
 fn unprotect(bytes: &[u8]) -> Result<Vec<u8>, String> {
     transform(bytes, false)
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn protect(_: &[u8]) -> Result<Vec<u8>, String> {
     Err("Protected credential storage is not implemented on this platform".into())
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn unprotect(_: &[u8]) -> Result<Vec<u8>, String> {
     Err("Protected credential storage is not implemented on this platform".into())
 }
@@ -193,6 +229,21 @@ fn unprotect(_: &[u8]) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn isolated_tests_never_read_or_write_the_real_keychain() {
+        let dir = std::env::temp_dir().join(format!(
+            "lightcal-keychain-isolated-{}",
+            crate::calendars::random_key().unwrap()
+        ));
+        let store = SecureStore::new(&dir);
+        assert!(store.load().unwrap().google_refresh_token.is_none());
+        assert!(store
+            .save(&Credentials::default())
+            .unwrap_err()
+            .contains("isolated application data"));
+        assert!(!dir.exists());
+    }
 
     #[test]
     fn credential_lock_recovers_after_a_holder_panics() {

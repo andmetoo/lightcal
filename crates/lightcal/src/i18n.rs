@@ -3,8 +3,13 @@
 
 use crate::preferences::LocaleCode;
 use calendar_core::{LocalDate, Weekday, YearMonth};
+mod failures;
+pub use failures::{
+    calendar_failure_text, mac_calendars_title, startup_failure_text, CalendarError,
+    CalendarFailure,
+};
 
-/// Complete connection/update control labels; provider diagnostics fall back to English.
+/// Complete connection/update control labels.
 pub fn connection_labels(locale: LocaleCode) -> [&'static str; 11] {
     match locale {
         LocaleCode::En => [
@@ -29,7 +34,7 @@ pub fn connection_labels(locale: LocaleCode) -> [&'static str; 11] {
             "Добавить ICS",
             "Удалить",
             "Календари Windows (устаревший способ)",
-            "Установить",
+            "Установить и перезапустить",
             "Автоматически устанавливать подписанные обновления",
             "Календари Outlook и ICS — только чтение",
         ],
@@ -1921,7 +1926,7 @@ pub fn format_calendar_count(locale: LocaleCode, count: usize) -> String {
         LocaleCode::Ja => format!("カレンダー{count}件"),
         LocaleCode::De => format!("{count} Kalender"),
         LocaleCode::Fr => match count {
-            0 | 1 => format!("{count} calendrier"),
+            1 => format!("{count} calendrier"),
             n => format!("{n} calendriers"),
         },
         LocaleCode::PtBr => match count {
@@ -3588,7 +3593,7 @@ pub fn shortcut_conflict_text(
         (LocaleCode::ZhHans, Some(p)) => format!("Lightcal 保留了之前的快捷键 {p}。"),
         (LocaleCode::ZhHans, None) => "未设置快捷键。".to_string(),
         (LocaleCode::Ko, Some(p)) => {
-            format!("Lightcal은 이전 바로 가기 키 {p}을(를) 유지했습니다.")
+            format!("이전 바로 가기 키를 유지했습니다: {p}.")
         }
         (LocaleCode::Ko, None) => "설정된 바로 가기 키가 없습니다.".to_string(),
     };
@@ -4517,7 +4522,7 @@ pub fn local_settings_text(locale: LocaleCode) -> &'static LocalSettingsText {
             recovered: "끝나지 않은 저장을 복구했습니다. 최근 변경 사항이 그대로 있습니다.",
             restored: "이전 사본을 복원했습니다. 그 이후의 변경 사항이 없을 수 있습니다.",
             restored_kept: "이전 사본을 복원했습니다. 그 이후의 변경 사항이 없을 수 있습니다. 손상된 파일은 보관됩니다:",
-            skipped: "파일에서 {events}을(를) 읽을 수 없어 건너뛰었습니다. 다음 저장 전에 파일 사본을 보관합니다.",
+            skipped: "파일에서 읽지 못해 건너뛴 항목: {events}. 다음 저장 전에 파일 사본을 보관합니다.",
             over_count: "{events} (최대 {max}개). 다시 추가하거나 편집하려면 캘린더에서 일정을 삭제하세요.",
             over_size: "이 PC의 일정이 2MB를 넘습니다. 다시 추가하거나 편집하려면 캘린더에서 일정을 삭제하세요.",
             retrying: "마지막 변경 사항을 저장하지 못했습니다: {error}. 변경 사항은 Lightcal에 보관되며 계속 저장을 시도합니다. [지금 다시 시도]를 누르면 바로 저장합니다.",
@@ -4565,5 +4570,254 @@ mod local_settings_text_tests {
                 assert!(!value.is_empty(), "{locale:?}");
             }
         }
+    }
+}
+
+/// EventKit needs Full Access to read calendars; direct Google/Outlook do not.
+pub fn mac_calendar_access_denied(locale: LocaleCode) -> &'static str {
+    match locale {
+        LocaleCode::En => "Allow Lightcal Full Access to calendars in macOS System Settings.",
+        LocaleCode::Ru => "Разрешите Lightcal полный доступ к календарям в Системных настройках macOS.",
+        LocaleCode::Es => "Permite a Lightcal acceso completo a los calendarios en Ajustes del Sistema de macOS.",
+        LocaleCode::Ja => "macOS のシステム設定で Lightcal にカレンダーへのフルアクセスを許可してください。",
+        LocaleCode::De => "Erlaube Lightcal in den macOS-Systemeinstellungen vollen Zugriff auf Kalender.",
+        LocaleCode::Fr => "Autorisez Lightcal à accéder entièrement aux calendriers dans les Réglages Système de macOS.",
+        LocaleCode::PtBr => "Permita acesso total do Lightcal aos calendários nos Ajustes do Sistema do macOS.",
+        LocaleCode::Uk => "Надайте Lightcal повний доступ до календарів у Системних параметрах macOS.",
+        LocaleCode::ZhHans => "请在 macOS 系统设置中允许 Lightcal 完全访问日历。",
+        LocaleCode::Ko => "macOS 시스템 설정에서 Lightcal에 캘린더 전체 접근 권한을 허용하세요.",
+    }
+}
+
+/// macOS-only settings and native menu labels, in the application's selected language.
+pub fn mac_labels(locale: LocaleCode) -> [&'static str; 8] {
+    match locale {
+        LocaleCode::En => [
+            "Weekday",
+            "Off",
+            "Short",
+            "Full",
+            "Month",
+            "Calendar",
+            "Connect calendars…",
+            "Open at login",
+        ],
+        LocaleCode::Ru => [
+            "День недели",
+            "Нет",
+            "Кратко",
+            "Полностью",
+            "Месяц",
+            "Календарь",
+            "Подключить календари…",
+            "Открывать при входе",
+        ],
+        LocaleCode::Es => [
+            "Día",
+            "No",
+            "Corto",
+            "Completo",
+            "Mes",
+            "Calendario",
+            "Conectar calendarios…",
+            "Abrir al iniciar sesión",
+        ],
+        LocaleCode::De => [
+            "Wochentag",
+            "Aus",
+            "Kurz",
+            "Voll",
+            "Monat",
+            "Kalender",
+            "Kalender verbinden…",
+            "Bei Anmeldung öffnen",
+        ],
+        LocaleCode::Fr => [
+            "Jour",
+            "Non",
+            "Court",
+            "Complet",
+            "Mois",
+            "Calendrier",
+            "Connecter les calendriers…",
+            "Ouvrir à la connexion",
+        ],
+        LocaleCode::PtBr => [
+            "Dia da semana",
+            "Não",
+            "Curto",
+            "Completo",
+            "Mês",
+            "Calendário",
+            "Conectar calendários…",
+            "Abrir ao iniciar sessão",
+        ],
+        LocaleCode::Uk => [
+            "День тижня",
+            "Ні",
+            "Стисло",
+            "Повністю",
+            "Місяць",
+            "Календар",
+            "Підключити календарі…",
+            "Відкривати при вході",
+        ],
+        LocaleCode::Ja => [
+            "曜日",
+            "なし",
+            "短い",
+            "完全",
+            "月",
+            "カレンダー",
+            "カレンダーを接続…",
+            "ログイン時に開く",
+        ],
+        LocaleCode::Ko => [
+            "요일",
+            "끔",
+            "짧게",
+            "전체",
+            "월",
+            "캘린더",
+            "캘린더 연결…",
+            "로그인 시 열기",
+        ],
+        LocaleCode::ZhHans => [
+            "星期",
+            "关",
+            "简短",
+            "完整",
+            "月份",
+            "日历",
+            "连接日历…",
+            "登录时打开",
+        ],
+    }
+}
+
+/// Short calendar month for the macOS menu bar, using the app locale.
+pub fn month_short(locale: LocaleCode, month: u8) -> &'static str {
+    let months = match locale {
+        LocaleCode::En => [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ],
+        LocaleCode::De => [
+            "Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
+        ],
+        LocaleCode::Es => [
+            "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
+        ],
+        LocaleCode::Fr => [
+            "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.",
+            "nov.", "déc.",
+        ],
+        LocaleCode::PtBr => [
+            "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez",
+        ],
+        LocaleCode::Ru => [
+            "янв.",
+            "февр.",
+            "мар.",
+            "апр.",
+            "мая",
+            "июн.",
+            "июл.",
+            "авг.",
+            "сент.",
+            "окт.",
+            "нояб.",
+            "дек.",
+        ],
+        LocaleCode::Uk => [
+            "січ.",
+            "лют.",
+            "бер.",
+            "квіт.",
+            "трав.",
+            "черв.",
+            "лип.",
+            "серп.",
+            "вер.",
+            "жовт.",
+            "лист.",
+            "груд.",
+        ],
+        LocaleCode::Ja | LocaleCode::ZhHans => [
+            "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月",
+        ],
+        LocaleCode::Ko => [
+            "1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월",
+        ],
+    };
+    months[(month.clamp(1, 12) - 1) as usize]
+}
+
+/// Explicit native macOS menu commands; Windows keeps its existing tray copy.
+pub fn mac_menu_labels(locale: LocaleCode) -> [&'static str; 5] {
+    match locale {
+        LocaleCode::En => [
+            "Calendars…",
+            "Open Calendar",
+            "Show month",
+            "Check for Updates…",
+            "Quit Lightcal",
+        ],
+        LocaleCode::Ru => [
+            "Календари…",
+            "Открыть Календарь",
+            "Показывать месяц",
+            "Проверить обновления…",
+            "Завершить Lightcal",
+        ],
+        LocaleCode::De => [
+            "Kalender…",
+            "Kalender öffnen",
+            "Monat anzeigen",
+            "Nach Updates suchen…",
+            "Lightcal beenden",
+        ],
+        LocaleCode::Es => [
+            "Calendarios…",
+            "Abrir Calendario",
+            "Mostrar mes",
+            "Buscar actualizaciones…",
+            "Salir de Lightcal",
+        ],
+        LocaleCode::Fr => [
+            "Calendriers…",
+            "Ouvrir Calendrier",
+            "Afficher le mois",
+            "Rechercher des mises à jour…",
+            "Quitter Lightcal",
+        ],
+        LocaleCode::PtBr => [
+            "Calendários…",
+            "Abrir Calendário",
+            "Mostrar mês",
+            "Buscar atualizações…",
+            "Sair do Lightcal",
+        ],
+        LocaleCode::Uk => [
+            "Календарі…",
+            "Відкрити Календар",
+            "Показувати місяць",
+            "Перевірити оновлення…",
+            "Завершити Lightcal",
+        ],
+        LocaleCode::Ja => [
+            "カレンダー…",
+            "カレンダーを開く",
+            "月を表示",
+            "アップデートを確認…",
+            "Lightcalを終了",
+        ],
+        LocaleCode::Ko => [
+            "캘린더…",
+            "캘린더 열기",
+            "월 표시",
+            "업데이트 확인…",
+            "Lightcal 종료",
+        ],
+        LocaleCode::ZhHans => ["日历…", "打开日历", "显示月份", "检查更新…", "退出Lightcal"],
     }
 }

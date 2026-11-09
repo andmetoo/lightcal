@@ -1,5 +1,7 @@
 # Architecture proposal
 
+Platform update (2026-11-09): [ADR 0019](decisions/0019-macos-support.md) adds macOS 14+ support with EventKit and direct Outlook/Google calendars, Dock and menu bar entry points, and signed automatic updates. Windows-specific requirements below remain Windows-specific. See [macOS validation and release status](macos.md).
+
 Status: the Rust/Slint prototype is implemented. The sections below retain the planning baseline; [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes its Windows-only provider and manual-install restrictions. Direct providers live in `crates/lightcal/src/calendars`, bounded HTTPS in `net.rs`, Windows credential encryption in `secure_store.rs`, and the signed portable updater in `installer.rs`. Calendar arithmetic stays in `calendar-core`; Windows timezone-name conversion is behind a platform adapter. Read [setup](provider-setup.md) for configuration and remaining live validation.
 
 ## Boundaries

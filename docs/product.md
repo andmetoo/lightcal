@@ -1,5 +1,7 @@
 # Product plan
 
+Platform update (2026-11-09): [ADR 0019](decisions/0019-macos-support.md) adds macOS 14+ support with EventKit and direct Outlook/Google calendars, Dock and menu bar entry points, and signed automatic updates. Windows-specific requirements below remain Windows-specific. See [macOS validation and release status](macos.md).
+
 ## Promise
 
 Lightcal gives Windows users an immediately available, readable month calendar from the tray or a pinned taskbar application, with minimal background resource use.
