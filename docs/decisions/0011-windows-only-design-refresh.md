@@ -5,6 +5,8 @@ Supersedes the macOS parts of [ADR 0008](0008-google-calendar-and-platform-desig
 the tray artwork in [ADR 0010](0010-windows-calendar-tray-icon.md), and the
 Penpot design-tool choice in [Product](../product.md).
 
+The Windows-only platform restriction is superseded by [ADR 0019](0019-macos-support.md); the Windows design decisions remain in force.
+
 ## Context
 
 The owner found the October 31 Penpot design dated and asked for a modern

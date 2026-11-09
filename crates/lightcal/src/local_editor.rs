@@ -549,6 +549,9 @@ pub(crate) fn connect_local_editor_callbacks(
         let reload = Rc::clone(&reload);
         // −1 is the selected day (N, + and Add event); otherwise a right-clicked cell.
         ui.on_new_event(move |cell| {
+            if cfg!(all(target_os = "macos", not(test))) {
+                return;
+            }
             let Some(w) = weak.upgrade() else {
                 return;
             };

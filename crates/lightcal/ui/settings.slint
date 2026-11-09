@@ -839,6 +839,7 @@ component ProviderRow inherits Rectangle {
 
 // One connected account: header, optional notice, calendar rows (.cr).
 component AccountCard inherits Rectangle {
+    in property <bool> macos: false;
     in property <AccountCardItem> card;
     in property <string> refresh-label;
     in property <string> more-label;
@@ -868,7 +869,14 @@ component AccountCard inherits Rectangle {
                     height: 28px;
                     border-radius: 14px;
                     background: Theme.avatar;
-                    Text {
+                    if root.macos && root.card.id == "windows" : Glyph {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        name: "calendar";
+                        size: 16px;
+                        color: Theme.accent;
+                    }
+                    if !root.macos || root.card.id != "windows" : Text {
                         width: parent.width;
                         height: parent.height;
                         text: root.card.initial;
@@ -1160,6 +1168,11 @@ component SelectorTab inherits Rectangle {
 }
 
 export component SettingsView inherits Rectangle {
+    in property <bool> macos: false;
+    in property <[string]> mac-texts;
+    in property <int> mac-weekday: 1;
+    in property <bool> mac-month: false;
+    callback mac-action(int);
     in property <string> app-name-text;
     in property <int> settings-tab;
     in property <string> nav-about-text;
@@ -1316,9 +1329,16 @@ export component SettingsView inherits Rectangle {
         vertical-alignment: center;
         overflow: elide;
     }
-    CaptionButton {
+    if !root.macos : CaptionButton {
         x: parent.width - 46px;
         y: 0px;
+        label: root.copy.close-label;
+        clicked => { root.close-settings(); }
+    }
+    if root.macos : GhostButton {
+        x: parent.width - 34px;
+        y: 2px;
+        icon: "close";
         label: root.copy.close-label;
         clicked => { root.close-settings(); }
     }
@@ -1659,6 +1679,12 @@ export component SettingsView inherits Rectangle {
                 spacing: 8px;
                 alignment: start;
 
+                if root.macos : SettingsCard {
+                    Row { title: root.copy.windows-title;
+                        LinkButton { label: root.mac-texts[6]; clicked => { root.mac-action(3); } }
+                        LinkButton { label: root.mac-texts[5]; clicked => { root.mac-action(4); } }
+                    }
+                }
                 if root.connection-message != "" : MessageBox {
                     text: root.connection-message;
                 }
@@ -1688,7 +1714,8 @@ export component SettingsView inherits Rectangle {
                     }
                 }
 
-                if root.account-cards.length == 0 && !root.add-account-open : LocalCard {
+                if !root.macos && root.account-cards.length == 0 && !root.add-account-open : LocalCard {
+                    visible: !root.macos;
                     data: root.local-card;
                     toggle => { root.toggle-calendar-source("local"); }
                     ok => { root.local-ok(); }
@@ -1755,7 +1782,7 @@ export component SettingsView inherits Rectangle {
                                 enabled: root.add-account-enabled;
                                 clicked => { root.choose-outlook-account(); }
                             }
-                            ProviderRow {
+                            if !root.macos : ProviderRow {
                                 title: root.copy.ics-title;
                                 desc: root.copy.ics-desc;
                                 glyph: "link";
@@ -1764,7 +1791,7 @@ export component SettingsView inherits Rectangle {
                                 enabled: root.add-account-enabled;
                                 clicked => { root.choose-ics-account(); }
                             }
-                            ProviderRow {
+                            if !root.macos : ProviderRow {
                                 title: root.copy.windows-title;
                                 desc: root.copy.windows-desc;
                                 glyph: "calendar";
@@ -1798,7 +1825,7 @@ export component SettingsView inherits Rectangle {
                             clicked => { root.add-calendar-account(); }
                         }
                     }
-                    LocalCard {
+                    if !root.macos : LocalCard {
                     data: root.local-card;
                     toggle => { root.toggle-calendar-source("local"); }
                     ok => { root.local-ok(); }
@@ -1809,6 +1836,7 @@ export component SettingsView inherits Rectangle {
                     keep => { root.local-keep(); }
                 }
                     for card in root.account-cards : AccountCard {
+                        macos: root.macos;
                         card: card;
                         refresh-label: root.copy.refresh-label;
                         more-label: root.copy.more-label;
@@ -2074,6 +2102,14 @@ export component SettingsView inherits Rectangle {
                     }
                 }
 
+                if root.macos : SettingsCard {
+                    Row { title: root.mac-texts[0];
+                        LinkButton { label: (root.mac-weekday == 0 ? "✓ " : "") + root.mac-texts[1]; clicked => { root.mac-action(10); } }
+                        LinkButton { label: (root.mac-weekday == 1 ? "✓ " : "") + root.mac-texts[2]; clicked => { root.mac-action(11); } }
+                        LinkButton { label: (root.mac-weekday == 2 ? "✓ " : "") + root.mac-texts[3]; clicked => { root.mac-action(12); } }
+                    }
+                    Row { title: root.mac-texts[4]; Switch { checked: root.mac-month; toggled => { root.mac-action(13); } } }
+                }
                 SettingsCard {
                     Row {
                         title: root.label-tray-palette-text;

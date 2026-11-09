@@ -34,3 +34,7 @@ This distribution incorporates the following open-source Rust crates:
 - The current design uses the Windows system font Segoe UI Variable, which is not redistributed. The tray date icon reads Segoe UI Variable (or Segoe UI Bold) from `%WINDIR%\Fonts` at runtime. Earlier design mockups used **Onest** (SIL OFL 1.1); see `design/fonts/`.
 - **Radix Colors**: the Gray + Teal palette is adapted from Radix Colors (MIT; Copyright 2021-2022 Modulz and 2022-Present WorkOS). Source: https://github.com/radix-ui/colors. License: `design/palettes/RADIX-LICENSE.txt`. This does not add a web or JavaScript runtime dependency.
 
+
+## macOS release framework
+
+macOS release bundles include [Sparkle 2](https://github.com/sparkle-project/Sparkle), distributed under the MIT license with additional third-party component notices. The pinned distribution's complete LICENSE is copied into `Contents/Resources/Sparkle-LICENSE` in every release bundle. Sparkle is not included in unsigned review bundles. Apple system frameworks are linked from macOS and are not redistributed.

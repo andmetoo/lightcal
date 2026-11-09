@@ -386,6 +386,7 @@ component AllDayChip inherits Rectangle {
 }
 
 export component CalendarView inherits Rectangle {
+    in property <bool> macos: false;
     // Header
     in property <string> month-name;
     in property <string> year-text;
@@ -613,7 +614,7 @@ export component CalendarView inherits Rectangle {
             label: root.settings-label;
             clicked => { root.open-settings(0); }
         }
-        IconButton {
+        if !root.macos : IconButton {
             icon: "minimize";
             label: root.hide-label;
             clicked => { root.hide-to-tray(); }
@@ -837,7 +838,7 @@ export component CalendarView inherits Rectangle {
                     // After arrow keys hide the highlight, the next pointer move brings it back.
                     // Real movement, never a hover change alone, also ends keyboard mode.
                     pointer-event(event) => {
-                        if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                        if (!root.macos && event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
                             root.new-event-on(pill.index);
                             return;
                         }
@@ -925,7 +926,7 @@ export component CalendarView inherits Rectangle {
             vertical-alignment: center;
         }
         // New event (.ib.sm): 24 px, a 14 px plus.
-        Rectangle {
+        if !root.macos : Rectangle {
             width: 24px;
             border-radius: Theme.radius-control;
             background: plus-touch.pressed ? Theme.press : (plus-touch.has-hover ? Theme.hover : transparent);
@@ -1097,7 +1098,7 @@ export component CalendarView inherits Rectangle {
                         vertical-alignment: center;
                     }
                 }
-                HorizontalLayout {
+                if !root.macos : HorizontalLayout {
                     alignment: start;
                     Rectangle {
                         height: 26px;

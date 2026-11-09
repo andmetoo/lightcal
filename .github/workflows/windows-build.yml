@@ -105,6 +105,9 @@ jobs:
     name: Attach Windows build to release
     if: needs.portable.outputs.release_tag != ''
     needs: portable
+    concurrency:
+      group: lightcal-release-${{ needs.portable.outputs.release_tag }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

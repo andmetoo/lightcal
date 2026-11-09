@@ -33,6 +33,57 @@ fn numeric_version(version: &str) -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rerun-if-changed=src/platform/macos/native.m");
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        let object = out.join("native.o");
+        let target = std::env::var("TARGET").unwrap();
+        let arch = if target.starts_with("aarch64") {
+            "arm64"
+        } else {
+            "x86_64"
+        };
+        assert!(std::process::Command::new("xcrun")
+            .args([
+                "clang",
+                "-arch",
+                arch,
+                "-mmacosx-version-min=14.0",
+                "-fobjc-arc",
+                "-fblocks",
+                if std::env::var_os("CARGO_FEATURE_NATIVE_SMOKE").is_some() {
+                    "-DLIGHTCAL_NATIVE_SMOKE=1"
+                } else {
+                    "-DLIGHTCAL_NATIVE_SMOKE=0"
+                },
+                "-c",
+                "src/platform/macos/native.m",
+                "-o"
+            ])
+            .arg(&object)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("ar")
+            .arg("crs")
+            .arg(out.join("liblightcal_native.a"))
+            .arg(object)
+            .status()
+            .unwrap()
+            .success());
+        println!("cargo:rustc-link-search=native={}", out.display());
+        println!("cargo:rustc-link-lib=static=lightcal_native");
+        for framework in [
+            "AppKit",
+            "EventKit",
+            "ServiceManagement",
+            "Carbon",
+            "QuartzCore",
+            "Security",
+        ] {
+            println!("cargo:rustc-link-lib=framework={framework}");
+        }
+    }
     println!("cargo:rerun-if-changed=assets/lightcal.ico");
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for relative in [".git/HEAD", ".git/packed-refs"] {

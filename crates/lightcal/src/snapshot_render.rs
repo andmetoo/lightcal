@@ -1,8 +1,9 @@
 //! Headless UI snapshot rendering pipeline for design system and visual regression validation.
 
 use crate::{AppController, AppWindow};
+use crate::{ShortcutManager, StartupManager};
 use calendar_core::{CalendarOccurrence, CalendarState, LocalDate, Weekday};
-use lightcal::platform::windows::{render_squircle_icon_rgba_64, ShortcutManager, StartupManager};
+use lightcal::platform::windows::render_squircle_icon_rgba_64;
 use lightcal::platform::ProviderSnapshot;
 use lightcal::preferences::{
     DateSize, LocaleCode, Preferences, PreferencesStore, ThemePreference, TrayIconMode,
@@ -67,7 +68,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         demo_shown: Default::default(),
         provider_request: 0,
         connection_busy: false,
-        connection_message: String::new(),
+        connection_message: Default::default(),
         startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Disconnected,
         provider_loading: false,

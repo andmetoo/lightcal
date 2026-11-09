@@ -14,6 +14,11 @@ export { KoiSchool, KoiSwim } from "koi.slint";
 export { CalendarDateSize, MarkColor, DayCellData, MonthViewData, CalendarSourceItem, WeekdayChipItem, AgendaEventItem, AgendaChipRow, ShadedBand, AccountCardItem, SettingsStrings }
 
 export component AppWindow inherits Window {
+    in property <bool> macos: false;
+    in property <[string]> mac-texts;
+    in property <int> mac-weekday: 1;
+    in property <bool> mac-month: false;
+    callback mac-action(int);
     title: "Lightcal";
     no-frame: true;
     default-font-family: Theme.font-family;
@@ -327,6 +332,7 @@ export component AppWindow inherits Window {
     callback move-selection-by(int);
     callback open-settings(int);
     callback close-settings();
+    callback close-settings-from-keyboard();
     callback select-language(string);
     callback select-theme(string);
     callback select-tray-icon-mode(string);
@@ -373,7 +379,8 @@ export component AppWindow inherits Window {
     height: root.settings-open ? 360px : root.calendar-height;
     preferred-width: root.settings-open ? 448px : 352px;
     preferred-height: root.settings-open ? 360px : root.calendar-height;
-    background: transparent;
+    // macOS software presentation ignores alpha; AppKit clips the outer corners.
+    background: root.macos ? (root.settings-open ? Theme.page : Theme.popup) : transparent;
     // Bumped by the app when Windows has discarded the window's pixels (restore from
     // minimized). The software renderer only presents dirty regions, so this window-sized,
     // never-visible layer makes the next frame repaint and present the whole window.
@@ -406,7 +413,7 @@ export component AppWindow inherits Window {
             }
             // N opens the editor for the selected day: calendar view only, no dialog,
             // editor or modifier. A focused field takes the key before it gets here.
-            if (!root.settings-open && !root.editor-open
+            if (!root.macos && !root.settings-open && !root.editor-open
                 && !event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta
                 && (event.text == "n" || event.text == "N")) {
                 root.new-event(-1);
@@ -414,7 +421,7 @@ export component AppWindow inherits Window {
             }
             if (event.text == Key.Escape) {
                 if (root.settings-open) {
-                    root.close-settings();
+                    root.close-settings-from-keyboard();
                 } else {
                     root.dismiss-compact();
                 }
@@ -460,6 +467,7 @@ export component AppWindow inherits Window {
 
     // ==================== CALENDAR VIEW (352×432, or 352×444) ====================
     if !root.settings-open : CalendarView {
+        macos: root.macos;
         width: 100%;
         height: 100%;
         month-name: root.month-name-text;
@@ -552,6 +560,11 @@ export component AppWindow inherits Window {
 
     // ==================== SETTINGS VIEW (448×360) ====================
     if root.settings-open : SettingsView {
+        macos: root.macos;
+        mac-texts: root.mac-texts;
+        mac-weekday: root.mac-weekday;
+        mac-month: root.mac-month;
+        mac-action(code) => { root.mac-action(code); }
         width: 100%;
         height: 100%;
         app-name-text: root.app-name-text;
