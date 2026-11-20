@@ -4,7 +4,7 @@ Windows releases use NSIS setup executables alongside the portable application. 
 
 ## Build
 
-Run `just installer`, or `pwsh -NoProfile -File scripts/package-nsis.ps1`. The script builds locked release code and writes `target/nsis/lightcal-<version>-windows-x64-setup.exe` and a SHA-256 file. `just installer -SkipBuild` skips Cargo compilation and packages the current `target/release/lightcal.exe`.
+On Windows, run `just installer`, or `pwsh -NoProfile -File scripts/package-nsis.ps1`. The script builds locked release code and writes `target/nsis/lightcal-<version>-windows-x64-setup.exe` and a SHA-256 file. `just installer -SkipBuild` skips Cargo compilation and packages the current `target/release/lightcal.exe`. On macOS, the same recipe builds a native DMG instead; see [macOS packaging](macos.md).
 
 The script uses `LIGHTCAL_NSIS_COMPILER`, `makensis.exe` on PATH, or an installed NSIS compiler. Otherwise it downloads the pinned official portable NSIS 3.13 archive into ignored `target/tools`, verifies its published SHA-256, and extracts it there. `just prepare-nsis` performs that step separately. It does not install NSIS or change Windows configuration. The archive and hash come from the [official download page](https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13.zip/download).
 

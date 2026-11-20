@@ -1,5 +1,7 @@
 # Required features
 
+Platform update (2026-11-09): [ADR 0019](decisions/0019-macos-support.md) adds macOS 14+ support with EventKit and direct Outlook/Google calendars, Dock and menu bar entry points, and signed automatic updates. Windows-specific requirements below remain Windows-specific. See [macOS validation and release status](macos.md).
+
 Owner requirements recorded on 2026-10-29. The 2026-10-30 owner decision in [ADR 0002](decisions/0002-direct-calendars-and-updates.md) supersedes the Windows-only provider and manual-install restrictions below: direct Microsoft Graph, private ICS, and signed automatic update installation are approved. The 2026-10-31 owner request in [ADR 0008](decisions/0008-google-calendar-and-platform-design.md) approves read-only Google Calendar OAuth. The Windows app connects that account in the system browser and loads selected calendars. See [setup and current implementation limits](provider-setup.md). The historical Windows feasibility gate remains documented for the optional legacy adapter. The 2026-11-04 owner decision in [ADR 0017](decisions/0017-local-events.md) adds events the user creates in Lightcal, stored only on this PC; provider calendars stay read-only. The 2026-11-04 owner decision in [ADR 0018](decisions/0018-multiple-accounts.md) approves up to five Google and five Microsoft accounts at once; it is not implemented yet, so the current build still connects one account per provider and reconnecting replaces it.
 
 | Feature | Expected behavior and acceptance |

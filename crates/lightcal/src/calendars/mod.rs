@@ -4,11 +4,9 @@ pub mod google;
 pub mod ics;
 pub mod microsoft;
 pub mod sign_in;
+use crate::platform::ProviderStatus;
 use crate::preferences::LocaleCode;
-use crate::{
-    platform::{ProviderSnapshot, ProviderStatus},
-    secure_store::Credentials,
-};
+use crate::{platform::ProviderSnapshot, secure_store::Credentials};
 use account::MicrosoftAccountState;
 use base64::Engine;
 use calendar_core::LocalDate;
@@ -267,7 +265,11 @@ pub fn query(
         }
     }
     let mut ics_feed_errors = BTreeMap::new();
-    for feed in &credentials.ics {
+    for feed in credentials
+        .ics
+        .iter()
+        .filter(|_| !cfg!(target_os = "macos"))
+    {
         snapshot.sources.push(calendar_core::CalendarSource {
             id: feed.id.clone(),
             name: feed.name.clone(),
@@ -277,7 +279,9 @@ pub fn query(
         if selected.contains(&feed.id) {
             match ics::fetch(feed, anchor) {
                 Ok(parsed) => {
-                    if let Some(note) = parsed.note(locale, &feed.name) {
+                    // Cache canonical diagnostics; render warnings in the UI's
+                    // current language, including after a language change.
+                    if let Some(note) = parsed.note(LocaleCode::En, &feed.name) {
                         ics_feed_errors.insert(feed.id.clone(), note.clone());
                         errors.push(note);
                     }
@@ -292,6 +296,9 @@ pub fn query(
         }
     }
     if legacy_windows {
+        #[cfg(target_os = "macos")]
+        let data = crate::platform::macos::load(anchor, true).snapshot;
+        #[cfg(not(target_os = "macos"))]
         let data = crate::platform::windows::query_calendar_provider(anchor, false);
         append_provider(&mut snapshot, data, &mut errors);
     }

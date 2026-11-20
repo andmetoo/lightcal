@@ -3,8 +3,13 @@
 
 use crate::preferences::LocaleCode;
 use calendar_core::{LocalDate, Weekday, YearMonth};
+mod failures;
+pub use failures::{
+    calendar_failure_text, mac_calendars_title, startup_failure_text, CalendarError,
+    CalendarFailure,
+};
 
-/// Complete connection/update control labels; provider diagnostics fall back to English.
+/// Complete connection/update control labels.
 pub fn connection_labels(locale: LocaleCode) -> [&'static str; 11] {
     match locale {
         LocaleCode::En => [
@@ -22,14 +27,14 @@ pub fn connection_labels(locale: LocaleCode) -> [&'static str; 11] {
         ],
         LocaleCode::Ru => [
             "Client ID приложения Microsoft",
-            "Войти в Outlook",
+            "Подключить Outlook",
             "Отключить Outlook",
             "Название календаря ICS",
-            "Секретная HTTPS-ссылка ICS",
+            "Закрытая ссылка ICS (HTTPS)",
             "Добавить ICS",
             "Удалить",
             "Календари Windows (устаревший способ)",
-            "Установить",
+            "Установить и перезапустить",
             "Автоматически устанавливать подписанные обновления",
             "Календари Outlook и ICS — только чтение",
         ],
@@ -257,7 +262,7 @@ const EN_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Current month",
     today_button: "Today",
     week_col_header: "W",
-    selected_date_overline: "SELECTED DATE",
+    selected_date_overline: "Selected",
     settings_title: "Settings",
     nav_general: "App",
     nav_appearance: "Calendar",
@@ -271,7 +276,7 @@ const EN_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Open shortcut",
     desc_shortcut: "Toggle the calendar popover from anywhere on the desktop",
     shortcut_unset: "Not set",
-    shortcut_record: "Record…",
+    shortcut_record: "Set…",
     shortcut_clear: "Clear",
     section_region: "Region",
     section_startup: "Startup",
@@ -342,17 +347,17 @@ const EN_STRINGS: UiStrings = UiStrings {
     update_ready_notes: "Verifies the signed update before installing and restarting.",
     download_release_button: "Download",
     manual_update_notes:
-        "This build cannot install updates by itself. Download the newer release from GitHub.",
+        "This copy of Lightcal can’t install updates. Download the new version from GitHub.",
     manual_install_status:
-        "Automatic installation needs a signed build. Download updates from GitHub.",
+        "Automatic installation needs a signed copy of Lightcal. Download updates from GitHub.",
     release_notes_button: "Release notes",
     dismiss_label: "Dismiss",
     refresh_slow_status: "Refresh is taking longer than expected",
-    worker_failed_error: "The operation failed unexpectedly. Please try again.",
+    worker_failed_error: "Something went wrong. Try again.",
     label_auto_updates: "Automatic updates",
     desc_auto_updates: "Download and verify signed releases in the background",
     label_license_source: "License & source",
-    desc_license_source: "GPL-3.0-only · Built with Rust, Slint, and zero webview bloat",
+    desc_license_source: "GPL-3.0-only. Built with Rust and Slint, without an embedded browser.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -371,7 +376,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Текущий месяц",
     today_button: "Сегодня",
     week_col_header: "НЕД",
-    selected_date_overline: "ВЫБРАННАЯ ДАТА",
+    selected_date_overline: "Выбранная дата",
     settings_title: "Настройки",
     nav_general: "Приложение",
     nav_appearance: "Календарь",
@@ -386,7 +391,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     desc_shortcut: "Открывать или скрывать компактный календарь из любого окна.",
     shortcut_unset: "Не задано",
     shortcut_record: "Задать…",
-    shortcut_clear: "Сбросить",
+    shortcut_clear: "Очистить",
     section_region: "Регион",
     section_startup: "Запуск",
     appearance_subtitle: "Тема, начало недели, затенённые дни, номера недель и точки событий.",
@@ -420,7 +425,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     tray_open_calendar: "Открыть календарь",
     tray_settings: "Настройки",
     tray_about: "О Lightcal",
-    tray_quit: "Выход",
+    tray_quit: "Завершить",
     back_to_calendar: "‹ К настройкам",
     label_tray_mode: "Значок в трее",
     desc_tray_mode: "Цветной или монохромный значок",
@@ -448,7 +453,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     add_calendar_account_button: "+ Добавить аккаунт",
     open_privacy_settings_button: "Параметры конфиденциальности",
     access_denied_desc:
-        "Lightcal требуются разрешения на чтение для отображения локальных событий.",
+        "Lightcal запрашивает доступ, чтобы читать события календаря. Месяц виден и без этого доступа.",
     retry_sync_button: "Повторить",
     checking_updates_label: "Проверка обновлений…",
     update_available_badge: "Доступно обновление",
@@ -456,9 +461,9 @@ const RU_STRINGS: UiStrings = UiStrings {
     update_ready_notes: "Проверяет подпись обновления перед установкой и перезапуском.",
     download_release_button: "Скачать",
     manual_update_notes:
-        "Эта сборка не устанавливает обновления сама. Скачайте новую версию на GitHub.",
+        "Эта копия Lightcal не устанавливает обновления сама. Скачайте новую версию на GitHub.",
     manual_install_status:
-        "Автоустановка доступна только для подписанной сборки. Скачайте обновление на GitHub.",
+        "Автоустановка доступна только для подписанной копии Lightcal. Скачайте обновление на GitHub.",
     release_notes_button: "Что нового ↗",
     dismiss_label: "Закрыть",
     refresh_slow_status: "Обновление занимает больше времени, чем ожидалось",
@@ -466,7 +471,7 @@ const RU_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "Автоматические обновления",
     desc_auto_updates: "Фоновая загрузка и проверка подписанных релизов",
     label_license_source: "Лицензия и исходный код",
-    desc_license_source: "Лицензия GPL-3.0-only · Rust + Slint без лишнего webview",
+    desc_license_source: "GPL-3.0-only. Сделано на Rust и Slint, без встроенного браузера.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -485,7 +490,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Mes actual",
     today_button: "Hoy",
     week_col_header: "SEM",
-    selected_date_overline: "FECHA SELECCIONADA",
+    selected_date_overline: "Fecha seleccionada",
     settings_title: "Ajustes",
     nav_general: "Aplicación",
     nav_appearance: "Calendario",
@@ -499,7 +504,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Atajo para abrir",
     desc_shortcut: "Mostrar u ocultar el calendario compacto desde cualquier aplicación.",
     shortcut_unset: "Sin asignar",
-    shortcut_record: "Grabar…",
+    shortcut_record: "Definir…",
     shortcut_clear: "Borrar",
     section_region: "Región",
     section_startup: "Inicio",
@@ -562,7 +567,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     add_calendar_button: "+ Añadir cuenta",
     add_calendar_account_button: "+ Añadir cuenta",
     open_privacy_settings_button: "Configuración de privacidad",
-    access_denied_desc: "Lightcal necesita permiso de lectura para mostrar eventos locales.",
+    access_denied_desc: "Lightcal necesita permiso para leer los eventos del calendario. El mes se sigue viendo igual.",
     retry_sync_button: "Reintentar sincronización",
     checking_updates_label: "Buscando actualizaciones…",
     update_available_badge: "Actualización disponible",
@@ -570,9 +575,9 @@ const ES_STRINGS: UiStrings = UiStrings {
     update_ready_notes: "Verifica la actualización firmada antes de instalar y reiniciar.",
     download_release_button: "Descargar",
     manual_update_notes:
-        "Esta compilación no instala actualizaciones sola. Descarga la versión nueva en GitHub.",
+        "Esta copia de Lightcal no puede instalar las actualizaciones. Descarga la versión nueva en GitHub.",
     manual_install_status:
-        "La instalación automática solo está en una compilación firmada. Descárgala en GitHub.",
+        "La instalación automática solo está en una copia firmada de Lightcal. Descárgala en GitHub.",
     release_notes_button: "Notas de la versión ↗",
     dismiss_label: "Descartar",
     refresh_slow_status: "La actualización está tardando más de lo esperado",
@@ -580,7 +585,7 @@ const ES_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "Actualizaciones automáticas",
     desc_auto_updates: "Descargar y verificar versiones firmadas en segundo plano",
     label_license_source: "Licencia y código fuente",
-    desc_license_source: "Licencia GPL-3.0-only · Creado con Rust y Slint sin webview",
+    desc_license_source: "GPL-3.0-only. Creado con Rust y Slint, sin un navegador integrado.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -613,7 +618,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     label_shortcut: "呼び出しショートカット",
     desc_shortcut: "どのアプリからでもトレイカレンダーを表示・非表示にします。",
     shortcut_unset: "未設定",
-    shortcut_record: "記録…",
+    shortcut_record: "設定…",
     shortcut_clear: "クリア",
     section_region: "地域",
     section_startup: "起動",
@@ -675,7 +680,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     add_calendar_button: "+ アカウントを追加",
     add_calendar_account_button: "+ アカウントを追加",
     open_privacy_settings_button: "プライバシー設定を開く",
-    access_denied_desc: "Lightcal が予定を表示するにはカレンダーの読み取り権限が必要です。",
+    access_denied_desc: "Lightcal が予定を表示するにはカレンダーの読み取り権限が必要です。権限がなくても月表示は使えます。",
     retry_sync_button: "再同期",
     checking_updates_label: "アップデートを確認中…",
     update_available_badge: "アップデートがあります",
@@ -684,9 +689,9 @@ const JA_STRINGS: UiStrings = UiStrings {
         "署名済みの更新を検証してインストールし、再起動します。",
     download_release_button: "ダウンロード",
     manual_update_notes:
-        "このビルドは更新を自分ではインストールできません。新しい版は GitHub からダウンロードしてください。",
+        "この Lightcal はアップデートを自分ではインストールできません。新しい版は GitHub からダウンロードしてください。",
     manual_install_status:
-        "自動インストールは署名付きビルドでのみ使えます。更新は GitHub からダウンロードしてください。",
+        "自動インストールは署名付きの Lightcal でのみ使えます。更新は GitHub からダウンロードしてください。",
     release_notes_button: "リリースノート ↗",
     dismiss_label: "閉じる",
     refresh_slow_status: "更新に想定より時間がかかっています",
@@ -694,7 +699,7 @@ const JA_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "自動アップデート",
     desc_auto_updates: "署名付きリリースをバックグラウンドでダウンロードおよび検証します",
     label_license_source: "ライセンスとソースコード",
-    desc_license_source: "GPL-3.0-only · Rust と Slint で構築、ウェブビュー不使用",
+    desc_license_source: "GPL-3.0-only. Rust と Slint で構築。内蔵ブラウザーはありません。",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -713,7 +718,7 @@ const DE_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Aktueller Monat",
     today_button: "Heute",
     week_col_header: "KW",
-    selected_date_overline: "AUSGEWÄHLTES DATUM",
+    selected_date_overline: "Ausgewähltes Datum",
     settings_title: "Einstellungen",
     nav_general: "App",
     nav_appearance: "Kalender",
@@ -727,7 +732,7 @@ const DE_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Tastenkürzel",
     desc_shortcut: "Kalender von überall auf dem Desktop ein- oder ausblenden",
     shortcut_unset: "Nicht festgelegt",
-    shortcut_record: "Aufnehmen…",
+    shortcut_record: "Festlegen…",
     shortcut_clear: "Löschen",
     section_region: "Region",
     section_startup: "Start",
@@ -795,16 +800,16 @@ const DE_STRINGS: UiStrings = UiStrings {
     update_ready_title: "Eine neuere Version ist verfügbar",
     update_ready_notes: "Prüft das signierte Update vor Installation und Neustart.",
     download_release_button: "Herunterladen",
-    manual_update_notes: "Dieser Build kann sich nicht selbst aktualisieren. Laden Sie die neue Version von GitHub herunter.",
-    manual_install_status: "Automatische Installation erfordert einen signierten Build. Updates gibt es auf GitHub.",
+    manual_update_notes: "Diese Version von Lightcal kann sich nicht selbst aktualisieren. Laden Sie die neue Version von GitHub herunter.",
+    manual_install_status: "Automatische Installation erfordert eine signierte Version von Lightcal. Updates gibt es auf GitHub.",
     release_notes_button: "Versionshinweise",
     dismiss_label: "Schließen",
     refresh_slow_status: "Aktualisierung dauert länger als erwartet",
-    worker_failed_error: "Unerwarteter Fehler. Bitte versuchen Sie es erneut.",
+    worker_failed_error: "Unerwarteter Fehler. Versuchen Sie es erneut.",
     label_auto_updates: "Automatische Updates",
     desc_auto_updates: "Signierte Versionen im Hintergrund laden und prüfen",
     label_license_source: "Lizenz & Quellcode",
-    desc_license_source: "GPL-3.0-only · Mit Rust und Slint gebaut, ganz ohne Webview",
+    desc_license_source: "GPL-3.0-only. Mit Rust und Slint erstellt, ohne eingebetteten Browser.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -823,7 +828,7 @@ const FR_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Mois en cours",
     today_button: "Aujourd’hui",
     week_col_header: "SEM",
-    selected_date_overline: "DATE SÉLECTIONNÉE",
+    selected_date_overline: "Date sélectionnée",
     settings_title: "Paramètres",
     nav_general: "Application",
     nav_appearance: "Calendrier",
@@ -837,7 +842,7 @@ const FR_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Raccourci d’ouverture",
     desc_shortcut: "Afficher ou masquer le calendrier depuis n’importe où sur le bureau",
     shortcut_unset: "Non défini",
-    shortcut_record: "Enregistrer…",
+    shortcut_record: "Définir…",
     shortcut_clear: "Effacer",
     section_region: "Région",
     section_startup: "Démarrage",
@@ -908,13 +913,13 @@ const FR_STRINGS: UiStrings = UiStrings {
     manual_update_notes: "Cette version ne peut pas s’installer seule. Téléchargez la nouvelle version sur GitHub.",
     manual_install_status: "L’installation automatique nécessite une version signée. Téléchargez les mises à jour sur GitHub.",
     release_notes_button: "Notes de version",
-    dismiss_label: "Ignorer",
+    dismiss_label: "Fermer",
     refresh_slow_status: "L’actualisation prend plus de temps que prévu",
-    worker_failed_error: "L’opération a échoué de façon inattendue. Veuillez réessayer.",
+    worker_failed_error: "L’opération a échoué. Réessayez.",
     label_auto_updates: "Mises à jour automatiques",
     desc_auto_updates: "Télécharger et vérifier les versions signées en arrière-plan",
     label_license_source: "Licence et code source",
-    desc_license_source: "GPL-3.0-only · Créé avec Rust et Slint, sans webview superflu",
+    desc_license_source: "GPL-3.0-only. Créé avec Rust et Slint, sans navigateur intégré.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -933,7 +938,7 @@ const PT_BR_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Mês atual",
     today_button: "Hoje",
     week_col_header: "SEM",
-    selected_date_overline: "DATA SELECIONADA",
+    selected_date_overline: "Data selecionada",
     settings_title: "Configurações",
     nav_general: "App",
     nav_appearance: "Calendário",
@@ -947,7 +952,7 @@ const PT_BR_STRINGS: UiStrings = UiStrings {
     label_shortcut: "Atalho para abrir",
     desc_shortcut: "Mostrar ou ocultar o calendário de qualquer lugar da área de trabalho",
     shortcut_unset: "Não definido",
-    shortcut_record: "Gravar…",
+    shortcut_record: "Definir…",
     shortcut_clear: "Limpar",
     section_region: "Região",
     section_startup: "Inicialização",
@@ -1018,13 +1023,13 @@ const PT_BR_STRINGS: UiStrings = UiStrings {
     manual_update_notes: "Esta versão não instala atualizações sozinha. Baixe a versão mais recente no GitHub.",
     manual_install_status: "A instalação automática exige uma versão assinada. Baixe as atualizações no GitHub.",
     release_notes_button: "Notas da versão",
-    dismiss_label: "Dispensar",
+    dismiss_label: "Fechar",
     refresh_slow_status: "A atualização está demorando mais que o esperado",
     worker_failed_error: "A operação falhou inesperadamente. Tente novamente.",
     label_auto_updates: "Atualizações automáticas",
     desc_auto_updates: "Baixar e verificar versões assinadas em segundo plano",
     label_license_source: "Licença e código",
-    desc_license_source: "GPL-3.0-only · Feito com Rust e Slint, sem o peso de um webview",
+    desc_license_source: "GPL-3.0-only. Feito com Rust e Slint, sem um navegador embutido.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -1043,7 +1048,7 @@ const UK_STRINGS: UiStrings = UiStrings {
     current_month_badge: "Поточний місяць",
     today_button: "Сьогодні",
     week_col_header: "ТИЖ",
-    selected_date_overline: "ВИБРАНА ДАТА",
+    selected_date_overline: "Вибрана дата",
     settings_title: "Налаштування",
     nav_general: "Застосунок",
     nav_appearance: "Календар",
@@ -1125,8 +1130,8 @@ const UK_STRINGS: UiStrings = UiStrings {
     update_ready_title: "Доступна новіша версія",
     update_ready_notes: "Перевіряє підпис оновлення перед інсталяцією та перезапуском.",
     download_release_button: "Завантажити",
-    manual_update_notes: "Ця збірка не може сама інсталювати оновлення. Завантажте новіший випуск із GitHub.",
-    manual_install_status: "Автоматична інсталяція потребує підписаної збірки. Завантажуйте оновлення з GitHub.",
+    manual_update_notes: "Ця копія Lightcal не може сама інсталювати оновлення. Завантажте новіший випуск із GitHub.",
+    manual_install_status: "Автоматична інсталяція потребує підписаної копії Lightcal. Завантажуйте оновлення з GitHub.",
     release_notes_button: "Що нового",
     dismiss_label: "Закрити",
     refresh_slow_status: "Оновлення триває довше, ніж очікувалося",
@@ -1134,7 +1139,7 @@ const UK_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "Автоматичні оновлення",
     desc_auto_updates: "Завантажувати й перевіряти підписані випуски у фоновому режимі",
     label_license_source: "Ліцензія та код",
-    desc_license_source: "GPL-3.0-only · Створено на Rust і Slint, без важкого webview",
+    desc_license_source: "GPL-3.0-only. Створено на Rust і Slint, без вбудованого браузера.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -1167,7 +1172,7 @@ const ZH_HANS_STRINGS: UiStrings = UiStrings {
     label_shortcut: "打开快捷键",
     desc_shortcut: "在桌面任意位置显示或隐藏日历弹窗",
     shortcut_unset: "未设置",
-    shortcut_record: "录制…",
+    shortcut_record: "设置…",
     shortcut_clear: "清除",
     section_region: "区域",
     section_startup: "启动",
@@ -1245,7 +1250,7 @@ const ZH_HANS_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "自动更新",
     desc_auto_updates: "在后台下载并验证已签名的版本",
     label_license_source: "许可证和源代码",
-    desc_license_source: "GPL-3.0-only · 基于 Rust 和 Slint 构建，不含臃肿的 webview",
+    desc_license_source: "GPL-3.0-only. 基于 Rust 和 Slint 构建，不含内嵌浏览器。",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -1278,7 +1283,7 @@ const KO_STRINGS: UiStrings = UiStrings {
     label_shortcut: "열기 바로 가기 키",
     desc_shortcut: "바탕 화면 어디에서나 캘린더 팝업을 열거나 닫습니다",
     shortcut_unset: "설정 안 함",
-    shortcut_record: "기록…",
+    shortcut_record: "설정…",
     shortcut_clear: "지우기",
     section_region: "지역",
     section_startup: "시작",
@@ -1346,8 +1351,8 @@ const KO_STRINGS: UiStrings = UiStrings {
     update_ready_title: "새 버전을 사용할 수 있습니다",
     update_ready_notes: "설치 및 다시 시작 전에 서명된 업데이트를 확인합니다.",
     download_release_button: "다운로드",
-    manual_update_notes: "이 빌드는 업데이트를 직접 설치할 수 없습니다. GitHub에서 새 릴리스를 다운로드하세요.",
-    manual_install_status: "자동 설치에는 서명된 빌드가 필요합니다. GitHub에서 업데이트를 다운로드하세요.",
+    manual_update_notes: "이 Lightcal은 업데이트를 직접 설치할 수 없습니다. GitHub에서 새 버전을 받으세요.",
+    manual_install_status: "자동 설치에는 서명된 Lightcal이 필요합니다. GitHub에서 업데이트를 받으세요.",
     release_notes_button: "릴리스 정보",
     dismiss_label: "닫기",
     refresh_slow_status: "새로 고침이 예상보다 오래 걸리고 있습니다",
@@ -1355,7 +1360,7 @@ const KO_STRINGS: UiStrings = UiStrings {
     label_auto_updates: "자동 업데이트",
     desc_auto_updates: "백그라운드에서 서명된 릴리스를 다운로드하고 확인합니다",
     label_license_source: "라이선스 및 소스",
-    desc_license_source: "GPL-3.0-only · Rust와 Slint로 제작, 무거운 webview 없음",
+    desc_license_source: "GPL-3.0-only. Rust와 Slint로 제작, 내장 브라우저 없음.",
     github_repo_button: "GitHub ↗",
     koona_app_button: "koona.app ↗",
     outlook_section: "Outlook",
@@ -1771,6 +1776,14 @@ pub fn format_month_year(locale: LocaleCode, ym: YearMonth) -> String {
     }
 }
 
+fn french_day(day: u8) -> String {
+    if day == 1 {
+        "1er".to_string()
+    } else {
+        day.to_string()
+    }
+}
+
 pub fn format_date_line(locale: LocaleCode, date: LocalDate, include_weekday: bool) -> String {
     let wd = weekday_full(locale, date.weekday());
     match (locale, include_weekday) {
@@ -1810,12 +1823,12 @@ pub fn format_date_line(locale: LocaleCode, date: LocalDate, include_weekday: bo
         ),
         (LocaleCode::Fr, true) => format!(
             "{wd} {} {}",
-            date.day,
+            french_day(date.day),
             month_name(locale, date.month).to_lowercase()
         ),
         (LocaleCode::Fr, false) => format!(
             "{} {} {}",
-            date.day,
+            french_day(date.day),
             month_name(locale, date.month).to_lowercase(),
             date.year
         ),
@@ -1921,7 +1934,7 @@ pub fn format_calendar_count(locale: LocaleCode, count: usize) -> String {
         LocaleCode::Ja => format!("カレンダー{count}件"),
         LocaleCode::De => format!("{count} Kalender"),
         LocaleCode::Fr => match count {
-            0 | 1 => format!("{count} calendrier"),
+            1 => format!("{count} calendrier"),
             n => format!("{n} calendriers"),
         },
         LocaleCode::PtBr => match count {
@@ -1935,14 +1948,14 @@ pub fn format_calendar_count(locale: LocaleCode, count: usize) -> String {
 
 pub fn format_active_calendars_heading(locale: LocaleCode, count: usize) -> String {
     match locale {
-        LocaleCode::En => format!("ACTIVE CALENDARS ({count})"),
-        LocaleCode::Ru => format!("АКТИВНЫЕ КАЛЕНДАРИ ({count})"),
-        LocaleCode::Es => format!("CALENDARIOS ACTIVOS ({count})"),
+        LocaleCode::En => format!("Active calendars ({count})"),
+        LocaleCode::Ru => format!("Активные календари ({count})"),
+        LocaleCode::Es => format!("Calendarios activos ({count})"),
         LocaleCode::Ja => format!("有効なカレンダー ({count})"),
-        LocaleCode::De => format!("AKTIVE KALENDER ({count})"),
-        LocaleCode::Fr => format!("CALENDRIERS ACTIFS ({count})"),
-        LocaleCode::PtBr => format!("CALENDÁRIOS ATIVOS ({count})"),
-        LocaleCode::Uk => format!("АКТИВНІ КАЛЕНДАРІ ({count})"),
+        LocaleCode::De => format!("Aktive Kalender ({count})"),
+        LocaleCode::Fr => format!("Calendriers actifs ({count})"),
+        LocaleCode::PtBr => format!("Calendários ativos ({count})"),
+        LocaleCode::Uk => format!("Активні календарі ({count})"),
         LocaleCode::ZhHans => format!("已启用的日历 ({count})"),
         LocaleCode::Ko => format!("활성 캘린더 ({count})"),
     }
@@ -2068,7 +2081,7 @@ pub struct AgendaCopy {
     pub open: &'static str,
     pub prev_month: &'static str,
     pub next_month: &'static str,
-    /// Header button that hides the popup to the notification area.
+    /// Header button that hides the popup. The icon stays in the menu bar or notification area.
     pub hide_to_tray: &'static str,
 }
 
@@ -2082,7 +2095,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Open",
             prev_month: "Previous month",
             next_month: "Next month",
-            hide_to_tray: "Hide to tray",
+            hide_to_tray: "Hide",
         },
         LocaleCode::Ru => &AgendaCopy {
             now: "Сейчас",
@@ -2092,7 +2105,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Открыть",
             prev_month: "Предыдущий месяц",
             next_month: "Следующий месяц",
-            hide_to_tray: "Свернуть в трей",
+            hide_to_tray: "Скрыть",
         },
         LocaleCode::Es => &AgendaCopy {
             now: "Ahora",
@@ -2102,7 +2115,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Abrir",
             prev_month: "Mes anterior",
             next_month: "Mes siguiente",
-            hide_to_tray: "Ocultar en la bandeja",
+            hide_to_tray: "Ocultar",
         },
         LocaleCode::Ja => &AgendaCopy {
             now: "進行中",
@@ -2112,7 +2125,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "開く",
             prev_month: "前の月",
             next_month: "次の月",
-            hide_to_tray: "トレイに隠す",
+            hide_to_tray: "隠す",
         },
         LocaleCode::De => &AgendaCopy {
             now: "Jetzt",
@@ -2142,7 +2155,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Abrir",
             prev_month: "Mês anterior",
             next_month: "Próximo mês",
-            hide_to_tray: "Ocultar na bandeja",
+            hide_to_tray: "Ocultar",
         },
         LocaleCode::Uk => &AgendaCopy {
             now: "Зараз",
@@ -2152,7 +2165,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "Відкрити",
             prev_month: "Попередній місяць",
             next_month: "Наступний місяць",
-            hide_to_tray: "Сховати в трей",
+            hide_to_tray: "Сховати",
         },
         LocaleCode::ZhHans => &AgendaCopy {
             now: "现在",
@@ -2162,7 +2175,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "打开",
             prev_month: "上个月",
             next_month: "下个月",
-            hide_to_tray: "隐藏到托盘",
+            hide_to_tray: "隐藏",
         },
         LocaleCode::Ko => &AgendaCopy {
             now: "지금",
@@ -2172,7 +2185,7 @@ pub fn agenda_copy(locale: LocaleCode) -> &'static AgendaCopy {
             open: "열기",
             prev_month: "이전 달",
             next_month: "다음 달",
-            hide_to_tray: "트레이로 숨기기",
+            hide_to_tray: "가리기",
         },
     }
 }
@@ -2197,7 +2210,7 @@ pub fn tray_menu_copy(locale: LocaleCode) -> &'static TrayMenuCopy {
             open: "Открыть Lightcal",
             settings: "Настройки…",
             sponsor: "♥ Поддержать Lightcal",
-            exit: "Выход",
+            exit: "Завершить",
         },
         LocaleCode::Es => &TrayMenuCopy {
             open: "Abrir Lightcal",
@@ -2353,7 +2366,7 @@ pub fn format_short_date(locale: LocaleCode, date: LocalDate) -> String {
                 "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.",
                 "nov.", "déc.",
             ];
-            format!("{} {} {}", WD[weekday], date.day, MO[month])
+            format!("{} {} {}", WD[weekday], french_day(date.day), MO[month])
         }
         LocaleCode::PtBr => {
             const WD: [&str; 7] = ["seg.", "ter.", "qua.", "qui.", "sex.", "sáb.", "dom."];
@@ -2466,6 +2479,15 @@ mod tests {
             assert_eq!(format_date_line(locale, oct29, true), with_weekday);
             assert_eq!(format_date_line(locale, oct29, false), without);
         }
+        let nov1 = LocalDate::new(2026, 11, 1).unwrap();
+        assert_eq!(
+            format_date_line(LocaleCode::Fr, nov1, true),
+            "Dimanche 1er novembre"
+        );
+        assert_eq!(
+            format_date_line(LocaleCode::Fr, nov1, false),
+            "1er novembre 2026"
+        );
         let november = YearMonth::new(2026, 11).unwrap();
         assert_eq!(
             format_month_year(LocaleCode::PtBr, november),
@@ -2498,7 +2520,7 @@ mod tests {
 
         assert_eq!(
             format_active_calendars_heading(LocaleCode::Ru, 3),
-            "АКТИВНЫЕ КАЛЕНДАРИ (3)"
+            "Активные календари (3)"
         );
         assert_eq!(
             format_sync_status(LocaleCode::Es, 2),
@@ -2679,7 +2701,7 @@ const EN_SETTINGS: SettingsText = SettingsText {
     windows_title: "Windows calendars",
     windows_desc: "Calendars already on this PC",
     windows_detail: "Windows Calendar",
-    signing_note: "We opened your browser. Lightcal asks only for read access to your calendars.",
+    signing_note: "Your browser is open. Lightcal asks only to read your calendars.",
     open_browser_again: "Open browser again",
     cancel: "Cancel",
     ics_heading: "Add a calendar link",
@@ -2755,7 +2777,7 @@ const RU_SETTINGS: SettingsText = SettingsText {
     windows_title: "Календари Windows",
     windows_desc: "Календари, уже настроенные на этом ПК",
     windows_detail: "Календарь Windows",
-    signing_note: "Мы открыли браузер. Lightcal запрашивает только чтение календарей.",
+    signing_note: "Браузер открыт. Lightcal запрашивает только чтение календарей.",
     open_browser_again: "Открыть браузер снова",
     cancel: "Отмена",
     ics_heading: "Добавить ссылку на календарь",
@@ -2832,7 +2854,8 @@ const ES_SETTINGS: SettingsText = SettingsText {
     windows_title: "Calendarios de Windows",
     windows_desc: "Calendarios que ya están en este PC",
     windows_detail: "Calendario de Windows",
-    signing_note: "Abrimos tu navegador. Lightcal solo pide acceso de lectura a tus calendarios.",
+    signing_note:
+        "Tu navegador está abierto. Lightcal solo pide permiso para leer tus calendarios.",
     open_browser_again: "Abrir el navegador otra vez",
     cancel: "Cancelar",
     ics_heading: "Añadir un enlace de calendario",
@@ -3140,7 +3163,7 @@ const PT_BR_SETTINGS: SettingsText = SettingsText {
     windows_desc: "Calendários que já estão neste PC",
     windows_detail: "Calendário do Windows",
     signing_note:
-        "Abrimos seu navegador. O Lightcal pede apenas acesso de leitura aos seus calendários.",
+        "Seu navegador está aberto. O Lightcal pede apenas permissão para ler seus calendários.",
     open_browser_again: "Abrir o navegador de novo",
     cancel: "Cancelar",
     ics_heading: "Adicionar link de calendário",
@@ -3217,7 +3240,7 @@ const UK_SETTINGS: SettingsText = SettingsText {
     windows_title: "Календарі Windows",
     windows_desc: "Календарі, уже наявні на цьому ПК",
     windows_detail: "Календар Windows",
-    signing_note: "Ми відкрили браузер. Lightcal просить лише доступ до читання календарів.",
+    signing_note: "Браузер відкрито. Lightcal просить лише доступ до читання календарів.",
     open_browser_again: "Відкрити браузер знову",
     cancel: "Скасувати",
     ics_heading: "Додати посилання на календар",
@@ -3588,7 +3611,7 @@ pub fn shortcut_conflict_text(
         (LocaleCode::ZhHans, Some(p)) => format!("Lightcal 保留了之前的快捷键 {p}。"),
         (LocaleCode::ZhHans, None) => "未设置快捷键。".to_string(),
         (LocaleCode::Ko, Some(p)) => {
-            format!("Lightcal은 이전 바로 가기 키 {p}을(를) 유지했습니다.")
+            format!("이전 바로 가기 키를 유지했습니다: {p}.")
         }
         (LocaleCode::Ko, None) => "설정된 바로 가기 키가 없습니다.".to_string(),
     };
@@ -4517,7 +4540,7 @@ pub fn local_settings_text(locale: LocaleCode) -> &'static LocalSettingsText {
             recovered: "끝나지 않은 저장을 복구했습니다. 최근 변경 사항이 그대로 있습니다.",
             restored: "이전 사본을 복원했습니다. 그 이후의 변경 사항이 없을 수 있습니다.",
             restored_kept: "이전 사본을 복원했습니다. 그 이후의 변경 사항이 없을 수 있습니다. 손상된 파일은 보관됩니다:",
-            skipped: "파일에서 {events}을(를) 읽을 수 없어 건너뛰었습니다. 다음 저장 전에 파일 사본을 보관합니다.",
+            skipped: "파일에서 읽지 못해 건너뛴 항목: {events}. 다음 저장 전에 파일 사본을 보관합니다.",
             over_count: "{events} (최대 {max}개). 다시 추가하거나 편집하려면 캘린더에서 일정을 삭제하세요.",
             over_size: "이 PC의 일정이 2MB를 넘습니다. 다시 추가하거나 편집하려면 캘린더에서 일정을 삭제하세요.",
             retrying: "마지막 변경 사항을 저장하지 못했습니다: {error}. 변경 사항은 Lightcal에 보관되며 계속 저장을 시도합니다. [지금 다시 시도]를 누르면 바로 저장합니다.",
@@ -4565,5 +4588,308 @@ mod local_settings_text_tests {
                 assert!(!value.is_empty(), "{locale:?}");
             }
         }
+    }
+}
+
+/// EventKit needs Full Access to read calendars; direct Google/Outlook do not.
+pub fn mac_calendar_access_denied(locale: LocaleCode) -> &'static str {
+    match locale {
+        LocaleCode::En => "Allow Lightcal Full Access to calendars in macOS System Settings.",
+        LocaleCode::Ru => "Разрешите Lightcal полный доступ к календарям в Системных настройках macOS.",
+        LocaleCode::Es => "Permite a Lightcal acceso completo a los calendarios en Ajustes del Sistema de macOS.",
+        LocaleCode::Ja => "macOS のシステム設定で Lightcal にカレンダーへのフルアクセスを許可してください。",
+        LocaleCode::De => "Erlaube Lightcal in den macOS-Systemeinstellungen vollen Zugriff auf Kalender.",
+        LocaleCode::Fr => "Autorisez Lightcal à accéder entièrement aux calendriers dans les Réglages Système de macOS.",
+        LocaleCode::PtBr => "Permita acesso total do Lightcal aos calendários nos Ajustes do Sistema do macOS.",
+        LocaleCode::Uk => "Надайте Lightcal повний доступ до календарів у Системних параметрах macOS.",
+        LocaleCode::ZhHans => "请在 macOS 系统设置中允许 Lightcal 完全访问日历。",
+        LocaleCode::Ko => "macOS 시스템 설정에서 Lightcal에 캘린더 전체 접근 권한을 허용하세요.",
+    }
+}
+
+/// macOS-only settings and native menu labels, in the application's selected language.
+pub fn mac_labels(locale: LocaleCode) -> [&'static str; 8] {
+    match locale {
+        LocaleCode::En => [
+            "Weekday",
+            "Off",
+            "Short",
+            "Full",
+            "Month",
+            "Calendar",
+            "Connect calendars…",
+            "Open at login",
+        ],
+        LocaleCode::Ru => [
+            "День недели",
+            "Нет",
+            "Кратко",
+            "Полностью",
+            "Месяц",
+            "Календарь",
+            "Подключить календари…",
+            "Открывать при входе",
+        ],
+        LocaleCode::Es => [
+            "Día",
+            "No",
+            "Corto",
+            "Completo",
+            "Mes",
+            "Calendario",
+            "Conectar calendarios…",
+            "Abrir al iniciar sesión",
+        ],
+        LocaleCode::De => [
+            "Wochentag",
+            "Aus",
+            "Kurz",
+            "Voll",
+            "Monat",
+            "Kalender",
+            "Kalender verbinden…",
+            "Bei Anmeldung öffnen",
+        ],
+        LocaleCode::Fr => [
+            "Jour",
+            "Non",
+            "Court",
+            "Complet",
+            "Mois",
+            "Calendrier",
+            "Connecter les calendriers…",
+            "Ouvrir à la connexion",
+        ],
+        LocaleCode::PtBr => [
+            "Dia da semana",
+            "Não",
+            "Curto",
+            "Completo",
+            "Mês",
+            "Calendário",
+            "Conectar calendários…",
+            "Abrir ao iniciar sessão",
+        ],
+        LocaleCode::Uk => [
+            "День тижня",
+            "Ні",
+            "Стисло",
+            "Повністю",
+            "Місяць",
+            "Календар",
+            "Підключити календарі…",
+            "Відкривати при вході",
+        ],
+        LocaleCode::Ja => [
+            "曜日",
+            "なし",
+            "短い",
+            "完全",
+            "月",
+            "カレンダー",
+            "カレンダーを接続…",
+            "ログイン時に開く",
+        ],
+        LocaleCode::Ko => [
+            "요일",
+            "끔",
+            "짧게",
+            "전체",
+            "월",
+            "캘린더",
+            "캘린더 연결…",
+            "로그인 시 열기",
+        ],
+        LocaleCode::ZhHans => [
+            "星期",
+            "关",
+            "简短",
+            "完整",
+            "月份",
+            "日历",
+            "连接日历…",
+            "登录时打开",
+        ],
+    }
+}
+
+/// Short calendar month for the macOS menu bar, using the app locale.
+pub fn month_short(locale: LocaleCode, month: u8) -> &'static str {
+    let months = match locale {
+        LocaleCode::En => [
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ],
+        LocaleCode::De => [
+            "Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
+        ],
+        LocaleCode::Es => [
+            "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
+        ],
+        LocaleCode::Fr => [
+            "janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.",
+            "nov.", "déc.",
+        ],
+        LocaleCode::PtBr => [
+            "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez",
+        ],
+        LocaleCode::Ru => [
+            "янв.",
+            "февр.",
+            "мар.",
+            "апр.",
+            "мая",
+            "июн.",
+            "июл.",
+            "авг.",
+            "сент.",
+            "окт.",
+            "нояб.",
+            "дек.",
+        ],
+        LocaleCode::Uk => [
+            "січ.",
+            "лют.",
+            "бер.",
+            "квіт.",
+            "трав.",
+            "черв.",
+            "лип.",
+            "серп.",
+            "вер.",
+            "жовт.",
+            "лист.",
+            "груд.",
+        ],
+        LocaleCode::Ja | LocaleCode::ZhHans => [
+            "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月",
+        ],
+        LocaleCode::Ko => [
+            "1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월",
+        ],
+    };
+    months[(month.clamp(1, 12) - 1) as usize]
+}
+
+/// Settings row for the icon. macOS shows a menu-bar icon; Windows keeps the tray name.
+pub fn icon_label(locale: LocaleCode, menu_bar: bool) -> &'static str {
+    if !menu_bar {
+        return catalog(locale).label_tray_palette;
+    }
+    match locale {
+        LocaleCode::En => "Menu bar icon",
+        LocaleCode::Ru => "Значок в строке меню",
+        LocaleCode::Es => "Icono de la barra de menús",
+        LocaleCode::Ja => "メニューバーのアイコン",
+        LocaleCode::De => "Menüleistensymbol",
+        LocaleCode::Fr => "Icône de la barre des menus",
+        LocaleCode::PtBr => "Ícone da barra de menus",
+        LocaleCode::Uk => "Значок у рядку меню",
+        LocaleCode::ZhHans => "菜单栏图标",
+        LocaleCode::Ko => "메뉴 막대 아이콘",
+    }
+}
+
+/// About tagline with platform-accurate chrome naming (menu bar on macOS, tray on Windows).
+pub fn about_tagline(locale: LocaleCode, macos: bool) -> &'static str {
+    if !macos {
+        return settings_text(locale).about_tagline;
+    }
+    match locale {
+        LocaleCode::En => "A small calendar for the menu bar",
+        LocaleCode::Ru => "Небольшой календарь в строке меню",
+        LocaleCode::Es => "Un pequeño calendario para la barra de menús",
+        LocaleCode::Ja => "メニューバーの小さなカレンダー",
+        LocaleCode::De => "Ein kleiner Kalender für die Menüleiste",
+        LocaleCode::Fr => "Un petit calendrier pour la barre des menus",
+        LocaleCode::PtBr => "Um pequeno calendário para a barra de menus",
+        LocaleCode::Uk => "Невеликий календар у рядку меню",
+        LocaleCode::ZhHans => "菜单栏里的小日历",
+        LocaleCode::Ko => "메뉴 막대용 작은 캘린더",
+    }
+}
+
+/// Subtitle for the macOS native calendar provider row in Settings -> Accounts.
+pub fn mac_calendars_desc(locale: LocaleCode) -> &'static str {
+    match locale {
+        LocaleCode::En => "iCloud and accounts in Apple Calendar",
+        LocaleCode::Ru => "iCloud и учётные записи из Календаря Apple",
+        LocaleCode::Es => "iCloud y cuentas en Calendario de Apple",
+        LocaleCode::Ja => "iCloud と Apple カレンダーのアカウント",
+        LocaleCode::De => "iCloud und Konten in Apple Kalender",
+        LocaleCode::Fr => "iCloud et comptes dans Calendrier d’Apple",
+        LocaleCode::PtBr => "iCloud e contas no Calendário da Apple",
+        LocaleCode::Uk => "iCloud та облікові записи з Календаря Apple",
+        LocaleCode::ZhHans => "iCloud 与 Apple 日历中的账户",
+        LocaleCode::Ko => "iCloud 및 Apple 캘린더 계정",
+    }
+}
+
+/// Explicit native macOS menu commands; Windows keeps its existing tray copy.
+pub fn mac_menu_labels(locale: LocaleCode) -> [&'static str; 5] {
+    match locale {
+        LocaleCode::En => [
+            "Calendars…",
+            "Open Calendar",
+            "Show month",
+            "Check for Updates…",
+            "Quit Lightcal",
+        ],
+        LocaleCode::Ru => [
+            "Календари…",
+            "Открыть Календарь",
+            "Показывать месяц",
+            "Проверить обновления…",
+            "Завершить Lightcal",
+        ],
+        LocaleCode::De => [
+            "Kalender…",
+            "Kalender öffnen",
+            "Monat anzeigen",
+            "Nach Updates suchen…",
+            "Lightcal beenden",
+        ],
+        LocaleCode::Es => [
+            "Calendarios…",
+            "Abrir Calendario",
+            "Mostrar mes",
+            "Buscar actualizaciones…",
+            "Salir de Lightcal",
+        ],
+        LocaleCode::Fr => [
+            "Calendriers…",
+            "Ouvrir Calendrier",
+            "Afficher le mois",
+            "Rechercher des mises à jour…",
+            "Quitter Lightcal",
+        ],
+        LocaleCode::PtBr => [
+            "Calendários…",
+            "Abrir Calendário",
+            "Mostrar mês",
+            "Buscar atualizações…",
+            "Sair do Lightcal",
+        ],
+        LocaleCode::Uk => [
+            "Календарі…",
+            "Відкрити Календар",
+            "Показувати місяць",
+            "Перевірити оновлення…",
+            "Завершити Lightcal",
+        ],
+        LocaleCode::Ja => [
+            "カレンダー…",
+            "カレンダーを開く",
+            "月を表示",
+            "アップデートを確認…",
+            "Lightcalを終了",
+        ],
+        LocaleCode::Ko => [
+            "캘린더…",
+            "캘린더 열기",
+            "월 표시",
+            "업데이트 확인…",
+            "Lightcal 종료",
+        ],
+        LocaleCode::ZhHans => ["日历…", "打开日历", "显示月份", "检查更新…", "退出Lightcal"],
     }
 }

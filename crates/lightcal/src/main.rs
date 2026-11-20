@@ -6,8 +6,14 @@ use lightcal::i18n::{
     catalog, format_active_calendars_heading, format_calendar_count, format_date_line,
     format_event_count, format_month_year, format_sync_status, format_update_status, weekday_short,
 };
+#[cfg(target_os = "macos")]
+use lightcal::platform::macos::{
+    bring_to_foreground, query_calendar_provider, system_prefers_dark_mode, ShortcutManager,
+    SingleInstance, SingleInstanceGuard, StartupManager,
+};
 #[cfg(windows)]
 use lightcal::platform::windows::taskbar::{IconPixels, WindowIcon};
+#[cfg(not(target_os = "macos"))]
 use lightcal::platform::windows::{
     bring_to_foreground, primary_tray_area, query_calendar_provider, system_prefers_dark_mode,
     ShortcutManager, SingleInstance, SingleInstanceGuard, StartupManager,
@@ -23,6 +29,8 @@ mod event_colors;
 mod hover_follow;
 mod local_editor;
 mod month_fade;
+#[cfg(all(target_os = "macos", feature = "native-smoke"))]
+mod native_smoke;
 mod snapshot_render;
 #[cfg(test)]
 mod ui_tests;
@@ -39,7 +47,9 @@ pub(crate) enum ActiveSignIn {
     Microsoft,
     Google,
 }
-use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel};
+#[cfg(not(target_os = "macos"))]
+use slint::PhysicalPosition;
+use slint::{ComponentHandle, LogicalSize, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::env;
 use std::path::Path;
@@ -53,7 +63,16 @@ slint::include_modules!();
 /// Chinese uses Microsoft YaHei UI, because Slint's fallback otherwise takes CJK glyphs from
 /// a Japanese face that lacks many simplified characters.
 pub(crate) fn apply_system_font(ui: &AppWindow, locale: LocaleCode) {
-    let family = if let Some(family) = language_font(locale) {
+    let family = if cfg!(target_os = "macos") {
+        // Native macOS San Francisco system font (`SFNS.ttf`, exposed as `.SF NS`),
+        // with native CJK system faces for Chinese, Japanese and Korean.
+        match locale {
+            LocaleCode::ZhHans => "PingFang SC",
+            LocaleCode::Ja => "Hiragino Sans",
+            LocaleCode::Ko => "Apple SD Gothic Neo",
+            _ => ".SF NS",
+        }
+    } else if let Some(family) = language_font(locale) {
         family
     } else if segoe_ui_variable_installed() {
         "Segoe UI Variable Text"
@@ -127,7 +146,7 @@ pub(crate) struct AppController {
     pub(crate) demo_shown: std::collections::BTreeSet<String>,
     pub(crate) provider_request: u64,
     pub(crate) connection_busy: bool,
-    pub(crate) connection_message: String,
+    pub(crate) connection_message: lightcal::i18n::CalendarError,
     /// Preferences recovery warning; shown on the General tab until dismissed.
     pub(crate) startup_warning: String,
     pub(crate) microsoft_account: lightcal::calendars::account::MicrosoftAccountState,
@@ -287,6 +306,32 @@ fn shortcut_label(key: String, ctrl: bool, alt: bool, shift: bool, meta: bool) -
     parts.join(" + ")
 }
 
+/// Renders one canonical shortcut token as a platform-native keycap label.
+fn display_shortcut_key(token: &str, macos: bool) -> &str {
+    if !macos {
+        return token;
+    }
+    match token {
+        "Ctrl" => "⌃",
+        "Alt" => "⌥",
+        "Shift" => "⇧",
+        "Win" => "⌘",
+        other => other,
+    }
+}
+
+/// Formats a stored canonical shortcut string for user-facing error text.
+fn format_shortcut_for_display(shortcut: &str, macos: bool) -> String {
+    if !macos {
+        return shortcut.to_string();
+    }
+    shortcut
+        .split(" + ")
+        .map(|part| display_shortcut_key(part, true))
+        .collect::<Vec<_>>()
+        .join("")
+}
+
 /// Registers `candidate`; on failure the previous binding stays and the conflict is shown.
 fn apply_shortcut(c: &mut AppController, candidate: &str) {
     match c.shortcut_mgr.bind(Some(candidate)) {
@@ -329,8 +374,8 @@ fn ics_name_from_address(address: &str) -> String {
 /// Whether a provider error reads as a network problem, for the account card's offline
 /// glyph. Matches whole words, so "reconnect" or "disconnected" do not count. Network
 /// failures reach the cards as the fixed English messages in `lightcal::net` (provider
-/// errors are not localized; only skipped-event notes are), so matching them works in
-/// every UI language.
+/// diagnostics stay locale independent), so classification is independent of the
+/// translated message rendered on the card.
 fn looks_offline(error: &str) -> bool {
     let lower = error.to_lowercase();
     lower.contains("timed out")
@@ -619,6 +664,17 @@ fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
 }
 
 impl AppController {
+    /// Native stores are connected as a whole; removing a source turns that
+    /// connection off without entering a remote credential-editing worker.
+    fn disconnect_native_source(&mut self, id: &str) -> bool {
+        if !id.starts_with("win:") && !id.starts_with("mac:") {
+            return false;
+        }
+        self.prefs.windows_calendars_enabled = false;
+        self.persist();
+        true
+    }
+
     /// Shows Settings on `tab`.
     pub(crate) fn open_settings_tab(&mut self, tab: i32) {
         self.settings_open = true;
@@ -629,6 +685,91 @@ impl AppController {
     pub(crate) fn close_settings(&mut self) {
         self.settings_open = false;
     }
+}
+
+fn wire_startup_setting(
+    ui: &AppWindow,
+    ctrl: &Rc<RefCell<AppController>>,
+    change: fn(&StartupManager, bool, &Path) -> Result<(), String>,
+) {
+    let ctrl = Rc::clone(ctrl);
+    let ui_weak = ui.as_weak();
+    ui.on_toggle_start_with_windows(move || {
+        let mut c = ctrl.borrow_mut();
+        let desired = !c.prefs.start_with_windows;
+        let exe = env::current_exe().unwrap_or_default();
+        match change(&c.startup_mgr, desired, &exe) {
+            Ok(()) => {
+                c.prefs.start_with_windows = desired;
+                c.startup_error.clear();
+                c.persist();
+            }
+            Err(err) => {
+                c.startup_error = if err.is_empty() {
+                    "Startup registration failed".into()
+                } else {
+                    err
+                };
+            }
+        }
+        if let Some(w) = ui_weak.upgrade() {
+            c.sync_to_ui(&w);
+        }
+    });
+}
+
+fn wire_outlook_sign_in(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>, use_synthetic: bool) {
+    let ctrl = Rc::clone(ctrl);
+    let weak = ui.as_weak();
+    ui.on_connect_microsoft(move || {
+        let client = ctrl.borrow().prefs.microsoft_client_id.clone();
+        if !lightcal::calendars::microsoft::valid_client_id(&client) {
+            let mut controller = ctrl.borrow_mut();
+            controller.connection_message =
+                lightcal::i18n::CalendarFailure::OutlookNotConfigured.into();
+            if let Some(window) = weak.upgrade() {
+                controller.sync_to_ui(&window);
+            }
+            return;
+        }
+        run_calendar_action(
+            weak.clone(),
+            CalendarAction::ConnectMicrosoft(client),
+            use_synthetic,
+        );
+    });
+}
+
+fn wire_google_sign_in(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>, use_synthetic: bool) {
+    let ctrl = Rc::clone(ctrl);
+    let weak = ui.as_weak();
+    ui.on_choose_google_account(move || {
+        let client = ctrl.borrow().prefs.google_client_id.clone();
+        let secret = ctrl.borrow().prefs.google_client_secret.clone();
+        if !lightcal::calendars::google::valid_client_id(&client)
+            || !lightcal::calendars::google::valid_client_secret(&secret)
+        {
+            with_active_controller(&weak, |c, w| {
+                c.add_account_open = false;
+                c.connection_message = if lightcal::calendars::google::valid_client_id(&client) {
+                    lightcal::i18n::CalendarFailure::GoogleSecretMissing
+                } else {
+                    lightcal::i18n::CalendarFailure::GoogleNotConfigured
+                }
+                .into();
+                c.sync_to_ui(w);
+            });
+            return;
+        }
+        run_calendar_action(
+            weak.clone(),
+            CalendarAction::ConnectGoogle {
+                client_id: client,
+                client_secret: secret,
+            },
+            use_synthetic,
+        );
+    });
 }
 
 /// Fills the week-start menu with the seven day names, Monday first. The list is
@@ -666,23 +807,53 @@ fn wire_settings_navigation(
     let ui_weak = ui.as_weak();
     ui.on_open_settings(move |tab| {
         let mut c = open_ctrl.borrow_mut();
-        c.open_settings_tab(tab);
         if let Some(w) = ui_weak.upgrade() {
+            let switching_view = !c.settings_open;
+            #[cfg(target_os = "macos")]
+            if switching_view {
+                lightcal::platform::macos::begin_transition(
+                    w.window(),
+                    w.global::<Motion>().get_move(),
+                );
+            }
+            c.open_settings_tab(tab);
             c.sync_to_ui(&w);
-            resize(&w, true);
+            if switching_view {
+                resize(&w, true);
+            }
+            #[cfg(target_os = "macos")]
+            if switching_view {
+                lightcal::platform::macos::finish_transition();
+            }
         }
     });
     let ctrl = Rc::clone(ctrl);
     let ui_weak = ui.as_weak();
-    ui.on_close_settings(move || {
+    let close = Rc::new(move |animate: bool| {
         let mut c = ctrl.borrow_mut();
-        c.close_settings();
         if let Some(w) = ui_weak.upgrade() {
+            #[cfg(target_os = "macos")]
+            if animate {
+                lightcal::platform::macos::begin_transition(
+                    w.window(),
+                    w.global::<Motion>().get_move(),
+                );
+            } else {
+                lightcal::platform::macos::cancel_transition(w.window());
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = animate;
+            c.close_settings();
             c.sync_to_ui(&w);
             resize(&w, false);
             w.invoke_focus_calendar_keys();
+            #[cfg(target_os = "macos")]
+            lightcal::platform::macos::finish_transition();
         }
     });
+    let click_close = Rc::clone(&close);
+    ui.on_close_settings(move || click_close(true));
+    ui.on_close_settings_from_keyboard(move || close(false));
 }
 
 /// The "Week starts on" select: its menu offers all seven days.
@@ -777,14 +948,21 @@ fn sync_window_geometry(ui: &AppWindow, settings_open: bool) {
 
     ui.window().set_size(LogicalSize::new(logical_w, logical_h));
 
-    let scale = ui.window().scale_factor().max(1.0);
-    // Frameless window geometry anchored next to the System Tray, on any taskbar edge.
-    let phys_w = (logical_w * scale).round() as i32;
-    let phys_h = (logical_h * scale).round() as i32;
-    let margin_phys = (12.0 * scale).round() as i32;
-    let (work_area, edge) = primary_tray_area();
-    let (x, y) = work_area.anchor_by_tray(edge, phys_w, phys_h, margin_phys);
-    ui.window().set_position(PhysicalPosition::new(x, y));
+    #[cfg(target_os = "macos")]
+    if ui.window().is_visible() {
+        lightcal::platform::macos::place(ui.window());
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let scale = ui.window().scale_factor().max(1.0);
+        // Frameless window geometry anchored next to the System Tray, on any taskbar edge.
+        let phys_w = (logical_w * scale).round() as i32;
+        let phys_h = (logical_h * scale).round() as i32;
+        let margin_phys = (12.0 * scale).round() as i32;
+        let (work_area, edge) = primary_tray_area();
+        let (x, y) = work_area.anchor_by_tray(edge, phys_w, phys_h, margin_phys);
+        ui.window().set_position(PhysicalPosition::new(x, y));
+    }
 }
 
 fn format_compact_summary(locale: LocaleCode, date: LocalDate, count: usize) -> String {
@@ -935,10 +1113,14 @@ impl AppController {
     /// providers' only, so the local calendar never hides an empty or failed provider.
     fn rebuild_calendar_view(&mut self, status: lightcal::platform::ProviderStatus) {
         let mut sources = Vec::with_capacity(self.remote.sources.len() + 1);
-        sources.push(lightcal::local_events::source(self.prefs.locale()));
+        if !cfg!(all(target_os = "macos", not(test))) {
+            sources.push(lightcal::local_events::source(self.prefs.locale()));
+        }
         sources.extend(self.remote.sources.iter().cloned());
         let mut occurrences = self.remote.occurrences.clone();
-        occurrences.extend(self.local.occurrences());
+        if !cfg!(all(target_os = "macos", not(test))) {
+            occurrences.extend(self.local.occurrences());
+        }
         self.provider = ProviderSnapshot {
             status,
             sources,
@@ -947,6 +1129,14 @@ impl AppController {
     }
 
     pub(crate) fn sync_to_ui(&self, ui: &AppWindow) {
+        #[cfg(target_os = "macos")]
+        {
+            ui.set_macos(!cfg!(test));
+            // Headless unit tests run concurrently on worker threads. They must
+            // not update the process-global AppKit menu or its Objective-C objects.
+            #[cfg(not(test))]
+            lightcal::platform::macos::sync(&self.prefs, self.settings_open);
+        }
         let locale = self.prefs.locale();
         let active_count = self
             .provider
@@ -1095,7 +1285,26 @@ impl AppController {
         ui.set_label_show_week_numbers_text(strings.label_show_week_numbers.into());
         ui.set_desc_show_week_numbers_text(strings.desc_show_week_numbers.into());
         let startup = lightcal::i18n::startup_copy(locale);
-        ui.set_label_startup_text(startup.label.into());
+        let mac_labels = lightcal::i18n::mac_labels(locale);
+        let mac_menu = lightcal::i18n::mac_menu_labels(locale);
+        ui.set_mac_weekday_label(mac_labels[0].into());
+        ui.set_mac_weekday_off_label(mac_labels[1].into());
+        ui.set_mac_weekday_short_label(mac_labels[2].into());
+        ui.set_mac_weekday_full_label(mac_labels[3].into());
+        ui.set_mac_month_label(mac_labels[4].into());
+        ui.set_mac_open_calendar_label(mac_menu[1].into());
+        ui.set_mac_calendars_desc(lightcal::i18n::mac_calendars_desc(locale).into());
+        ui.set_mac_weekday(match self.prefs.mac_weekday {
+            lightcal::preferences::MenuWeekday::Off => 0,
+            lightcal::preferences::MenuWeekday::Short => 1,
+            lightcal::preferences::MenuWeekday::Full => 2,
+        });
+        ui.set_mac_month(self.prefs.mac_show_month);
+        ui.set_label_startup_text(if cfg!(target_os = "macos") {
+            mac_labels[7].into()
+        } else {
+            startup.label.into()
+        });
         ui.set_desc_startup_text(startup.description.into());
         ui.set_label_shortcut_text(strings.label_shortcut.into());
         ui.set_desc_shortcut_text(strings.desc_shortcut.into());
@@ -1112,9 +1321,10 @@ impl AppController {
         ui.set_date_size_standard_label(strings.date_size_standard.into());
         ui.set_date_size_large_label(strings.date_size_large.into());
         ui.set_date_size_larger_label(strings.date_size_larger.into());
-        ui.set_label_tray_mode_text(strings.label_tray_mode.into());
+        let icon_label = lightcal::i18n::icon_label(locale, ui.get_macos());
+        ui.set_label_tray_mode_text(icon_label.into());
         ui.set_desc_tray_mode_text(strings.desc_tray_mode.into());
-        ui.set_label_tray_palette_text(strings.label_tray_palette.into());
+        ui.set_label_tray_palette_text(icon_label.into());
         ui.set_desc_tray_palette_text(strings.desc_tray_palette.into());
         ui.set_palette_colored_text(strings.palette_colored.into());
         ui.set_palette_monochrome_text(strings.palette_monochrome.into());
@@ -1134,7 +1344,7 @@ impl AppController {
         ui.set_install_busy(self.install_busy);
         ui.set_install_status_text(self.install_status.clone().into());
         ui.set_connection_busy(self.connection_busy);
-        ui.set_connection_message(self.connection_message.clone().into());
+        ui.set_connection_message(self.connection_message.render(locale).into());
         ui.set_startup_warning(self.startup_warning.clone().into());
         ui.set_dismiss_label_text(catalog(self.prefs.locale()).dismiss_label.into());
         let account_idle = !self.connection_busy && !self.provider_loading;
@@ -1172,7 +1382,7 @@ impl AppController {
             privacy,
             stays,
             subscribe,
-            google_missing,
+            _,
         ) = match locale {
             LocaleCode::Ru => (
                 "Изменить",
@@ -1195,7 +1405,7 @@ impl AppController {
                 "Кто знает адрес, тот читает календарь.",
                 "Остаётся на этом компьютере.",
                 "Подписаться",
-                "Вход через Google в этой сборке не настроен.",
+                "Вход в Google недоступен в этой версии Lightcal.",
             ),
             LocaleCode::Es => (
                 "Cambiar",
@@ -1218,7 +1428,7 @@ impl AppController {
                 "Quien tenga la dirección puede leer el calendario.",
                 "Se queda en este equipo.",
                 "Suscribirse",
-                "El inicio de sesión de Google no está configurado en esta compilación.",
+                "El inicio de sesión en Google no está disponible en esta versión de Lightcal.",
             ),
             LocaleCode::Ja => (
                 "変更",
@@ -1241,7 +1451,7 @@ impl AppController {
                 "アドレスを知っている人はカレンダーを読めます。",
                 "このコンピューターに残ります。",
                 "購読",
-                "このビルドでは Google サインインが設定されていません。",
+                "この Lightcal では Google にサインインできません。",
             ),
             LocaleCode::En => (
                 "Change",
@@ -1264,7 +1474,7 @@ impl AppController {
                 "Anyone with the address can read this calendar.",
                 "Stays on this computer.",
                 "Subscribe",
-                "Google sign-in is not configured in this build.",
+                "Google sign-in isn’t available in this copy of Lightcal.",
             ),
             LocaleCode::De => (
                 "Ändern",
@@ -1287,7 +1497,7 @@ impl AppController {
                 "Wer die Adresse kennt, kann diesen Kalender lesen.",
                 "Bleibt auf diesem Computer.",
                 "Abonnieren",
-                "Die Google-Anmeldung ist in diesem Build nicht eingerichtet.",
+                "Die Google-Anmeldung ist in dieser Version von Lightcal nicht verfügbar.",
             ),
             LocaleCode::Fr => (
                 "Modifier",
@@ -1310,7 +1520,7 @@ impl AppController {
                 "Toute personne qui a l’adresse peut lire ce calendrier.",
                 "Reste sur cet ordinateur.",
                 "S’abonner",
-                "La connexion Google n’est pas configurée dans cette version.",
+                "La connexion à Google n’est pas disponible dans cette version de Lightcal.",
             ),
             LocaleCode::PtBr => (
                 "Alterar",
@@ -1333,7 +1543,7 @@ impl AppController {
                 "Quem tiver o endereço pode ler este calendário.",
                 "Fica neste computador.",
                 "Assinar",
-                "O login do Google não está configurado nesta versão.",
+                "O login no Google não está disponível nesta versão do Lightcal.",
             ),
             LocaleCode::Uk => (
                 "Змінити",
@@ -1356,7 +1566,7 @@ impl AppController {
                 "Будь-хто з цією адресою може читати календар.",
                 "Залишається на цьому комп’ютері.",
                 "Підписатися",
-                "Вхід через Google у цій збірці не налаштовано.",
+                "Вхід у Google недоступний у цій версії Lightcal.",
             ),
             LocaleCode::ZhHans => (
                 "更改",
@@ -1379,7 +1589,7 @@ impl AppController {
                 "知道此地址的任何人都能读取此日历。",
                 "仅保存在这台电脑上。",
                 "订阅",
-                "此版本未配置 Google 登录。",
+                "此版本的 Lightcal 无法登录 Google。",
             ),
             LocaleCode::Ko => (
                 "변경",
@@ -1402,7 +1612,7 @@ impl AppController {
                 "주소를 아는 사람은 누구나 이 캘린더를 읽을 수 있습니다.",
                 "이 컴퓨터에만 저장됩니다.",
                 "구독",
-                "이 빌드에는 Google 로그인이 구성되어 있지 않습니다.",
+                "이 Lightcal 버전에서는 Google에 로그인할 수 없습니다.",
             ),
         };
         ui.set_shortcut_change_label(change.into());
@@ -1440,7 +1650,13 @@ impl AppController {
             }
             .into(),
         );
-        ui.set_google_unavailable_text(google_missing.into());
+        ui.set_google_unavailable_text(
+            lightcal::i18n::calendar_failure_text(
+                locale,
+                lightcal::i18n::CalendarFailure::GoogleNotConfigured,
+            )
+            .into(),
+        );
         ui.set_disconnect_google_label(
             match locale {
                 LocaleCode::Ru => "Отключить Google",
@@ -1462,7 +1678,7 @@ impl AppController {
                 .sources
                 .iter()
                 .filter_map(|source| self.ics_feed_errors.get(&source.id))
-                .map(String::as_str)
+                .map(|error| lightcal::i18n::CalendarError::from(error.as_str()).render(locale))
                 .collect::<Vec<_>>()
                 .join("\n")
                 .into(),
@@ -1475,7 +1691,7 @@ impl AppController {
                 self.google_connected,
                 self.google_needs_signin,
                 &self.google_label,
-                &self.google_error,
+                &lightcal::i18n::CalendarError::from(self.google_error.as_str()).render(locale),
             )
             .into(),
         );
@@ -1516,7 +1732,9 @@ impl AppController {
         ui.set_calendars_dot_note_text(strings.calendars_dot_note.into());
         ui.set_provider_error_text(match &self.provider.status {
             lightcal::platform::ProviderStatus::ProviderUnavailable(message) => {
-                message.clone().into()
+                lightcal::i18n::CalendarError::from(message.as_str())
+                    .render(locale)
+                    .into()
             }
             _ => "".into(),
         });
@@ -1615,7 +1833,7 @@ impl AppController {
                 LocaleCode::PtBr => format!("A versão {latest_version} está disponível"),
                 LocaleCode::Uk => format!("Доступна версія {latest_version}"),
                 LocaleCode::ZhHans => format!("版本 {latest_version} 已可用"),
-                LocaleCode::Ko => format!("버전 {latest_version}을(를) 사용할 수 있습니다"),
+                LocaleCode::Ko => format!("새 버전이 있습니다: {latest_version}"),
             };
             ui.set_update_ready_title_text(title.into());
         } else {
@@ -1670,7 +1888,14 @@ impl AppController {
             );
         }
         ui.set_shortcut_error_message(self.shortcut_error.clone().into());
-        ui.set_startup_status_text(self.startup_error.clone().into());
+        ui.set_startup_status_text(
+            if self.startup_error.is_empty() {
+                String::new()
+            } else {
+                lightcal::i18n::startup_failure_text(locale, cfg!(target_os = "macos")).into()
+            }
+            .into(),
+        );
         ui.set_shortcut_record_label(strings.shortcut_record.into());
         // The menu lists every language by its own name in any UI language, so it is
         // built once; replacing it would recreate the open menu's entries.
@@ -1844,6 +2069,7 @@ impl AppController {
         use lightcal::i18n::{settings_text, updated_ago};
         let locale = self.prefs.locale();
         let st = settings_text(locale);
+        let macos = ui.get_macos();
         let strings = catalog(locale);
         let now = chrono::Local::now();
         let updated = self.last_refreshed.map(|at| {
@@ -1925,7 +2151,7 @@ impl AppController {
                 ""
             };
             // Unavailable with no error, or with a network error, is the offline state;
-            // any other error is shown as it is, without the offline glyph.
+            // other diagnostics get localized without the offline glyph.
             let error_offline = looks_offline(&self.microsoft_error);
             let offline = (matches!(ms, Ms::Unavailable { .. }) && self.microsoft_error.is_empty())
                 || error_offline;
@@ -1934,7 +2160,12 @@ impl AppController {
                 Ms::Unavailable { .. } if self.microsoft_error.is_empty() || error_offline => {
                     (1, offline_text.clone(), "")
                 }
-                _ if !self.microsoft_error.is_empty() => (1, self.microsoft_error.clone(), ""),
+                _ if !self.microsoft_error.is_empty() => (
+                    1,
+                    lightcal::i18n::CalendarError::from(self.microsoft_error.as_str())
+                        .render(locale),
+                    "",
+                ),
                 _ => (0, String::new(), ""),
             };
             cards.push(AccountCardItem {
@@ -1977,7 +2208,11 @@ impl AppController {
             let (notice_kind, notice, action) = if self.google_needs_signin {
                 (2, st.access_expired.to_string(), st.sign_in)
             } else if !self.google_error.is_empty() {
-                (1, self.google_error.clone(), "")
+                (
+                    1,
+                    lightcal::i18n::CalendarError::from(self.google_error.as_str()).render(locale),
+                    "",
+                )
             } else {
                 (0, String::new(), "")
             };
@@ -2013,7 +2248,9 @@ impl AppController {
                 title: source.name.clone(),
                 initial: initial(source.name.as_str(), "I").into(),
                 detail: join(&[st.ics_detail, updated.as_deref().unwrap_or("")]).into(),
-                notice: error.into(),
+                notice: lightcal::i18n::CalendarError::from(error)
+                    .render(locale)
+                    .into(),
                 notice_kind: if error.is_empty() { 0 } else { 1 },
                 action_label: "".into(),
                 can_refresh,
@@ -2031,10 +2268,18 @@ impl AppController {
             let denied = self.calendars_access_denied;
             cards.push(AccountCardItem {
                 id: "windows".into(),
-                title: st.windows_title.into(),
-                initial: "W".into(),
+                title: if macos {
+                    lightcal::i18n::mac_calendars_title(locale).into()
+                } else {
+                    st.windows_title.into()
+                },
+                initial: if macos { "M" } else { "W" }.into(),
                 detail: join(&[
-                    st.windows_detail,
+                    if macos {
+                        lightcal::i18n::mac_labels(locale)[5]
+                    } else {
+                        st.windows_detail
+                    },
                     if denied {
                         ""
                     } else {
@@ -2042,7 +2287,14 @@ impl AppController {
                     },
                 ])
                 .into(),
-                notice: if denied { st.access_denied } else { "" }.into(),
+                notice: if !denied {
+                    ""
+                } else if macos {
+                    lightcal::i18n::mac_calendar_access_denied(locale)
+                } else {
+                    st.access_denied
+                }
+                .into(),
                 notice_kind: if denied { 2 } else { 0 },
                 action_label: st.open_privacy.into(),
                 can_refresh,
@@ -2063,8 +2315,21 @@ impl AppController {
             &self.provider.status
         {
             if let Some(card) = cards.iter_mut().find(|card| card.notice_kind == 0) {
-                card.notice = message.clone().into();
+                card.notice = lightcal::i18n::CalendarError::from(message.as_str())
+                    .render(locale)
+                    .into();
                 card.notice_kind = 1;
+            }
+        }
+        if cfg!(target_os = "macos") && cards.is_empty() && self.connection_message.is_empty() {
+            if let lightcal::platform::ProviderStatus::ProviderUnavailable(message) =
+                &self.provider.status
+            {
+                ui.set_connection_message(
+                    lightcal::i18n::CalendarError::from(message.as_str())
+                        .render(locale)
+                        .into(),
+                );
             }
         }
         ui.set_account_cards(ModelRc::new(VecModel::from(cards)));
@@ -2073,16 +2338,26 @@ impl AppController {
             .conflicting_shortcut
             .as_deref()
             .or(self.prefs.global_shortcut.as_deref())
-            .map(|s| s.split(" + ").map(SharedString::from).collect())
+            .map(|s| {
+                s.split(" + ")
+                    .map(|part| SharedString::from(display_shortcut_key(part, macos)))
+                    .collect()
+            })
             .unwrap_or_default();
         ui.set_shortcut_keys(ModelRc::new(VecModel::from(keys)));
         let shortcut_error = if self.shortcut_error.is_empty() {
             String::new()
         } else if let Some(candidate) = &self.conflicting_shortcut {
+            let candidate_display = format_shortcut_for_display(candidate, macos);
+            let previous_display = self
+                .prefs
+                .global_shortcut
+                .as_deref()
+                .map(|s| format_shortcut_for_display(s, macos));
             lightcal::i18n::shortcut_conflict_text(
                 locale,
-                candidate,
-                self.prefs.global_shortcut.as_deref(),
+                &candidate_display,
+                previous_display.as_deref(),
                 self.shortcut_error.contains("in use"),
             )
         } else {
@@ -2157,9 +2432,12 @@ impl AppController {
             close_label: st.close.into(),
             connected_accounts: st.connected_accounts.into(),
             add_account: st.add_account.into(),
-            read_only_note: lightcal::i18n::local_settings_text(locale)
-                .accounts_read_only
-                .into(),
+            read_only_note: if macos {
+                st.read_only_note
+            } else {
+                lightcal::i18n::local_settings_text(locale).accounts_read_only
+            }
+            .into(),
             connect_heading: st.connect_heading.into(),
             connect_note: st.connect_note.into(),
             google_title: st.google_title.into(),
@@ -2168,7 +2446,12 @@ impl AppController {
             outlook_desc: st.outlook_desc.into(),
             ics_title: st.ics_title.into(),
             ics_desc: st.ics_desc.into(),
-            windows_title: st.windows_title.into(),
+            windows_title: if macos {
+                lightcal::i18n::mac_calendars_title(locale)
+            } else {
+                st.windows_title
+            }
+            .into(),
             windows_desc: st.windows_desc.into(),
             signing_title: lightcal::i18n::signing_in_title(
                 locale,
@@ -2203,7 +2486,7 @@ impl AppController {
             update_short: short.into(),
             update_kind: kind,
             app_update_button: if kind == 3 { st.details } else { st.check_now }.into(),
-            about_tagline: st.about_tagline.into(),
+            about_tagline: lightcal::i18n::about_tagline(locale, macos).into(),
             about_status_title: title.into(),
             about_status_note: note.into(),
             view_release: st.view_release.into(),
@@ -2234,7 +2517,11 @@ fn popup_on_screen() -> bool {
     {
         lightcal::platform::windows::main_window_is_open() == Some(true)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        lightcal::platform::macos::window_view().0
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         false
     }
@@ -2265,11 +2552,19 @@ fn show_application_window(ui: &AppWindow) {
     } else {
         sync_window_geometry(ui, ui.get_settings_open());
     }
+    #[cfg(target_os = "macos")]
+    {
+        lightcal::platform::macos::attach(ui.window());
+        apply_window_chrome(ui);
+        lightcal::platform::macos::bring_to_foreground();
+    }
     ui.invoke_focus_calendar_keys();
     wake_koi(ui);
 }
 
 fn hide_application_window(ui: &AppWindow) {
+    #[cfg(target_os = "macos")]
+    lightcal::platform::macos::cancel_transition(ui.window());
     // The window hides under the pointer (the header − button); without this the button
     // keeps its hover fill when the calendar opens again.
     ui.window()
@@ -2293,6 +2588,49 @@ fn application_window_is_open(ui: &AppWindow) -> bool {
         return open;
     }
     ui.window().is_visible() && !ui.window().is_minimized()
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn next_minute_delay<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) -> std::time::Duration {
+    let remaining = std::time::Duration::from_secs(60 - now.timestamp().rem_euclid(60) as u64)
+        - std::time::Duration::from_nanos(now.timestamp_subsec_nanos().into());
+    // Slint timers have millisecond resolution; round up to avoid an early tick.
+    std::time::Duration::from_millis(remaining.as_nanos().div_ceil(1_000_000) as u64)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn refresh_clock_ui(ctrl: &mut AppController, ui: &AppWindow, today: LocalDate) {
+    ctrl.cal_state.update_today(today);
+    if application_window_is_open(ui) {
+        ctrl.sync_to_ui(ui);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn schedule_mac_minute_tick(
+    timer: &Rc<slint::Timer>,
+    ui: slint::Weak<AppWindow>,
+    ctrl: std::rc::Weak<RefCell<AppController>>,
+) {
+    let weak_timer = Rc::downgrade(timer);
+    timer.start(
+        slint::TimerMode::SingleShot,
+        next_minute_delay(&chrono::Local::now()),
+        move || {
+            let (Some(timer), Some(ui_window), Some(controller)) =
+                (weak_timer.upgrade(), ui.upgrade(), ctrl.upgrade())
+            else {
+                return;
+            };
+            refresh_clock_ui(
+                &mut controller.borrow_mut(),
+                &ui_window,
+                current_local_date(),
+            );
+            // Realign after wake or delayed dispatch. No provider query is issued.
+            schedule_mac_minute_tick(&timer, ui.clone(), ctrl.clone());
+        },
+    );
 }
 
 /// How long display and setting changes must stop before an open window moves to the tray.
@@ -2434,7 +2772,14 @@ fn apply_window_chrome(ui: &AppWindow) {
         }
         APPLIED.with(|slot| slot.set((hwnd as isize, Some(state))));
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        #[cfg(not(test))]
+        lightcal::platform::macos::set_appearance(ui.get_dark_mode());
+        #[cfg(test)]
+        let _ = ui;
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     let _ = ui;
 }
 
@@ -2560,6 +2905,8 @@ fn open_browser_link(url: &str) {
     if is_allowed_external_link(url) {
         #[cfg(windows)]
         open_allowed_browser_link(url);
+        #[cfg(target_os = "macos")]
+        lightcal::platform::macos::open_url(url);
     }
 }
 
@@ -2644,6 +2991,7 @@ static LOCAL_EVENTS_LOCK_TAKEN: std::sync::atomic::AtomicBool =
 
 thread_local! {
     /// Polls the local events writer while Quit waits for it.
+    #[cfg(any(not(target_os = "macos"), test))]
     static QUIT_WAIT: RefCell<Option<slint::Timer>> = const { RefCell::new(None) };
     /// Set when Quit starts waiting; the window is not shown again.
     static QUITTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -2750,11 +3098,13 @@ fn apply_local_write_report(report: lightcal::local_events::WriteReport) {
 
 /// The open Quit prompt and what Quit anyway goes on to do, kept together so neither can
 /// outlive the other.
+#[cfg(any(not(target_os = "macos"), test))]
 struct QuitAsk {
     prompt: QuitPrompt,
     proceed: Rc<dyn Fn()>,
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 thread_local! {
     static QUIT_ASK: RefCell<Option<QuitAsk>> = const { RefCell::new(None) };
 }
@@ -2762,6 +3112,7 @@ thread_local! {
 /// Hides the Quit prompt and frees it, with its next action, once the event that closed
 /// it has finished; it is never dropped inside one of its own callbacks. Returns the
 /// action, for Quit anyway.
+#[cfg(any(not(target_os = "macos"), test))]
 fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
     let open = QUIT_ASK.with(|slot| {
         slot.borrow()
@@ -2791,6 +3142,7 @@ fn close_quit_prompt() -> Option<Rc<dyn Fn()>> {
 /// Quit after a failed save: asks first, before anything blocks (ADR 0017). Keep
 /// Lightcal open closes the prompt; Quit anyway runs `proceed`: the usual quit, or the
 /// update install that ends with one.
+#[cfg(not(target_os = "macos"))]
 fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
     // A second Quit while the prompt is open brings that prompt back, with this action.
     let open = QUIT_ASK.with(|slot| {
@@ -2830,6 +3182,7 @@ fn show_quit_prompt(ui_weak: &slint::Weak<AppWindow>, proceed: Rc<dyn Fn()>) {
 }
 
 /// Wires the prompt's answers, shows it and keeps it with its next action.
+#[cfg(any(not(target_os = "macos"), test))]
 fn open_quit_prompt(prompt: QuitPrompt, proceed: Rc<dyn Fn()>) {
     prompt.on_keep_open(|| {
         close_quit_prompt();
@@ -2848,6 +3201,7 @@ fn open_quit_prompt(prompt: QuitPrompt, proceed: Rc<dyn Fn()>) {
     QUIT_ASK.with(|slot| *slot.borrow_mut() = Some(QuitAsk { prompt, proceed }));
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 impl AppController {
     /// Quit asks first when the last local event write failed and is still unsaved.
     pub(crate) fn quit_needs_prompt(&self) -> bool {
@@ -2875,6 +3229,7 @@ fn request_quit(ui_weak: &slint::Weak<AppWindow>) {
 }
 
 /// Why Lightcal quits, which decides whether a new launch may start while it exits.
+#[cfg(any(not(target_os = "macos"), test))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum QuitKind {
     /// The user's Quit: a relaunch starts normally while a write finishes (ADR 0017).
@@ -2898,6 +3253,7 @@ enum QuitKind {
 ///
 /// `free_shortcut` unregisters the global shortcut and runs before the lock is
 /// released, so a relaunch can register it.
+#[cfg(any(not(target_os = "macos"), test))]
 fn begin_quit_wait(
     writer: &lightcal::local_events::Writer,
     kind: QuitKind,
@@ -2917,6 +3273,7 @@ fn begin_quit_wait(
 /// hides at once and Lightcal waits at most 2 s, polling, so the UI thread never blocks
 /// on the writer (ADR 0017). Once that wait has begun, a further quit leaves it and its
 /// deadline alone.
+#[cfg(any(not(target_os = "macos"), test))]
 fn quit_after_writes(ui_weak: &slint::Weak<AppWindow>, kind: QuitKind) {
     if QUITTING.with(std::cell::Cell::get) {
         return;
@@ -2985,7 +3342,7 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
         ctrl.google_label = data.google_label.unwrap_or_default();
         ctrl.google_error = data.google_error;
         if data.google_skipped > 0 {
-            let skipped = skipped_google_events(ctrl.prefs.locale(), data.google_skipped);
+            let skipped = skipped_google_events(LocaleCode::En, data.google_skipped);
             if ctrl.google_error.is_empty() {
                 ctrl.google_error = skipped;
             } else {
@@ -3025,6 +3382,29 @@ fn apply_loaded_provider(data: lightcal::calendars::CalendarLoad, ui_weak: slint
 }
 
 fn request_update_check(ui_weak: slint::Weak<AppWindow>) {
+    #[cfg(target_os = "macos")]
+    {
+        if lightcal::platform::macos::updates_available() {
+            lightcal::platform::macos::check_updates();
+            return;
+        }
+    }
+    request_github_update_check(ui_weak);
+}
+
+// Sparkle owns macOS scheduling. Only explicit Check for Updates actions may
+// reach its interactive checkForUpdates: entry point.
+fn dispatch_automatic_update_check(enabled: bool, synthetic: bool, check: impl FnOnce()) {
+    if enabled && !synthetic && !cfg!(target_os = "macos") {
+        check();
+    }
+}
+
+fn request_automatic_update_check(ui: slint::Weak<AppWindow>, enabled: bool, synthetic: bool) {
+    dispatch_automatic_update_check(enabled, synthetic, || request_update_check(ui));
+}
+
+fn request_github_update_check(ui_weak: slint::Weak<AppWindow>) {
     if lightcal::installer::package_managed() {
         return;
     }
@@ -3052,7 +3432,9 @@ fn request_update_check(ui_weak: slint::Weak<AppWindow>) {
                 });
                 let mut auto_install = false;
                 with_active_controller(&ui_weak, |ctrl, _| {
-                    auto_install = ctrl.prefs.auto_install_updates
+                    auto_install = !cfg!(target_os = "macos")
+                        && lightcal::installer::automatic_install_configured()
+                        && ctrl.prefs.auto_install_updates
                         && matches!(ctrl.update_state, UpdateCheckState::UpdateAvailable { .. });
                 });
                 if auto_install {
@@ -3064,24 +3446,35 @@ fn request_update_check(ui_weak: slint::Weak<AppWindow>) {
 }
 
 fn request_install(ui_weak: slint::Weak<AppWindow>) {
-    if lightcal::installer::package_managed() {
-        return;
+    #[cfg(target_os = "macos")]
+    {
+        let _ = ui_weak;
+        if lightcal::platform::macos::updates_available() {
+            lightcal::platform::macos::check_updates();
+        }
     }
-    // Installing ends with Quit: with a failed save, ask first, before the installer
-    // starts and waits on this process.
-    let mut ask = false;
-    with_active_controller(&ui_weak, |c, _| {
-        ask = !c.install_busy && c.quit_needs_prompt()
-    });
-    if ask {
-        let weak = ui_weak.clone();
-        show_quit_prompt(&ui_weak, Rc::new(move || start_install(weak.clone())));
-    } else {
-        start_install(ui_weak);
+    #[cfg(not(target_os = "macos"))]
+    {
+        if lightcal::installer::package_managed() {
+            return;
+        }
+        // Installing ends with Quit: with a failed save, ask first, before the installer
+        // starts and waits on this process.
+        let mut ask = false;
+        with_active_controller(&ui_weak, |c, _| {
+            ask = !c.install_busy && c.quit_needs_prompt()
+        });
+        if ask {
+            let weak = ui_weak.clone();
+            show_quit_prompt(&ui_weak, Rc::new(move || start_install(weak.clone())));
+        } else {
+            start_install(ui_weak);
+        }
     }
 }
 
 /// Stages and launches the verified installer, then quits.
+#[cfg(not(target_os = "macos"))]
 fn start_install(ui_weak: slint::Weak<AppWindow>) {
     let mut directory = None;
     let mut failure_text = "";
@@ -3412,7 +3805,7 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                 match SIGN_IN_GATE.begin() {
                     Ok(epoch) => epoch,
                     Err(error) => {
-                        ctrl.connection_message = error;
+                        ctrl.connection_message = error.into();
                         ctrl.sync_to_ui(ui);
                         return;
                     }
@@ -3460,6 +3853,12 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
     };
     std::thread::spawn(move || {
         let operation = || -> Result<Option<String>, String> {
+            if matches!(
+                action,
+                CalendarAction::ConnectMicrosoft(_) | CalendarAction::ConnectGoogle { .. }
+            ) {
+                lightcal::secure_store::SecureStore::new(&dir).check_write_allowed()?;
+            }
             // Browser consent must not hold the credential lock for its whole lifetime.
             let mut microsoft_token = None;
             let mut google_token = None;
@@ -3632,14 +4031,14 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
                             ui.set_ics_source_name("".into());
                             ctrl.ics_dialog_open = false;
                         }
-                        String::new()
+                        Default::default()
                     }
                     Err(error) => {
                         ctrl.microsoft_account = previous_account;
                         if !held_microsoft_error.is_empty() {
                             ctrl.microsoft_error = held_microsoft_error;
                         }
-                        error
+                        error.into()
                     }
                 };
                 ctrl.sync_to_ui(ui);
@@ -3655,6 +4054,33 @@ fn run_calendar_action(ui_weak: slint::Weak<AppWindow>, action: CalendarAction, 
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let native_smoke_requested = args.iter().any(|arg| arg == "--smoke-native");
+    if native_smoke_requested {
+        #[cfg(all(target_os = "macos", feature = "native-smoke"))]
+        if let Err(error) = native_smoke::validate(&args) {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+        #[cfg(not(all(target_os = "macos", feature = "native-smoke")))]
+        {
+            eprintln!("Native smoke checks require macOS and --features native-smoke.");
+            std::process::exit(2);
+        }
+    }
+    if args.get(1).map(String::as_str) == Some("--export-app-icon-png") {
+        let path = args
+            .get(2)
+            .map(Path::new)
+            .expect("Provide an output PNG path");
+        let pixels = if cfg!(target_os = "macos") {
+            lightcal::platform::windows::icon::render_macos_app_icon(1024)
+        } else {
+            lightcal::platform::windows::icon::render_app_icon(1024)
+        };
+        lightcal::snapshot::write_rgba_png(path, 1024, 1024, &pixels)
+            .expect("Could not export application icon");
+        return;
+    }
     if args.get(1).map(String::as_str) == Some("--export-app-icon") {
         let path = args
             .get(2)
@@ -3764,7 +4190,7 @@ fn main() {
         prefs
             .selected_calendar_ids
             .extend(demo_shown.iter().cloned());
-    } else if !prefs.local_calendar_offered {
+    } else if !cfg!(target_os = "macos") && !prefs.local_calendar_offered {
         // On this PC starts selected once, on a fresh install and on upgrade (ADR 0017).
         // The flag is saved with the next preference change; after that the selection
         // is the user's.
@@ -3803,6 +4229,8 @@ fn main() {
 
     let ui = AppWindow::new().expect("Failed to create Lightcal window");
     apply_system_font(&ui, prefs.locale());
+    #[cfg(target_os = "macos")]
+    lightcal::platform::macos::watch(ui.window());
 
     ACTIVE_UI.with(|u| {
         *u.borrow_mut() = Some(ui.as_weak());
@@ -3908,7 +4336,13 @@ fn main() {
     // Demo mode never opens the real file or takes the lock; its sample events are kept
     // in memory and discarded on exit.
     let local_dir = store.dir().to_path_buf();
-    let (local, local_writer, local_cannot_save) = if use_synthetic {
+    let (local, local_writer, local_cannot_save) = if cfg!(target_os = "macos") {
+        (
+            lightcal::local_events::LocalEvents::in_memory(Vec::new()),
+            None,
+            None,
+        )
+    } else if use_synthetic {
         (
             lightcal::local_events::LocalEvents::in_memory(lightcal::local_events::samples(today)),
             None,
@@ -3946,7 +4380,7 @@ fn main() {
         demo_shown,
         provider_request: 0,
         connection_busy: false,
-        connection_message: String::new(),
+        connection_message: Default::default(),
         startup_warning: String::new(),
         microsoft_account: lightcal::calendars::account::MicrosoftAccountState::Checking,
         provider_loading: false,
@@ -3996,12 +4430,34 @@ fn main() {
         *c.borrow_mut() = Some(Rc::downgrade(&ctrl));
     });
 
+    #[cfg(target_os = "macos")]
+    {
+        use lightcal::platform::macos;
+        macos::initialize(mac_event);
+        ui.on_select_mac_weekday(|mode| {
+            let code = match mode {
+                0 => macos::EVENT_WEEKDAY_OFF,
+                1 => macos::EVENT_WEEKDAY_SHORT,
+                _ => macos::EVENT_WEEKDAY_FULL,
+            };
+            mac_event_rust(code);
+        });
+        ui.on_toggle_mac_month(|| mac_event_rust(macos::EVENT_TOGGLE_MONTH));
+        ui.on_connect_mac_calendars(|| mac_event_rust(macos::EVENT_REQUEST_ACCESS));
+        ui.on_open_mac_calendar_app(|| mac_event_rust(macos::EVENT_OPEN_CALENDAR_APP));
+        ui.on_start_window_drag(macos::start_window_drag);
+        if env::var_os("LIGHTCAL_DATA_DIR").is_none() {
+            ctrl.borrow_mut().prefs.start_with_windows = macos::startup_enabled();
+        }
+    }
+
     // Adds the local calendar to the first view.
     ctrl.borrow_mut().refresh_local_view();
-    if !use_synthetic {
+    if !use_synthetic && !cfg!(target_os = "macos") {
         start_local_events_load(ui.as_weak(), local_dir, local_cannot_save);
     }
     ctrl.borrow().sync_to_ui(&ui);
+    apply_window_chrome(&ui);
 
     // If starting in tray, hide the window initially; otherwise show it.
     if !start_in_tray {
@@ -4013,10 +4469,9 @@ fn main() {
         request_visible_calendars(ui.as_weak(), false);
     }
 
-    // Explicit opt-in: check at startup and once per day, never install updates.
-    if ctrl.borrow().prefs.auto_check_updates && !use_synthetic {
-        request_update_check(ui.as_weak());
-    }
+    // Opt-in Windows checks run at startup and daily; Sparkle schedules macOS checks.
+    let auto_check = ctrl.borrow().prefs.auto_check_updates;
+    request_automatic_update_check(ui.as_weak(), auto_check, use_synthetic);
     let update_timer = slint::Timer::default();
     {
         let ctrl = Rc::clone(&ctrl);
@@ -4025,9 +4480,8 @@ fn main() {
             slint::TimerMode::Repeated,
             std::time::Duration::from_secs(24 * 60 * 60),
             move || {
-                if ctrl.borrow().prefs.auto_check_updates && !use_synthetic {
-                    request_update_check(ui_weak.clone());
-                }
+                let enabled = ctrl.borrow().prefs.auto_check_updates;
+                request_automatic_update_check(ui_weak.clone(), enabled, use_synthetic);
             },
         );
     }
@@ -4163,6 +4617,13 @@ fn main() {
             });
         }));
     }
+
+    #[cfg(target_os = "macos")]
+    let _minute_timer = {
+        let timer = Rc::new(slint::Timer::default());
+        schedule_mac_minute_tick(&timer, ui.as_weak(), Rc::downgrade(&ctrl));
+        timer
+    };
 
     #[cfg(windows)]
     let mut last_today = today;
@@ -4387,33 +4848,8 @@ fn main() {
             }
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let ui_weak = ui.as_weak();
-        ui.on_toggle_start_with_windows(move || {
-            let mut c = ctrl.borrow_mut();
-            let desired = !c.prefs.start_with_windows;
-            let exe = env::current_exe().unwrap_or_default();
-            match c.startup_mgr.set_enabled(desired, &exe) {
-                Ok(()) => {
-                    c.prefs.start_with_windows = desired;
-                    c.startup_error.clear();
-                    c.persist();
-                }
-                Err(err) => {
-                    let prefix = lightcal::i18n::startup_copy(c.prefs.locale()).error;
-                    c.startup_error = if err.is_empty() {
-                        prefix.to_string()
-                    } else {
-                        format!("{prefix} {err}")
-                    };
-                }
-            }
-            if let Some(w) = ui_weak.upgrade() {
-                c.sync_to_ui(&w);
-            }
-        });
-    }
+    wire_startup_setting(&ui, &ctrl, StartupManager::set_enabled);
+
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
@@ -4421,7 +4857,9 @@ fn main() {
             let mut c = ctrl.borrow_mut();
             #[cfg(windows)]
             let pressed = pressed_main_key();
-            #[cfg(not(windows))]
+            #[cfg(target_os = "macos")]
+            let pressed = lightcal::platform::macos::current_key_name().map(str::to_string);
+            #[cfg(not(any(windows, target_os = "macos")))]
             let pressed: Option<String> = None;
             if let Some(candidate) =
                 shortcut_from_press(pressed.as_deref(), text.as_str(), control, alt, shift, meta)
@@ -4472,27 +4910,8 @@ fn main() {
             }
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let weak = ui.as_weak();
-        ui.on_connect_microsoft(move || {
-            let client = ctrl.borrow().prefs.microsoft_client_id.clone();
-            if !lightcal::calendars::microsoft::valid_client_id(&client) {
-                let mut controller = ctrl.borrow_mut();
-                controller.connection_message =
-                    "Outlook sign-in is not configured in this build".into();
-                if let Some(window) = weak.upgrade() {
-                    controller.sync_to_ui(&window);
-                }
-                return;
-            }
-            run_calendar_action(
-                weak.clone(),
-                CalendarAction::ConnectMicrosoft(client),
-                use_synthetic,
-            );
-        });
-    }
+    wire_outlook_sign_in(&ui, &ctrl, use_synthetic);
+
     {
         let weak = ui.as_weak();
         ui.on_disconnect_microsoft(move || {
@@ -4523,14 +4942,14 @@ fn main() {
     {
         let weak = ui.as_weak();
         ui.on_remove_calendar_source(move |id| {
-            // Legacy Windows store sources have no per-calendar delete in the dense UI.
-            // Treat remove as turning the preference off so users are never stuck.
-            if id.as_str().starts_with("win:") {
-                with_active_controller(&weak, |c, w| {
-                    c.prefs.windows_calendars_enabled = false;
-                    c.persist();
+            let mut native = false;
+            with_active_controller(&weak, |c, w| {
+                native = c.disconnect_native_source(id.as_str());
+                if native {
                     c.sync_to_ui(w);
-                });
+                }
+            });
+            if native {
                 request_visible_calendars(weak.clone(), use_synthetic);
                 return;
             }
@@ -4595,9 +5014,7 @@ fn main() {
                 c.sync_to_ui(&w);
             }
             drop(c);
-            if desired {
-                request_update_check(weak.clone());
-            }
+            request_automatic_update_check(weak.clone(), desired, use_synthetic);
         });
     }
     {
@@ -4684,9 +5101,7 @@ fn main() {
             }
             let enabled = c.prefs.auto_check_updates;
             drop(c);
-            if enabled && !use_synthetic {
-                request_update_check(ui_weak.clone());
-            }
+            request_automatic_update_check(ui_weak.clone(), enabled, use_synthetic);
         });
     }
     {
@@ -4706,6 +5121,11 @@ fn main() {
     }
     {
         ui.on_open_privacy_settings(move || {
+            #[cfg(target_os = "macos")]
+            lightcal::platform::macos::open_url(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars",
+            );
+            #[cfg(not(target_os = "macos"))]
             open_browser_link("ms-settings:privacy-calendar");
         });
     }
@@ -4756,70 +5176,8 @@ fn main() {
             }
         });
     }
-    {
-        let ctrl = Rc::clone(&ctrl);
-        let weak = ui.as_weak();
-        ui.on_choose_google_account(move || {
-            let client = ctrl.borrow().prefs.google_client_id.clone();
-            let secret = ctrl.borrow().prefs.google_client_secret.clone();
-            if !lightcal::calendars::google::valid_client_id(&client)
-                || !lightcal::calendars::google::valid_client_secret(&secret)
-            {
-                with_active_controller(&weak, |c, w| {
-                    c.add_account_open = false;
-                    c.connection_message = if lightcal::calendars::google::valid_client_id(&client)
-                    {
-                        match c.prefs.locale() {
-                            LocaleCode::Ru => {
-                                "Секрет клиента Google не задан в этой сборке.".into()
-                            }
-                            LocaleCode::Es => {
-                                "El secreto de cliente de Google no está en esta compilación."
-                                    .into()
-                            }
-                            LocaleCode::Ja => {
-                                "このビルドに Google のクライアント シークレットがありません。"
-                                    .into()
-                            }
-                            LocaleCode::En => {
-                                "The Google client secret is not set in this build.".into()
-                            }
-                            LocaleCode::De => {
-                                "Das Google-Clientgeheimnis fehlt in diesem Build.".into()
-                            }
-                            LocaleCode::Fr => {
-                                "Le secret client Google n’est pas défini dans cette version."
-                                    .into()
-                            }
-                            LocaleCode::PtBr => {
-                                "O segredo do cliente Google não está definido nesta versão.".into()
-                            }
-                            LocaleCode::Uk => {
-                                "Секрет клієнта Google не задано в цій збірці.".into()
-                            }
-                            LocaleCode::ZhHans => "此版本未设置 Google 客户端密钥。".into(),
-                            LocaleCode::Ko => {
-                                "이 빌드에는 Google 클라이언트 비밀번호가 설정되어 있지 않습니다."
-                                    .into()
-                            }
-                        }
-                    } else {
-                        w.get_google_unavailable_text().to_string()
-                    };
-                    c.sync_to_ui(w);
-                });
-                return;
-            }
-            run_calendar_action(
-                weak.clone(),
-                CalendarAction::ConnectGoogle {
-                    client_id: client,
-                    client_secret: secret,
-                },
-                use_synthetic,
-            );
-        });
-    }
+    wire_google_sign_in(&ui, &ctrl, use_synthetic);
+
     {
         let weak = ui.as_weak();
         ui.on_disconnect_google(move || {
@@ -4868,7 +5226,7 @@ fn main() {
                 Ok(false) => return,
                 Err(error) => {
                     with_active_controller(&weak, |c, w| {
-                        c.connection_message = error;
+                        c.connection_message = error.into();
                         c.sync_to_ui(w);
                     });
                     return;
@@ -4899,8 +5257,100 @@ fn main() {
     }
 
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = Some(_single_instance));
+    #[cfg(all(target_os = "macos", feature = "native-smoke"))]
+    let smoke = native_smoke_requested.then(|| native_smoke::start(&ui));
     slint::run_event_loop_until_quit().expect("Failed to run Slint event loop");
     SINGLE_INSTANCE.with(|slot| *slot.borrow_mut() = None);
+    #[cfg(all(target_os = "macos", feature = "native-smoke"))]
+    if smoke.is_some_and(|smoke| !smoke.passed()) {
+        std::process::exit(1);
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn mac_event(event: i32) {
+    mac_event_rust(event);
+}
+
+#[cfg(target_os = "macos")]
+fn mac_event_rust(event: i32) {
+    use lightcal::platform::macos;
+    let _ = slint::invoke_from_event_loop(move || {
+        ACTIVE_UI.with(|slot| {
+            let Some(weak) = slot.borrow().clone() else {
+                return;
+            };
+            if event == macos::EVENT_REQUEST_ACCESS {
+                with_active_controller(&weak, |c, w| {
+                    c.add_account_open = false;
+                    c.prefs.windows_calendars_enabled = true;
+                    c.persist();
+                    c.sync_to_ui(w);
+                });
+                macos::request_access();
+            } else if event == macos::EVENT_OPEN_CALENDAR_APP {
+                macos::open_calendar();
+            } else if event == macos::EVENT_CHECK_UPDATES {
+                request_update_check(weak);
+            } else if event == macos::EVENT_QUIT {
+                let _ = slint::quit_event_loop();
+            } else {
+                with_active_controller(&weak, |c, w| match event {
+                    macos::EVENT_TOGGLE if application_window_is_open(w) && !c.settings_open => {
+                        hide_application_window(w)
+                    }
+                    macos::EVENT_TOGGLE | macos::EVENT_OPEN => {
+                        c.close_settings();
+                        c.sync_to_ui(w);
+                        show_application_window(w);
+                    }
+                    macos::EVENT_OPEN_SETTINGS => {
+                        c.open_settings_tab(2);
+                        c.sync_to_ui(w);
+                        show_application_window(w);
+                    }
+                    macos::EVENT_OPEN_ACCOUNTS => {
+                        c.open_settings_tab(1);
+                        c.sync_to_ui(w);
+                        show_application_window(w);
+                    }
+                    macos::EVENT_DOCK_REOPEN => {
+                        // Dock activation restores the current view; it never toggles it off.
+                        c.sync_to_ui(w);
+                        show_application_window(w);
+                    }
+                    macos::EVENT_DISMISS if !c.settings_open => hide_application_window(w),
+                    macos::EVENT_WEEKDAY_OFF..=macos::EVENT_WEEKDAY_FULL => {
+                        c.prefs.mac_weekday = match event {
+                            macos::EVENT_WEEKDAY_OFF => lightcal::preferences::MenuWeekday::Off,
+                            macos::EVENT_WEEKDAY_SHORT => lightcal::preferences::MenuWeekday::Short,
+                            _ => lightcal::preferences::MenuWeekday::Full,
+                        };
+                        c.persist();
+                        c.sync_to_ui(w);
+                    }
+                    macos::EVENT_TOGGLE_MONTH => {
+                        c.prefs.mac_show_month = !c.prefs.mac_show_month;
+                        c.persist();
+                        c.sync_to_ui(w);
+                    }
+                    macos::EVENT_VIEW_CHANGED | macos::EVENT_THEME_CHANGED => {
+                        wake_koi(w);
+                        c.sync_to_ui(w);
+                        apply_window_chrome(w);
+                    }
+                    macos::EVENT_REFRESH => {
+                        c.cal_state.update_today(current_local_date());
+                        c.sync_to_ui(w);
+                    }
+                    _ => {}
+                });
+                if event == macos::EVENT_REFRESH {
+                    request_visible_calendars(weak, RELOAD_SYNTHETIC.with(std::cell::Cell::get));
+                }
+            }
+        });
+    });
 }
 
 #[cfg(test)]

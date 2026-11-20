@@ -46,7 +46,7 @@ just check            # docs, script tests, rustfmt, Clippy and tests
 just run              # run Lightcal
 just run-demo         # run with sample events only
 just release build    # locked release build
-just installer        # NSIS setup in target/nsis
+just installer        # macOS DMG in target/macos; Windows NSIS setup in target/nsis
 ```
 
 Headless renders need no display and make no network requests:
@@ -72,3 +72,7 @@ Lightcal is free and open source. If it is useful to you, you can [sponsor its d
 ## License
 
 Lightcal is licensed under [GPL-3.0-only](LICENSE). Copyright (c) 2026 Lightcal contributors.
+
+## macOS
+
+macOS 14+ support is in development for Intel and Apple Silicon. The Mac app supports calendars available through macOS plus direct read-only Outlook and Google connections and keeps both Dock and menu bar entry points. See [macOS builds, signing, and remaining validation](docs/macos.md). Public macOS release validation is pending.

@@ -44,7 +44,14 @@ fn parse_pins(raw: &str) -> Result<Vec<String>, String> {
 
 /// Signed in-place installation is only offered when this build has a certificate pin.
 pub fn automatic_install_configured() -> bool {
-    certificate_pin().is_ok() && cfg!(all(windows, target_arch = "x86_64"))
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos::updates_available()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        certificate_pin().is_ok() && cfg!(all(windows, target_arch = "x86_64"))
+    }
 }
 fn normalize_pin(raw: &str) -> Result<String, String> {
     let pin = raw.replace([' ', ':'], "").to_ascii_uppercase();

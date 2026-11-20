@@ -5,7 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Lightweight native Windows calendar for the system tray and taskbar"
+description = "Lightweight native calendar for Windows and macOS"
+
+[features]
+# Explicit, isolated desktop diagnostics; absent from normal and release builds.
+native-smoke = []
 
 [dependencies]
 calendar-core = { path = "../calendar-core" }
@@ -29,6 +33,10 @@ slint = { version = "1.18", default-features = false, features = [
     "backend-winit",
     "renderer-software",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Access the exact native view owned by the pinned Slint/winit backend.
+slint = { version = "1.18", default-features = false, features = ["unstable-winit-030"] }
 
 [target.'cfg(windows)'.dependencies]
 tray-icon = { version = "0.26", default-features = false }

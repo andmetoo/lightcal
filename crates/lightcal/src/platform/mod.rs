@@ -1,5 +1,7 @@
-//! Platform boundary definitions. Lightcal targets Windows only.
+//! Platform boundary definitions for Windows and macOS.
 
+#[cfg(target_os = "macos")]
+pub mod macos;
 pub mod windows;
 
 use calendar_core::{CalendarOccurrence, CalendarSource, LocalDate};
@@ -802,7 +804,11 @@ pub fn animation_effects_enabled() -> bool {
     {
         windows::animation_effects_enabled()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        macos::motion_enabled()
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         true
     }
@@ -820,7 +826,16 @@ pub fn main_window_view() -> WindowView {
             animation_effects: windows::animation_effects_enabled(),
         }
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        let (on_screen, seen) = macos::window_view();
+        WindowView {
+            on_screen,
+            seen,
+            animation_effects: macos::motion_enabled(),
+        }
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         WindowView {
             on_screen: false,
