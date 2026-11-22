@@ -1371,7 +1371,7 @@ pub unsafe fn position_window_by_tray(
     use windows_sys::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
     use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
+        GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOCOPYBITS, SWP_NOZORDER,
     };
 
     let dpi = GetDpiForWindow(hwnd);
@@ -1386,21 +1386,19 @@ pub unsafe fn position_window_by_tray(
     let (target_x, target_y) = work_area.anchor_by_tray(edge, phys_w, phys_h, margin);
     let target = (target_x, target_y, target_x + phys_w, target_y + phys_h);
     let mut placed: RECT = std::mem::zeroed();
-    if GetWindowRect(hwnd, &mut placed) != 0
-        && (placed.left, placed.top, placed.right, placed.bottom) == target
-    {
+    let have_rect = GetWindowRect(hwnd, &mut placed) != 0;
+    if have_rect && (placed.left, placed.top, placed.right, placed.bottom) == target {
         return true;
     }
 
-    SetWindowPos(
-        hwnd,
-        HWND_TOP,
-        target_x,
-        target_y,
-        phys_w,
-        phys_h,
-        SWP_NOACTIVATE | SWP_NOZORDER,
-    );
+    // When width or height changes, SWP_NOCOPYBITS prevents Windows from briefly blitting
+    // the previous view's pixels at the new left edge before the next view paints.
+    let size_changed = !have_rect
+        || (placed.right - placed.left) != phys_w
+        || (placed.bottom - placed.top) != phys_h;
+    let flags = SWP_NOACTIVATE | SWP_NOZORDER | if size_changed { SWP_NOCOPYBITS } else { 0 };
+
+    SetWindowPos(hwnd, HWND_TOP, target_x, target_y, phys_w, phys_h, flags);
     GetWindowRect(hwnd, &mut placed) != 0
         && (placed.left, placed.top, placed.right, placed.bottom) == target
 }
@@ -1685,7 +1683,7 @@ mod tests {
             0
         );
         // Settings, then the calendar: each a single change, exactly where asked.
-        for (width, height) in [(448.0, 360.0), (352.0, 432.0)] {
+        for (width, height) in [(448.0, 432.0), (352.0, 432.0)] {
             let before = changes.get();
             assert!(unsafe { position_window_by_tray(hwnd, width, height) });
             assert_eq!(changes.get() - before, 1, "{width} × {height} in one step");
@@ -1694,8 +1692,8 @@ mod tests {
             unsafe { SetWindowSubclass(hwnd, Some(clamp), CLAMP_ID, 0) },
             0
         );
-        assert!(!unsafe { position_window_by_tray(hwnd, 448.0, 360.0) });
-        assert!(!unsafe { position_window_by_tray(std::ptr::null_mut(), 448.0, 360.0) });
+        assert!(!unsafe { position_window_by_tray(hwnd, 448.0, 432.0) });
+        assert!(!unsafe { position_window_by_tray(std::ptr::null_mut(), 448.0, 432.0) });
         unsafe {
             RemoveWindowSubclass(hwnd, Some(clamp), CLAMP_ID);
             RemoveWindowSubclass(hwnd, Some(count), COUNT_ID);

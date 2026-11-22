@@ -473,14 +473,14 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
         helper.render_to_png(
             &out_dir.join(format!("19-calendar-settings-{}.png", theme.as_str())),
             448,
-            360,
+            432,
         )?;
         ctrl.prefs.tray_icon_monochrome = true;
         ctrl.sync_to_ui(&ui);
         helper.render_to_png(
             &out_dir.join(format!("19-calendar-settings-{}-mono.png", theme.as_str())),
             448,
-            360,
+            432,
         )?;
     }
 
@@ -545,7 +545,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
             helper.render_to_png(
                 &out_dir.join(format!("20-account-{}-{name}.png", theme.as_str())),
                 448,
-                360,
+                432,
             )?;
         }
     }
@@ -592,7 +592,7 @@ pub fn render_snapshots_to_dir(out_dir: &Path) -> std::io::Result<()> {
                     if partial { "partial" } else { "denied" }
                 )),
                 448,
-                360,
+                432,
             )?;
         }
     }
@@ -823,7 +823,7 @@ fn render_local_event_boards(
         helper.render_to_png(
             &out_dir.join(format!("local-settings-{name}.png")),
             448,
-            360,
+            432,
         )
     };
     ctrl.local = LocalEvents::in_memory(samples(today));
@@ -1114,7 +1114,7 @@ fn render_settings_snapshots(
             helper.render_to_png(
                 &out_dir.join(format!("settings-{name}-{}.png", theme.as_str())),
                 448,
-                360,
+                432,
             )?;
         }
         Ok(())
@@ -1280,7 +1280,7 @@ fn render_settings_snapshots(
         ctrl.prefs.theme = ThemePreference::Light;
         ctrl.sync_to_ui(ui);
         // Lay the tab out at settings size before scrolling it.
-        helper.window.set_size(slint::PhysicalSize::new(448, 360));
+        helper.window.set_size(slint::PhysicalSize::new(448, 432));
         helper.window.draw_if_needed(|_| {});
         let scroll = |delta_y| {
             ui.window()
@@ -1297,7 +1297,7 @@ fn render_settings_snapshots(
                 locale.as_str()
             )),
             448,
-            360,
+            432,
         )?;
         scroll(1000.0);
     }
@@ -1323,7 +1323,7 @@ fn render_settings_snapshots(
                         locale.as_str()
                     )),
                     448,
-                    360,
+                    432,
                 )?;
             }
         }
@@ -1338,7 +1338,7 @@ fn render_settings_snapshots(
                 locale.as_str()
             )),
             448,
-            360,
+            432,
         )?;
         ctrl.settings_tab = 2;
         ctrl.provider.sources = base_provider.sources.clone();
@@ -1351,7 +1351,7 @@ fn render_settings_snapshots(
                 locale.as_str()
             )),
             448,
-            360,
+            432,
         )?;
     }
 
@@ -1366,7 +1366,7 @@ fn render_settings_snapshots(
     helper.render_to_png(
         &out_dir.join("settings-app-language-menu-light-zh-Hans.png"),
         448,
-        360,
+        432,
     )?;
     ui.set_snapshot_open_menu(0);
 

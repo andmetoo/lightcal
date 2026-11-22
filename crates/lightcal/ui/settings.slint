@@ -1,4 +1,4 @@
-// Settings (Calendar, Accounts, App) and About, 448 × 360 (ADR 0011).
+// Settings (Calendar, Accounts, App) and About, 448 × 432 (448 × 444 with Larger dates).
 // Spec boards: design/canvas/SettingsCalendar, SettingsAccounts, SettingsApp,
 // WinAbout, States and Languages. AppWindow forwards data and callbacks.
 //
@@ -6,8 +6,8 @@
 // 36 px footer. About replaces the selector bar and uses its own footer.
 
 import { ScrollView } from "std-widgets.slint";
-import { Theme } from "theme.slint";
-import { BrandMark, CaptionButton, ControlFrame, Icon, Keycap, LinkButton, Menu, MenuOption, GridSelect, Switch, TextField } from "controls.slint";
+import { Theme, Motion } from "theme.slint";
+import { BrandMark, CaptionButton, ControlFrame, FadeIn, Icon, Keycap, LinkButton, Menu, MenuOption, GridSelect, Switch, TextField } from "controls.slint";
 
 // Heart + label that opens GitHub Sponsors (footer, always visible).
 component SponsorButton inherits Rectangle {
@@ -18,6 +18,7 @@ component SponsorButton inherits Rectangle {
     width: self.preferred-width;
     border-radius: Theme.radius-control;
     background: touch.pressed ? Theme.press : touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
@@ -74,6 +75,7 @@ component Glyph inherits Path {
         : root.name == "external" ? "M7 17 L17 7 M8 7 L17 7 L17 16"
         : root.name == "plus" ? "M12 5 L12 19 M5 12 L19 12"
         : root.name == "refresh" ? "M21 12 A9 9 0 1 1 18.36 5.64 M21 3 L21 9 L15 9"
+        : root.name == "arrow-up" ? "M12 19 L12 5 M5 12 L12 5 L19 12"
         : root.name == "lock" ? "M6 11 L18 11 A2 2 0 0 1 20 13 L20 19 A2 2 0 0 1 18 21 L6 21 A2 2 0 0 1 4 19 L4 13 A2 2 0 0 1 6 11 Z M8 11 L8 7 A4 4 0 0 1 16 7 L16 11"
         : root.name == "warning" ? "M12 3 L2 20 L22 20 Z M12 10 L12 14 M12 17 L12.01 17"
         : root.name == "wifi-off" ? "M2 9 A15 15 0 0 1 22 9 M5 12.5 A10 10 0 0 1 19 12.5 M8.5 16 A5 5 0 0 1 15.5 16 M3 3 L21 21"
@@ -103,6 +105,7 @@ component GhostButton inherits Rectangle {
     height: 28px;
     border-radius: Theme.radius-control;
     background: !root.enabled ? transparent : touch.pressed ? Theme.press : touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
@@ -248,9 +251,10 @@ component TrayPreview inherits Rectangle {
     }
 }
 
-// One segment of a track (.seg button).
+// One segment of a track. When `sliding` is true, the parent track draws the sliding thumb.
 component Segment inherits Rectangle {
     in property <bool> on;
+    in property <bool> sliding: false;
     in property <string> label;
     in property <length> fixed-width: 0px;
     in property <length> segment-height: 24px;
@@ -263,13 +267,14 @@ component Segment inherits Rectangle {
 
     width: root.fixed-width > 0px ? root.fixed-width : max(28px, lay.preferred-width);
     height: root.segment-height;
-    border-radius: Theme.radius-control;
-    background: root.on ? Theme.thumb : transparent;
-    border-width: root.on ? 1px : 0px;
-    border-color: Theme.control-line;
-    drop-shadow-blur: root.on ? 2px : 0px;
-    drop-shadow-offset-y: root.on ? 1px : 0px;
-    drop-shadow-color: root.on ? #00000014 : transparent;
+    border-radius: 5px;
+    background: !root.sliding && root.on ? Theme.thumb : transparent;
+    border-width: !root.sliding && root.on ? 1px : 0px;
+    border-color: Theme.thumb-line;
+    drop-shadow-blur: !root.sliding && root.on ? 2px : 0px;
+    drop-shadow-offset-y: !root.sliding && root.on ? 1px : 0px;
+    drop-shadow-color: !root.sliding && root.on ? #00000018 : transparent;
+    animate background, border-color { duration: Motion.fade; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.label;
     accessible-checked: root.on;
@@ -309,14 +314,43 @@ component Segment inherits Rectangle {
     }
 }
 
-// Segmented track sized to its segments (.seg).
+// Segmented track sized to its segments, with an optional sliding active thumb behind them.
 component Track inherits Rectangle {
     in property <length> track-height: 28px;
+    in property <bool> has-slider: false;
+    in property <length> slider-x: 0px;
+    in property <length> slider-width: 0px;
+    // Enable slide animation only after initial layout settles so tracks never fly in from x = 0.
+    property <bool> ready: false;
     height: root.track-height;
-    width: self.preferred-width;
-    border-radius: Theme.radius-card;
+    width: lay.preferred-width;
+    border-radius: 7px;
+    border-width: 1px;
+    border-color: Theme.track-line;
     background: Theme.track;
-    HorizontalLayout {
+
+    Timer {
+        interval: 24ms;
+        running: root.has-slider && !root.ready;
+        triggered => { root.ready = true; }
+    }
+
+    if root.has-slider && root.slider-width > 0px : Rectangle {
+        x: root.slider-x;
+        y: 2px;
+        width: root.slider-width;
+        height: parent.height - 4px;
+        border-radius: 5px;
+        background: Theme.thumb;
+        border-width: 1px;
+        border-color: Theme.thumb-line;
+        drop-shadow-blur: 2px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: Theme.dark ? #00000059 : #18181417;
+        animate x, width { duration: root.ready ? Motion.slide : 0ms; easing: ease-out; }
+    }
+
+    lay := HorizontalLayout {
         padding: 2px;
         spacing: 2px;
         @children
@@ -369,10 +403,11 @@ component Checkbox inherits Rectangle {
     in property <bool> checked;
     width: 16px;
     height: 16px;
-    border-radius: 4px;
-    border-width: root.checked ? 0px : 1px;
+    border-radius: 4.5px;
+    border-width: root.checked ? 0px : 1.5px;
     border-color: Theme.toggle-off;
     background: root.checked ? Theme.primary : transparent;
+    animate background, border-color { duration: Motion.fade; easing: ease-out; }
     if root.checked : Glyph {
         x: 3px;
         y: 3px;
@@ -735,12 +770,15 @@ component Row inherits Rectangle {
     }
 }
 
-// Settings card: card fill, card line, radius 8; 1 px inset for the border.
+// Settings card: card fill, card line, radius 10; 1 px inset for the border.
 component SettingsCard inherits Rectangle {
     background: Theme.card;
     border-width: 1px;
     border-color: Theme.card-line;
     border-radius: Theme.radius-card;
+    drop-shadow-blur: 3px;
+    drop-shadow-offset-y: 1px;
+    drop-shadow-color: Theme.card-shadow;
     VerticalLayout {
         padding: 1px;
         @children
@@ -1127,29 +1165,32 @@ component LinkRow inherits Rectangle {
     }
 }
 
-// Selector bar tab: icon + label, one 16 × 3 teal marker when active.
+// Selector bar tab: icon + label; the active pill slides behind it in the selector bar.
 component SelectorTab inherits Rectangle {
     in property <string> icon;
     in property <string> label;
     in property <bool> active;
     callback clicked();
 
-    height: 40px;
+    height: 28px;
     width: self.preferred-width;
+    border-radius: Theme.radius-control;
+    background: !root.active && touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     accessible-role: tab;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        spacing: 8px;
+        padding-left: 11px;
+        padding-right: 11px;
+        spacing: 6px;
         Centered {
             Glyph {
                 name: root.icon;
-                size: 16px;
-                weight: 1.75;
-                color: root.active || touch.has-hover ? Theme.ink : Theme.ink2;
+                size: 14px;
+                weight: 1.85;
+                color: root.active ? Theme.accent : (touch.has-hover ? Theme.ink : Theme.ink2);
             }
         }
         Text {
@@ -1159,14 +1200,6 @@ component SelectorTab inherits Rectangle {
             color: root.active || touch.has-hover ? Theme.ink : Theme.ink2;
             vertical-alignment: center;
         }
-    }
-    if root.active : Rectangle {
-        x: (parent.width - 16px) / 2;
-        y: parent.height - 6px;
-        width: 16px;
-        height: 3px;
-        border-radius: 1.5px;
-        background: Theme.accent;
     }
     touch := TouchArea {
         clicked => { root.clicked(); }
@@ -1376,12 +1409,12 @@ export component SettingsView inherits Rectangle {
     property <bool> about: root.settings-tab == 3;
     // Body area between the selector bar (or caption on About) and the footer.
     property <length> body-top: root.about ? 32px : 73px;
-    property <length> body-height: 323px - root.body-top;
+    property <length> body-height: root.height - 37px - root.body-top;
     property <bool> recording: false;
     property <bool> signing-in: root.connection-busy && !root.ics-dialog-open;
 
     width: 448px;
-    height: 360px;
+    height: 432px;
     border-radius: Theme.radius-window;
     border-width: 1px;
     border-color: Theme.card-line;
@@ -1430,31 +1463,61 @@ export component SettingsView inherits Rectangle {
         clicked => { root.close-settings(); }
     }
 
-    // ===== Selector bar (40 px) with one hairline =====
-    if !root.about : Rectangle {
+    // ===== Selector bar (40 px) with sliding tactile tab pill and hairline =====
+    if !root.about : selector-bar := Rectangle {
+        // Enable slide animation only after mount layout settles so opening Settings or
+        // returning from About never animates the active tab plate from x = 0.
+        property <bool> ready: false;
+
+        Timer {
+            interval: 24ms;
+            running: !selector-bar.ready;
+            triggered => { selector-bar.ready = true; }
+        }
+
         x: 0px;
         y: 32px;
         width: parent.width;
         height: 41px;
+
+        // Sliding active tab plate behind the three tabs.
+        Rectangle {
+            x: root.settings-tab == 0 ? tab0.x
+                : (root.settings-tab == 1 ? tab1.x : tab2.x);
+            y: 6px;
+            width: root.settings-tab == 0 ? tab0.width
+                : (root.settings-tab == 1 ? tab1.width : tab2.width);
+            height: 28px;
+            border-radius: Theme.radius-control;
+            background: Theme.card;
+            border-width: 1px;
+            border-color: Theme.card-line;
+            drop-shadow-blur: 2px;
+            drop-shadow-offset-y: 1px;
+            drop-shadow-color: Theme.dark ? #00000059 : #18181414;
+            animate x, width { duration: selector-bar.ready ? Motion.slide : 0ms; easing: ease-out; }
+        }
+
         HorizontalLayout {
-            height: 40px;
-            padding-left: 8px;
-            padding-right: 8px;
+            y: 6px;
+            height: 28px;
+            padding-left: 14px;
+            padding-right: 14px;
             spacing: 4px;
             alignment: start;
-            SelectorTab {
+            tab0 := SelectorTab {
                 icon: "calendar";
                 label: root.nav-appearance-text;
                 active: root.settings-tab == 0;
                 clicked => { root.open-settings(0); }
             }
-            SelectorTab {
+            tab1 := SelectorTab {
                 icon: "person";
                 label: root.nav-calendars-text;
                 active: root.settings-tab == 1;
                 clicked => { root.open-settings(1); }
             }
-            SelectorTab {
+            tab2 := SelectorTab {
                 icon: "app";
                 label: root.nav-general-text;
                 active: root.settings-tab == 2;
@@ -1470,14 +1533,24 @@ export component SettingsView inherits Rectangle {
         }
     }
 
-    // ===== Calendar tab =====
-    if root.settings-tab == 0 : cal-tab := Rectangle {
+    // Smooth page fade when switching tabs inside Settings; settles immediately when opening Settings.
+    FadeIn {
         x: 0px;
         y: root.body-top;
         width: parent.width;
         height: root.body-height;
+        fade-on-create: false;
+        fade-key: root.settings-tab == 0 ? "0" : (root.settings-tab == 1 ? "1" : (root.settings-tab == 2 ? "2" : "3"));
+        fade-on-change: true;
+        fade-duration: Motion.fade;
 
-        // Scrolls once the Date size row pushes the cards past the window height.
+    // ===== Calendar tab =====
+    if root.settings-tab == 0 : cal-tab := Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+
         ScrollView {
             width: parent.width;
             height: parent.height;
@@ -1490,7 +1563,7 @@ export component SettingsView inherits Rectangle {
                 padding-right: 16px;
                 padding-top: 12px;
                 padding-bottom: 12px;
-                spacing: 8px;
+                spacing: 10px;
                 alignment: start;
 
                 SettingsCard {
@@ -1498,14 +1571,26 @@ export component SettingsView inherits Rectangle {
                         title: root.label-theme-text;
                         Centered {
                             Track {
-                                for opt[idx] in [root.theme-system-label, root.theme-light-label, root.theme-dark-label] : Segment {
-                                    label: opt;
-                                    on: root.theme-index == idx;
-                                    clicked => {
-                                        if (idx == 0) { root.select-theme("system"); }
-                                        if (idx == 1) { root.select-theme("light"); }
-                                        if (idx == 2) { root.select-theme("dark"); }
-                                    }
+                                has-slider: true;
+                                slider-x: root.theme-index == 0 ? th0.x : (root.theme-index == 1 ? th1.x : th2.x);
+                                slider-width: root.theme-index == 0 ? th0.width : (root.theme-index == 1 ? th1.width : th2.width);
+                                th0 := Segment {
+                                    sliding: true;
+                                    label: root.theme-system-label;
+                                    on: root.theme-index == 0;
+                                    clicked => { root.select-theme("system"); }
+                                }
+                                th1 := Segment {
+                                    sliding: true;
+                                    label: root.theme-light-label;
+                                    on: root.theme-index == 1;
+                                    clicked => { root.select-theme("light"); }
+                                }
+                                th2 := Segment {
+                                    sliding: true;
+                                    label: root.theme-dark-label;
+                                    on: root.theme-index == 2;
+                                    clicked => { root.select-theme("dark"); }
                                 }
                             }
                         }
@@ -1515,15 +1600,31 @@ export component SettingsView inherits Rectangle {
                         divider: false;
                         Centered {
                             Track {
-                                for opt in [
-                                    { label: root.date-size-standard-label, size: CalendarDateSize.standard, sample: 10px },
-                                    { label: root.date-size-large-label, size: CalendarDateSize.large, sample: 11.5px },
-                                    { label: root.date-size-larger-label, size: CalendarDateSize.larger, sample: 13px },
-                                ] : Segment {
-                                    label: opt.label;
-                                    sample-size: opt.sample;
-                                    on: root.date-size == opt.size;
-                                    clicked => { root.select-date-size(opt.size); }
+                                has-slider: true;
+                                slider-x: root.date-size == CalendarDateSize.standard ? ds0.x
+                                    : (root.date-size == CalendarDateSize.large ? ds1.x : ds2.x);
+                                slider-width: root.date-size == CalendarDateSize.standard ? ds0.width
+                                    : (root.date-size == CalendarDateSize.large ? ds1.width : ds2.width);
+                                ds0 := Segment {
+                                    sliding: true;
+                                    label: root.date-size-standard-label;
+                                    sample-size: 10px;
+                                    on: root.date-size == CalendarDateSize.standard;
+                                    clicked => { root.select-date-size(CalendarDateSize.standard); }
+                                }
+                                ds1 := Segment {
+                                    sliding: true;
+                                    label: root.date-size-large-label;
+                                    sample-size: 11.5px;
+                                    on: root.date-size == CalendarDateSize.large;
+                                    clicked => { root.select-date-size(CalendarDateSize.large); }
+                                }
+                                ds2 := Segment {
+                                    sliding: true;
+                                    label: root.date-size-larger-label;
+                                    sample-size: 13px;
+                                    on: root.date-size == CalendarDateSize.larger;
+                                    clicked => { root.select-date-size(CalendarDateSize.larger); }
                                 }
                             }
                         }
@@ -1601,9 +1702,9 @@ export component SettingsView inherits Rectangle {
     // ===== Accounts tab =====
     if root.settings-tab == 1 : Rectangle {
         x: 0px;
-        y: root.body-top;
+        y: 0px;
         width: parent.width;
-        height: root.body-height;
+        height: parent.height;
 
         // Signing in: one card with a spinner, Cancel and Open browser again.
         if root.signing-in : VerticalLayout {
@@ -1995,9 +2096,9 @@ export component SettingsView inherits Rectangle {
     // ===== App tab =====
     if root.settings-tab == 2 : app-tab := Rectangle {
         x: 0px;
-        y: root.body-top;
+        y: 0px;
         width: parent.width;
-        height: root.body-height;
+        height: parent.height;
 
         ScrollView {
             width: parent.width;
@@ -2201,7 +2302,11 @@ export component SettingsView inherits Rectangle {
                         Centered {
                             Track {
                                 track-height: 40px;
-                                Segment {
+                                has-slider: true;
+                                slider-x: !root.tray-icon-monochrome ? tray0.x : tray1.x;
+                                slider-width: !root.tray-icon-monochrome ? tray0.width : tray1.width;
+                                tray0 := Segment {
+                                    sliding: true;
                                     segment-height: 36px;
                                     has-preview: true;
                                     preview-mono: false;
@@ -2212,7 +2317,8 @@ export component SettingsView inherits Rectangle {
                                         if (root.tray-icon-monochrome) { root.toggle-tray-icon-monochrome(); }
                                     }
                                 }
-                                Segment {
+                                tray1 := Segment {
+                                    sliding: true;
                                     segment-height: 36px;
                                     has-preview: true;
                                     preview-mono: true;
@@ -2230,10 +2336,26 @@ export component SettingsView inherits Rectangle {
                         title: root.mac-weekday-label;
                         Centered {
                             Track {
-                                for opt[idx] in [root.mac-weekday-off-label, root.mac-weekday-short-label, root.mac-weekday-full-label] : Segment {
-                                    label: opt;
-                                    on: root.mac-weekday == idx;
-                                    clicked => { root.select-mac-weekday(idx); }
+                                has-slider: true;
+                                slider-x: root.mac-weekday == 0 ? mac-wd0.x : (root.mac-weekday == 1 ? mac-wd1.x : mac-wd2.x);
+                                slider-width: root.mac-weekday == 0 ? mac-wd0.width : (root.mac-weekday == 1 ? mac-wd1.width : mac-wd2.width);
+                                mac-wd0 := Segment {
+                                    sliding: true;
+                                    label: root.mac-weekday-off-label;
+                                    on: root.mac-weekday == 0;
+                                    clicked => { root.select-mac-weekday(0); }
+                                }
+                                mac-wd1 := Segment {
+                                    sliding: true;
+                                    label: root.mac-weekday-short-label;
+                                    on: root.mac-weekday == 1;
+                                    clicked => { root.select-mac-weekday(1); }
+                                }
+                                mac-wd2 := Segment {
+                                    sliding: true;
+                                    label: root.mac-weekday-full-label;
+                                    on: root.mac-weekday == 2;
+                                    clicked => { root.select-mac-weekday(2); }
                                 }
                             }
                         }
@@ -2277,9 +2399,9 @@ export component SettingsView inherits Rectangle {
     // ===== About =====
     if root.about : Rectangle {
         x: 0px;
-        y: root.body-top;
+        y: 0px;
         width: parent.width;
-        height: root.body-height;
+        height: parent.height;
 
         ScrollView {
             width: parent.width;
@@ -2499,47 +2621,168 @@ export component SettingsView inherits Rectangle {
             }
         }
     }
+    } // end FadeIn body wrapper
 
-    // ===== Footer (36 px) =====
+    // ===== Footer (36 px, anchored to window bottom) =====
     Rectangle {
         x: 0px;
-        y: 323px;
+        y: root.height - 37px;
         width: parent.width;
         height: 1px;
         background: Theme.card-line;
     }
     if !root.about : Rectangle {
         x: 0px;
-        y: 324px;
+        y: root.height - 36px;
         width: parent.width;
         height: 36px;
-        LinkButton {
-            x: 12px;
-            y: (parent.height - self.height) / 2;
-            label: root.about-link-text;
-            clicked => { root.open-settings(3); }
-        }
-        SponsorButton {
-            x: parent.width - 16px - version-text.width - 8px - self.width;
-            y: (parent.height - self.height) / 2;
-            label: root.copy.sponsor-label;
-            clicked => { root.open-sponsor(false); }
-        }
-        version-text := Text {
-            x: parent.width - 16px - self.width;
-            width: self.preferred-width;
-            height: parent.height;
-            text: root.about-version-text;
-            font-size: Theme.type-caption;
-            color: Theme.ink3;
-            horizontal-alignment: right;
-            vertical-alignment: center;
-            overflow: elide;
+
+        HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
+            spacing: 6px;
+            alignment: space-between;
+
+            Centered {
+                LinkButton {
+                    label: root.about-link-text;
+                    clicked => { root.open-settings(3); }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: end;
+
+                Centered {
+                    SponsorButton {
+                        label: root.copy.sponsor-label;
+                        clicked => { root.open-sponsor(false); }
+                    }
+                }
+                Centered {
+                    Rectangle {
+                        width: 1px;
+                        height: 12px;
+                        background: Theme.card-line;
+                    }
+                }
+                // Delicate footer update trigger / live status / available update pill.
+                if root.copy.update-kind == 3 : Centered {
+                    Rectangle {
+                        height: 22px;
+                        width: upd-avail-row.preferred-width;
+                        border-radius: 11px;
+                        border-width: 1px;
+                        border-color: Theme.accent-border;
+                        background: upd-avail-touch.has-hover ? Theme.accent-border : Theme.accent-soft;
+                        animate background { duration: Motion.quick; easing: ease-out; }
+                        accessible-role: button;
+                        accessible-label: root.copy.update-short;
+                        accessible-action-default => { root.open-settings(3); }
+
+                        upd-avail-row := HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 9px;
+                            spacing: 4px;
+                            Centered {
+                                Glyph {
+                                    name: "arrow-up";
+                                    size: 11px;
+                                    weight: 2.4;
+                                    color: Theme.accent;
+                                }
+                            }
+                            Text {
+                                text: root.copy.update-badge != "" ? root.copy.update-badge : root.copy.update-short;
+                                font-size: Theme.type-small;
+                                font-weight: Theme.weight-medium;
+                                color: Theme.accent;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                        upd-avail-touch := TouchArea {
+                            clicked => { root.open-settings(3); }
+                        }
+                    }
+                }
+                if root.copy.update-kind == 2 : Centered {
+                    HorizontalLayout {
+                        padding-left: 4px;
+                        padding-right: 4px;
+                        spacing: 5px;
+                        Centered {
+                            Spinner {
+                                size: 11px;
+                            }
+                        }
+                        Text {
+                            text: root.copy.update-short;
+                            font-size: Theme.type-caption;
+                            color: Theme.ink2;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+                if root.copy.update-kind != 2 && root.copy.update-kind != 3 && !root.package-managed-updates : Centered {
+                    Rectangle {
+                        height: 22px;
+                        width: upd-ver-row.preferred-width;
+                        border-radius: Theme.radius-control;
+                        background: upd-ver-touch.pressed ? Theme.press
+                            : (upd-ver-touch.has-hover ? Theme.hover : transparent);
+                        animate background { duration: Motion.quick; easing: ease-out; }
+                        accessible-role: button;
+                        accessible-label: root.copy.check-now + ", " + root.about-version-text;
+                        accessible-action-default => { root.check-updates(); }
+
+                        upd-ver-row := HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            spacing: 5px;
+                            Centered {
+                                Glyph {
+                                    name: root.copy.update-kind == 1 ? "check" : "refresh";
+                                    size: 11px;
+                                    weight: root.copy.update-kind == 1 ? 2.5 : 2;
+                                    color: root.copy.update-kind == 1 ? Theme.accent
+                                        : (upd-ver-touch.has-hover ? Theme.ink : Theme.ink3);
+                                }
+                            }
+                            Text {
+                                text: root.about-version-text;
+                                font-size: Theme.type-caption;
+                                color: upd-ver-touch.has-hover ? Theme.ink : Theme.ink2;
+                                vertical-alignment: center;
+                            }
+                        }
+                        upd-ver-touch := TouchArea {
+                            clicked => { root.check-updates(); }
+                        }
+                    }
+                }
+                if root.copy.update-kind != 2 && root.copy.update-kind != 3 && root.package-managed-updates : Centered {
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        Text {
+                            text: root.about-version-text;
+                            font-size: Theme.type-caption;
+                            color: Theme.ink2;
+                            vertical-alignment: center;
+                            accessible-role: text;
+                            accessible-label: root.about-version-text;
+                        }
+                    }
+                }
+            }
         }
     }
     if root.about : Rectangle {
         x: 0px;
-        y: 324px;
+        y: root.height - 36px;
         width: parent.width;
         height: 36px;
         LinkButton {

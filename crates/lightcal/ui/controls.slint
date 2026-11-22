@@ -65,6 +65,7 @@ export component IconButton inherits Rectangle {
         : touch.pressed ? Theme.press
         : touch.has-hover ? Theme.hover
         : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
@@ -112,6 +113,7 @@ export component TextButton inherits Rectangle {
         : touch.pressed ? Theme.press
         : touch.has-hover ? Theme.hover
         : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: button;
     accessible-label: root.label;
@@ -166,27 +168,28 @@ export component ControlFrame inherits Rectangle {
         height: parent.height - 2px;
         border-radius: Theme.radius-control - 1px;
         background: root.pressed ? Theme.press : (root.hovered ? Theme.hover : Theme.control);
+        animate background { duration: Motion.quick; easing: ease-out; }
     }
 
     @children
 }
 
-// Switch 40×20 (.tg): off is an outline with a 12 px knob, on is a teal
-// fill with a white 14 px knob.
+// Sleek pill switch 38×20: smooth track tint + crisp white knob with subtle drop shadow.
 export component Switch inherits Rectangle {
     in property <bool> checked: false;
     in property <bool> enabled: true;
     in property <string> label;
     callback toggled();
 
-    width: 40px;
+    width: 38px;
     height: 20px;
     border-radius: 10px;
     border-width: 1px;
-    border-color: root.checked ? Theme.primary : Theme.toggle-off;
+    border-color: root.checked ? Theme.primary-hover : Theme.control-line;
     background: root.checked
         ? (touch.has-hover ? Theme.primary-hover : Theme.primary)
-        : (touch.has-hover ? Theme.hover : transparent);
+        : (touch.has-hover ? Theme.press : Theme.toggle-track-off);
+    animate background, border-color { duration: Motion.move; easing: ease-out; }
     opacity: root.enabled ? 1 : 0.4;
     accessible-role: checkbox;
     accessible-checked: root.checked;
@@ -198,13 +201,16 @@ export component Switch inherits Rectangle {
     }
 
     Rectangle {
-        width: root.checked ? 14px : 12px;
-        height: self.width;
-        border-radius: self.width / 2;
-        x: root.checked ? 22px : 4px;
+        width: 14px;
+        height: 14px;
+        border-radius: 7px;
+        x: root.checked ? 21px : 3px;
         y: (parent.height - self.height) / 2;
-        background: root.checked ? Theme.on-primary : Theme.toggle-off;
-        animate x, width { duration: 120ms; easing: ease-out; }
+        background: #FFFFFF;
+        drop-shadow-blur: 2px;
+        drop-shadow-offset-y: 1px;
+        drop-shadow-color: #00000033;
+        animate x { duration: Motion.move; easing: ease-out; }
     }
 
     touch := TouchArea {
@@ -413,10 +419,11 @@ export component LinkButton inherits Rectangle {
     in property <length> font-size: Theme.type-caption;
     callback clicked();
 
-    height: 20px;
+    height: 22px;
     width: self.preferred-width;
-    border-radius: Theme.radius-key;
+    border-radius: Theme.radius-control;
     background: touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
@@ -495,12 +502,15 @@ export component Keycap inherits Rectangle {
     }
 }
 
-// Settings card: card fill, 1 px card line, radius 8 (.card).
+// Settings card: card fill, 1 px card line, radius 10.
 export component Card inherits Rectangle {
     background: Theme.card;
     border-width: 1px;
     border-color: Theme.card-line;
     border-radius: Theme.radius-card;
+    drop-shadow-blur: 3px;
+    drop-shadow-offset-y: 1px;
+    drop-shadow-color: Theme.card-shadow;
     clip: true;
 }
 
@@ -603,6 +613,7 @@ export component MenuOption inherits Rectangle {
     border-radius: Theme.radius-control;
     background: root.active ? Theme.selected
         : ((opt-touch.has-hover || root.highlighted) ? Theme.hover : transparent);
+    animate background { duration: Motion.quick; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }

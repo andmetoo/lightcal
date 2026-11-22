@@ -1,7 +1,7 @@
 //! Manual GitHub release update checker.
 //!
 //! Per `docs/features.md` and `docs/architecture.md`:
-//! - Manual checks, plus startup/daily checks only when explicitly enabled in Settings.
+//! - Manual checks plus daily background checks (enabled by default; toggleable in About).
 //! - Compares stable semantic versions; excludes drafts and prereleases.
 //! - Accepts release-page links only from `https://github.com/andmetoo/lightcal/`.
 //! - Handles offline, timeout, rate-limit, malformed-response, and no-release states.

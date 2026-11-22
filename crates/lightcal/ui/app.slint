@@ -1,5 +1,5 @@
 // Lightcal — native desktop calendar UI (Slint).
-// November 2026 design refresh (ADR 0011) · Segoe UI Variable · Calendar 352×432 (352×444 with Larger dates) · Settings 448×360
+// November 2026 design refresh (ADR 0011) · Segoe UI Variable · Calendar 352×432 (352×444 with Larger dates) · Settings 448×432 (448×444 with Larger dates)
 // Modules: theme.slint (tokens), controls.slint (shared controls), types.slint (Rust structs),
 // calendar.slint (CalendarView), settings.slint (SettingsView with About).
 
@@ -385,10 +385,14 @@ export component AppWindow inherits Window {
     callback dismiss-startup-warning();
 
     property <length> calendar-height: Theme.calendar-height(root.date-size);
-    width: root.settings-open ? 448px : 352px;
-    height: root.settings-open ? 360px : root.calendar-height;
+    // Keep min/max spanning both Calendar (352) and Settings (448) so Win32 WM_GETMINMAXINFO
+    // never clamps SetWindowPos during a view switch; frameless windows cannot be drag-resized.
+    min-width: 352px;
+    max-width: 448px;
+    min-height: 432px;
+    max-height: 444px;
     preferred-width: root.settings-open ? 448px : 352px;
-    preferred-height: root.settings-open ? 360px : root.calendar-height;
+    preferred-height: root.calendar-height;
     // macOS software presentation ignores alpha; AppKit clips the outer corners.
     background: root.macos ? (root.settings-open ? Theme.page : Theme.popup) : transparent;
     // Bumped by the app when Windows has discarded the window's pixels (restore from
@@ -499,6 +503,7 @@ export component AppWindow inherits Window {
         next-label: root.next-month-label;
         settings-label: root.settings-title-text;
         hide-label: root.hide-to-tray-label;
+        update-available: root.update-is-available;
         header-motion: root.header-motion;
         show-week-numbers: root.show-week-numbers;
         shaded-bands: root.shaded-bands;
@@ -578,7 +583,7 @@ export component AppWindow inherits Window {
         go-next-event() => { root.calendar-keyboard-nav = false; root.go-next-event(); }
     }
 
-    // ==================== SETTINGS VIEW (448×360) ====================
+    // ==================== SETTINGS VIEW (448×432 / 448×444) ====================
     if root.settings-open : SettingsView {
         macos: root.macos;
         mac-weekday-label: root.mac-weekday-label;

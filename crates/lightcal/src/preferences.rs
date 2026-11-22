@@ -359,7 +359,7 @@ pub struct Preferences {
     pub show_koi: bool,
     #[serde(deserialize_with = "lenient_date_size")]
     pub date_size: DateSize,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub auto_check_updates: bool,
     #[serde(skip, default = "default_microsoft_client_id")]
     pub microsoft_client_id: String,
@@ -402,7 +402,7 @@ impl Default for Preferences {
             show_event_dots: true,
             show_koi: false,
             date_size: DateSize::Standard,
-            auto_check_updates: false,
+            auto_check_updates: true,
             microsoft_client_id: default_microsoft_client_id(),
             google_client_id: default_google_client_id(),
             google_client_secret: default_google_client_secret(),
@@ -1086,7 +1086,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         assert!(loaded.preferences.show_event_dots);
         assert!(!loaded.preferences.show_koi);
         assert_eq!(loaded.preferences.date_size, DateSize::Standard);
-        assert!(!loaded.preferences.auto_check_updates);
+        assert!(loaded.preferences.auto_check_updates);
 
         // Now modify and roundtrip
         let mut modified = loaded.preferences;
@@ -1094,7 +1094,7 @@ LIGHTCAL_GOOGLE_CLIENT_SECRET=\"desktop-secret\"
         modified.show_event_dots = false;
         modified.show_koi = true;
         modified.date_size = DateSize::Larger;
-        modified.auto_check_updates = true;
+        modified.auto_check_updates = false;
 
         store.save(&modified).unwrap();
         let reloaded = store.load();

@@ -428,13 +428,13 @@ fn month_navigation_continues_after_today() {
         .dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 1.5 });
     window.set_size(slint::PhysicalSize::new(528, 648));
     let mut pixels = vec![PremultipliedRgbaColor::default(); 528 * 648];
-    // Compare only the title: from 16 px to just before the previous-month arrow at its
-    // leftmost, which is with Today showing. Font metrics differ by platform (Linux CI has
-    // no Segoe UI), so measure the arrow instead of assuming its position.
+    // Compare only the title: from 16 px to just before Today at its leftmost,
+    // which is with Today showing to the left of the month arrows. Font metrics differ by
+    // platform (Linux CI has no Segoe UI), so measure the Today pill instead of assuming its position.
     ui.set_today_hidden(false);
-    let title_end = ElementHandle::find_by_accessible_label(&ui, "Previous month")
+    let title_end = ElementHandle::find_by_accessible_label(&ui, "Today")
         .next()
-        .expect("previous-month arrow")
+        .expect("today button")
         .absolute_position()
         .x;
     ctrl.borrow().sync_to_ui(&ui);
@@ -603,7 +603,7 @@ fn about_offers_manual_updates_without_running_an_installer() {
             .render_to_png(
                 &dir.join(format!("manual-update-{}.png", locale.as_str())),
                 448,
-                360,
+                432,
             )
             .unwrap();
         installed.set(false);
@@ -617,7 +617,7 @@ fn about_offers_manual_updates_without_running_an_installer() {
     ctrl.install_busy = true;
     ctrl.sync_to_ui(&ui);
     renderer
-        .render_to_png(&dir.join("install-busy.png"), 448, 360)
+        .render_to_png(&dir.join("install-busy.png"), 448, 432)
         .unwrap();
     installed.set(false);
     click(&ui, 380.0, 138.0);
@@ -629,7 +629,7 @@ fn about_offers_manual_updates_without_running_an_installer() {
     ctrl.install_status = "Update verification failed: the signer does not match the configured certificate. The existing installation was not replaced.".into();
     ctrl.sync_to_ui(&ui);
     renderer
-        .render_to_png(&dir.join("install-error.png"), 448, 360)
+        .render_to_png(&dir.join("install-error.png"), 448, 432)
         .unwrap();
     println!("Manual-update snapshots: {}", dir.display());
 }
@@ -665,7 +665,7 @@ fn settings_recovery_controls_remain_reachable() {
         ui.set_legacy_windows_enabled(!ui.get_legacy_windows_enabled());
     });
     renderer
-        .render_to_png(&dir.join("windows-disabled.png"), 448, 360)
+        .render_to_png(&dir.join("windows-disabled.png"), 448, 432)
         .unwrap();
     // The On this PC card sits above the provider list, so the Windows row is found by
     // its label after scrolling it into view.
@@ -707,7 +707,7 @@ fn settings_recovery_controls_remain_reachable() {
             .render_to_png(
                 &dir.join(format!("shortcut-clear-{}.png", locale.as_str())),
                 448,
-                360,
+                432,
             )
             .unwrap();
         cleared.set(false);
@@ -727,7 +727,7 @@ fn settings_recovery_controls_remain_reachable() {
     });
     click(&ui, 340.0, 186.0);
     renderer
-        .render_to_png(&dir.join("shortcut-recording.png"), 448, 360)
+        .render_to_png(&dir.join("shortcut-recording.png"), 448, 432)
         .unwrap();
     for (key, pressed) in [
         (slint::platform::Key::Control, true),
@@ -760,7 +760,7 @@ fn settings_recovery_controls_remain_reachable() {
     let observed = refreshed.clone();
     ui.on_refresh_calendars(move || observed.set(true));
     renderer
-        .render_to_png(&dir.join("google-retry.png"), 448, 360)
+        .render_to_png(&dir.join("google-retry.png"), 448, 432)
         .unwrap();
     // The On this PC card (44 px and an 8 px gap, plus its border) sits above.
     click(&ui, 372.0, 200.0);
@@ -779,7 +779,7 @@ fn settings_recovery_controls_remain_reachable() {
     let observed = reconnected.clone();
     ui.on_choose_google_account(move || observed.set(true));
     renderer
-        .render_to_png(&dir.join("google-expired.png"), 448, 360)
+        .render_to_png(&dir.join("google-expired.png"), 448, 432)
         .unwrap();
     click(&ui, 395.0, 247.0);
     assert!(
@@ -801,7 +801,7 @@ fn settings_recovery_controls_remain_reachable() {
     let observed = selected.clone();
     ui.on_toggle_calendar_source(move |id| observed.set(id == "google:fixture"));
     renderer
-        .render_to_png(&dir.join("mixed-permission-denied.png"), 448, 360)
+        .render_to_png(&dir.join("mixed-permission-denied.png"), 448, 432)
         .unwrap();
     click(&ui, 220.0, 248.0);
     assert!(
@@ -810,18 +810,28 @@ fn settings_recovery_controls_remain_reachable() {
     );
     scroll(&ui, -1000.0);
     renderer
-        .render_to_png(&dir.join("mixed-permission-recovery.png"), 448, 360)
+        .render_to_png(&dir.join("mixed-permission-recovery.png"), 448, 432)
         .unwrap();
     let privacy_opened = Rc::new(Cell::new(false));
     let observed = privacy_opened.clone();
     ui.on_open_privacy_settings(move || observed.set(true));
     refreshed.set(false);
-    click(&ui, 366.0, 238.0);
+    let privacy_label = (0..ui.get_account_cards().row_count())
+        .filter_map(|i| ui.get_account_cards().row_data(i))
+        .find(|card| card.id == "windows")
+        .expect("Windows card")
+        .action_label;
+    click_label(&ui, &privacy_label);
     assert!(
         privacy_opened.get(),
         "Permission recovery remains reachable"
     );
-    click(&ui, 372.0, 187.0);
+    let refresh_btn =
+        ElementHandle::find_by_accessible_label(&ui, &ui.get_settings_strings().refresh_label)
+            .last()
+            .expect("Windows card refresh button");
+    let refresh_pos = element_center(&refresh_btn);
+    click(&ui, refresh_pos.x, refresh_pos.y);
     assert!(refreshed.get(), "Permission recovery still offers a retry");
 
     // About: links first, then both automatic update switches.
@@ -843,7 +853,7 @@ fn settings_recovery_controls_remain_reachable() {
     let observed = opened.clone();
     ui.on_open_external_url(move |url| observed.borrow_mut().push(url.to_string()));
     renderer
-        .render_to_png(&dir.join("about-links.png"), 448, 360)
+        .render_to_png(&dir.join("about-links.png"), 448, 432)
         .unwrap();
     click(&ui, 220.0, 195.0);
     click(&ui, 220.0, 235.0);
@@ -867,16 +877,18 @@ fn settings_recovery_controls_remain_reachable() {
             .render_to_png(
                 &dir.join(format!("about-updates-{}.png", locale.as_str())),
                 448,
-                360,
+                432,
             )
             .unwrap();
-        click(&ui, 400.0, 250.0);
+        let check_pos = switch_center(&ui, &ui.get_settings_strings().auto_check_label);
+        click(&ui, check_pos.x, check_pos.y);
         assert!(
             !ui.get_auto_check_updates(),
             "Automatic checking can be disabled in {}",
             locale.as_str()
         );
-        click(&ui, 400.0, 290.0);
+        let install_pos = switch_center(&ui, &ui.get_auto_install_label());
+        click(&ui, install_pos.x, install_pos.y);
         assert!(
             !ui.get_auto_install_updates(),
             "Automatic installation can be disabled in {}",
@@ -896,7 +908,7 @@ fn settings_recovery_controls_remain_reachable() {
     ui.on_add_ics_source(move |_, _| observed.set(true));
     ui.set_connection_busy(true);
     renderer
-        .render_to_png(&dir.join("ics-loading.png"), 448, 360)
+        .render_to_png(&dir.join("ics-loading.png"), 448, 432)
         .unwrap();
     click(&ui, 392.0, 249.0);
     assert!(
@@ -908,7 +920,7 @@ fn settings_recovery_controls_remain_reachable() {
         "Use a direct HTTPS calendar address. Plain HTTP is not supported.".into(),
     );
     renderer
-        .render_to_png(&dir.join("ics-error.png"), 448, 360)
+        .render_to_png(&dir.join("ics-error.png"), 448, 432)
         .unwrap();
     click(&ui, 392.0, 249.0);
     assert!(
@@ -1631,11 +1643,9 @@ fn koi_pond_switch_is_off_by_default_and_saves_the_choice() {
     wire_koi_pond(&ui, &ctrl);
     ui.show().unwrap();
     ctrl.borrow().sync_to_ui(&ui);
-    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.set_size(slint::PhysicalSize::new(448, 432));
     window.draw_if_needed(|_| {});
-    // Koi pond is the last Calendar row, below the fold.
-    scroll(&ui, -1000.0);
-    window.draw_if_needed(|_| {});
+    // Koi pond is the last Calendar row and fits on screen at 432 px without scrolling.
     assert!(!ui.get_show_koi());
 
     let switch = switch_center(&ui, "Koi pond");
@@ -1726,7 +1736,7 @@ fn settings_window(
     wire_settings_navigation(&ui, &ctrl, |_, _| {});
     ui.show().unwrap();
     ctrl.borrow().sync_to_ui(&ui);
-    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.set_size(slint::PhysicalSize::new(448, 432));
     window.draw_if_needed(|_| {});
     ui.invoke_focus_calendar_keys();
     (ui, window, ctrl, dir)
@@ -2010,15 +2020,31 @@ fn date_size_control_saves_the_choice_and_grows_the_calendar() {
     ctrl.settings_open = true;
     ctrl.settings_tab = 0;
     let ctrl = Rc::new(RefCell::new(ctrl));
-    wire_date_size(&ui, &ctrl);
+    thread_local! {
+        static RESIZED_FOR_DATE_SIZE: Cell<Option<(bool, f32)>> = const { Cell::new(None) };
+    }
+    fn record_resize(ui: &AppWindow, settings_open: bool) {
+        RESIZED_FOR_DATE_SIZE.with(|slot| slot.set(Some((settings_open, calendar_height(ui)))));
+    }
+    RESIZED_FOR_DATE_SIZE.with(|slot| slot.set(None));
+    wire_date_size(&ui, &ctrl, record_resize);
     ui.show().unwrap();
     ctrl.borrow().sync_to_ui(&ui);
-    window.set_size(slint::PhysicalSize::new(448, 360));
+    window.set_size(slint::PhysicalSize::new(448, 432));
     window.draw_if_needed(|_| {});
 
     click_label(&ui, "Larger");
     assert_eq!(ctrl.borrow().prefs.date_size, DateSize::Larger);
     assert_eq!(ui.get_date_size(), CalendarDateSize::Larger);
+    assert_eq!(
+        RESIZED_FOR_DATE_SIZE.with(|slot| slot.get()),
+        Some((true, 444.0)),
+        "changing Date size while Settings is open should resize the window to 444 px"
+    );
+    assert_eq!(
+        target_logical_size(true, calendar_height(&ui)),
+        (448.0, 444.0)
+    );
     let saved = PreferencesStore::new(dir.clone()).load();
     assert_eq!(saved.preferences.date_size, DateSize::Larger);
 
@@ -2062,7 +2088,7 @@ fn header_hide_button_hides_the_calendar_like_escape() {
 }
 
 #[test]
-fn today_folds_between_the_arrows_on_the_current_day() {
+fn today_folds_left_of_the_arrows_on_the_current_day() {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
     let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
     slint::platform::set_platform(Box::new(HeadlessPlatform {
@@ -2087,6 +2113,13 @@ fn today_folds_between_the_arrows_on_the_current_day() {
             .unwrap();
         next.absolute_position().x - (prev.absolute_position().x + prev.size().width)
     };
+    let prev_x = |ui: &AppWindow| {
+        ElementHandle::find_by_accessible_label(ui, "Previous month")
+            .next()
+            .unwrap()
+            .absolute_position()
+            .x
+    };
     let today = |ui: &AppWindow| {
         ElementHandle::find_by_accessible_label(ui, "Today")
             .next()
@@ -2098,9 +2131,11 @@ fn today_folds_between_the_arrows_on_the_current_day() {
     window.draw_if_needed(|_| {});
     assert!(ui.get_today_hidden());
     let close = |a: f32, b: f32| (a - b).abs() < 0.01;
+    let initial_gap = arrow_gap(&ui);
+    let initial_prev_x = prev_x(&ui);
     assert!(
-        close(arrow_gap(&ui), 4.0),
-        "only the two 2 px layout gaps remain"
+        close(initial_gap, 2.0),
+        "arrows stay locked together with 2 px spacing"
     );
     assert!(
         ElementHandle::find_by_accessible_label(&ui, "Today")
@@ -2109,15 +2144,22 @@ fn today_folds_between_the_arrows_on_the_current_day() {
         "a folded Today is hidden from clicks and screen readers"
     );
 
-    // A month away: the arrows move apart and Today sits between them.
+    // A month away: Today unfolds to the left of the arrows without moving them apart.
     ctrl.cal_state.navigate_months(1);
     ctrl.sync_to_ui(&ui);
     window.draw_if_needed(|_| {});
     assert!(!ui.get_today_hidden());
-    let today_width = today(&ui).size().width;
-    assert!(today_width > 0.0);
-    assert!(close(arrow_gap(&ui), 4.0 + today_width));
-    assert_eq!(today(&ui).computed_opacity(), 1.0);
+    let today_el = today(&ui);
+    assert!(today_el.size().width > 0.0);
+    assert!(
+        today_el.absolute_position().x + today_el.size().width <= prev_x(&ui),
+        "Today sits to the left of Previous month"
+    );
+    assert!(
+        close(arrow_gap(&ui), initial_gap) && close(prev_x(&ui), initial_prev_x),
+        "arrows stay stationary when Today appears"
+    );
+    assert_eq!(today_el.computed_opacity(), 1.0);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2201,8 +2243,8 @@ fn opening_settings_shows_the_page_at_once() {
     ctrl.settings_open = true;
     ctrl.settings_tab = 2;
     ctrl.sync_to_ui(&ui);
-    window.set_size(slint::PhysicalSize::new(448, 360));
-    let size = (448, 360);
+    window.set_size(slint::PhysicalSize::new(448, 432));
+    let size = (448, 432);
     let first = ink_after(&window, size, Duration::ZERO);
     let settled = ink_after(&window, size, Duration::from_millis(400));
     assert_eq!(first, settled, "Settings opens without a fade");
@@ -3636,5 +3678,180 @@ fn native_calendar_permission_copy_and_read_only_footer_follow_the_platform_and_
             }
         }
     }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn settings_footer_update_controls_check_open_about_and_fit_all_locales() {
+    use i_slint_backend_testing::AccessibleRole;
+    use lightcal::preferences::LocaleCode;
+
+    let (ui, window, ctrl, dir) = settings_window(0, "footer-updates");
+    let checks = Rc::new(Cell::new(0usize));
+    let checks_cb = Rc::clone(&checks);
+    ui.on_check_updates(move || checks_cb.set(checks_cb.get() + 1));
+
+    // Idle footer version acts as a delicate manual update check button.
+    let version = ui.get_about_version_text().to_string();
+    let check_label = format!("Check now, {version}");
+    let btn = ElementHandle::find_by_accessible_label(&ui, &check_label)
+        .find(|e| e.accessible_role() == Some(AccessibleRole::Button))
+        .expect("footer version button in idle state");
+    let center = element_center(&btn);
+    click(&ui, center.x, center.y);
+    assert_eq!(checks.get(), 1);
+
+    // Package-managed builds expose plain text (not a clickable check button).
+    ui.set_package_managed_updates(true);
+    window.draw_if_needed(|_| {});
+    assert!(
+        ElementHandle::find_by_accessible_label(&ui, &check_label)
+            .next()
+            .is_none(),
+        "package-managed builds must not expose a Check now footer button"
+    );
+    let text_item = ElementHandle::find_by_accessible_label(&ui, &version)
+        .find(|e| e.accessible_role() == Some(AccessibleRole::Text))
+        .expect("plain version text for package-managed builds");
+    let center = element_center(&text_item);
+    click(&ui, center.x, center.y);
+    assert_eq!(checks.get(), 1);
+    ui.set_package_managed_updates(false);
+
+    // When an update is available, the footer shows the compact version badge in every locale
+    // without crowding About or Sponsor, and clicking it opens About (tab 3).
+    let locales = [
+        LocaleCode::En,
+        LocaleCode::Ru,
+        LocaleCode::Es,
+        LocaleCode::Ja,
+        LocaleCode::De,
+        LocaleCode::Fr,
+        LocaleCode::PtBr,
+        LocaleCode::Uk,
+        LocaleCode::ZhHans,
+        LocaleCode::Ko,
+    ];
+    {
+        let mut c = ctrl.borrow_mut();
+        c.update_state = lightcal::updater::UpdateCheckState::UpdateAvailable {
+            current_version: env!("CARGO_PKG_VERSION").into(),
+            latest_version: "1.4.0".into(),
+            release_url: "https://github.com/andmetoo/lightcal/releases/tag/v1.4.0".into(),
+        };
+        for locale in locales {
+            c.prefs.set_locale(locale);
+            c.sync_to_ui(&ui);
+            window.request_redraw();
+            window.draw_if_needed(|_| {});
+            assert_eq!(ui.get_settings_strings().update_badge, "v1.4.0");
+            let about_label = ui.get_about_link_text().to_string();
+            let sponsor_label = ui.get_settings_strings().sponsor_label.to_string();
+            let update_label = ui.get_settings_strings().update_short.to_string();
+            let about = ElementHandle::find_by_accessible_label(&ui, &about_label)
+                .find(|e| e.accessible_role() == Some(AccessibleRole::Button))
+                .unwrap_or_else(|| panic!("{locale:?}: missing About footer button"));
+            let sponsor = ElementHandle::find_by_accessible_label(&ui, &sponsor_label)
+                .find(|e| e.accessible_role() == Some(AccessibleRole::Button))
+                .unwrap_or_else(|| panic!("{locale:?}: missing Sponsor footer button"));
+            let pill = ElementHandle::find_by_accessible_label(&ui, &update_label)
+                .find(|e| e.accessible_role() == Some(AccessibleRole::Button))
+                .unwrap_or_else(|| panic!("{locale:?}: missing update pill in footer"));
+            let about_right = about.absolute_position().x + about.size().width;
+            let sponsor_left = sponsor.absolute_position().x;
+            let sponsor_right = sponsor_left + sponsor.size().width;
+            let pill_left = pill.absolute_position().x;
+            let pill_right = pill_left + pill.size().width;
+            assert!(
+                about_right + 4.0 <= sponsor_left,
+                "{locale:?}: About ({about_right}) overlaps Sponsor ({sponsor_left})"
+            );
+            assert!(
+                sponsor_right + 4.0 <= pill_left,
+                "{locale:?}: Sponsor ({sponsor_right}) overlaps update pill ({pill_left})"
+            );
+            assert!(
+                pill_right <= 448.0,
+                "{locale:?}: update pill overflows footer ({pill_right} > 448)"
+            );
+        }
+        c.prefs.set_locale(LocaleCode::En);
+        c.sync_to_ui(&ui);
+    }
+    window.request_redraw();
+    window.draw_if_needed(|_| {});
+    let pill_label = ui.get_settings_strings().update_short.to_string();
+    let pill = ElementHandle::find_by_accessible_label(&ui, &pill_label)
+        .find(|e| e.accessible_role() == Some(AccessibleRole::Button))
+        .expect("update pill in English");
+    let center = element_center(&pill);
+    click(&ui, center.x, center.y);
+    assert_eq!(ctrl.borrow().settings_tab, 3);
+    assert_eq!(ui.get_settings_tab(), 3);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn calendar_settings_gear_paints_update_dot_when_update_is_available() {
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+    slint::platform::set_platform(Box::new(HeadlessPlatform {
+        window: window.clone(),
+    }))
+    .unwrap();
+    let ui = AppWindow::new().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "lightcal-gear-update-dot-{}",
+        lightcal::calendars::random_key().unwrap()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut ctrl = controller(&dir);
+    ctrl.settings_open = false;
+    ui.show().unwrap();
+    ctrl.sync_to_ui(&ui);
+    window.set_size(slint::PhysicalSize::new(352, 432));
+
+    let render = || {
+        window.request_redraw();
+        let mut pixels = vec![slint::Rgb8Pixel::new(0, 0, 0); 352 * 432];
+        window.draw_if_needed(|renderer| {
+            renderer.render(&mut pixels, 352);
+        });
+        pixels
+    };
+
+    let idle_pixels = render();
+    assert!(!ui.get_update_is_available());
+
+    let gear = ElementHandle::find_by_accessible_label(&ui, "Settings")
+        .next()
+        .expect("Settings gear button");
+    let gx = gear.absolute_position().x.floor().max(0.0) as usize;
+    let gy = gear.absolute_position().y.floor().max(0.0) as usize;
+    let gw = gear.size().width.ceil() as usize;
+    let gh = gear.size().height.ceil() as usize;
+
+    ctrl.update_state = lightcal::updater::UpdateCheckState::UpdateAvailable {
+        current_version: env!("CARGO_PKG_VERSION").into(),
+        latest_version: "1.4.0".into(),
+        release_url: "https://github.com/andmetoo/lightcal/releases/tag/v1.4.0".into(),
+    };
+    ctrl.sync_to_ui(&ui);
+    assert!(ui.get_update_is_available());
+    let avail_pixels = render();
+
+    let mut changed_inside_gear = 0usize;
+    for y in gy..(gy + gh).min(432) {
+        for x in gx..(gx + gw).min(352) {
+            let idx = y * 352 + x;
+            if idle_pixels[idx] != avail_pixels[idx] {
+                changed_inside_gear += 1;
+            }
+        }
+    }
+    assert!(
+        changed_inside_gear >= 12,
+        "expected update dot to paint inside Settings gear bounds ({changed_inside_gear} px changed)"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }

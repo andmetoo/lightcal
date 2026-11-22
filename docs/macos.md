@@ -24,7 +24,7 @@ bun scripts/package-macos.ts
 ```
 
 Run `just installer` to build the universal app plus a local unsigned disk image
-at `target/macos/lightcal-1.3.1-macos-universal.dmg` and its SHA-256 file. This uses
+at `target/macos/lightcal-1.3.2-macos-universal.dmg` and its SHA-256 file. This uses
 Apple's native packaging tools and does not require PowerShell or NSIS. The image
 contains `Lightcal.app` and an Applications link for drag-and-drop installation.
 `just installer --help` lists macOS options; Windows-only flags such as
