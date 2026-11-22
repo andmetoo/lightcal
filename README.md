@@ -2,18 +2,18 @@
 
 # Lightcal
 
-Lightcal 1.3.2 is a small calendar that lives in the Windows tray. Click the tray icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
+Lightcal 1.3.2 is a small calendar that lives in the Windows tray and the macOS menu bar. Click its icon, or press your own shortcut, to see the month, the days that have events and today's agenda. Connect Google, Outlook or private ICS calendars if you want them: Lightcal only reads them, works without an account of its own and sends no telemetry. It is written in Rust and [Slint](https://slint.dev), with no browser engine inside.
 
 ## Highlights
 
 - **Month at a glance.** Open the 42-day month from the tray or the taskbar. Move by month, jump back with **Today**, or use the keyboard. Week numbers and shaded weekend columns are optional.
 - **Event dots and agenda.** Up to three dots per day in calendar colors. The agenda lists all-day events, time ranges, **Now** and the time to the next event. Click an event for its duration, location and calendar, with **Copy** and, for Google and Outlook, **Open** in the web calendar.
-- **Your calendars, read-only.** Google Calendar, Outlook (Microsoft Graph), private HTTPS ICS links and, optionally, calendars exposed by Windows. Choose which calendars to show. Lightcal never changes an event.
-- **Tray date icon.** The tray shows today's date in Lightcal's coral tile or a mono outline, with weekday or time variants. It does not replace the Windows clock.
+- **Your calendars, read-only.** Google Calendar, Outlook (Microsoft Graph), private HTTPS ICS links and, optionally, calendars exposed by Windows. On a Mac: Google, Outlook and the calendars in macOS Calendar. Choose which calendars to show. Lightcal never changes an event.
+- **Date icon.** The Windows tray shows today's date in Lightcal's coral tile or a mono outline, with weekday or time variants. On a Mac, the menu bar shows the date with an optional weekday and month, and the Dock icon shows today's date. Lightcal does not replace the system clock.
 - **Ten languages.** English, German, Spanish, French, Brazilian Portuguese, Russian, Ukrainian, Japanese, Korean and Simplified Chinese, switched without a restart.
-- **Light and dark.** Follows Windows or stays on the theme you choose.
-- **Opt-in extras.** A global shortcut and start with Windows are off until you turn them on.
-- **Updates on request.** **Check for updates** compares your version with the latest GitHub release only when you ask.
+- **Light and dark.** Follows the system or stays on the theme you choose.
+- **Opt-in extras.** A global shortcut and opening at login are off until you turn them on.
+- **Signed updates.** Lightcal checks GitHub once a day for a newer release (you can turn this off in About) and installs only signed updates: Authenticode on Windows, Sparkle with a notarized app on macOS.
 
 ## Screenshots
 
@@ -29,13 +29,28 @@ These are headless renders of the real Slint UI (`--render-snapshots`) with samp
 
 ## Install
 
-Download Lightcal from [GitHub Releases](https://github.com/andmetoo/lightcal/releases). Each release has:
+Download Lightcal from [GitHub Releases](https://github.com/andmetoo/lightcal/releases).
+
+**Windows 10 and 11 (x64)**
 
 - `lightcal-X.Y.Z-windows-x64-setup.exe`, a per-user installer that needs no administrator rights;
 - `lightcal-vX.Y.Z-windows-x64.zip`, a portable copy;
 - `lightcal.exe`, the application the updater uses.
 
-Every file has a SHA-256 checksum next to it. Releases are Authenticode-signed on the maintainer's PC, and the signatures are verified before a release is published. CI artifacts are unsigned until then. See [Windows installer](docs/windows-installer.md) for what Setup installs, how signing works and how in-place updates are restricted to signed builds.
+Windows releases are Authenticode-signed on the maintainer's PC, and the signatures are verified before a release is published. See [Windows installer](docs/windows-installer.md) for what Setup installs, how signing works and how in-place updates are restricted to signed builds.
+
+**macOS 14 or later (Apple Silicon and Intel)**
+
+- `lightcal-X.Y.Z-macos-universal.dmg`: open it and drag Lightcal to Applications;
+- `lightcal-X.Y.Z-macos-universal.zip`, the app the Sparkle updater installs.
+
+The Mac app is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. See [macOS build and distribution](docs/macos.md).
+
+Every file has a SHA-256 checksum next to it. CI artifacts from pull requests are unsigned review builds.
+
+## On a Mac
+
+Lightcal runs on macOS 14 or later, on Apple Silicon and Intel, as one universal app. It opens from the menu bar or the Dock, reads Google and Outlook directly and the calendars of macOS Calendar through EventKit, and stores sign-ins in the Keychain. The On this PC calendar and private ICS links are Windows-only; create Mac events in Calendar instead. See [macOS](docs/macos.md) and [ADR 0019](docs/decisions/0019-macos-support.md).
 
 ## Build from source
 
@@ -59,11 +74,11 @@ Copy [.env.example](.env.example) to the ignored `.env` for the public client id
 
 ## Privacy
 
-Lightcal never changes your connected calendars and has no telemetry. It goes online only when you act: a calendar you connect is read from Google, Microsoft or the ICS host, and an update check reaches GitHub. Sign-in tokens stay in the Windows protected store. Events you create in the On this PC calendar are saved only on this PC, as plain unencrypted JSON (`local-events.json` in `%APPDATA%\Lightcal`), so anyone with access to your Windows profile can read them. See [required features](docs/features.md).
+Lightcal never changes your connected calendars and has no telemetry. It goes online only to read the calendars you connect (from Google, Microsoft or the ICS host) and to check GitHub for updates. Sign-in tokens stay in the Windows protected store, or in the macOS Keychain on a Mac. macOS Calendar events are read on the Mac through EventKit, after you allow access. Events you create in the On this PC calendar are saved only on this PC, as plain unencrypted JSON (`local-events.json` in `%APPDATA%\Lightcal`), so anyone with access to your Windows profile can read them. See [required features](docs/features.md).
 
 ## Documentation
 
-[Documentation index](docs/README.md) · [Required features](docs/features.md) · [Provider setup](docs/provider-setup.md) · [Windows installer](docs/windows-installer.md) · [Design](design/README.md) · [Contributing](CONTRIBUTING.md)
+[Documentation index](docs/README.md) · [Required features](docs/features.md) · [Provider setup](docs/provider-setup.md) · [Windows installer](docs/windows-installer.md) · [macOS](docs/macos.md) · [Design](design/README.md) · [Contributing](CONTRIBUTING.md)
 
 ## Support
 
@@ -72,7 +87,3 @@ Lightcal is free and open source. If it is useful to you, you can [sponsor its d
 ## License
 
 Lightcal is licensed under [GPL-3.0-only](LICENSE). Copyright (c) 2026 Lightcal contributors.
-
-## macOS
-
-macOS 14+ support is in development for Intel and Apple Silicon. The Mac app supports calendars available through macOS plus direct read-only Outlook and Google connections and keeps both Dock and menu bar entry points. See [macOS builds, signing, and remaining validation](docs/macos.md). Public macOS release validation is pending.

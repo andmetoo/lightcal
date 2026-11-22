@@ -15,7 +15,7 @@ export const SIGNED_EXE = "lightcal.exe";
 const STABLE_VERSION = /^v?([0-9]+\.[0-9]+\.[0-9]+)$/;
 
 export type ReleaseAsset = { name: string };
-export type ReleaseView = { isDraft: boolean; url?: string; assets: ReleaseAsset[] };
+export type ReleaseView = { isDraft: boolean; url?: string; body?: string; assets: ReleaseAsset[] };
 export type BuildRun = { databaseId: number; headSha: string; status: string; event: string };
 
 export function matchingBuildRuns(runs: BuildRun[], commit: string): BuildRun[] {
@@ -105,7 +105,7 @@ export function parseReleaseView(json: string): ReleaseView {
     throw new Error("GitHub release metadata is not JSON");
   }
   if (!value || typeof value !== "object") throw new Error("GitHub release metadata is incomplete");
-  const record = value as { isDraft?: unknown; assets?: unknown; url?: unknown };
+  const record = value as { isDraft?: unknown; assets?: unknown; url?: unknown; body?: unknown };
   if (typeof record.isDraft !== "boolean" || !Array.isArray(record.assets)) {
     throw new Error("GitHub release metadata is incomplete");
   }
@@ -118,6 +118,7 @@ export function parseReleaseView(json: string): ReleaseView {
   return {
     isDraft: record.isDraft,
     url: typeof record.url === "string" ? record.url : undefined,
+    body: typeof record.body === "string" ? record.body : undefined,
     assets,
   };
 }
@@ -377,7 +378,19 @@ export function publishedReleaseTitle(version: string): string {
   return `Lightcal ${tagForVersion(version)}`;
 }
 
-export function publishedReleaseNotes(version: string, includesMac = false): string {
+/**
+ * GitHub's generated "What's Changed" list (and its Full Changelog link) from the draft
+ * notes, so publishing keeps it below the download section. Empty when there is none.
+ */
+export function generatedChangelog(body: string | undefined): string {
+  const text = (body ?? "").replace(/\r\n/g, "\n");
+  const start = [text.indexOf("## What's Changed"), text.indexOf("**Full Changelog**")]
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0];
+  return start === undefined ? "" : text.slice(start).trim();
+}
+
+export function publishedReleaseNotes(version: string, includesMac = false, changelog = ""): string {
   const tag = tagForVersion(version);
   const mac = includesMac
     ? [
@@ -403,6 +416,7 @@ export function publishedReleaseNotes(version: string, includesMac = false): str
     "The installer and `lightcal.exe` are digitally signed, and the ZIP contains that same signed `lightcal.exe`. Each download has a `.sha256` checksum next to it.",
     "",
     ...mac,
+    ...(changelog ? [changelog, ""] : []),
   ].join("\n");
 }
 

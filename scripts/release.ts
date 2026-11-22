@@ -19,6 +19,7 @@ import {
   assertWindowsExecutable,
   deleteAssetArgs,
   editReleaseArgs,
+  generatedChangelog,
   embedsCertificatePin,
   ALLOW_WINDOWS_ONLY,
   assertSparkleKeyContinuity,
@@ -285,7 +286,7 @@ function assertExecutableVersion(path: string, version: string): void {
 
 function loadRelease(tag: string) {
   try {
-    return parseReleaseView(gh("release", "view", tag, "--json", "isDraft,assets,url"));
+    return parseReleaseView(gh("release", "view", tag, "--json", "isDraft,assets,url,body"));
   } catch (error) {
     if (/release not found/i.test(String(error))) return null;
     throw error;
@@ -487,7 +488,7 @@ function publishDraft(): void {
       const notesDir = join(ROOT, "target", "draft-sign");
       mkdirSync(notesDir, { recursive: true });
       const notesPath = join(notesDir, "published-notes.md");
-      writeFileSync(notesPath, publishedReleaseNotes(version, includesMac), "utf8");
+      writeFileSync(notesPath, publishedReleaseNotes(version, includesMac, generatedChangelog(view.body)), "utf8");
       console.log(`=== Publishing ${tag} ===`);
       ghRun(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath),
         `Could not publish ${tag}. Check the release state in GitHub before retrying.`);
