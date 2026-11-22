@@ -4,10 +4,15 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag to build (for example v1.3.0); empty means unsigned review build"
+        type: string
+        required: false
 permissions:
   contents: read
 concurrency:
-  group: macos-${{ github.ref }}
+  group: macos-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 jobs:
   check:
@@ -17,10 +22,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: macos-check
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: "1.4.4"
@@ -30,11 +39,45 @@ jobs:
       # Compile the opt-in diagnostic path, without running a desktop app in CI.
       - run: cargo clippy --workspace --all-targets --features native-smoke --locked -- -D warnings
       - run: cargo test --workspace --features native-smoke --locked
+  unsigned:
+    name: Unsigned macOS DMG
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.release_tag == '' }}
+    needs: check
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
+      LIGHTCAL_GOOGLE_CLIENT_ID: ${{ vars.LIGHTCAL_GOOGLE_CLIENT_ID }}
+      LIGHTCAL_GOOGLE_CLIENT_SECRET: ${{ secrets.LIGHTCAL_GOOGLE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: macos-universal
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.4.4"
+      - name: Build unsigned universal DMG
+        run: bun scripts/package-macos.ts --dmg
+      - name: Upload unsigned macOS DMG
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lightcal-macos-universal-unsigned
+          path: |
+            target/macos/*.dmg
+            target/macos/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 14
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != '' }}
     needs: check
     concurrency:
-      group: lightcal-release-${{ github.ref_name }}
+      group: lightcal-release-${{ inputs.release_tag || github.ref_name }}
       cancel-in-progress: false
     runs-on: macos-15
     environment: macos-release
@@ -42,10 +85,11 @@ jobs:
       contents: write
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
       LIGHTCAL_MICROSOFT_CLIENT_ID: ${{ vars.LIGHTCAL_MICROSOFT_CLIENT_ID }}
       LIGHTCAL_GOOGLE_CLIENT_ID: ${{ vars.LIGHTCAL_GOOGLE_CLIENT_ID }}
       LIGHTCAL_GOOGLE_CLIENT_SECRET: ${{ secrets.LIGHTCAL_GOOGLE_CLIENT_SECRET }}
-      LIGHTCAL_RELEASE_VERSION: ${{ github.ref_name }}
+      LIGHTCAL_RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
       SPARKLE_VERSION: "2.8.1"
       SPARKLE_SHA256: ${{ vars.SPARKLE_SHA256 }}
       SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
@@ -54,19 +98,35 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
           persist-credentials: false
           fetch-depth: 0
       - name: Validate release tag
         run: |
-          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch --no-tags origin main:refs/remotes/origin/main
           git merge-base --is-ancestor HEAD origin/main
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: macos-universal
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: "1.4.4"
+      - name: Check signing configuration
+        id: signing
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: bun scripts/macos-signing-config.ts
       - name: Configure temporary signing keychain
+        if: ${{ steps.signing.outputs.configured == 'true' }}
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -76,6 +136,7 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: bun scripts/prepare-macos-signing.ts
       - name: Fetch verified Sparkle distribution
+        if: ${{ steps.signing.outputs.configured == 'true' }}
         run: |
           test -n "$SPARKLE_SHA256"
           curl --fail --location --proto '=https' "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o "$RUNNER_TEMP/sparkle.tar.xz"
@@ -84,17 +145,44 @@ jobs:
           tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
           echo "SPARKLE_DIR=$RUNNER_TEMP/sparkle" >> "$GITHUB_ENV"
       - name: Build, sign and notarize
+        if: ${{ steps.signing.outputs.configured == 'true' }}
         run: bun scripts/package-macos.ts --release
+      - name: Upload signed macOS artifacts
+        if: ${{ steps.signing.outputs.configured == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lightcal-macos-universal-signed
+          path: |
+            target/macos/*.zip
+            target/macos/*.dmg
+            target/macos/*.sha256
+            target/macos/lightcal-macos-appcast.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Attach to draft release
+        if: ${{ steps.signing.outputs.configured == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --json isDraft > "$RUNNER_TEMP/release.json"; then
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
             bun -e 'if (!JSON.parse(await Bun.file(process.env.RUNNER_TEMP + "/release.json").text()).isDraft) throw new Error("Release is already public; refusing asset changes")'
           else
-            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Lightcal $GITHUB_REF_NAME" --notes "Signed macOS build prepared for review."
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "Lightcal $RELEASE_TAG" --notes "Signed macOS build prepared for review."
           fi
-          gh release upload "$GITHUB_REF_NAME" target/macos/*.zip target/macos/*.dmg target/macos/*.sha256 target/macos/lightcal-macos-appcast.xml
+          gh release upload "$RELEASE_TAG" target/macos/*.zip target/macos/*.dmg target/macos/*.sha256 target/macos/lightcal-macos-appcast.xml
+      - name: Build unsigned universal DMG
+        if: ${{ steps.signing.outputs.configured != 'true' }}
+        run: bun scripts/package-macos.ts --dmg
+      - name: Upload unsigned macOS DMG
+        if: ${{ steps.signing.outputs.configured != 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lightcal-macos-universal-unsigned
+          path: |
+            target/macos/*.dmg
+            target/macos/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 14
       - name: Remove signing material
-        if: always()
+        if: ${{ always() && steps.signing.outputs.configured == 'true' }}
         run: bun scripts/prepare-macos-signing.ts --cleanup

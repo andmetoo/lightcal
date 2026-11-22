@@ -24,7 +24,7 @@ bun scripts/package-macos.ts
 ```
 
 Run `just installer` to build the universal app plus a local unsigned disk image
-at `target/macos/lightcal-1.2.2-macos-universal.dmg` and its SHA-256 file. This uses
+at `target/macos/lightcal-1.2.3-macos-universal.dmg` and its SHA-256 file. This uses
 Apple's native packaging tools and does not require PowerShell or NSIS. The image
 contains `Lightcal.app` and an Applications link for drag-and-drop installation.
 `just installer --help` lists macOS options; Windows-only flags such as
@@ -95,11 +95,13 @@ does not replace manual Dock, multi-display, permission or accessibility checks.
 
 ## Tag workflow configuration
 
-The macOS workflow checks pull requests on the macOS 15 runner; the deployment
-target remains macOS 14. GitHub retired its macOS 14 runner on November 2, 2026
+The macOS workflow checks pull requests and manual runs on the macOS 15 runner and
+uploads an unsigned universal DMG (`lightcal-macos-universal-unsigned`) as a
+workflow artifact; the deployment target remains macOS 14. GitHub retired its
+macOS 14 runner on November 2, 2026
 ([runner retirement](https://github.com/actions/runner-images/issues/13518)).
-Stable `vX.Y.Z` tags reachable from main
-also build universal release assets in the protected `macos-release` environment.
+Stable `vX.Y.Z` tags reachable from main (or `workflow_dispatch` with
+`release_tag`) run in the protected `macos-release` environment.
 Configure environment protection for owner approval before exposing signing keys.
 
 Environment variables:
@@ -124,11 +126,15 @@ Environment secrets:
 | `LIGHTCAL_GOOGLE_CLIENT_SECRET` | Google Desktop OAuth client secret (non-confidential desktop configuration) |
 | `SPARKLE_PRIVATE_KEY` | Sparkle private signing key in `sign_update --ed-key-file` format |
 
-The workflow imports credentials into a temporary keychain, signs nested Sparkle
-components and the application with hardened runtime, notarizes and staples the
-app and DMG, signs the update ZIP, and attaches assets to a draft release.
-Cleanup runs even after a failure. Missing configuration fails the release; it
-never substitutes unsigned release assets or overwrites a public release.
+When all variables and secrets above are configured, the workflow imports
+credentials into a temporary keychain, signs nested Sparkle components and the
+application with hardened runtime, notarizes and staples the app and DMG, signs
+the update ZIP, uploads the signed bundle as a workflow artifact, and attaches
+assets to a draft release. Cleanup runs even after a failure. When any signing,
+notarization, or Sparkle variable or secret is missing, the workflow falls back
+to building the unsigned universal DMG and its SHA-256 into the
+`lightcal-macos-universal-unsigned` workflow artifact; it never substitutes
+unsigned release assets into a GitHub Release or overwrites a public release.
 ZIP and DMG notarization both pass the ephemeral signing keychain explicitly.
 
 Sparkle alone schedules automatic macOS update checks. The shared startup/daily

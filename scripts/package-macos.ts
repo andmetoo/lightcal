@@ -20,7 +20,9 @@ const root = resolve(import.meta.dir, "..");
 const out = join(root, "target/macos");
 const app = join(out, "Lightcal.app");
 const contents = join(app, "Contents");
-const version = (process.env.LIGHTCAL_RELEASE_VERSION || "1.2.2").replace(/^v/, "");
+const workspacePackage = (await readFile(join(root, "Cargo.toml"), "utf8")).match(/\[workspace\.package\][\s\S]*?(?=\n\[|$)/)?.[0];
+const cargoVersion = workspacePackage?.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
+const version = (process.env.LIGHTCAL_RELEASE_VERSION || cargoVersion || "1.2.3").replace(/^v/, "");
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Expected stable x.y.z version");
 const run = async (...args: string[]) => {
   // Bun's default inherited environment can omit mutations made above.
