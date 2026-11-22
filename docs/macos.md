@@ -130,19 +130,23 @@ Notarization uses an App Store Connect team API key (Users and Access ›
 Integrations › Team Keys, Developer role or higher) instead of an Apple ID and
 app-specific password: it needs no personal account password and keeps working
 after Apple ID password changes. The workflow validates the key ID, issuer and PEM
-format without printing them, writes the `.p8` text to the runner's temporary
-directory only long enough for `notarytool store-credentials` to copy it into the
-temporary keychain, and deletes it again. Apple lets you download a `.p8` once, so
+format without printing them (a one-line value with literal `\n` sequences is
+refused), writes the `.p8` text to the runner's temporary directory for
+`notarytool store-credentials` and both submissions, and the always-run cleanup step
+deletes it with the temporary keychain. When Apple rejects the key, the job shows
+notarytool's reason. Apple lets you download a `.p8` once, so
 keep an offline backup.
 
 When all variables and secrets above are configured, the workflow imports
 credentials into a temporary keychain, signs nested Sparkle components and the
 application with hardened runtime, notarizes and staples the app and DMG, signs
 the update ZIP, uploads the signed bundle as a workflow artifact, and attaches
-assets to a draft release. Cleanup runs even after a failure. When any signing,
-notarization, or Sparkle variable or secret is missing, the workflow falls back
-to building the unsigned universal DMG and its SHA-256 into the
-`lightcal-macos-universal-unsigned` workflow artifact; it never substitutes
+assets to a draft release. Cleanup runs even after a failure. When none of the signing,
+notarization and Sparkle values are configured, the workflow falls back to
+building the unsigned universal DMG and its SHA-256 into the
+`lightcal-macos-universal-unsigned` workflow artifact. When only some are set, or
+one is empty (`gh secret set` stores an empty value from an empty pipe), the
+release job fails and names the missing keys instead of quietly building unsigned; it never substitutes
 unsigned release assets into a GitHub Release or overwrites a public release.
 ZIP and DMG notarization both pass the ephemeral signing keychain explicitly.
 

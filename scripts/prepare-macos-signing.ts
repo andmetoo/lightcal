@@ -1,7 +1,7 @@
 /** CI-only temporary signing material; never writes into the checkout. */
 import { chmod, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { notaryApiKey, notaryStoreCredentialsCommand } from "./macos-notarization";
+import { notaryApiKey, notaryFailureMessage, notaryStoreCredentialsCommand } from "./macos-notarization";
 const directory = process.env.RUNNER_TEMP;
 if (!directory) throw new Error("Run only on an ephemeral GitHub Actions runner");
 const keychain = join(directory, "lightcal-signing.keychain-db");
@@ -29,13 +29,13 @@ if (process.argv.includes("--cleanup")) {
   await run("security", "import", certificate, "-P", required("APPLE_CERTIFICATE_PASSWORD"), "-A", "-t", "cert", "-f", "pkcs12", "-k", keychain);
   await run("security", "list-keychains", "-d", "user", "-s", keychain, join(process.env.HOME!, "Library/Keychains/login.keychain-db"));
   await run("security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:", "-s", "-k", password, keychain);
-  // notarytool copies the API key into the profile, so the .p8 file is removed right after.
+  // The .p8 stays until the always-run cleanup step: the profile may refer to the file
+  // rather than hold a copy, and both later notarytool submissions need it.
   await writeFile(notaryKey, apiKey.privateKey, { mode: 0o600 });
-  try {
-    await run(...notaryStoreCredentialsCommand(required("APPLE_NOTARY_PROFILE"), notaryKey, apiKey, keychain));
-  } finally {
-    await unlink(notaryKey).catch(() => {});
-  }
+  const notary = Bun.spawn(notaryStoreCredentialsCommand(required("APPLE_NOTARY_PROFILE"), notaryKey, apiKey, keychain),
+    { stdout: "pipe", stderr: "pipe" });
+  const notaryError = (await Promise.all([new Response(notary.stdout).text(), new Response(notary.stderr).text()])).join("\n");
+  if (await notary.exited !== 0) throw new Error(notaryFailureMessage(notaryError));
   await Bun.write(Bun.file(process.env.GITHUB_ENV!), `${await Bun.file(process.env.GITHUB_ENV!).text()}SPARKLE_PRIVATE_KEY_FILE=${privateKey}\nAPPLE_SIGNING_KEYCHAIN=${keychain}\n`);
   await unlink(certificate);
 }

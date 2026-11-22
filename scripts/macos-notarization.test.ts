@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { notaryApiKey, notaryStoreCredentialsCommand, notarySubmitCommand } from "./macos-notarization";
+import { notaryApiKey, notaryFailureMessage, notaryStoreCredentialsCommand, notarySubmitCommand } from "./macos-notarization";
 
 test("ZIP and DMG notarization explicitly use the temporary profile keychain", () => {
   for (const artifact of ["/tmp/release files/Lightcal.zip", "/tmp/release files/Lightcal.dmg"]) {
@@ -47,4 +47,20 @@ test("malformed API key settings fail without echoing their values", () => {
     expect(String(error)).toMatch(message);
     for (const value of Object.values(overrides)) if (value) expect(String(error)).not.toContain(value);
   }
+});
+
+test("a one-line .p8 with literal \\n sequences is refused before notarytool sees it", () => {
+  const oneLine = pem.replaceAll("\n", "\\n");
+  expect(() => notaryApiKey(apiEnv({ APPLE_API_KEY_P8: oneLine }))).toThrow(/literal "\\n"/);
+  // Markers present but no line breaks at all.
+  expect(() => notaryApiKey(apiEnv({ APPLE_API_KEY_P8: pem.replaceAll("\n", "") }))).toThrow(/APPLE_API_KEY_P8 must contain/);
+  // Windows line endings are still a valid PEM.
+  expect(() => notaryApiKey(apiEnv({ APPLE_API_KEY_P8: pem.replaceAll("\n", "\r\n") }))).not.toThrow();
+});
+
+test("notarytool failures keep Apple's reason and name the secrets to check", () => {
+  const message = notaryFailureMessage("\nError: HTTP status code: 401. Unable to authenticate.\n  Invalid issuer.\n");
+  expect(message).toContain("APPLE_API_ISSUER");
+  expect(message).toContain("HTTP status code: 401. Unable to authenticate. | Invalid issuer.");
+  expect(notaryFailureMessage("")).not.toMatch(/: $/);
 });
