@@ -28,6 +28,7 @@ component DetailAction inherits Rectangle {
     width: self.preferred-width;
     border-radius: Theme.radius-control;
     background: touch.has-hover ? Theme.press : transparent;
+    animate background { duration: Motion.quick; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.accessible-name != "" ? root.accessible-name
         : root.show-alt ? root.alt-label : root.label;
@@ -100,7 +101,9 @@ component EventDetails inherits FadeIn {
     // cannot be offset to slide: the panel takes its height from that layout.
     fade-duration: Motion.move;
 
-    background: Theme.chip;
+    background: root.joined ? transparent : Theme.detail-bg;
+    border-width: root.joined ? 0px : 1px;
+    border-color: Theme.detail-line;
     border-top-left-radius: root.joined ? 0px : 8px;
     border-top-right-radius: root.joined ? 0px : 8px;
     border-bottom-left-radius: 8px;
@@ -108,10 +111,10 @@ component EventDetails inherits FadeIn {
 
     VerticalLayout {
         padding-top: root.joined ? 2px : 6px;
-        padding-right: 8px;
-        padding-bottom: 6px;
-        padding-left: 21px;
-        spacing: 4px;
+        padding-right: 10px;
+        padding-bottom: 5px;
+        padding-left: 19px;
+        spacing: 3px;
 
         HorizontalLayout {
             spacing: 6px;
@@ -161,38 +164,46 @@ component EventDetails inherits FadeIn {
                 wrap: word-wrap;
             }
         }
-        HorizontalLayout {
-            spacing: 6px;
-            height: root.event.is-local ? 16px : 24px;
-            VerticalLayout {
-                alignment: center;
-                Rectangle {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 4px;
-                    background: Theme.mark(root.event.swatch);
-                }
+        VerticalLayout {
+            padding-top: 2px;
+            spacing: 2px;
+            Rectangle {
+                height: 1px;
+                background: Theme.line;
             }
-            Text {
-                horizontal-stretch: 1;
-                text: root.event.provider-line;
-                font-size: Theme.type-caption;
-                color: Theme.ink2;
-                vertical-alignment: center;
-                overflow: elide;
-            }
-            if !root.event.is-local : HorizontalLayout {
-                spacing: 2px;
-                DetailAction {
-                    label: root.copy-label;
-                    alt-label: root.copied-label;
-                    show-alt: root.event.copied;
-                    clicked => { root.copy(); }
+            HorizontalLayout {
+                spacing: 6px;
+                height: root.event.is-local ? 16px : 22px;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 4px;
+                        background: Theme.mark(root.event.swatch);
+                    }
                 }
-                if root.event.can-open : DetailAction {
-                    label: root.open-label;
-                    external: true;
-                    clicked => { root.open(); }
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.event.provider-line;
+                    font-size: Theme.type-caption;
+                    color: Theme.ink2;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                if !root.event.is-local : HorizontalLayout {
+                    spacing: 2px;
+                    DetailAction {
+                        label: root.copy-label;
+                        alt-label: root.copied-label;
+                        show-alt: root.event.copied;
+                        clicked => { root.copy(); }
+                    }
+                    if root.event.can-open : DetailAction {
+                        label: root.open-label;
+                        external: true;
+                        clicked => { root.open(); }
+                    }
                 }
             }
         }
@@ -258,7 +269,7 @@ component EventDetails inherits FadeIn {
     }
 }
 
-// One timed agenda row (.row): 3×16 bar, 80 px time range, title, badge.
+// One timed agenda row: 2.5×15 bar, 70 px time range, title, badge.
 component AgendaRow inherits Rectangle {
     in property <AgendaEventItem> event;
     in property <string> now-label;
@@ -269,7 +280,12 @@ component AgendaRow inherits Rectangle {
     border-top-right-radius: Theme.radius-control;
     border-bottom-left-radius: root.event.expanded ? 0px : Theme.radius-control;
     border-bottom-right-radius: root.event.expanded ? 0px : Theme.radius-control;
-    background: root.event.expanded ? Theme.chip : (touch.has-hover ? Theme.hover : transparent);
+    border-width: !root.event.expanded && root.event.is-now ? 1px : 0px;
+    border-color: Theme.accent-border;
+    background: root.event.expanded ? transparent
+        : root.event.is-now ? Theme.accent-soft
+        : (touch.has-hover ? Theme.hover : transparent);
+    animate background { duration: Motion.quick; easing: ease-out; }
     animate border-bottom-left-radius, border-bottom-right-radius { duration: Motion.move; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.event.time-label + ", " + root.event.title
@@ -278,23 +294,23 @@ component AgendaRow inherits Rectangle {
     accessible-action-default => { root.clicked(); }
 
     HorizontalLayout {
-        padding-left: 4px;
-        padding-right: 4px;
-        spacing: 10px;
+        padding-left: 7px;
+        padding-right: 7px;
+        spacing: 8px;
 
         // Past rows dim their text only: a faded bar would lose its contrast.
         VerticalLayout {
             alignment: center;
             Rectangle {
-                width: 3px;
-                height: 16px;
-                border-radius: 1.5px;
+                width: 2.5px;
+                height: 15px;
+                border-radius: 1.25px;
                 background: Theme.mark(root.event.swatch);
             }
         }
         Text {
-            width: 80px;
-            opacity: root.event.dimmed ? 0.55 : 1;
+            width: 70px;
+            opacity: root.event.dimmed ? 0.52 : 1;
             text: root.event.time-label;
             font-size: Theme.type-caption;
             font-weight: Theme.weight-medium;
@@ -304,10 +320,10 @@ component AgendaRow inherits Rectangle {
         }
         Text {
             horizontal-stretch: 1;
-            opacity: root.event.dimmed ? 0.55 : 1;
+            opacity: root.event.dimmed ? 0.52 : 1;
             text: root.event.title;
             font-size: Theme.type-body;
-            font-weight: root.event.is-now ? Theme.weight-semibold : Theme.weight-regular;
+            font-weight: root.event.is-now || root.event.expanded ? Theme.weight-semibold : Theme.weight-regular;
             color: Theme.ink;
             vertical-alignment: center;
             overflow: elide;
@@ -316,21 +332,35 @@ component AgendaRow inherits Rectangle {
             alignment: center;
             Rectangle {
                 height: 18px;
-                width: now-text.preferred-width + 12px;
-                border-radius: Theme.radius-key;
-                background: Theme.accent-soft;
-                now-text := Text {
-                    text: root.now-label;
-                    font-size: Theme.type-small;
-                    font-weight: Theme.weight-semibold;
-                    color: Theme.accent;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+                width: now-row.preferred-width + 12px;
+                border-radius: 9px;
+                border-width: 1px;
+                border-color: Theme.accent-border;
+                background: Theme.card;
+                now-row := HorizontalLayout {
+                    spacing: 4px;
+                    alignment: center;
+                    VerticalLayout {
+                        alignment: center;
+                        Rectangle {
+                            width: 5px;
+                            height: 5px;
+                            border-radius: 2.5px;
+                            background: Theme.accent;
+                        }
+                    }
+                    Text {
+                        text: root.now-label;
+                        font-size: Theme.type-small;
+                        font-weight: Theme.weight-semibold;
+                        color: Theme.accent;
+                        vertical-alignment: center;
+                    }
                 }
             }
         }
         if !root.event.is-now && root.event.badge != "" : Text {
-            opacity: root.event.dimmed ? 0.55 : 1;
+            opacity: root.event.dimmed ? 0.52 : 1;
             text: root.event.badge;
             font-size: Theme.type-small;
             font-weight: Theme.weight-medium;
@@ -344,15 +374,19 @@ component AgendaRow inherits Rectangle {
     }
 }
 
-// All-day chip (.chip): 22 px, dot and title.
+// All-day chip: 23 px, soft border, dot and title.
 component AllDayChip inherits Rectangle {
     in property <AgendaEventItem> event;
     callback clicked();
 
-    height: 22px;
+    height: 23px;
     width: min(self.preferred-width, 320px);
     border-radius: Theme.radius-control;
-    background: root.event.expanded || touch.has-hover ? Theme.selected : Theme.chip;
+    border-width: 1px;
+    border-color: root.event.expanded ? Theme.accent-border : Theme.chip-line;
+    background: root.event.expanded ? Theme.detail-bg
+        : (touch.has-hover ? Theme.hover : Theme.chip);
+    animate background, border-color { duration: Motion.quick; easing: ease-out; }
     accessible-role: button;
     accessible-label: root.event.time-label + ", " + root.event.title;
     accessible-expanded: root.event.expanded;
@@ -399,6 +433,8 @@ export component CalendarView inherits Rectangle {
     in property <string> next-label: "Next month";
     in property <string> settings-label: "Settings";
     in property <string> hide-label: "Hide";
+    // Shows a quiet teal dot on the Settings gear icon when an update is ready.
+    in property <bool> update-available: false;
     // Grid
     in property <bool> show-week-numbers;
     in property <[ShadedBand]> shaded-bands;
@@ -568,15 +604,9 @@ export component CalendarView inherits Rectangle {
             }
         }
 
-        IconButton {
-            icon: "chevron-left";
-            label: root.prev-label;
-            clicked => { root.prev-month(); }
-        }
-        // On the current day the arrows sit together; leaving it slides them apart and
-        // fades Today in between.
+        // Today sits left of the month arrows so `<` and `>` stay locked together.
         today-slot := Rectangle {
-            width: root.today-hidden ? 0px : today-button.preferred-width;
+            width: root.today-hidden ? 0px : today-button.preferred-width + 2px;
             opacity: root.today-hidden ? 0 : 1;
             clip: true;
             animate width, opacity {
@@ -584,14 +614,47 @@ export component CalendarView inherits Rectangle {
                 easing: ease-in-out;
             }
 
-            today-button := TextButton {
-                x: (parent.width - self.width) / 2;
+            today-button := Rectangle {
+                x: 0px;
                 y: (parent.height - self.height) / 2;
-                label: root.today-button-label;
+                height: 24px;
+                width: today-label-row.preferred-width;
+                border-radius: Theme.radius-control;
+                border-width: 1px;
+                border-color: Theme.accent-border;
+                background: (today-touch.pressed || today-touch.has-hover) ? Theme.accent-border : Theme.accent-soft;
+                animate background { duration: Motion.quick; easing: ease-out; }
                 visible: today-slot.width > 0px;
-                enabled: !root.today-hidden;
-                clicked => { root.return-to-today(); }
+                accessible-role: button;
+                accessible-label: root.today-button-label;
+                accessible-action-default => {
+                    if (!root.today-hidden) {
+                        root.return-to-today();
+                    }
+                }
+
+                today-label-row := HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    Text {
+                        text: root.today-button-label;
+                        font-size: Theme.type-caption;
+                        font-weight: Theme.weight-medium;
+                        color: Theme.accent;
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
+                }
+                today-touch := TouchArea {
+                    enabled: !root.today-hidden;
+                    clicked => { root.return-to-today(); }
+                }
             }
+        }
+        IconButton {
+            icon: "chevron-left";
+            label: root.prev-label;
+            clicked => { root.prev-month(); }
         }
         IconButton {
             icon: "chevron-right";
@@ -605,16 +668,38 @@ export component CalendarView inherits Rectangle {
                 alignment: center;
                 Rectangle {
                     width: 1px;
-                    height: 16px;
+                    height: 15px;
                     background: Theme.popup-line;
                 }
             }
         }
-        IconButton {
-            icon: "gear";
-            icon-weight: 1.75;
-            label: root.settings-label;
-            clicked => { root.open-settings(0); }
+        Rectangle {
+            width: 28px;
+            height: 28px;
+            IconButton {
+                width: 100%;
+                height: 100%;
+                icon: "gear";
+                icon-weight: 1.75;
+                label: root.settings-label;
+                clicked => { root.open-settings(0); }
+            }
+            if root.update-available : Rectangle {
+                x: parent.width - 10px;
+                y: 3px;
+                width: 9px;
+                height: 9px;
+                border-radius: 4.5px;
+                background: Theme.popup;
+                Rectangle {
+                    x: 1.5px;
+                    y: 1.5px;
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: Theme.accent;
+                }
+            }
         }
         if !root.macos : IconButton {
             icon: "minimize";
@@ -669,13 +754,13 @@ export component CalendarView inherits Rectangle {
             }
         }
 
-        // Flat shaded-weekday bands behind whole columns (.band).
+        // Flat shaded-weekday bands behind whole columns, softly inset.
         for band in root.shaded-bands : Rectangle {
-            x: grid.lead + band.start * grid.col-width;
+            x: grid.lead + band.start * grid.col-width + 1px;
             y: 0px;
-            width: band.span * grid.col-width;
+            width: band.span * grid.col-width - 2px;
             height: grid.height;
-            border-radius: Theme.radius-day;
+            border-radius: 9px;
             background: Theme.weekend-band;
         }
 
@@ -702,9 +787,9 @@ export component CalendarView inherits Rectangle {
         // One hover highlight for the whole grid, under the selected day, Today and the
         // numbers, so it slides beneath them.
         if root.hover-opacity > 0 : Rectangle {
-            x: grid.lead + root.hover-col * grid.col-width + (grid.col-width - 34px) / 2;
+            x: grid.lead + root.hover-col * grid.col-width + (grid.col-width - 36px) / 2;
             y: 24px + root.hover-row * root.row-height + (root.row-height - root.tile-height) / 2;
-            width: 34px;
+            width: 36px;
             height: root.tile-height;
             border-radius: Theme.radius-day;
             background: Theme.hover;
@@ -737,14 +822,16 @@ export component CalendarView inherits Rectangle {
                 property <int> index: row * 7 + col;
                 property <DayCellData> cell: root.cells[self.index];
                 property <bool> dots: root.show-event-dots && self.cell.in-month && self.cell.dot-count > 0;
-                // Dots sit 2 px above the tile bottom (1 px on Today); the number keeps the same
-                // gap above them at every date size.
-                property <length> dots-y: self.height - (self.cell.is-today ? 5px : 6px);
-                property <length> number-center: self.dots-y - (self.cell.is-today ? 2.5px : 3px) - root.day-font / 2;
+                property <bool> today-selected: self.cell.is-today && self.cell.is-selected;
+                property <bool> today-resting: self.cell.is-today && !self.cell.is-selected;
+                property <bool> other-selected: !self.cell.is-today && self.cell.is-selected;
+                // Consistent vertical rhythm for numerals and 3.5 px dots across every day.
+                property <length> dots-y: self.height - 5.5px;
+                property <length> number-center: self.dots-y - 2.5px - root.day-font / 2;
 
-                x: grid.lead + col * grid.col-width + (grid.col-width - 34px) / 2;
+                x: grid.lead + col * grid.col-width + (grid.col-width - 36px) / 2;
                 y: (root.row-height - root.tile-height) / 2;
-                width: 34px;
+                width: 36px;
                 height: root.tile-height;
                 accessible-role: button;
                 accessible-label: self.cell.accessible-label;
@@ -761,38 +848,24 @@ export component CalendarView inherits Rectangle {
                     border-color: Theme.accent;
                     background: Theme.popup;
                 }
-                // Selected today: a 16 × 2 px coral underline in the 4 px gap below the tile
-                // (ADR 0016).
-                if !root.keyboard-nav && pill.cell.is-today && pill.cell.is-selected : Rectangle {
-                    x: (parent.width - self.width) / 2;
-                    y: parent.height + 1px;
-                    width: 16px;
-                    height: 2px;
-                    border-radius: 1px;
-                    background: Theme.coral;
-                }
 
+                // Clean day tile surface:
+                // - Today (selected): solid coral squircle (no dark top band, no stray underline)
+                // - Today (resting): soft coral wash with hairline coral rim
+                // - Other day (selected): crisp solid ink squircle
                 Rectangle {
                     border-radius: Theme.radius-day;
-                    background: pill.cell.is-today ? Theme.coral-band
-                        : pill.cell.is-selected ? Theme.day-selected
+                    border-width: pill.today-resting ? 1px
+                        : (root.editor-open && pill.other-selected ? 1px : 0px);
+                    border-color: pill.today-resting ? Theme.coral-soft-line : Theme.toggle-off;
+                    background: pill.today-selected ? Theme.coral
+                        : pill.today-resting ? Theme.coral-soft
+                        : pill.other-selected ? Theme.day-selected
                         : transparent;
-                }
-                // The day the edited event is on (.d.edit): a 1 px ring.
-                if root.editor-open && pill.cell.is-selected && !pill.cell.is-today : Rectangle {
-                    border-radius: Theme.radius-day;
-                    border-width: 1px;
-                    border-color: Theme.toggle-off;
-                }
-                // Today: coral tile under a 5 px darker band.
-                if pill.cell.is-today : Rectangle {
-                    y: 5px;
-                    height: parent.height - 5px;
-                    border-top-left-radius: 1px;
-                    border-top-right-radius: 1px;
-                    border-bottom-left-radius: Theme.radius-day;
-                    border-bottom-right-radius: Theme.radius-day;
-                    background: Theme.coral;
+                    animate background, border-color {
+                        duration: root.header-motion ? Motion.fade : 0ms;
+                        easing: ease-out;
+                    }
                 }
 
                 Text {
@@ -805,9 +878,12 @@ export component CalendarView inherits Rectangle {
                     font-weight: pill.cell.is-today || pill.cell.is-selected ? Theme.weight-semibold
                         : !pill.cell.in-month ? Theme.weight-regular
                         : Theme.weight-medium;
-                    color: pill.cell.is-today ? Theme.on-coral
+                    color: pill.today-selected ? Theme.on-coral
+                        : pill.today-resting ? Theme.coral-ink
+                        : pill.other-selected ? Theme.on-day-selected
                         : !pill.cell.in-month ? Theme.ink3
                         : Theme.ink;
+                    opacity: !pill.cell.in-month && !pill.cell.is-selected && !pill.cell.is-today ? 0.68 : 1;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -816,27 +892,33 @@ export component CalendarView inherits Rectangle {
                     x: 0px;
                     y: pill.dots-y;
                     width: parent.width;
-                    height: 4px;
-                    spacing: 3px;
+                    height: 3.5px;
+                    spacing: 2.5px;
                     alignment: center;
 
                     if pill.cell.dot-count >= 1 : Rectangle {
-                        width: 4px;
-                        height: 4px;
-                        border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot1);
+                        width: 3.5px;
+                        height: 3.5px;
+                        border-radius: 1.75px;
+                        background: pill.today-selected ? #FFFFFFE6
+                            : pill.other-selected ? Theme.mark-inverted(pill.cell.dot1)
+                            : Theme.mark(pill.cell.dot1);
                     }
                     if pill.cell.dot-count >= 2 : Rectangle {
-                        width: 4px;
-                        height: 4px;
-                        border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot2);
+                        width: 3.5px;
+                        height: 3.5px;
+                        border-radius: 1.75px;
+                        background: pill.today-selected ? #FFFFFFE6
+                            : pill.other-selected ? Theme.mark-inverted(pill.cell.dot2)
+                            : Theme.mark(pill.cell.dot2);
                     }
                     if pill.cell.dot-count >= 3 : Rectangle {
-                        width: 4px;
-                        height: 4px;
-                        border-radius: 2px;
-                        background: pill.cell.is-today ? #FFFFFFD9 : Theme.mark(pill.cell.dot3);
+                        width: 3.5px;
+                        height: 3.5px;
+                        border-radius: 1.75px;
+                        background: pill.today-selected ? #FFFFFFE6
+                            : pill.other-selected ? Theme.mark-inverted(pill.cell.dot3)
+                            : Theme.mark(pill.cell.dot3);
                     }
                 }
 
@@ -885,27 +967,33 @@ export component CalendarView inherits Rectangle {
         background: Theme.popup-line;
     }
 
-    if root.editor-open : EventEditor {
+    if root.editor-open : FadeIn {
         x: root.content-x;
         y: root.agenda-top + 1px;
         width: root.content-width;
         height: root.height - self.y - 4px;
-        text: root.local-text;
-        editing: root.editor-editing;
-        title <=> root.editor-title;
-        all-day <=> root.editor-all-day;
-        start <=> root.editor-start;
-        end <=> root.editor-end;
-        location <=> root.editor-location;
-        note <=> root.editor-note;
-        title-error: root.editor-title-error;
-        time-error: root.editor-time-error;
-        start-invalid: root.editor-start-invalid;
-        limit-error: root.editor-limit-error;
-        date-text: root.editor-date;
-        save => { root.save-editor(); }
-        cancel => { root.cancel-editor(); }
-        toggle-all-day => { root.toggle-editor-all-day(); }
+        fade-on-create: root.header-motion;
+        fade-duration: Motion.move;
+        EventEditor {
+            width: 100%;
+            height: 100%;
+            text: root.local-text;
+            editing: root.editor-editing;
+            title <=> root.editor-title;
+            all-day <=> root.editor-all-day;
+            start <=> root.editor-start;
+            end <=> root.editor-end;
+            location <=> root.editor-location;
+            note <=> root.editor-note;
+            title-error: root.editor-title-error;
+            time-error: root.editor-time-error;
+            start-invalid: root.editor-start-invalid;
+            limit-error: root.editor-limit-error;
+            date-text: root.editor-date;
+            save => { root.save-editor(); }
+            cancel => { root.cancel-editor(); }
+            toggle-all-day => { root.toggle-editor-all-day(); }
+        }
     }
 
     if root.panel-open && !root.editor-open : EditorPanel {
@@ -950,6 +1038,7 @@ export component CalendarView inherits Rectangle {
             width: 24px;
             border-radius: Theme.radius-control;
             background: plus-touch.pressed ? Theme.press : (plus-touch.has-hover ? Theme.hover : transparent);
+            animate background { duration: Motion.quick; easing: ease-out; }
             accessible-role: button;
             accessible-label: root.local-text.new-event-key;
             Icon {
@@ -971,9 +1060,20 @@ export component CalendarView inherits Rectangle {
         content-height: max(self.height, list.preferred-height);
         interactive: list.preferred-height > self.height;
 
-        list := VerticalLayout {
+        FadeIn {
             width: agenda.width;
-            alignment: start;
+            height: max(agenda.height, list.preferred-height);
+            fade-on-create: false;
+            fade-key: root.agenda-title;
+            fade-on-change: root.header-motion;
+            fade-duration: Motion.fade;
+
+            list := VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: parent.width;
+                height: self.preferred-height;
+                alignment: start;
 
             if root.strip-text != "" : HorizontalLayout {
                 padding-left: 4px;
@@ -1077,30 +1177,40 @@ export component CalendarView inherits Rectangle {
             }
 
             for ev in root.agenda-events : VerticalLayout {
-                padding-bottom: ev.expanded ? 6px : 0px;
-                AgendaRow {
-                    event: ev;
-                    now-label: root.now-label;
-                    clicked => { root.toggle-event(ev.key); }
-                }
-                if ev.expanded : EventDetails {
-                    fade-on-create: ev.key == root.fade-details-key;
-                    init => {
-                        if (self.fade-on-create) {
-                            root.details-faded(ev.key);
+                padding-bottom: ev.expanded ? 4px : 0px;
+                Rectangle {
+                    border-radius: 8px;
+                    border-width: ev.expanded ? 1px : 0px;
+                    border-color: Theme.detail-line;
+                    background: ev.expanded ? Theme.detail-bg : transparent;
+                    clip: true;
+
+                    VerticalLayout {
+                        AgendaRow {
+                            event: ev;
+                            now-label: root.now-label;
+                            clicked => { root.toggle-event(ev.key); }
+                        }
+                        if ev.expanded : EventDetails {
+                            fade-on-create: ev.key == root.fade-details-key;
+                            init => {
+                                if (self.fade-on-create) {
+                                    root.details-faded(ev.key);
+                                }
+                            }
+                            event: ev;
+                            copy-label: root.copy-label;
+                            copied-label: root.copied-label;
+                            open-label: root.open-label;
+                            local-text: root.local-text;
+                            copy => { root.copy-event(ev.key); }
+                            open => { root.open-event(ev.key); }
+                            edit => { root.edit-event(ev.key); }
+                            ask-delete => { root.ask-delete-event(ev.key); }
+                            confirm-delete => { root.confirm-delete-event(ev.key); }
+                            keep => { root.keep-event(ev.key); }
                         }
                     }
-                    event: ev;
-                    copy-label: root.copy-label;
-                    copied-label: root.copied-label;
-                    open-label: root.open-label;
-                    local-text: root.local-text;
-                    copy => { root.copy-event(ev.key); }
-                    open => { root.open-event(ev.key); }
-                    edit => { root.edit-event(ev.key); }
-                    ask-delete => { root.ask-delete-event(ev.key); }
-                    confirm-delete => { root.confirm-delete-event(ev.key); }
-                    keep => { root.keep-event(ev.key); }
                 }
             }
 
@@ -1171,6 +1281,7 @@ export component CalendarView inherits Rectangle {
                         }
                     }
                 }
+            }
             }
         }
     }

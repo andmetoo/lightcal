@@ -495,7 +495,7 @@ fn resolve_dark_mode(theme: ThemePreference) -> bool {
 
 fn target_logical_size(settings_open: bool, calendar_height: f32) -> (f32, f32) {
     if settings_open {
-        (448.0, 360.0)
+        (448.0, calendar_height)
     } else {
         (352.0, calendar_height)
     }
@@ -649,16 +649,19 @@ fn watch_koi_window_changes(ui: &AppWindow, watch: bool) {
     });
 }
 
-/// Settings › Calendar › Date size: store the choice and refresh the UI. Shared with the
-/// headless test so it exercises the production handler.
-fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>) {
+/// Settings › Calendar › Date size: store the choice, refresh the UI, and resize the open
+/// window when the calendar height changes. Shared with the headless test so it exercises the
+/// production handler.
+fn wire_date_size(ui: &AppWindow, ctrl: &Rc<RefCell<AppController>>, resize: fn(&AppWindow, bool)) {
     let ctrl = Rc::clone(ctrl);
     let ui_weak = ui.as_weak();
     ui.on_select_date_size(move |size| {
         let mut c = ctrl.borrow_mut();
         c.select_date_size(size.into());
         if let Some(w) = ui_weak.upgrade() {
+            let settings_open = c.settings_open;
             c.sync_to_ui(&w);
+            resize(&w, settings_open);
         }
     });
 }
@@ -2484,6 +2487,12 @@ impl AppController {
             shortcut_clear_label: st.shortcut_clear.into(),
             shortcut_error: shortcut_error.into(),
             update_short: short.into(),
+            update_badge: match &self.update_state {
+                UpdateCheckState::UpdateAvailable { latest_version, .. } => {
+                    format!("v{}", latest_version.trim_start_matches('v')).into()
+                }
+                _ => "".into(),
+            },
             update_kind: kind,
             app_update_button: if kind == 3 { st.details } else { st.check_now }.into(),
             about_tagline: lightcal::i18n::about_tagline(locale, macos).into(),
@@ -5088,7 +5097,7 @@ fn main() {
     }
     wire_koi_pond(&ui, &ctrl);
     hover_follow::wire_hover_follow(&ui);
-    wire_date_size(&ui, &ctrl);
+    wire_date_size(&ui, &ctrl, sync_window_geometry);
     {
         let ctrl = Rc::clone(&ctrl);
         let ui_weak = ui.as_weak();
@@ -5579,7 +5588,8 @@ mod tests {
     fn target_logical_size_matches_compact_and_settings_specs() {
         assert_eq!(target_logical_size(false, 432.0), (352.0, 432.0));
         assert_eq!(target_logical_size(false, 444.0), (352.0, 444.0));
-        assert_eq!(target_logical_size(true, 444.0), (448.0, 360.0));
+        assert_eq!(target_logical_size(true, 432.0), (448.0, 432.0));
+        assert_eq!(target_logical_size(true, 444.0), (448.0, 444.0));
     }
 
     #[test]

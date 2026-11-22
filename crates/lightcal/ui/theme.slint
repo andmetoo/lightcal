@@ -1,7 +1,6 @@
-// Lightcal design tokens (ADR 0011, design canvas "Lightcal Refresh").
-// Values come from the `.lc` (calendar) and `.st` (settings) variables in
-// design/canvas/*.dc.html. `AppWindow.dark-mode` is two-way bound to
-// `Theme.dark`, so every component reads the active palette from here.
+// Lightcal design tokens (refreshed matte neutral palette + Teal accent + Coral identity).
+// `AppWindow.dark-mode` is two-way bound to `Theme.dark`, so every component reads the active
+// palette from here. App icon and tray icon colors (`coral`, `coral-band`) stay untouched.
 
 import { MarkColor, CalendarDateSize } from "types.slint";
 
@@ -15,58 +14,72 @@ export global Theme {
     // Slint falls back to the generic sans-serif and system-ui families.
     in-out property <string> font-family: "Segoe UI Variable Text";
 
-    // ---- Surfaces ----
-    // Calendar popup background (.lc --bg).
-    out property <color> popup: dark ? #191919 : #FFFFFF;
-    // Settings and About window background (.st --page).
-    out property <color> page: dark ? #191919 : #F3F3F3;
-    out property <color> card: dark ? #222222 : #FFFFFF;
-    out property <color> card-line: dark ? #2A2A2A : #E8E8E8;
+    // ---- Surfaces (calm matte neutral) ----
+    // Calendar popup background.
+    out property <color> popup: dark ? #1A1A18 : #FBFBF9;
+    // Settings and About window background.
+    out property <color> page: dark ? #151513 : #F2F2EE;
+    out property <color> card: dark ? #21211E : #FFFFFF;
+    out property <color> card-line: dark ? #2E2E2A : #E4E4DE;
+    out property <color> card-shadow: dark ? #00000000 : #1818140C;
 
     // ---- Text ----
-    out property <color> ink: dark ? #EEEEEE : #202020;
-    out property <color> ink2: dark ? #B4B4B4 : #646464;
-    out property <color> ink3: dark ? #8A8A8A : #707070;
+    out property <color> ink: dark ? #F1F1EC : #1C1C1A;
+    out property <color> ink2: dark ? #A6A69E : #62625D;
+    out property <color> ink3: dark ? #73736C : #8C8C85;
 
     // ---- Lines and states ----
-    // Inset row divider in settings cards (.st --line).
-    out property <color> line: dark ? #2E2E2E : #F0F0F0;
-    // Calendar header and agenda divider (.lc --line).
-    out property <color> popup-line: dark ? #2A2A2A : #F0F0F0;
-    out property <color> hover: dark ? #2A2A2A : #F0F0F0;
-    out property <color> press: dark ? #313131 : #E8E8E8;
-    out property <color> selected: dark ? #313131 : #E8E8E8;
-    // Selected day tile: the palette's Selected fill, one clear step above the moving
-    // hover highlight (ADR 0015).
-    out property <color> day-selected: dark ? #3A3A3A : #E0E0E0;
+    // Inset row divider in settings cards.
+    out property <color> line: dark ? #292925 : #ECECE7;
+    // Calendar header and agenda divider.
+    out property <color> popup-line: dark ? #292925 : #ECECE7;
+    out property <color> hover: dark ? #292925 : #EFEFEA;
+    out property <color> press: dark ? #32322D : #E5E5DF;
+    out property <color> selected: dark ? #32322D : #E5E5DF;
+    // Selected day tile: crisp high-contrast ink pill (distinct from hover and Today).
+    out property <color> day-selected: dark ? #EAEAE4 : #222220;
+    out property <color> on-day-selected: dark ? #181816 : #FFFFFF;
     // Flat shaded-weekday band behind calendar columns.
-    out property <color> weekend-band: dark ? #1F1F1F : #F7F7F7;
+    out property <color> weekend-band: dark ? #20201D : #F3F3EE;
     // Modal scrim behind in-window dialogs.
-    out property <color> scrim: dark ? #00000066 : #00000033;
+    out property <color> scrim: dark ? #00000070 : #14141238;
 
     // ---- Accent (Gray + Teal) ----
-    out property <color> accent: dark ? #53B9AB : #00796B;
-    out property <color> accent-soft: dark ? #53B9AB24 : #00796B1A;
-    // Primary button fill is the same teal in both themes.
-    out property <color> primary: #00796B;
-    out property <color> primary-hover: #00695C;
+    out property <color> accent: dark ? #4DC1B3 : #0B786B;
+    out property <color> accent-soft: dark ? #4DC1B321 : #0B786B18;
+    out property <color> accent-border: dark ? #4DC1B342 : #0B786B3D;
+    // Primary button fill is the same calm teal in both themes.
+    out property <color> primary: #0B786B;
+    out property <color> primary-hover: #09665B;
     out property <color> on-primary: #FFFFFF;
 
-    // ---- Identity coral (app icon and Today only) ----
-    out property <color> coral: #D73840;
+    // ---- Identity coral (app icon, tray icon, and Today only) ----
+    out property <color> coral: dark ? #DC4048 : #D73840;
+    // Kept for BrandMark and TrayPreview (icon artwork stays untouched).
     out property <color> coral-band: dark ? #B02E35 : #A92A31;
     out property <color> on-coral: #FFFFFF;
+    // Resting Today tile when another day is selected: soft coral tint + hairline + coral ink.
+    out property <color> coral-soft: dark ? #DC404829 : #D738401A;
+    out property <color> coral-soft-line: dark ? #DC40485C : #D7384047;
+    out property <color> coral-ink: dark ? #FF8288 : #BE2830;
 
-    // ---- Chips, controls, segmented track ----
-    out property <color> chip: dark ? #2A2A2A : #F0F0F0;
-    out property <color> control: dark ? #2A2A2A : #FFFFFF;
-    out property <color> control-line: dark ? #333333 : #E0E0E0;
-    out property <color> control-bottom-line: dark ? #3F3F3F : #CECECE;
-    out property <color> track: dark ? #161616 : #EBEBEB;
-    out property <color> thumb: dark ? #3A3A3A : #FFFFFF;
-    out property <color> toggle-off: dark ? #7B7B7B : #838383;
-    out property <color> key: dark ? #363636 : #F0F0F0;
-    out property <color> avatar: dark ? #1C2E2B : #E6F4F1;
+    // ---- Chips, details, controls, segmented track ----
+    out property <color> chip: dark ? #272723 : #F1F1EC;
+    out property <color> chip-line: dark ? #34342F : #E5E5DF;
+    out property <color> detail-bg: dark ? #23231F : #F5F5F1;
+    out property <color> detail-line: dark ? #32322D : #E4E4DE;
+    out property <color> control: dark ? #272723 : #FFFFFF;
+    out property <color> control-line: dark ? #363631 : #DCDCD5;
+    out property <color> control-bottom-line: dark ? #181815 : #CBCBC3;
+    out property <color> track: dark ? #121210 : #E8E8E2;
+    out property <color> track-line: dark ? #FFFFFF0F : #18181412;
+    out property <color> thumb: dark ? #31312C : #FFFFFF;
+    out property <color> thumb-line: dark ? #41413B : #DCDCD5;
+    out property <color> toggle-off: dark ? #787870 : #B8B8B0;
+    out property <color> toggle-track-off: dark ? #2D2D29 : #E4E4DE;
+    out property <color> key: dark ? #2F2F2B : #F4F4F0;
+    out property <color> avatar: dark ? #1B302D : #E4F3F0;
+    out property <color> avatar-ink: dark ? #6CD0C4 : #0A685D;
     // Windows caption Close hover.
     out property <color> close-hover: #C42B1C;
     out property <color> on-close-hover: #FFFFFF;
@@ -74,7 +87,7 @@ export global Theme {
     // ---- Status ----
     out property <color> warn: dark ? #F2B866 : #8A5300;
     out property <color> warn-bg: dark ? #33291A : #FFF4E0;
-    out property <color> err: dark ? #FF8A80 : #B3261E;
+    out property <color> err: dark ? #FF8A80 : #B82921;
     out property <color> err-bg: dark ? #3A2220 : #FDECEA;
 
     // ---- Calendar marks ----
@@ -82,10 +95,14 @@ export global Theme {
     public pure function mark(c: MarkColor) -> color {
         return dark ? c.dark : c.light;
     }
+    // Contrast-inverted marks for dots sitting inside the solid ink selected-day pill.
+    public pure function mark-inverted(c: MarkColor) -> color {
+        return dark ? c.light : c.dark;
+    }
 
     // ---- Radii ----
     out property <length> radius-window: 8px;
-    out property <length> radius-card: 8px;
+    out property <length> radius-card: 10px;
     out property <length> radius-control: 6px;
     out property <length> radius-day: 8px;
     out property <length> radius-key: 4px;
@@ -117,17 +134,17 @@ export global Theme {
     out property <int> weight-semibold: 600;
     out property <int> weight-bold: 700;
 
-    // ---- Date size (design/canvas DateSize boards) ----
+    // ---- Date size ----
     // The only source of these metrics: CalendarView lays out with them and Rust sizes
     // the window from calendar-height().
     public pure function day-font(size: CalendarDateSize) -> length {
         size == CalendarDateSize.larger ? 18px : size == CalendarDateSize.large ? 16px : root.type-day
     }
     public pure function day-tile-height(size: CalendarDateSize) -> length {
-        size == CalendarDateSize.larger ? 30px : 28px
+        size == CalendarDateSize.larger ? 32px : 30px
     }
     public pure function week-row-height(size: CalendarDateSize) -> length {
-        root.day-tile-height(size) + 4px
+        root.day-tile-height(size) + 2px
     }
     // Header, weekday row, hairline, agenda and padding take 240 px; only the six
     // week rows grow (352 × 432, or 352 × 444 with Larger dates).
@@ -136,12 +153,16 @@ export global Theme {
     }
 }
 
-// Motion durations (ADR 0016). Rust turns `enabled` off when Windows Animation effects is
-// off, and every transition then applies at once.
+// Motion durations. Rust turns `enabled` off when OS Animation effects are off,
+// and every transition then applies at once with zero idle timers.
 export global Motion {
     in property <bool> enabled: true;
+    // Subtle hover/press color transitions.
+    out property <duration> quick: root.enabled ? 100ms : 0ms;
     // Colour, label and page fades.
-    out property <duration> fade: root.enabled ? 120ms : 0ms;
-    // Things that move: knobs, corners, opening details.
+    out property <duration> fade: root.enabled ? 125ms : 0ms;
+    // Things that move: knobs, corners, opening details, Today slot.
     out property <duration> move: root.enabled ? 160ms : 0ms;
+    // Sliding active pills (tabs and segmented controls).
+    out property <duration> slide: root.enabled ? 175ms : 0ms;
 }
