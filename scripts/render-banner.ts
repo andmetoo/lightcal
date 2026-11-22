@@ -122,11 +122,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <g transform="translate(88 176) scale(1.5)" filter="url(#iconshadow)">${icon}</g>
 
   <text x="94" y="352" font-family="'Segoe UI Semibold', 'Segoe UI'" font-size="80" font-weight="600" letter-spacing="-1.6" fill="#1A1A1A">Lightcal</text>
-  <text x="96" y="404" font-family="${text}" font-size="27" fill="#4A4F4E">A small calendar that lives</text>
-  <text x="96" y="440" font-family="${text}" font-size="27" fill="#4A4F4E">in the Windows tray.</text>
+  <text x="96" y="404" font-family="${text}" font-size="27" fill="#4A4F4E">A small calendar for the</text>
+  <text x="96" y="440" font-family="${text}" font-size="27" fill="#4A4F4E">Windows tray and macOS menu bar.</text>
 
   <rect x="96" y="482" width="3" height="24" rx="1.5" fill="#D73840"/>
-  <text x="112" y="500" font-family="${text}" font-size="17" fill="#646464">Windows · Free and open source · GPL-3.0</text>
+  <text x="112" y="500" font-family="${text}" font-size="17" fill="#646464">Windows · macOS · Free and open source · GPL-3.0</text>
 
   ${windowShot(shot("calendar-koi-dark.png"), dark.x, dark.y, "back", "#FFFFFF14")}
   ${windowShot(shot("calendar-today-light.png"), light.x, light.y, "front", "#00000010")}

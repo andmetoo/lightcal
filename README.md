@@ -1,4 +1,4 @@
-![Lightcal, a small calendar for the Windows tray](assets/readme/banner.png)
+![Lightcal, a small calendar for the Windows tray and the macOS menu bar](assets/readme/banner.png)
 
 # Lightcal
 
