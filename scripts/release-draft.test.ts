@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  MACOS_APPCAST,
+  type ReleaseView,
   UNSIGNED_EXE,
   assertChecksum,
   assertFilesExist,
@@ -13,22 +16,31 @@ import {
   SIGN_STEPS,
   editReleaseArgs,
   embedsCertificatePin,
+  hasMacAssets,
+  macAssetNames,
+  macDmgName,
+  macZipName,
+  missingMacAssets,
   missingSignedAssets,
   matchingBuildRuns,
+  parseAppcastEnclosure,
   parseChecksum,
   parseReleaseView,
   publishedReleaseNotes,
   publishedReleaseTitle,
   requireStableVersion,
   runSteps,
+  sha256Hex,
   signedAssetNames,
   signedUploadPaths,
   signingAsset,
+  sparkleSignatureValid,
   thumbprintMatches,
   unsignedAssetNames,
   unsignedAssetsPresent,
   uploadArgs,
   versionFromCheckout,
+  verifyMacReleaseFiles,
   verifyReleaseFiles,
 } from "./release-draft.ts";
 
@@ -252,7 +264,7 @@ describe("release step order", () => {
     expect(before(SIGN_STEPS, "check-pin-after-signing", "package")).toBe(true);
   });
   test("publish-release finishes every check before changing the release", () => {
-    for (const check of ["verify-files", "check-app-version", "check-pin", "check-setup-version"] as const) {
+    for (const check of ["verify-files", "verify-mac-files", "check-app-version", "check-pin", "check-setup-version"] as const) {
       expect(before(PUBLISH_STEPS, check, "remove-unsigned")).toBe(true);
     }
     expect(PUBLISH_STEPS.at(-1)).toBe("publish");
@@ -261,5 +273,104 @@ describe("release step order", () => {
     const ran: string[] = [];
     runSteps(["b", "a"] as const, { a: () => ran.push("a"), b: () => ran.push("b") });
     expect(ran).toEqual(["b", "a"]);
+  });
+});
+
+describe("macOS release files", () => {
+  const view = (names: string[], isDraft = false): ReleaseView => ({ isDraft, assets: names.map((name) => ({ name })) });
+  const windows = signedAssetNames("1.4.0");
+  const mac = macAssetNames("1.4.0");
+
+  test("Windows-only releases stay publishable until a public release serves the macOS appcast", () => {
+    expect(missingMacAssets(view(windows, true), null, "1.4.0")).toEqual([]);
+    expect(missingMacAssets(view(windows, true), view(signedAssetNames("1.3.1")), "1.4.0")).toEqual([]);
+    // A draft carrying the appcast has not been served to anyone yet.
+    expect(missingMacAssets(view(windows, true), view([MACOS_APPCAST], true), "1.4.0")).toEqual([]);
+  });
+
+  test("after a signed Mac release, every later release must carry all macOS files", () => {
+    const latest = view([...signedAssetNames("1.3.2"), ...macAssetNames("1.3.2")]);
+    expect(missingMacAssets(view(windows, true), latest, "1.4.0")).toEqual(mac);
+    expect(missingMacAssets(view([...windows, ...mac], true), latest, "1.4.0")).toEqual([]);
+  });
+
+  test("partial macOS files are refused even before the first Mac release", () => {
+    expect(missingMacAssets(view([...windows, macDmgName("1.4.0")], true), null, "1.4.0")).toEqual(
+      mac.filter((name) => name !== macDmgName("1.4.0")),
+    );
+    expect(hasMacAssets(view([...windows, macDmgName("1.4.0")]), "1.4.0")).toBe(false);
+    expect(hasMacAssets(view([...windows, ...mac]), "1.4.0")).toBe(true);
+  });
+
+  test("published notes describe the Mac downloads only when they are attached", () => {
+    expect(publishedReleaseNotes("1.4.0")).not.toContain("macOS");
+    const notes = publishedReleaseNotes("1.4.0", true);
+    expect(notes).toContain(macDmgName("1.4.0"));
+    expect(notes).toContain(macZipName("1.4.0"));
+    expect(notes).toContain("notarized");
+  });
+
+  test("Mac files need matching checksums and a valid Sparkle signature from the configured key", () => {
+    const directory = mkdtempSync(join(tmpdir(), "lightcal-mac-release-"));
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    const sparklePublic = Buffer.from(publicKey.export({ format: "jwk" }).x!, "base64url").toString("base64");
+    const zip = new TextEncoder().encode("signed update archive");
+    const url = `https://github.com/andmetoo/lightcal/releases/download/v1.4.0/${macZipName("1.4.0")}`;
+    const appcast = (fields: { version?: string; url?: string; signature?: string; length?: number }) =>
+      `<rss><channel><item><sparkle:version>${fields.version ?? "1.4.0"}</sparkle:version><enclosure url="${fields.url ?? url}" ` +
+      `sparkle:edSignature="${fields.signature ?? sign(null, zip, privateKey).toString("base64")}" length="${fields.length ?? zip.length}" type="application/octet-stream"/></item></channel></rss>`;
+    const write = (name: string, bytes: Uint8Array | string) => {
+      writeFileSync(join(directory, name), bytes);
+      if (name !== MACOS_APPCAST) {
+        const data = typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+        writeFileSync(join(directory, `${name}.sha256`), `${sha256Hex(data)}  ${name}\n`);
+      }
+    };
+    const check = () => verifyMacReleaseFiles(directory, "1.4.0", readFileSync, sparklePublic);
+    try {
+      write(macZipName("1.4.0"), zip);
+      write(macDmgName("1.4.0"), "disk image");
+      write(MACOS_APPCAST, appcast({}));
+      expect(check).not.toThrow();
+
+      write(MACOS_APPCAST, appcast({ url: url.replaceAll("1.4.0", "1.3.2") }));
+      expect(check).toThrow(/does not reference/);
+      write(MACOS_APPCAST, appcast({ version: "1.3.2" }));
+      expect(check).toThrow(/does not announce version 1.4.0/);
+      write(MACOS_APPCAST, appcast({ length: zip.length + 1 }));
+      expect(check).toThrow(/gives length/);
+      write(MACOS_APPCAST, appcast({ signature: Buffer.alloc(64).toString("base64") }));
+      expect(check).toThrow(/Sparkle signature/);
+
+      const other = generateKeyPairSync("ed25519").privateKey;
+      write(MACOS_APPCAST, appcast({ signature: sign(null, zip, other).toString("base64") }));
+      expect(check).toThrow(/Sparkle signature/);
+
+      // A replaced ZIP with a recomputed checksum still fails the signature.
+      write(macZipName("1.4.0"), "unsigned replacement!");
+      write(MACOS_APPCAST, appcast({ length: "unsigned replacement!".length }));
+      expect(check).toThrow(/Sparkle signature/);
+
+      write(macZipName("1.4.0"), zip);
+      write(MACOS_APPCAST, appcast({}));
+      writeFileSync(join(directory, macDmgName("1.4.0")), "tampered");
+      expect(check).toThrow(/SHA-256 mismatch/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("appcast parsing rejects missing or repeated enclosures and malformed keys", () => {
+    expect(() => parseAppcastEnclosure("<sparkle:version>1.4.0</sparkle:version>", "1.4.0")).toThrow(/exactly one enclosure/);
+    const one = `<enclosure url="https://example.test/a.zip" sparkle:edSignature="c2ln" length="5"/>`;
+    expect(() => parseAppcastEnclosure(`<sparkle:version>1.4.0</sparkle:version>${one}${one}`, "1.4.0")).toThrow(/exactly one enclosure/);
+    expect(parseAppcastEnclosure(`<sparkle:version>1.4.0</sparkle:version>${one}`, "1.4.0")).toEqual({
+      url: "https://example.test/a.zip", signature: "c2ln", length: 5,
+    });
+    expect(() => sparkleSignatureValid(new Uint8Array(1), "c2ln", "c2hvcnQ=")).toThrow(/32 bytes/);
+  });
+
+  test("publish-release checks the Mac files before changing the release", () => {
+    expect(PUBLISH_STEPS.indexOf("verify-mac-files")).toBeLessThan(PUBLISH_STEPS.indexOf("remove-unsigned"));
   });
 });

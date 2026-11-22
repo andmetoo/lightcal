@@ -169,7 +169,9 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --draft --verify-tag --title "Lightcal $RELEASE_TAG" --notes "Signed macOS build prepared for review."
           fi
-          gh release upload "$RELEASE_TAG" target/macos/*.zip target/macos/*.dmg target/macos/*.sha256 target/macos/lightcal-macos-appcast.xml
+          # Drafts only (checked above): a rerun replaces every macOS file together, so the
+          # appcast signature always matches the ZIP, even after an interrupted upload.
+          gh release upload "$RELEASE_TAG" --clobber target/macos/*.zip target/macos/*.dmg target/macos/*.sha256 target/macos/lightcal-macos-appcast.xml
       - name: Build unsigned universal DMG
         if: ${{ steps.signing.outputs.configured != 'true' }}
         run: bun scripts/package-macos.ts --dmg

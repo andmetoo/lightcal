@@ -5,7 +5,7 @@
  * PC while SimplySign Desktop is signed in. `just sign-draft vX.Y.Z` downloads that
  * release (draft or public); `just publish-release vX.Y.Z` explicitly promotes it.
  */
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
 import { join } from "node:path";
 import { normalizeFingerprint } from "./certificate.ts";
 
@@ -162,6 +162,98 @@ export function missingSignedAssets(view: ReleaseView, version: string): string[
   return signedAssetNames(version).filter((name) => !names.has(name));
 }
 
+/** Sparkle reads this asset from the latest stable release (see docs/macos.md). */
+export const MACOS_APPCAST = "lightcal-macos-appcast.xml";
+
+export function macZipName(version: string): string {
+  return `lightcal-${version}-macos-universal.zip`;
+}
+
+export function macDmgName(version: string): string {
+  return `lightcal-${version}-macos-universal.dmg`;
+}
+
+export function macAssetNames(version: string): string[] {
+  const zip = macZipName(version);
+  const dmg = macDmgName(version);
+  return [zip, `${zip}.sha256`, dmg, `${dmg}.sha256`, MACOS_APPCAST];
+}
+
+/**
+ * macOS files a release still needs before it may become the latest release.
+ * Once a public release serves the macOS appcast, every later one must as well:
+ * Sparkle's feed URL follows "latest", so a Windows-only release would break
+ * updates for every signed Mac installation. Partial macOS files are also refused.
+ */
+export function missingMacAssets(target: ReleaseView, latest: ReleaseView | null, version: string): string[] {
+  const names = new Set(target.assets.map((asset) => asset.name));
+  const expected = macAssetNames(version);
+  const started = expected.some((name) => names.has(name));
+  const macShipped = latest !== null && !latest.isDraft && latest.assets.some((asset) => asset.name === MACOS_APPCAST);
+  return started || macShipped ? expected.filter((name) => !names.has(name)) : [];
+}
+
+export function hasMacAssets(view: ReleaseView, version: string): boolean {
+  const names = new Set(view.assets.map((asset) => asset.name));
+  return macAssetNames(version).every((name) => names.has(name));
+}
+
+export type AppcastEnclosure = { url: string; signature: string; length: number };
+
+/** The single enclosure of a Lightcal appcast, after checking it announces `version`. */
+export function parseAppcastEnclosure(appcast: string, version: string): AppcastEnclosure {
+  if (!appcast.includes(`<sparkle:version>${version}</sparkle:version>`)) {
+    throw new Error(`${MACOS_APPCAST} does not announce version ${version}`);
+  }
+  const enclosures = appcast.match(/<enclosure\s[^>]*>/g) ?? [];
+  if (enclosures.length !== 1) throw new Error(`${MACOS_APPCAST} must contain exactly one enclosure`);
+  const attribute = (name: string) => enclosures[0].match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
+  const url = attribute("url");
+  const signature = attribute("sparkle:edSignature");
+  const length = Number(attribute("length"));
+  if (!url || !signature || !Number.isSafeInteger(length) || length <= 0) {
+    throw new Error(`${MACOS_APPCAST} enclosure needs url, sparkle:edSignature and length`);
+  }
+  return { url, signature, length };
+}
+
+/** Sparkle signs the archive bytes with Ed25519; both values are base64 as Sparkle prints them. */
+export function sparkleSignatureValid(archive: Uint8Array, signature: string, publicKey: string): boolean {
+  const key = Buffer.from(publicKey.trim(), "base64");
+  const bytes = Buffer.from(signature, "base64");
+  if (key.length !== 32) throw new Error("SPARKLE_PUBLIC_KEY must be a base64 Ed25519 public key (32 bytes)");
+  if (bytes.length !== 64) return false;
+  const jwk = { kty: "OKP", crv: "Ed25519", x: key.toString("base64url") };
+  return verifySignature(null, archive, createPublicKey({ key: jwk, format: "jwk" }), bytes);
+}
+
+/**
+ * Verifies the macOS files before publication. Names prove nothing, so the update ZIP
+ * must carry a valid Sparkle signature from SPARKLE_PUBLIC_KEY. The macOS release job
+ * creates that signature only after the app and DMG were notarized and stapled.
+ */
+export function verifyMacReleaseFiles(
+  directory: string,
+  version: string,
+  read: (path: string) => Uint8Array,
+  publicKey: string,
+): void {
+  for (const name of [macZipName(version), macDmgName(version)]) {
+    assertChecksum(read(join(directory, name)), new TextDecoder().decode(read(join(directory, `${name}.sha256`))), name);
+  }
+  const enclosure = parseAppcastEnclosure(new TextDecoder().decode(read(join(directory, MACOS_APPCAST))), version);
+  if (!enclosure.url.endsWith(`/releases/download/${tagForVersion(version)}/${macZipName(version)}`)) {
+    throw new Error(`${MACOS_APPCAST} does not reference ${macZipName(version)} of ${tagForVersion(version)}`);
+  }
+  const zip = read(join(directory, macZipName(version)));
+  if (enclosure.length !== zip.length) {
+    throw new Error(`${MACOS_APPCAST} gives length ${enclosure.length}, but ${macZipName(version)} has ${zip.length} bytes`);
+  }
+  if (!sparkleSignatureValid(zip, enclosure.signature, publicKey)) {
+    throw new Error(`Sparkle signature of ${macZipName(version)} does not match SPARKLE_PUBLIC_KEY; Mac installs would refuse this update`);
+  }
+}
+
 export function unsignedAssetsPresent(view: ReleaseView, tag: string): string[] {
   const names = new Set(view.assets.map((asset) => asset.name));
   return unsignedAssetNames(tag).filter((name) => names.has(name));
@@ -221,8 +313,20 @@ export function publishedReleaseTitle(version: string): string {
   return `Lightcal ${tagForVersion(version)}`;
 }
 
-export function publishedReleaseNotes(version: string): string {
+export function publishedReleaseNotes(version: string, includesMac = false): string {
   const tag = tagForVersion(version);
+  const mac = includesMac
+    ? [
+      "For macOS 14 or later, on Apple Silicon and Intel:",
+      "",
+      `- \`${macDmgName(version)}\`: disk image; drag Lightcal to Applications.`,
+      `- \`${macZipName(version)}\`: the app on its own. Lightcal's macOS updates install this file.`,
+      `- \`${MACOS_APPCAST}\`: the macOS update feed.`,
+      "",
+      "The Mac app is signed with a Developer ID and notarized by Apple.",
+      "",
+    ]
+    : [];
   return [
     `Lightcal ${tag}.`,
     "",
@@ -234,6 +338,7 @@ export function publishedReleaseNotes(version: string): string {
     "",
     "The installer and `lightcal.exe` are digitally signed, and the ZIP contains that same signed `lightcal.exe`. Each download has a `.sha256` checksum next to it.",
     "",
+    ...mac,
   ].join("\n");
 }
 
@@ -280,6 +385,7 @@ export type SignStep = (typeof SIGN_STEPS)[number];
 /** Steps of `just publish-release`, in order: every check passes before anything changes on GitHub. */
 export const PUBLISH_STEPS = [
   "verify-files",
+  "verify-mac-files",
   "check-app-version",
   "check-pin",
   "check-setup-version",

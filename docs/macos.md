@@ -137,15 +137,39 @@ to building the unsigned universal DMG and its SHA-256 into the
 unsigned release assets into a GitHub Release or overwrites a public release.
 ZIP and DMG notarization both pass the ephemeral signing keychain explicitly.
 
-Sparkle alone schedules automatic macOS update checks. The shared startup/daily
-Rust checks and automatic-check/download toggles never call its interactive
-update command; Check for Updates remains an explicit user action. UI refreshes
+The application is signed with
+[`packaging/macos/Lightcal.entitlements`](../packaging/macos/Lightcal.entitlements).
+Hardened runtime denies EventKit without its
+`com.apple.security.personal-information.calendars` entitlement, so packaging reads
+the signed app's entitlements back and stops if that key is missing. The file adds
+no sandbox, JIT or library-validation exceptions; the login-keychain credential
+item needs no entitlement. Sparkle's nested code is signed innermost first, as in
+[Sparkle's signing guide](https://sparkle-project.org/documentation/sandboxing/),
+and `Downloader.xpc` keeps its own entitlements (`--preserve-metadata=entitlements`).
+
+Sparkle alone schedules automatic macOS update checks. Daily checking is on by
+default and switchable in About; automatic downloads stay off unless enabled
+([ADR 0019](decisions/0019-macos-support.md#update-check-default-follow-up)).
+`SUEnableAutomaticChecks` stays false in the bundle so Sparkle shows no permission
+prompt of its own; the app preference sets `automaticallyChecksForUpdates`. The
+shared startup/daily Rust checks and automatic-check/download toggles never call
+its interactive update command; Check for Updates remains an explicit user action. UI refreshes
 write Sparkle preferences only when their values change, preserving its cycle.
 See [Sparkle's programmatic setup guidance](https://sparkle-project.org/documentation/programmatic-setup/).
 
 Sparkle reads the macOS appcast from the latest stable GitHub release's
 `lightcal-macos-appcast.xml` asset. Every future stable release must include this
 asset and its referenced signed ZIP, including releases prepared by Windows jobs.
+`just publish-release vX.Y.Z` enforces this: once the latest public release serves
+the appcast, it refuses a release without the macOS ZIP, DMG, their checksums and
+the appcast, and it always refuses partial macOS files. When they are present it
+verifies both checksums, that the appcast announces this version with one enclosure
+for this version's ZIP and its exact length, and that the ZIP's Sparkle Ed25519
+signature is valid for `SPARKLE_PUBLIC_KEY` (from `.env`, otherwise the
+`macos-release` environment variable). Only then does it list the Mac downloads in
+the published notes. A rerun of the macOS release job replaces all of its files on a
+draft, so an interrupted upload never leaves a ZIP and appcast from different runs. Until the first signed
+Mac release, Windows-only releases remain publishable.
 Keep signing private keys outside the repository. Publication is a separate owner
 action after both platform assets are ready.
 

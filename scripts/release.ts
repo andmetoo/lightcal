@@ -19,6 +19,9 @@ import {
   deleteAssetArgs,
   editReleaseArgs,
   embedsCertificatePin,
+  hasMacAssets,
+  macAssetNames,
+  missingMacAssets,
   PUBLISH_STEPS,
   SIGN_STEPS,
   matchingBuildRuns,
@@ -35,6 +38,7 @@ import {
   thumbprintMatches,
   unsignedAssetsPresent,
   uploadArgs,
+  verifyMacReleaseFiles,
   verifyReleaseFiles,
   versionFromCheckout,
 } from "./release-draft.ts";
@@ -278,6 +282,29 @@ function loadRelease(tag: string) {
   }
 }
 
+/** The current latest stable release (`gh release view` without a tag), or null before the first one. */
+function loadLatestRelease() {
+  try {
+    return parseReleaseView(gh("release", "view", "--json", "isDraft,assets,url"));
+  } catch (error) {
+    if (/release not found/i.test(String(error))) return null;
+    throw error;
+  }
+}
+
+/** SPARKLE_PUBLIC_KEY from .env or the shell, else the macos-release environment variable. */
+function sparklePublicKeyForVerification(): string {
+  const local = process.env.SPARKLE_PUBLIC_KEY?.trim();
+  if (local) return local;
+  try {
+    const remote = gh("variable", "get", "SPARKLE_PUBLIC_KEY", "--env", "macos-release");
+    if (remote) return remote;
+  } catch {
+    // Reported below with the fix.
+  }
+  throw new Error("Set SPARKLE_PUBLIC_KEY in .env, or in the macos-release environment, to verify the macOS update signature.");
+}
+
 function releaseDownloadDirectory(tag: string): string {
   const parent = join(ROOT, "target", "release-sign", tag);
   mkdirSync(parent, { recursive: true });
@@ -366,9 +393,20 @@ function publishDraft(): void {
   assertReleaseExists(view, tag);
   const missing = missingSignedAssets(view, version);
   if (missing.length > 0) throw new Error(`Release ${tag} is missing files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`);
+  const missingMac = missingMacAssets(view, loadLatestRelease(), version);
+  if (missingMac.length > 0) {
+    throw new Error(`Release ${tag} is missing macOS files: ${missingMac.join(", ")}. Signed Mac installs update from the latest release. ` +
+      `With signing configured, rebuild them; the run replaces any partial macOS files on the draft: ` +
+      `gh workflow run macos-build.yml --ref main -f release_tag=${tag}`);
+  }
+  const includesMac = hasMacAssets(view, version);
+  const sparklePublicKey = includesMac ? sparklePublicKeyForVerification() : "";
 
   const downloaded = releaseDownloadDirectory(tag);
-  const names = signedUploadPaths(ROOT, version).map((path) => basename(path));
+  const names = [
+    ...signedUploadPaths(ROOT, version).map((path) => basename(path)),
+    ...(includesMac ? macAssetNames(version) : []),
+  ];
   ghRun(["release", "download", tag, "--dir", downloaded, ...names.flatMap((name) => ["--pattern", name])],
     `Could not download release ${tag} for signature verification.`);
   const app = join(downloaded, "lightcal.exe");
@@ -377,6 +415,7 @@ function publishDraft(): void {
     "verify-files": () => verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false),
       (archive, executable) =>
         run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable))),
+    "verify-mac-files": () => { if (includesMac) verifyMacReleaseFiles(downloaded, version, readFileSync, sparklePublicKey); },
     "check-app-version": () => assertExecutableVersion(app, version),
     "check-pin": () => assertUpdatePinMatchesSigner(app),
     "check-setup-version": () =>
@@ -391,7 +430,7 @@ function publishDraft(): void {
       const notesDir = join(ROOT, "target", "draft-sign");
       mkdirSync(notesDir, { recursive: true });
       const notesPath = join(notesDir, "published-notes.md");
-      writeFileSync(notesPath, publishedReleaseNotes(version), "utf8");
+      writeFileSync(notesPath, publishedReleaseNotes(version, includesMac), "utf8");
       console.log(`=== Publishing ${tag} ===`);
       ghRun(editReleaseArgs(tag, publishedReleaseTitle(version), notesPath),
         `Could not publish ${tag}. Check the release state in GitHub before retrying.`);
