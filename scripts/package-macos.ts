@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { validateMacDeploymentTarget } from "./macos-deployment";
 import { notarySubmitCommand } from "./macos-notarization";
 import { prepareMacBundle } from "./macos-bundle";
+import { appSigningCommand, assertCalendarsEntitlement, sparkleSigningCommands } from "./macos-signing";
 
 process.env.MACOSX_DEPLOYMENT_TARGET = "14.0";
 const args = process.argv.slice(2);
@@ -93,11 +94,13 @@ if (release) {
   await cp(join(required("SPARKLE_DIR"), "Sparkle.framework"), join(contents, "Frameworks/Sparkle.framework"), { recursive: true, verbatimSymlinks: true });
   await cp(join(required("SPARKLE_DIR"), "LICENSE"), join(contents, "Resources/Sparkle-LICENSE"));
   // Sign each nested executable and bundle before the enclosing application.
-  const framework = join(contents, "Frameworks/Sparkle.framework");
-  for (const path of ["Versions/B/XPCServices/Downloader.xpc", "Versions/B/XPCServices/Installer.xpc", "Versions/B/Autoupdate", "Versions/B/Updater.app", ""]) {
-    await run("codesign", "--force", "--timestamp", "--options", "runtime", "--sign", required("APPLE_SIGNING_IDENTITY"), join(framework, path));
-  }
-  await run("codesign", "--force", "--timestamp", "--options", "runtime", "--sign", required("APPLE_SIGNING_IDENTITY"), app);
+  const identity = required("APPLE_SIGNING_IDENTITY");
+  for (const command of sparkleSigningCommands(join(contents, "Frameworks/Sparkle.framework"), identity)) await run(...command);
+  await run(...appSigningCommand(app, identity, join(root, "packaging/macos/Lightcal.entitlements")));
+  const entitlements = Bun.spawn(["codesign", "-d", "--entitlements", "-", "--xml", app], { stdout: "pipe", stderr: "pipe" });
+  const granted = await new Response(entitlements.stdout).text();
+  if (await entitlements.exited !== 0) throw new Error("Could not read the signed app's entitlements.");
+  assertCalendarsEntitlement(granted);
   const zip = join(out, `lightcal-${version}-macos-universal.zip`);
   await run("ditto", "-c", "-k", "--keepParent", app, zip);
   await run(...notarySubmitCommand(zip, required("APPLE_NOTARY_PROFILE"), required("APPLE_SIGNING_KEYCHAIN")));

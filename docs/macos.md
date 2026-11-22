@@ -120,32 +120,80 @@ Environment secrets:
 | --- | --- |
 | `APPLE_CERTIFICATE_P12` | Base64-encoded Developer ID certificate and private key export |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the P12 export |
-| `APPLE_ID` | Apple developer account used for notarization |
-| `APPLE_TEAM_ID` | Apple developer team identifier |
-| `APPLE_APP_PASSWORD` | App-specific password for notarization |
+| `APPLE_API_KEY` | App Store Connect team API key ID (usually 10 characters), used for notarization |
+| `APPLE_API_ISSUER` | App Store Connect issuer ID (UUID) of that key |
+| `APPLE_API_KEY_P8` | Contents of that key's `AuthKey_<ID>.p8` file (PEM text, or base64 of it) |
 | `LIGHTCAL_GOOGLE_CLIENT_SECRET` | Google Desktop OAuth client secret (non-confidential desktop configuration) |
 | `SPARKLE_PRIVATE_KEY` | Sparkle private signing key in `sign_update --ed-key-file` format |
+
+Notarization uses an App Store Connect team API key (Users and Access ›
+Integrations › Team Keys, Developer role or higher) instead of an Apple ID and
+app-specific password: it needs no personal account password and keeps working
+after Apple ID password changes. The workflow validates the key ID, issuer and PEM
+format without printing them (a one-line value with literal `\n` sequences is
+refused), writes the `.p8` text to the runner's temporary directory for
+`notarytool store-credentials` and both submissions, and the always-run cleanup step
+deletes it with the temporary keychain. When Apple rejects the key, the job shows
+notarytool's reason. Apple lets you download a `.p8` once, so
+keep an offline backup.
 
 When all variables and secrets above are configured, the workflow imports
 credentials into a temporary keychain, signs nested Sparkle components and the
 application with hardened runtime, notarizes and staples the app and DMG, signs
 the update ZIP, uploads the signed bundle as a workflow artifact, and attaches
-assets to a draft release. Cleanup runs even after a failure. When any signing,
-notarization, or Sparkle variable or secret is missing, the workflow falls back
-to building the unsigned universal DMG and its SHA-256 into the
-`lightcal-macos-universal-unsigned` workflow artifact; it never substitutes
+assets to a draft release. Cleanup runs even after a failure. When none of the signing,
+notarization and Sparkle values are configured, the workflow falls back to
+building the unsigned universal DMG and its SHA-256 into the
+`lightcal-macos-universal-unsigned` workflow artifact. When only some are set, or
+one is empty (`gh secret set` stores an empty value from an empty pipe), the
+release job fails and names the missing keys instead of quietly building unsigned; it never substitutes
 unsigned release assets into a GitHub Release or overwrites a public release.
 ZIP and DMG notarization both pass the ephemeral signing keychain explicitly.
 
-Sparkle alone schedules automatic macOS update checks. The shared startup/daily
-Rust checks and automatic-check/download toggles never call its interactive
-update command; Check for Updates remains an explicit user action. UI refreshes
+The application is signed with
+[`packaging/macos/Lightcal.entitlements`](../packaging/macos/Lightcal.entitlements).
+Hardened runtime denies EventKit without its
+`com.apple.security.personal-information.calendars` entitlement, so packaging reads
+the signed app's entitlements back and stops if that key is missing. The file adds
+no sandbox, JIT or library-validation exceptions; the login-keychain credential
+item needs no entitlement. Sparkle's nested code is signed innermost first, as in
+[Sparkle's signing guide](https://sparkle-project.org/documentation/sandboxing/),
+and `Downloader.xpc` keeps its own entitlements (`--preserve-metadata=entitlements`).
+
+Sparkle alone schedules automatic macOS update checks. Daily checking is on by
+default and switchable in About; automatic downloads stay off unless enabled
+([ADR 0019](decisions/0019-macos-support.md#update-check-default-follow-up)).
+`SUEnableAutomaticChecks` stays false in the bundle so Sparkle shows no permission
+prompt of its own; the app preference sets `automaticallyChecksForUpdates`. The
+shared startup/daily Rust checks and automatic-check/download toggles never call
+its interactive update command; Check for Updates remains an explicit user action. UI refreshes
 write Sparkle preferences only when their values change, preserving its cycle.
 See [Sparkle's programmatic setup guidance](https://sparkle-project.org/documentation/programmatic-setup/).
 
 Sparkle reads the macOS appcast from the latest stable GitHub release's
 `lightcal-macos-appcast.xml` asset. Every future stable release must include this
 asset and its referenced signed ZIP, including releases prepared by Windows jobs.
+`just publish-release vX.Y.Z` enforces this: once the latest public release serves
+the appcast, it refuses a release without the macOS ZIP, DMG, their checksums and
+the appcast, and it always refuses partial macOS files. When they are present it
+verifies both checksums, that the appcast announces this version with one enclosure
+at the exact `https://github.com/<owner>/<repo>/releases/download/<tag>/` URL of
+this version's ZIP and its exact length, and that the ZIP's Sparkle Ed25519
+signature is valid for `SPARKLE_PUBLIC_KEY` (from `.env`, otherwise the
+`macos-release` environment variable; gh failures other than a missing variable are
+reported as they are). It then extracts `SUPublicEDKey` from this ZIP and from the
+latest public Mac release's ZIP, using the system bsdtar, and requires both to equal
+`SPARKLE_PUBLIC_KEY`: installed Macs accept only updates signed for the key they
+carry, so the Sparkle key pair must never be replaced. Only then does it list the
+Mac downloads in the published notes.
+
+For an urgent Windows-only release while macOS signing is broken, run
+`just release publish-release vX.Y.Z --allow-windows-only`. It is refused if the
+release has any macOS files, and it warns that Mac update checks fail and signed
+Mac installs stay on their version until a release with macOS files is latest
+again. A rerun of the macOS release job replaces all of its files on a
+draft, so an interrupted upload never leaves a ZIP and appcast from different runs. Until the first signed
+Mac release, Windows-only releases remain publishable.
 Keep signing private keys outside the repository. Publication is a separate owner
 action after both platform assets are ready.
 

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { MACOS_RELEASE_CONFIG_KEYS, missingMacSigningConfig } from "./macos-signing-config";
+import { MACOS_RELEASE_CONFIG_KEYS, MACOS_SIGNING_KEYS, macSigningConfigState, missingMacSigningConfig } from "./macos-signing-config";
+import { NOTARY_API_KEY_ENV } from "./macos-notarization";
 
 test("missingMacSigningConfig returns empty list when all keys are set", () => {
   const env = Object.fromEntries(MACOS_RELEASE_CONFIG_KEYS.map(key => [key, "configured"]));
@@ -51,4 +52,26 @@ test("MACOS_RELEASE_CONFIG_KEYS covers every external key required by signing an
   for (const key of expectedExternalKeys) {
     expect(configuredKeys.has(key), `missing ${key} in MACOS_RELEASE_CONFIG_KEYS`).toBe(true);
   }
+});
+
+test("partial signing configuration is an error, while none at all keeps the unsigned fallback", () => {
+  const complete = Object.fromEntries(MACOS_RELEASE_CONFIG_KEYS.map(key => [key, "configured"]));
+  expect(macSigningConfigState(complete)).toBe("complete");
+  // An empty secret, as `gh secret set` stores from an empty pipe, counts as missing.
+  expect(macSigningConfigState({ ...complete, APPLE_CERTIFICATE_P12: "" })).toBe("partial");
+  expect(macSigningConfigState({ ...complete, SPARKLE_SHA256: "  " })).toBe("partial");
+  // Only the shared client IDs: a repository that never set up macOS signing.
+  const clientIds = Object.fromEntries(MACOS_RELEASE_CONFIG_KEYS.filter(key => key.startsWith("LIGHTCAL_")).map(key => [key, "configured"]));
+  expect(macSigningConfigState(clientIds)).toBe("absent");
+  expect(macSigningConfigState({})).toBe("absent");
+  expect(MACOS_SIGNING_KEYS).not.toContain("LIGHTCAL_GOOGLE_CLIENT_ID");
+});
+
+test("the notarization API key names are part of the release configuration", async () => {
+  for (const key of NOTARY_API_KEY_ENV) expect(MACOS_RELEASE_CONFIG_KEYS as readonly string[]).toContain(key);
+  // notaryApiKey must read its variables through NOTARY_API_KEY_ENV, not hard-coded names.
+  const source = await readFile(join(import.meta.dir, "macos-notarization.ts"), "utf8");
+  const body = source.slice(source.indexOf("export function notaryApiKey"), source.indexOf("export function notaryStoreCredentialsCommand"));
+  expect(body).toContain("NOTARY_API_KEY_ENV");
+  expect(body).not.toMatch(/env\.APPLE_/);
 });

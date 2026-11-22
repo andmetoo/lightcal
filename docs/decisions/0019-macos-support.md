@@ -37,8 +37,10 @@ features are retained.
 
 Distribution uses a universal app and DMG, Developer ID signing, notarization,
 and Sparkle-signed updates. Tag workflows prepare draft release assets; the owner
-publishes explicitly. Automatic checking and downloads are opt-in, with Sparkle
-presenting installation/restart choices. Telemetry remains excluded.
+publishes explicitly. Daily automatic checking is on by default and can be
+turned off in About (owner follow-up of 2026-11-22, below); automatic downloads
+remain opt-in, with Sparkle presenting installation/restart choices. Telemetry
+remains excluded.
 
 ## Window placement and Settings motion
 
@@ -63,6 +65,20 @@ dimensions are not animated and Slint does not repaint for every opacity frame.
 Rapid changes retarget one transition. Hiding cancels it and releases the
 snapshot. Reduce Motion, Escape, `⌘W` and global shortcut activation apply
 immediately. Windows Settings behavior from ADR 0016 is unchanged.
+
+## Update-check default follow-up
+
+Owner decision on 2026-11-22, with the 1.3.2 UI refresh: background update checks
+are enabled by default on both platforms and remain switchable in About. On macOS
+the setting drives Sparkle's `automaticallyChecksForUpdates`, so signed builds
+check the appcast on Sparkle's own schedule (its default daily interval). Sparkle
+decides when the first scheduled check runs and may skip the very first launch,
+so acceptance testing uses Check for Updates rather than waiting for one.
+Preferences saved with the setting off keep it off. Automatic downloads and installation stay off unless the user
+enables them, and Sparkle still asks before installing or restarting. A check
+contacts only the GitHub release feed and sends no telemetry. The bundle keeps
+`SUEnableAutomaticChecks` false so that Sparkle does not show its own permission
+prompt; Lightcal's preference is the only switch.
 
 ## Integration gate and evidence
 
