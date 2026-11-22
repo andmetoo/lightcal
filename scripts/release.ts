@@ -5,6 +5,7 @@
  *   bun run scripts/release.ts build | sign | verify | certificate-info | package | sign-installer | release
  *   bun run scripts/release.ts sign-draft vX.Y.Z       # sign a CI build and upload it to its release
  *   bun run scripts/release.ts publish-release vX.Y.Z  # verify the signed assets, then publish
+ *   bun run scripts/release.ts publish-release vX.Y.Z --allow-windows-only  # urgent release without macOS files
  *
  * Signing uses scripts/sign-windows.ps1 with SIGN_CERT_SHA1 (a thumbprint, not a secret)
  * from .env; SimplySign Desktop must be signed in. SIGNTOOL overrides the signtool path.
@@ -19,9 +20,18 @@ import {
   deleteAssetArgs,
   editReleaseArgs,
   embedsCertificatePin,
+  ALLOW_WINDOWS_ONLY,
+  assertSparkleKeyContinuity,
   hasMacAssets,
+  MAC_INFO_PLIST,
+  MACOS_APPCAST,
   macAssetNames,
+  macShipped,
+  macZipName,
+  macZipVersion,
   missingMacAssets,
+  parsePublishOptions,
+  sparkleKeyFromInfoPlist,
   PUBLISH_STEPS,
   SIGN_STEPS,
   matchingBuildRuns,
@@ -296,13 +306,47 @@ function loadLatestRelease() {
 function sparklePublicKeyForVerification(): string {
   const local = process.env.SPARKLE_PUBLIC_KEY?.trim();
   if (local) return local;
+  let remote = "";
   try {
-    const remote = gh("variable", "get", "SPARKLE_PUBLIC_KEY", "--env", "macos-release");
-    if (remote) return remote;
-  } catch {
-    // Reported below with the fix.
+    remote = gh("variable", "get", "SPARKLE_PUBLIC_KEY", "--env", "macos-release");
+  } catch (error) {
+    // Only a missing variable means "not configured"; auth, network or permission
+    // failures are reported as they are.
+    if (!/was not found/i.test(String(error))) {
+      throw new Error(`Could not read SPARKLE_PUBLIC_KEY from the macos-release environment: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
+  if (remote.trim()) return remote.trim();
   throw new Error("Set SPARKLE_PUBLIC_KEY in .env, or in the macos-release environment, to verify the macOS update signature.");
+}
+
+/** owner/name of the repository gh publishes to; the appcast must point there. */
+function releaseRepository(): string {
+  return gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner");
+}
+
+/** bsdtar reads ZIP archives; on Windows use the system copy, not a GNU tar from Git. */
+const BSDTAR = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
+
+/** The Sparkle key a downloaded macOS update ZIP trusts for its successor. */
+function sparkleKeyInZip(zip: string): string {
+  const directory = mkdtempSync(join(ROOT, "target", "release-sign", "info-plist-"));
+  run([BSDTAR, "-xf", zip, "-C", directory, MAC_INFO_PLIST], `Could not read ${MAC_INFO_PLIST} from ${basename(zip)}.`);
+  return sparkleKeyFromInfoPlist(readFileSync(join(directory, MAC_INFO_PLIST), "utf8"));
+}
+
+/** Key inside the latest public Mac release, which every signed install trusts now. */
+function shippedSparkleKey(latest: ReturnType<typeof loadLatestRelease>, version: string, nextKey: string): string | null {
+  if (!macShipped(latest)) return null;
+  const shippedVersion = macZipVersion(latest);
+  if (!shippedVersion) throw new Error("The latest public release serves the macOS appcast but has no macOS update ZIP.");
+  // Re-publishing the latest release compares the ZIP with itself.
+  if (shippedVersion === version) return nextKey;
+  const shippedTag = tagForVersion(shippedVersion);
+  const directory = releaseDownloadDirectory(shippedTag);
+  ghRun(["release", "download", shippedTag, "--dir", directory, "--pattern", macZipName(shippedVersion)],
+    `Could not download ${macZipName(shippedVersion)} from ${shippedTag} to compare Sparkle keys.`);
+  return sparkleKeyInZip(join(directory, macZipName(shippedVersion)));
 }
 
 function releaseDownloadDirectory(tag: string): string {
@@ -339,6 +383,7 @@ function downloadSigningInput(view: ReturnType<typeof loadRelease>, tag: string,
 function signDraft(): void {
   requireWindows("Signing runs only on the maintainer's Windows PC, with SimplySign Desktop signed in. Run `just sign-draft vX.Y.Z` there.");
   const version = versionFromCheckout(process.argv[3]);
+  const options = parsePublishOptions(process.argv.slice(4));
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
@@ -393,14 +438,21 @@ function publishDraft(): void {
   assertReleaseExists(view, tag);
   const missing = missingSignedAssets(view, version);
   if (missing.length > 0) throw new Error(`Release ${tag} is missing files: ${missing.join(", ")}. On Windows, run just sign-draft ${tag}.`);
-  const missingMac = missingMacAssets(view, loadLatestRelease(), version);
+  const latest = loadLatestRelease();
+  const missingMac = missingMacAssets(view, latest, version, options.allowWindowsOnly);
   if (missingMac.length > 0) {
     throw new Error(`Release ${tag} is missing macOS files: ${missingMac.join(", ")}. Signed Mac installs update from the latest release. ` +
       `With signing configured, rebuild them; the run replaces any partial macOS files on the draft: ` +
-      `gh workflow run macos-build.yml --ref main -f release_tag=${tag}`);
+      `gh workflow run macos-build.yml --ref main -f release_tag=${tag}` +
+      (macShipped(latest) ? `. Only for an urgent Windows-only release: just release publish-release ${tag} ${ALLOW_WINDOWS_ONLY}` : ""));
   }
   const includesMac = hasMacAssets(view, version);
+  if (!includesMac && macShipped(latest)) {
+    console.warn(`WARNING: ${ALLOW_WINDOWS_ONLY}: ${tag} has no macOS files. Until a release with them is latest again, ` +
+      `Mac update checks fail (${MACOS_APPCAST} is missing) and signed Mac installs stay on their current version.`);
+  }
   const sparklePublicKey = includesMac ? sparklePublicKeyForVerification() : "";
+  const repository = includesMac ? releaseRepository() : "";
 
   const downloaded = releaseDownloadDirectory(tag);
   const names = [
@@ -415,7 +467,12 @@ function publishDraft(): void {
     "verify-files": () => verifyReleaseFiles(downloaded, version, readFileSync, (path) => verify(path, true, false),
       (archive, executable) =>
         run(pwsh("-File", join(SCRIPTS, "verify-portable.ps1"), "-Archive", archive, "-Executable", executable))),
-    "verify-mac-files": () => { if (includesMac) verifyMacReleaseFiles(downloaded, version, readFileSync, sparklePublicKey); },
+    "verify-mac-files": () => { if (includesMac) verifyMacReleaseFiles(downloaded, version, readFileSync, sparklePublicKey, repository); },
+    "check-sparkle-key": () => {
+      if (!includesMac) return;
+      const nextKey = sparkleKeyInZip(join(downloaded, macZipName(version)));
+      assertSparkleKeyContinuity(sparklePublicKey, nextKey, shippedSparkleKey(latest, version, nextKey));
+    },
     "check-app-version": () => assertExecutableVersion(app, version),
     "check-pin": () => assertUpdatePinMatchesSigner(app),
     "check-setup-version": () =>

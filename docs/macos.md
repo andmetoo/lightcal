@@ -164,10 +164,21 @@ asset and its referenced signed ZIP, including releases prepared by Windows jobs
 the appcast, it refuses a release without the macOS ZIP, DMG, their checksums and
 the appcast, and it always refuses partial macOS files. When they are present it
 verifies both checksums, that the appcast announces this version with one enclosure
-for this version's ZIP and its exact length, and that the ZIP's Sparkle Ed25519
+at the exact `https://github.com/<owner>/<repo>/releases/download/<tag>/` URL of
+this version's ZIP and its exact length, and that the ZIP's Sparkle Ed25519
 signature is valid for `SPARKLE_PUBLIC_KEY` (from `.env`, otherwise the
-`macos-release` environment variable). Only then does it list the Mac downloads in
-the published notes. A rerun of the macOS release job replaces all of its files on a
+`macos-release` environment variable; gh failures other than a missing variable are
+reported as they are). It then extracts `SUPublicEDKey` from this ZIP and from the
+latest public Mac release's ZIP, using the system bsdtar, and requires both to equal
+`SPARKLE_PUBLIC_KEY`: installed Macs accept only updates signed for the key they
+carry, so the Sparkle key pair must never be replaced. Only then does it list the
+Mac downloads in the published notes.
+
+For an urgent Windows-only release while macOS signing is broken, run
+`just release publish-release vX.Y.Z --allow-windows-only`. It is refused if the
+release has any macOS files, and it warns that Mac update checks fail and signed
+Mac installs stay on their version until a release with macOS files is latest
+again. A rerun of the macOS release job replaces all of its files on a
 draft, so an interrupted upload never leaves a ZIP and appcast from different runs. Until the first signed
 Mac release, Windows-only releases remain publishable.
 Keep signing private keys outside the repository. Publication is a separate owner

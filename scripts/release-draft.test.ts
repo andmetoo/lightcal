@@ -4,6 +4,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  ALLOW_WINDOWS_ONLY,
+  assertSparkleKeyContinuity,
+  expectedMacZipUrl,
+  macShipped,
+  macZipVersion,
+  parsePublishOptions,
+  sparkleKeyFromInfoPlist,
   MACOS_APPCAST,
   type ReleaseView,
   UNSIGNED_EXE,
@@ -264,7 +271,7 @@ describe("release step order", () => {
     expect(before(SIGN_STEPS, "check-pin-after-signing", "package")).toBe(true);
   });
   test("publish-release finishes every check before changing the release", () => {
-    for (const check of ["verify-files", "verify-mac-files", "check-app-version", "check-pin", "check-setup-version"] as const) {
+    for (const check of ["verify-files", "verify-mac-files", "check-sparkle-key", "check-app-version", "check-pin", "check-setup-version"] as const) {
       expect(before(PUBLISH_STEPS, check, "remove-unsigned")).toBe(true);
     }
     expect(PUBLISH_STEPS.at(-1)).toBe("publish");
@@ -326,7 +333,7 @@ describe("macOS release files", () => {
         writeFileSync(join(directory, `${name}.sha256`), `${sha256Hex(data)}  ${name}\n`);
       }
     };
-    const check = () => verifyMacReleaseFiles(directory, "1.4.0", readFileSync, sparklePublic);
+    const check = () => verifyMacReleaseFiles(directory, "1.4.0", readFileSync, sparklePublic, "andmetoo/lightcal");
     try {
       write(macZipName("1.4.0"), zip);
       write(macDmgName("1.4.0"), "disk image");
@@ -334,7 +341,12 @@ describe("macOS release files", () => {
       expect(check).not.toThrow();
 
       write(MACOS_APPCAST, appcast({ url: url.replaceAll("1.4.0", "1.3.2") }));
-      expect(check).toThrow(/does not reference/);
+      expect(check).toThrow(/points to/);
+      // Right path, wrong repository or host.
+      write(MACOS_APPCAST, appcast({ url: url.replace("andmetoo/lightcal", "someone/lightcal-fork") }));
+      expect(check).toThrow(/points to/);
+      write(MACOS_APPCAST, appcast({ url: url.replace("https://github.com", "https://downloads.example") }));
+      expect(check).toThrow(/points to/);
       write(MACOS_APPCAST, appcast({ version: "1.3.2" }));
       expect(check).toThrow(/does not announce version 1.4.0/);
       write(MACOS_APPCAST, appcast({ length: zip.length + 1 }));
@@ -370,7 +382,40 @@ describe("macOS release files", () => {
     expect(() => sparkleSignatureValid(new Uint8Array(1), "c2ln", "c2hvcnQ=")).toThrow(/32 bytes/);
   });
 
+  test("an explicit override allows a Windows-only release, but never partial macOS files", () => {
+    const latest = view([...signedAssetNames("1.3.2"), ...macAssetNames("1.3.2")]);
+    expect(missingMacAssets(view(windows, true), latest, "1.4.0", true)).toEqual([]);
+    expect(missingMacAssets(view([...windows, MACOS_APPCAST], true), latest, "1.4.0", true)).toEqual(
+      mac.filter((name) => name !== MACOS_APPCAST),
+    );
+    expect(macShipped(latest)).toBe(true);
+    expect(macShipped(view([MACOS_APPCAST], true))).toBe(false);
+    expect(parsePublishOptions([])).toEqual({ allowWindowsOnly: false });
+    expect(parsePublishOptions([ALLOW_WINDOWS_ONLY])).toEqual({ allowWindowsOnly: true });
+    expect(() => parsePublishOptions(["--allow-windows"])).toThrow(/Unknown publish-release option/);
+  });
+
+  test("the Sparkle key must match the one installed Macs trust and the one this release embeds", () => {
+    const plist = (key: string) => `<plist><dict><key>SUFeedURL</key><string>x</string><key>SUPublicEDKey</key>\n<string>${key}</string></dict></plist>`;
+    expect(sparkleKeyFromInfoPlist(plist("AAAA"))).toBe("AAAA");
+    expect(() => sparkleKeyFromInfoPlist(plist(""))).toThrow(/no SUPublicEDKey/);
+    expect(() => sparkleKeyFromInfoPlist("<plist><dict></dict></plist>")).toThrow(/no SUPublicEDKey/);
+
+    expect(() => assertSparkleKeyContinuity("KEY", "KEY", null)).not.toThrow();
+    expect(() => assertSparkleKeyContinuity("KEY", "KEY", "KEY")).not.toThrow();
+    expect(() => assertSparkleKeyContinuity("NEW", "NEW", "OLD")).toThrow(/latest public Mac release/);
+    expect(() => assertSparkleKeyContinuity("KEY", "OTHER", "KEY")).toThrow(/own next update/);
+
+    expect(macZipVersion(view([...signedAssetNames("1.3.2"), ...macAssetNames("1.3.2")]))).toBe("1.3.2");
+    expect(macZipVersion(view(signedAssetNames("1.3.2")))).toBeNull();
+    expect(macZipVersion(null)).toBeNull();
+    expect(expectedMacZipUrl("andmetoo/lightcal", "1.4.0")).toBe(
+      "https://github.com/andmetoo/lightcal/releases/download/v1.4.0/lightcal-1.4.0-macos-universal.zip",
+    );
+  });
+
   test("publish-release checks the Mac files before changing the release", () => {
     expect(PUBLISH_STEPS.indexOf("verify-mac-files")).toBeLessThan(PUBLISH_STEPS.indexOf("remove-unsigned"));
+    expect(PUBLISH_STEPS.indexOf("check-sparkle-key")).toBeLessThan(PUBLISH_STEPS.indexOf("remove-unsigned"));
   });
 });
