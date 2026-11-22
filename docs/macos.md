@@ -24,9 +24,20 @@ bun scripts/package-macos.ts
 ```
 
 Run `just installer` to build the universal app plus a local unsigned disk image
-at `target/macos/lightcal-1.3.2-macos-universal.dmg` and its SHA-256 file. This uses
+at `target/macos/lightcal-1.3.3-macos-universal.dmg` and its SHA-256 file. This uses
 Apple's native packaging tools and does not require PowerShell or NSIS. The image
-contains `Lightcal.app` and an Applications link for drag-and-drop installation.
+contains `Lightcal.app` and an Applications link for drag-and-drop installation,
+laid out in a designed Finder window: a 640 × 400 background
+(`assets/macos/dmg-background.png` and `@2x`, combined into one HiDPI TIFF with
+`tiffutil`), 128 pt icons placed on it, no toolbar, and the Lightcal volume icon.
+Positions live in `scripts/macos-dmg.ts`; `bun scripts/render-dmg-background.ts`
+redraws the art from the same numbers with resvg (a development-only tool, see the
+script header). Finder writes the layout into the image's `.DS_Store` through
+AppleScript, so a local build may ask once to allow controlling Finder. If Finder
+cannot be scripted, the image is still built with Finder's default layout and the
+build log shows a warning. The window hides the toolbar, status bar and path bar;
+Finder draws the icon names in dark text on the light background in both Light and
+Dark Mode, so the art keeps the label row clear.
 `just installer --help` lists macOS options; Windows-only flags such as
 `-SkipBuild` are rejected before building. Signed distribution still requires the
 release configuration below; `just installer --release` prepares those artifacts

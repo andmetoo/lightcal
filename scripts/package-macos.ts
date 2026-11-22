@@ -1,6 +1,8 @@
 /** Build a universal macOS bundle. Release mode requires configured signing and Sparkle. */
 import { mkdir, mkdtemp, cp, rm, symlink, writeFile, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { DMG_LAYOUT, finderLayoutScript } from "./macos-dmg";
 import { validateMacDeploymentTarget } from "./macos-deployment";
 import { notarySubmitCommand } from "./macos-notarization";
 import { prepareMacBundle } from "./macos-bundle";
@@ -23,7 +25,7 @@ const app = join(out, "Lightcal.app");
 const contents = join(app, "Contents");
 const workspacePackage = (await readFile(join(root, "Cargo.toml"), "utf8")).match(/\[workspace\.package\][\s\S]*?(?=\n\[|$)/)?.[0];
 const cargoVersion = workspacePackage?.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
-const version = (process.env.LIGHTCAL_RELEASE_VERSION || cargoVersion || "1.3.2").replace(/^v/, "");
+const version = (process.env.LIGHTCAL_RELEASE_VERSION || cargoVersion || "1.3.3").replace(/^v/, "");
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Expected stable x.y.z version");
 const run = async (...args: string[]) => {
   // Bun's default inherited environment can omit mutations made above.
@@ -77,15 +79,63 @@ await writeFile(join(contents, "Info.plist"), `<?xml version="1.0" encoding="UTF
 <key>SUAutomaticallyUpdate</key><false/>
 <key>SUEnableSystemProfiling</key><false/>
 </dict></plist>`);
+/** Runs a command and returns its stdout; stderr stays visible in the build log. */
+const output = async (...args: string[]) => {
+  const child = Bun.spawn(args, { cwd: root, env: process.env, stdout: "pipe", stderr: "inherit" });
+  const text = await new Response(child.stdout).text();
+  if (await child.exited !== 0) throw new Error(`Failed: ${args[0]}`);
+  return text;
+};
+const warn = (message: string) => console.warn(process.env.GITHUB_ACTIONS === "true" ? `::warning::${message}` : message);
+
+/**
+ * Disk image with the designed Finder window: background art, 128 pt icons placed on it,
+ * the Lightcal volume icon and no toolbar. Finder writes the layout into .DS_Store on a
+ * writable image, which is then compressed. If Finder cannot be scripted, the image is
+ * still built and works, with Finder's default layout.
+ */
 async function createDiskImage(): Promise<string> {
   const staging = await mkdtemp(join(out, "dmg-content-"));
   const dmg = join(out, `lightcal-${version}-macos-universal.dmg`);
+  const writable = join(out, "dmg-writable.dmg");
+  const volume = `/Volumes/${DMG_LAYOUT.volumeName}`;
+  let device: string | undefined;
   try {
-    await cp(app, join(staging, "Lightcal.app"), { recursive: true, verbatimSymlinks: true });
-    await symlink("/Applications", join(staging, "Applications"));
-    await run("hdiutil", "create", "-volname", "Lightcal", "-srcfolder", staging, "-ov", "-format", "UDZO", dmg);
+    await cp(app, join(staging, DMG_LAYOUT.app.name), { recursive: true, verbatimSymlinks: true });
+    await symlink("/Applications", join(staging, DMG_LAYOUT.applications.name));
+    await mkdir(join(staging, dirname(DMG_LAYOUT.background)));
+    await run("tiffutil", "-cathidpicheck", join(root, "assets/macos/dmg-background.png"), join(root, "assets/macos/dmg-background@2x.png"),
+      "-out", join(staging, DMG_LAYOUT.background));
+    if (existsSync(volume)) throw new Error(`Eject ${volume} first; Finder lays out the new image by its volume name.`);
+    const megabytes = Number((await output("du", "-sm", staging)).split(/\s/)[0]) + 20;
+    await rm(writable, { force: true });
+    await run("hdiutil", "create", "-volname", DMG_LAYOUT.volumeName, "-srcfolder", staging, "-fs", "HFS+",
+      "-format", "UDRW", "-size", `${megabytes}m`, "-ov", writable);
+    const attached = await output("hdiutil", "attach", "-readwrite", "-noverify", "-noautoopen", writable);
+    device = attached.match(/^(\/dev\/disk\d+)\s/m)?.[1];
+    if (!device || !attached.includes(volume)) throw new Error(`The writable image did not mount at ${volume}.`);
+    const finder = Bun.spawn(["osascript"], { stdin: new TextEncoder().encode(finderLayoutScript()), stdout: "ignore", stderr: "pipe" });
+    const timer = setTimeout(() => finder.kill(), 120_000);
+    const finderError = await new Response(finder.stderr).text();
+    clearTimeout(timer);
+    if (await finder.exited !== 0) warn(`Finder could not lay out the disk image window; it keeps the default layout. ${finderError.trim()}`);
+    // After the layout: Finder drops a volume icon that is already present when it rewrites the view.
+    await cp(join(contents, "Resources/Lightcal.icns"), join(volume, ".VolumeIcon.icns"));
+    await run("xcrun", "SetFile", "-a", "C", volume);
+    await rm(join(volume, ".fseventsd"), { recursive: true, force: true });
+    await run("sync");
+    for (let attempt = 1; ; attempt++) {
+      const detach = Bun.spawn(["hdiutil", "detach", device, ...(attempt === 5 ? ["-force"] : [])], { stdout: "ignore", stderr: "ignore" });
+      if (await detach.exited === 0) break;
+      if (attempt === 5) throw new Error(`Could not eject ${volume}.`);
+      await Bun.sleep(2000);
+    }
+    device = undefined;
+    await run("hdiutil", "convert", writable, "-format", "UDZO", "-imagekey", "zlib-level=9", "-ov", "-o", dmg);
   } finally {
+    if (device) Bun.spawnSync(["hdiutil", "detach", device, "-force"]);
     await rm(staging, { recursive: true, force: true });
+    await rm(writable, { force: true });
   }
   return dmg;
 }

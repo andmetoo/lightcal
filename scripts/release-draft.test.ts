@@ -22,6 +22,7 @@ import {
   PUBLISH_STEPS,
   SIGN_STEPS,
   editReleaseArgs,
+  generatedChangelog,
   embedsCertificatePin,
   hasMacAssets,
   macAssetNames,
@@ -417,5 +418,31 @@ describe("macOS release files", () => {
   test("publish-release checks the Mac files before changing the release", () => {
     expect(PUBLISH_STEPS.indexOf("verify-mac-files")).toBeLessThan(PUBLISH_STEPS.indexOf("remove-unsigned"));
     expect(PUBLISH_STEPS.indexOf("check-sparkle-key")).toBeLessThan(PUBLISH_STEPS.indexOf("remove-unsigned"));
+  });
+});
+
+describe("published notes keep GitHub's generated changelog", () => {
+  const generated = [
+    "## What's Changed",
+    "* Add macOS support by @someone in https://github.com/andmetoo/lightcal/pull/73",
+    "",
+    "**Full Changelog**: https://github.com/andmetoo/lightcal/compare/v1.3.1...v1.3.2",
+  ].join("\n");
+
+  test("the changelog follows the download section and is kept once on republish", () => {
+    const notes = publishedReleaseNotes("1.3.2", true, generatedChangelog(`Draft text.\r\n\r\n${generated}\r\n`));
+    expect(notes.indexOf("For macOS 14")).toBeLessThan(notes.indexOf("## What's Changed"));
+    expect(notes).toContain("**Full Changelog**");
+    // Publishing an already published release must not duplicate it.
+    const again = publishedReleaseNotes("1.3.2", true, generatedChangelog(notes));
+    expect(again).toBe(notes);
+    expect(again.split("## What's Changed").length).toBe(2);
+  });
+
+  test("notes without a generated changelog are unchanged", () => {
+    expect(generatedChangelog(undefined)).toBe("");
+    expect(generatedChangelog("Signed macOS build prepared for review.")).toBe("");
+    expect(generatedChangelog("**Full Changelog**: https://example.test/compare")).toBe("**Full Changelog**: https://example.test/compare");
+    expect(publishedReleaseNotes("1.3.2", false, "")).toBe(publishedReleaseNotes("1.3.2"));
   });
 });
