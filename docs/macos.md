@@ -120,11 +120,20 @@ Environment secrets:
 | --- | --- |
 | `APPLE_CERTIFICATE_P12` | Base64-encoded Developer ID certificate and private key export |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the P12 export |
-| `APPLE_ID` | Apple developer account used for notarization |
-| `APPLE_TEAM_ID` | Apple developer team identifier |
-| `APPLE_APP_PASSWORD` | App-specific password for notarization |
+| `APPLE_API_KEY` | App Store Connect team API key ID (usually 10 characters), used for notarization |
+| `APPLE_API_ISSUER` | App Store Connect issuer ID (UUID) of that key |
+| `APPLE_API_KEY_P8` | Contents of that key's `AuthKey_<ID>.p8` file (PEM text, or base64 of it) |
 | `LIGHTCAL_GOOGLE_CLIENT_SECRET` | Google Desktop OAuth client secret (non-confidential desktop configuration) |
 | `SPARKLE_PRIVATE_KEY` | Sparkle private signing key in `sign_update --ed-key-file` format |
+
+Notarization uses an App Store Connect team API key (Users and Access ›
+Integrations › Team Keys, Developer role or higher) instead of an Apple ID and
+app-specific password: it needs no personal account password and keeps working
+after Apple ID password changes. The workflow validates the key ID, issuer and PEM
+format without printing them, writes the `.p8` text to the runner's temporary
+directory only long enough for `notarytool store-credentials` to copy it into the
+temporary keychain, and deletes it again. Apple lets you download a `.p8` once, so
+keep an offline backup.
 
 When all variables and secrets above are configured, the workflow imports
 credentials into a temporary keychain, signs nested Sparkle components and the
