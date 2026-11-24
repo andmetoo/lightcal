@@ -4231,6 +4231,8 @@ fn main() {
     apply_system_font(&ui, prefs.locale());
     #[cfg(target_os = "macos")]
     lightcal::platform::macos::watch(ui.window());
+    #[cfg(not(target_os = "macos"))]
+    lightcal::layout_shortcuts::install(ui.window());
 
     ACTIVE_UI.with(|u| {
         *u.borrow_mut() = Some(ui.as_weak());
