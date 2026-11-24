@@ -4,6 +4,7 @@
 pub mod calendars;
 pub mod i18n;
 pub mod installer;
+pub mod layout_shortcuts;
 pub mod local_events;
 pub mod net;
 pub mod platform;

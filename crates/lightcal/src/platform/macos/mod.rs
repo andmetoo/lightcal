@@ -225,7 +225,13 @@ pub fn attach(window: &slint::Window) -> bool {
 pub fn watch(window: &slint::Window) {
     use slint::winit_030::{winit::event::WindowEvent, EventResult, WinitWindowAccessor};
     let mut first_frame = true;
+    // The window has one winit event filter, so this one also carries the
+    // shortcut filter that other platforms install on its own.
+    let mut shortcuts = crate::layout_shortcuts::LayoutShortcuts::default();
     window.on_winit_window_event(move |window, event| {
+        if shortcuts.filter(window, event) == EventResult::PreventDefault {
+            return EventResult::PreventDefault;
+        }
         let first_redraw = first_frame && matches!(event, WindowEvent::RedrawRequested);
         if first_redraw {
             first_frame = false;
