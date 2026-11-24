@@ -384,7 +384,6 @@ function downloadSigningInput(view: ReturnType<typeof loadRelease>, tag: string,
 function signDraft(): void {
   requireWindows("Signing runs only on the maintainer's Windows PC, with SimplySign Desktop signed in. Run `just sign-draft vX.Y.Z` there.");
   const version = versionFromCheckout(process.argv[3]);
-  const options = parsePublishOptions(process.argv.slice(4));
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
@@ -433,6 +432,7 @@ function signDraft(): void {
 function publishDraft(): void {
   requireWindows("Publish from Windows so Authenticode can be verified before publication.");
   const version = versionFromCheckout(process.argv[3]);
+  const options = parsePublishOptions(process.argv.slice(4));
   const tag = tagForVersion(version);
   ensureGh();
   const view = loadRelease(tag);
