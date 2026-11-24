@@ -41,6 +41,29 @@ try {
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $stage 'lightcal.exe')
     foreach ($name in @('LICENSE','THIRD_PARTY_NOTICES.md','README.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $stage }
+    # The license page shows Lightcal's own notice and the GPL terms. The
+    # "How to Apply These Terms" appendix after the terms is a template with
+    # placeholders for other projects, so it is left off the page; the
+    # installed LICENSE stays the verbatim GPL text.
+    $gpl = [IO.File]::ReadAllText((Join-Path $projectRoot 'LICENSE'))
+    $termsEnd = 'END OF TERMS AND CONDITIONS'
+    $cut = $gpl.IndexOf($termsEnd)
+    if ($cut -lt 0) { throw "LICENSE does not contain '$termsEnd'" }
+    $notice = @(
+        'Lightcal'
+        'Copyright (C) 2026 Lightcal contributors'
+        ''
+        'Lightcal is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 3 only (GPL-3.0-only).'
+        ''
+        'Lightcal is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the license terms below for details.'
+        ''
+        'Third-party notices are installed with Lightcal in THIRD_PARTY_NOTICES.md.'
+        ''
+        ''
+    ) -join "`r`n"
+    $page = $notice + $gpl.Substring(0, $cut + $termsEnd.Length) + "`r`n"
+    if ($page -match '<(one line|year>|name of author|program>)') { throw 'License page still contains GPL template placeholders' }
+    [IO.File]::WriteAllText((Join-Path $stage 'LICENSE-PAGE.txt'), $page, [Text.UTF8Encoding]::new($true))
     Copy-Item -LiteralPath (Join-Path $projectRoot 'crates\lightcal\assets\lightcal.ico') -Destination $stage
     $nsisRoot = Split-Path (Split-Path $compiler -Parent) -Parent
     $license = Join-Path $nsisRoot 'COPYING'
