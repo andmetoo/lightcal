@@ -35,7 +35,7 @@ UninstallIcon "${STAGE}\lightcal.ico"
 !define MUI_ICON "${STAGE}\lightcal.ico"
 !define MUI_UNICON "${STAGE}\lightcal.ico"
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "${STAGE}\LICENSE"
+!insertmacro MUI_PAGE_LICENSE "${STAGE}\LICENSE-PAGE.txt"
 !insertmacro MUI_PAGE_COMPONENTS
 !ifndef TEST_SETUP
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryLeave
